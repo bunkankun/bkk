@@ -1,0 +1,49 @@
+root: /home/Shared/krpdev/gh/KR1a/KR1a0001
+files processed: 69
+decode errors: 0
+files where NFC altered residue: 0
+elapsed seconds: 0.05
+
+distinct codepoints (textual): 1437
+total textual codepoints: 31326
+pilcrow ('¶') count: 6233
+org-mode headline markers stripped: 69
+whitespace codepoints distinct/total: 1/8585
+<pb:...> tokens: 1077
+&KR entity tokens distinct/total: 0/0
+&CH-0F entity tokens distinct/total: 0/0
+other entity tokens distinct/total: 0/0
+other angle markup tokens distinct/total: 0/0
+
+--- top 20 textual codepoints ---
+  U+FF0C    '，'       1994  Halfwidth and Fullwidth Forms
+  U+3002    '。'       1956  CJK Symbols and Punctuation
+  U+300A    '《'       1050  CJK Symbols and Punctuation
+  U+300B    '》'       1050  CJK Symbols and Punctuation
+  U+4E5F    '也'        961  CJK Unified Ideographs
+  U+FF1A    '：'        944  Halfwidth and Fullwidth Forms
+  U+3001    '、'        881  CJK Symbols and Punctuation
+  U+300C    '「'        843  CJK Symbols and Punctuation
+  U+300D    '」'        843  CJK Symbols and Punctuation
+  U+4E4B    '之'        613  CJK Unified Ideographs
+  U+66F0    '曰'        587  CJK Unified Ideographs
+  U+8C61    '象'        483  CJK Unified Ideographs
+  U+4EE5    '以'        474  CJK Unified Ideographs
+  U+4E0D    '不'        424  CJK Unified Ideographs
+  U+5176    '其'        386  CJK Unified Ideographs
+  U+800C    '而'        370  CJK Unified Ideographs
+  U+6709    '有'        344  CJK Unified Ideographs
+  U+65E0    '无'        299  CJK Unified Ideographs
+  U+5409    '吉'        287  CJK Unified Ideographs
+  U+4E0A    '上'        246  CJK Unified Ideographs
+
+--- top 20 blocks ---
+       21584  CJK Unified Ideographs
+        6645  CJK Symbols and Punctuation
+        3030  Halfwidth and Fullwidth Forms
+          67  Yijing Hexagram Symbols
+
+--- top 20 entities (any namespace) ---
+
+--- whitespace breakdown ---
+  U+000A        8585  

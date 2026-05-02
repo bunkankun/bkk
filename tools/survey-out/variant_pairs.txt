@@ -1,0 +1,51 @@
+Variant pairs where BOTH members appear in the corpus
+=====================================================
+
+Unihan_Variants.txt distinct unordered pairs: 8966
+  ... of which both members are in our corpus: 3644
+distinct corpus codepoints involved in those pairs: 5967
+sum of corpus occurrences across both members of all in-corpus pairs: 544041577
+  (note: codepoints in multiple pairs are counted multiple times)
+corpus total codepoints (denominator): 951438493
+
+Per variant_type (a pair may carry several types):
+  type                                 pairs      sum_counts
+  kSemanticVariant                      1971       303411087
+  kSimplifiedVariant                    1578       237521239
+  kSpecializedSemanticVariant            294        93680331
+  kSpoofingVariant                        70        11617323
+  kTraditionalVariant                   1578       237521239
+  kZVariant                               70         7153497
+
+--- top 30 in-corpus variant pairs by count_minor desc ---
+  major        count_major  minor        count_minor     ratio  types
+  U+65BC 於       4724818    U+4E8E 于       1466342      3.22  kSemanticVariant,kSimplifiedVariant,kTraditionalVariant
+  U+70BA 為       7094922    U+7232 爲        955109      7.43  kSemanticVariant
+  U+4E91 云       2407318    U+96F2 雲        851211      2.83  kSimplifiedVariant,kTraditionalVariant
+  U+773E 眾        620676    U+8846 衆        457382      1.36  kSemanticVariant
+  U+8AAA 說       1234644    U+8AAC 説        410802      3.01  kZVariant
+  U+9AD9 髙        653464    U+9AD8 高        396650      1.65  kSemanticVariant
+  U+5225 別        461903    U+522B 别        379099      1.22  kSimplifiedVariant,kTraditionalVariant
+  U+5F8C 後       2155932    U+540E 后        309353      6.97  kSimplifiedVariant,kTraditionalVariant
+  U+5B50 子       4600297    U+53EA 只        239618     19.20  kSemanticVariant
+  U+7121 無       5290315    U+65E0 无        236105     22.41  kSemanticVariant,kSimplifiedVariant,kTraditionalVariant
+  U+516D 六       1739476    U+9678 陸        229284      7.59  kSpecializedSemanticVariant
+  U+9918 餘        912088    U+4F59 余        228752      3.99  kSimplifiedVariant,kTraditionalVariant
+  U+4E88 予        268325    U+4F59 余        228752      1.17  kSemanticVariant
+  U+9682 隂        479724    U+9670 陰        223934      2.14  kSemanticVariant
+  U+4E26 並        381390    U+5E76 并        213031      1.79  kSemanticVariant,kSimplifiedVariant,kTraditionalVariant
+  U+5C07 將       1148111    U+5C06 将        212259      5.41  kSimplifiedVariant,kSpecializedSemanticVariant,kTraditionalVariant
+  U+5BF6 寶        294543    U+5BF3 寳        203252      1.45  kSemanticVariant
+  U+5D57 嵗        323740    U+6B72 歲        202290      1.60  kSemanticVariant
+  U+84CB 蓋        289096    U+76D6 盖        198726      1.45  kSemanticVariant,kSimplifiedVariant,kTraditionalVariant
+  U+91CC 里        989487    U+88CF 裏        196368      5.04  kSimplifiedVariant,kTraditionalVariant
+  U+771F 真        660424    U+771E 眞        187637      3.52  kSemanticVariant
+  U+9F4A 齊        656786    U+9F4B 齋        182902      3.59  kSpecializedSemanticVariant
+  U+84CB 蓋        289096    U+8462 葢        181301      1.59  kSemanticVariant
+  U+76D6 盖        198726    U+8462 葢        181301      1.10  kSemanticVariant
+  U+4F86 來       1664960    U+6765 来        180987      9.20  kSemanticVariant,kSimplifiedVariant,kTraditionalVariant
+  U+865A 虚        248092    U+865B 虛        177601      1.40  kSimplifiedVariant,kTraditionalVariant
+  U+820D 舍        300775    U+6368 捨        171087      1.76  kSimplifiedVariant,kSpecializedSemanticVariant,kTraditionalVariant
+  U+4E7E 乾        375465    U+5E72 干        170712      2.20  kSimplifiedVariant,kTraditionalVariant
+  U+624D 才        306677    U+8CA1 財        164954      1.86  kSpecializedSemanticVariant
+  U+6CE8 注        552230    U+8A3B 註        163675      3.37  kSimplifiedVariant,kTraditionalVariant

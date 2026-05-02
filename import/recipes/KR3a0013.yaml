@@ -1,0 +1,17 @@
+format: krp
+text_id: KR3a0013
+source:
+  repo: ../input/krp/KR3a0013
+  editions:
+    - {branch: WYG, short: WYG}
+  master:
+    branch: master
+    witnesses: [WYG]
+  imglist:
+    branch: _data
+    path: imglist/{text_id}_{NNN}.txt
+metadata:
+  title: 傅子
+  date: '2015-08-24'
+output:
+  bundle: ../output

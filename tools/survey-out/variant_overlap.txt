@@ -1,0 +1,29 @@
+Corpus / Unihan_Variants.txt overlap
+====================================
+
+corpus distinct codepoints: 33460
+corpus total codepoints:    951438493
+
+Sides:
+  source = corpus codepoints that appear in column 1 of
+           Unihan_Variants.txt (i.e. they have a variant defined).
+  target = corpus codepoints that appear in column 3 (i.e. some
+           other character names them as its variant).
+
+variant_type                    side      distinct    corpus_total   unihan_size
+kSemanticVariant                source        3351       245281847          3538
+kSemanticVariant                target        3363       247933012          3538
+kSimplifiedVariant              source        5934       251369538          6929
+kSimplifiedVariant              target        1545        34540146          6475
+kSpecializedSemanticVariant     source         514        82261869           525
+kSpecializedSemanticVariant     target         514        82261869           525
+kSpoofingVariant                source         213        18942310           349
+kSpoofingVariant                target         213        18942310           349
+kTraditionalVariant             source        1545        34540146          6475
+kTraditionalVariant             target        5934       251369538          6929
+kZVariant                       source         129         7123607           149
+kZVariant                       target         129         7123607           149
+
+union (any type, source side)           distinct=9613     corpus_total=415715920      unihan_size=15818
+union (any type, target side)           distinct=9619     corpus_total=417847515      unihan_size=15813
+union (any type, either side)           distinct=9623     corpus_total=417983064      unihan_size=15830

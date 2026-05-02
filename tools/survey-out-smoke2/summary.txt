@@ -1,0 +1,57 @@
+root: /home/Shared/krpdev/gh/KR1a/KR1a0008
+files processed: 18
+decode errors: 0
+files where NFC altered residue: 0
+elapsed seconds: 0.11
+
+distinct codepoints (textual): 2493
+total textual codepoints: 126969
+pilcrow ('¶') count: 10170
+whitespace codepoints distinct/total: 3/16963
+<pb:...> tokens: 1131
+&KR entity tokens distinct/total: 4/7
+&CH-0F entity tokens distinct/total: 0/0
+other entity tokens distinct/total: 0/0
+other angle markup tokens distinct/total: 0/0
+
+--- top 20 textual codepoints ---
+  U+4E5F    '也'       4931  CJK Unified Ideographs
+  U+66F0    '曰'       4094  CJK Unified Ideographs
+  U+4E4B    '之'       3613  CJK Unified Ideographs
+  U+6545    '故'       3540  CJK Unified Ideographs
+  U+70BA    '為'       3049  CJK Unified Ideographs
+  U+4EE5    '以'       2060  CJK Unified Ideographs
+  U+800C    '而'       1633  CJK Unified Ideographs
+  U+4E0D    '不'       1625  CJK Unified Ideographs
+  U+865E    '虞'       1335  CJK Unified Ideographs
+  U+7FFB    '翻'       1299  CJK Unified Ideographs
+  U+5176    '其'       1299  CJK Unified Ideographs
+  U+4E0A    '上'       1240  CJK Unified Ideographs
+  U+8B02    '謂'       1202  CJK Unified Ideographs
+  U+6709    '有'       1165  CJK Unified Ideographs
+  U+4E94    '五'       1133  CJK Unified Ideographs
+  U+8C61    '象'       1113  CJK Unified Ideographs
+  U+4E09    '三'       1100  CJK Unified Ideographs
+  U+4E7E    '乾'       1084  CJK Unified Ideographs
+  U+5764    '坤'       1070  CJK Unified Ideographs
+  U+4E8C    '二'        998  CJK Unified Ideographs
+
+--- top 20 blocks ---
+      125975  CJK Unified Ideographs
+         409  Geometric Shapes
+         258  Basic Latin
+         143  CJK Unified Ideographs Extension B
+         114  CJK Unified Ideographs Extension A
+          64  Yijing Hexagram Symbols
+           6  CJK Unified Ideographs Extension D
+
+--- top 20 entities (any namespace) ---
+           3  kr	&KR3026;
+           2  kr	&KR2235;
+           1  kr	&KR3124;
+           1  kr	&KR2104;
+
+--- whitespace breakdown ---
+  U+000A       10172  
+  U+3000        6787  IDEOGRAPHIC SPACE
+  U+0020           4  SPACE

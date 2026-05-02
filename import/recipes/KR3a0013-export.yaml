@@ -1,0 +1,5 @@
+format: krp
+bundle: ../output/KR3a0013
+output_dir: ../export/KR3a0013
+shape: dirs
+mode: split

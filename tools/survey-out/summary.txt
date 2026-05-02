@@ -1,0 +1,88 @@
+root: /home/Shared/krpdev/gh
+files processed: 105409
+decode errors: 0
+files where NFC altered residue: 3120
+elapsed seconds: 977.26
+
+distinct codepoints (textual): 33460
+total textual codepoints: 951438493
+pilcrow ('¶') count: 52411455
+org-mode headline markers stripped: 239535
+whitespace codepoints distinct/total: 4/91429189
+<pb:...> tokens: 4936514
+&KR entity tokens distinct/total: 4566/299454
+&CH-0F entity tokens distinct/total: 22/25
+other entity tokens distinct/total: 0/0
+other angle markup tokens distinct/total: 935/8411
+
+--- top 20 textual codepoints ---
+  U+4E4B    '之'   19373831  CJK Unified Ideographs
+  U+3002    '。'   17261588  CJK Symbols and Punctuation
+  U+4E0D    '不'   11612698  CJK Unified Ideographs
+  U+0029    ')'   10832973  Basic Latin
+  U+0028    '('   10829981  Basic Latin
+  U+4EE5    '以'    9576911  CJK Unified Ideographs
+  U+002F    '/'    8906362  Basic Latin
+  U+4E5F    '也'    8368752  CJK Unified Ideographs
+  U+800C    '而'    7743347  CJK Unified Ideographs
+  U+6709    '有'    7479526  CJK Unified Ideographs
+  U+4EBA    '人'    7170214  CJK Unified Ideographs
+  U+70BA    '為'    7094922  CJK Unified Ideographs
+  U+4E00    '一'    6961417  CJK Unified Ideographs
+  U+8005    '者'    6814609  CJK Unified Ideographs
+  U+5176    '其'    6744556  CJK Unified Ideographs
+  U+66F0    '曰'    5337298  CJK Unified Ideographs
+  U+7121    '無'    5290315  CJK Unified Ideographs
+  U+65BC    '於'    4724818  CJK Unified Ideographs
+  U+5B50    '子'    4600297  CJK Unified Ideographs
+  U+5341    '十'    4578888  CJK Unified Ideographs
+
+--- top 20 blocks ---
+   874463238  CJK Unified Ideographs
+    47936399  Basic Latin
+    20309005  CJK Symbols and Punctuation
+     4346796  Halfwidth and Fullwidth Forms
+     2653837  CJK Unified Ideographs Extension A
+      791483  CJK Unified Ideographs Extension B
+      658709  Geometric Shapes
+       77653  CJK Unified Ideographs Extension D
+       47552  Box Drawing
+       33241  CJK Compatibility Forms
+       29180  Yijing Hexagram Symbols
+       21825  CJK Unified Ideographs Extension E
+       12344  General Punctuation
+        9875  Unassigned/Unmapped
+        9237  CJK Unified Ideographs Extension C
+        7566  Arrows
+        6850  Bopomofo
+        6297  Supplementary Private Use Area-A
+        5907  CJK Compatibility Ideographs
+        4739  Latin Extended-A
+
+--- top 20 entities (any namespace) ---
+       23039  kr	&KR1098;
+       18332  kr	&KR0008;
+        7234  kr	&KR0034;
+        2088  kr	&KR0146;
+        1423  kr	&KR0238;
+        1157  kr	&KR0306;
+        1142  kr	&KR0309;
+        1120  kr	&KR0320;
+         988  kr	&KR0070;
+         968  kr	&KR0263;
+         883  kr	&KR0067;
+         841  kr	&KR0377;
+         792  kr	&KR0006;
+         759  kr	&KR0103;
+         743  kr	&KR0013;
+         731  kr	&KR0066;
+         670  kr	&KR0671;
+         556  kr	&KR0615;
+         553  kr	&KR0003;
+         547  kr	&KR2692;
+
+--- whitespace breakdown ---
+  U+000A    56823296  
+  U+3000    29766553  IDEOGRAPHIC SPACE
+  U+0020     4645938  SPACE
+  U+0009      193402  

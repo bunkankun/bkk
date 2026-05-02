@@ -1,0 +1,41 @@
+canonical_identifier: bkk:krp/KR6q0053/T/v1
+canonical_location: https://kanripo.org/bkk/KR6q0053/T/v1
+canonical_set:
+  identifier: bkk:charset/cjk-v1
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+assets:
+  parts:
+  - seq: 1
+    filename: KR6q0053_001-T.yaml
+    hash: sha256:0dd7a674abd41b8fd210abf748b10e5121896611ea76f9fc41e98d2a98490147
+table_of_contents:
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0495a.4-h, span: [front, 0, 295]}
+  label: 臨濟慧照玄公大宗師語錄序
+  level: 1
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0495a.51-h, span: [front, 296, 926]}
+  label: 臨濟慧照玄公大宗師語錄序
+  level: 1
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0495c.12-h, span: [front, 927, 1507]}
+  label: 臨濟慧照玄公大宗師語錄序
+  level: 1
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0495c.12-h, span: [front, 1507, 1794]}
+  label: 臨濟慧照玄公大宗師語錄序
+  level: 1
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0496b.32-h, span: [body, 0, 1794]}
+  label: 鎮州臨濟慧照禪師語錄
+  level: 1
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0503a.45-h, span: [body, 0, 0]}
+  label: 勘辨
+  level: 1
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0504b.82-h, span: [body, 0:0]}
+  label: 行錄
+  level: 1
+  
+metadata:
+  title: 臨濟錄
+  edition:
+    short: T
+  source:
+    repository: tls-texts
+    file: data/tls/KR6q0053.xml
+hash: sha256:0000000000000000000000000000000000000000000000000000000000000000

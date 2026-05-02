@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bkk-importer"
+version = "0.1.0"
+description = "Importer from external sources (TLS, KRP) to the BKK archival format"
+requires-python = ">=3.10"
+dependencies = [
+    "lxml>=4.9",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+]
+
+[tool.setuptools.packages.find]
+include = ["bkk*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
