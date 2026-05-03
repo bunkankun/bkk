@@ -104,12 +104,21 @@ def _bundle_from_manifest(
     if "table_of_contents" in manifest:
         metadata["table_of_contents"] = list(manifest["table_of_contents"])
 
-    edition_short = (
+    manifest_short = (
         edition_block.get("short")
         if isinstance(edition_block, dict) else None
-    ) or _discover_edition_short(file_dir)
-    if edition_short == "bkk":
+    )
+    if manifest_short and manifest_short != "bkk":
+        # Documentary manifest: trust its declared short (e.g. "T", "WYG").
+        edition_short = manifest_short
+    elif "editions" in manifest:
+        # KRP master: distinct edition, lists the documentary witnesses.
         edition_short = "master"
+    else:
+        # TLS master: shares content with the sole documentary witness; use
+        # that subdir name as the rendering hint.
+        sole = _sole_edition_subdir(file_dir)
+        edition_short = sole if sole is not None else "master"
 
     return Bundle(
         text_id=text_id,
@@ -183,15 +192,31 @@ def _sections_from_juan(juan_data: dict,
 
 def _split_bucket(bucket_text: str, bucket_markers: list[dict],
                   toc_entries: list[dict]) -> list[Section]:
-    """Split a merged bucket back into sections.
+    """Split a merged bucket back into sections, guided by the TOC spans.
 
-    Section boundaries follow ``tls:head`` markers (matched against TOC
-    entries by id), not span offsets — at the boundary, markers like the
-    previous section's closing punctuation/paragraph-break sit at the same
-    offset as the next section's head, and offset filtering would mis-route
-    them. Walking the marker list in order keeps each marker on the side it
-    came from.
+    TLS bundles emit ``tls:head`` markers at section boundaries, so we walk
+    the marker list and snap each section break onto the corresponding head
+    marker. Without that, markers like the previous section's closing
+    paragraph-break sit at the same offset as the next section's head and
+    would get mis-routed by pure offset filtering.
+
+    KRP bundles don't carry ``tls:head`` markers; sections in a juan are
+    simply consecutive page-break/line-break runs. When no head marker
+    matches the TOC, fall back to offset slicing — markers at the boundary
+    go to the next section (KRP doesn't share closing punctuation across
+    section seams, so the ambiguity TLS works around can't arise).
     """
+    has_head = any(
+        m["type"] == "tls:head" and m.get("id") in {e["marker_id"] for e in toc_entries}
+        for m in bucket_markers
+    )
+    if has_head:
+        return _split_bucket_by_head(bucket_text, bucket_markers, toc_entries)
+    return _split_bucket_by_offset(bucket_text, bucket_markers, toc_entries)
+
+
+def _split_bucket_by_head(bucket_text: str, bucket_markers: list[dict],
+                          toc_entries: list[dict]) -> list[Section]:
     by_id = {e["marker_id"]: e for e in toc_entries}
 
     sec_entries: list[dict | None] = [None]
@@ -234,6 +259,36 @@ def _split_bucket(bucket_text: str, bucket_markers: list[dict],
     return out
 
 
+def _split_bucket_by_offset(bucket_text: str, bucket_markers: list[dict],
+                            toc_entries: list[dict]) -> list[Section]:
+    """Slice a bucket into sections strictly by ``[start, end)`` offsets.
+
+    Used for bundles whose TOC describes section boundaries without an
+    accompanying ``tls:head`` marker (KRP).
+    """
+    out: list[Section] = []
+    for entry in toc_entries:
+        start = entry["start"]
+        end = entry["end"]
+        section_markers = [
+            Marker(
+                type=m["type"],
+                offset=m["offset"] - start,
+                content=m.get("content") or "",
+                id=m.get("id") or "",
+            )
+            for m in bucket_markers
+            if m["type"] != "tls:ann" and start <= m.get("offset", 0) < end
+        ]
+        out.append(Section(
+            head_text=entry["label"],
+            head_marker_id=entry["marker_id"],
+            text=bucket_text[start:end],
+            markers=section_markers,
+        ))
+    return out
+
+
 def _annotations_from_ann_file(ann_data: dict,
                                source_info: dict | None) -> list[Annotation]:
     provenance_by_id: dict[str, str | None] = {}
@@ -255,14 +310,15 @@ def _annotations_from_ann_file(ann_data: dict,
     return out
 
 
-def _discover_edition_short(bundle_dir: Path) -> str:
-    """Edition short id = the only directory name under ``editions/``.
+def _sole_edition_subdir(bundle_dir: Path) -> str | None:
+    """Return the sole ``editions/<short>/`` subdir name, or ``None``.
 
-    Falls back to ``T`` (the TLS default) if the editions tree is absent.
+    Used to recover the edition short id for a master manifest whose own
+    ``metadata.edition.short`` is the literal ``"bkk"`` (TLS convention,
+    where master and the witness share content).
     """
     editions_dir = bundle_dir / "editions"
-    if editions_dir.is_dir():
-        for d in sorted(editions_dir.iterdir()):
-            if d.is_dir():
-                return d.name
-    return "T"
+    if not editions_dir.is_dir():
+        return None
+    subs = [d.name for d in sorted(editions_dir.iterdir()) if d.is_dir()]
+    return subs[0] if len(subs) == 1 else None

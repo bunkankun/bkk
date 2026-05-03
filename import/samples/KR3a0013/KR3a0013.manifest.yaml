@@ -1,23 +1,26 @@
-canonical_identifier: bkk:krp/KR3a0013/master/v1
-canonical_location: https://kanripo.org/bkk/KR3a0013/master/v1
+canonical_identifier: bkk:krp/KR3a0013/v1
+canonical_location: https://kanripo.org/bkk/KR3a0013/v1
 canonical_set:
   identifier: bkk:charset/cjk-v1
   hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
 entity_encoding:
   identifier: bkk:encoding/kanripo-pua-v1
   hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
-juan:
-- seq: 0
-  filename: KR3a0013_000.yaml
-  hash: sha256:ef668d882af264bfca00ea7504a40f4bc5ae21dc347ba50d9ef3368c2f5df965
-- seq: 1
-  filename: KR3a0013_001.yaml
-  hash: sha256:fe7091626284ab931c8fa82c6417abb17008924219b3d1643cdbb6cb5f646e26
+editions:
+- {short: WYG, label: 【四庫全書・文淵閣】}
+assets:
+  parts:
+  - seq: 0
+    filename: KR3a0013_000.yaml
+    hash: sha256:ef668d882af264bfca00ea7504a40f4bc5ae21dc347ba50d9ef3368c2f5df965
+  - seq: 1
+    filename: KR3a0013_001.yaml
+    hash: sha256:fe7091626284ab931c8fa82c6417abb17008924219b3d1643cdbb6cb5f646e26
 table_of_contents:
-- ref: {juan: 0, marker_id: KR3a0013_WYG_000-1a}
-  title: 目録
-- ref: {juan: 1, marker_id: KR3a0013_WYG_001-1a}
-  title: 傅子
+- ref: {seq: 0, marker_id: KR3a0013_WYG_000-1a, span : [body, 0, 0]}
+  label: 目録
+- ref: {seq: 1, marker_id: KR3a0013_WYG_001-1a, span : [body, 0, 0]}
+  label: 傅子
 metadata:
   title: 傅子
   edition:
@@ -25,5 +28,5 @@ metadata:
   date: '2015-08-24'
   source:
     repository: kanripo
-    dir: KR3a0013
+    path: KR3a0013
 hash: sha256:0000000000000000000000000000000000000000000000000000000000000000

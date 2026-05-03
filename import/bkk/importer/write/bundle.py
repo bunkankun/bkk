@@ -457,11 +457,15 @@ def _build_krp_juan_dict(
     return d
 
 
-def _build_krp_toc_entry(juan_seq: int, head_text: str, head_marker_id: str) -> dict:
+def _build_krp_toc_entry(
+    juan_seq: int, head_text: str, head_marker_id: str,
+    bucket: str, start: int, end: int,
+) -> dict:
     return {
         "ref": marker_to_flow({
             "seq": juan_seq,
             "marker_id": head_marker_id,
+            "span": [bucket, start, end],
         }),
         "label": head_text,
     }
@@ -512,13 +516,25 @@ def _write_krp_juans(
         (juan_dir / filename).write_text(dump(juan_dict), encoding="utf-8")
         juan_files.append((juan.seq, filename, juan_hash))
 
-        # TOC: one entry per juan (KRP shape — no per-section spans).
-        for sec in juan.sections:
-            if not sec.head_text:
+        # TOC: one entry per titled section, span = [bucket, start, end] in
+        # the bucket's text stream (end exclusive — next section start, or
+        # len(text) for the last section in a bucket). Front-bucket entries
+        # are skipped: the front matter (頭注 / opening indent) repeats the
+        # body's title and adds no navigation value.
+        for bucket_name, secs in sections_per_bucket.items():
+            if bucket_name == "front":
                 continue
-            toc.append(_build_krp_toc_entry(
-                juan.seq, sec.head_text, sec.head_marker_id,
-            ))
+            cursor = 0
+            for sec in secs:
+                start = cursor
+                end = cursor + len(sec.text)
+                cursor = end
+                if not sec.head_text:
+                    continue
+                toc.append(_build_krp_toc_entry(
+                    juan.seq, sec.head_text, sec.head_marker_id,
+                    bucket_name, start, end,
+                ))
 
     return juan_files, toc
 

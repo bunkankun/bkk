@@ -61,7 +61,11 @@ def _classify(file: str, path: str, kind: str, sample, ours) -> Divergence:
         elif isinstance(ours, str) and ours in _PLACEHOLDER_HASHES:
             status = "expected"
             note = "ours uses a placeholder hash (e.g. canonical_set)"
-        elif path.startswith(("body.", "front.")) or path.startswith("juan["):
+        elif (
+            path.startswith(("body.", "front."))
+            or path.startswith("juan[")
+            or path.startswith("assets.parts[")
+        ):
             status = "expected"
             note = "hash follows divergent text/markers in the sample"
 

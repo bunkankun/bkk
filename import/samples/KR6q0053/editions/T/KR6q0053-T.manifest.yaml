@@ -37,5 +37,5 @@ metadata:
     short: T
   source:
     repository: tls-texts
-    file: data/tls/KR6q0053.xml
+    path: data/tls/KR6q0053.xml
 hash: sha256:0000000000000000000000000000000000000000000000000000000000000000

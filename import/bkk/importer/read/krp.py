@@ -65,31 +65,35 @@ def _list_juan_files(repo: Path, branch: str, text_id: str) -> list[tuple[int, s
     return sorted(out)
 
 
-def _parse_imglist_file(text: str) -> dict[str, str]:
+def _parse_imglist_file(text: str) -> dict[tuple[str, str], str]:
     """Parse one imglist file: ``<juan>-<PaB><LL>\\t<edition> <juan>-<PaB>\\t<image>``.
 
-    Returns ``{ "<juan>-<PaB>": <image_path> }``.
+    Returns ``{ (<edition>, <juan>-<PaB>): <image_path> }``. Keying by
+    ``(edition, page_id)`` rather than the bare ``page_id`` keeps SBCK and
+    WYG entries that share ``001-1a`` from clobbering each other; the
+    page-break image lookup later in :func:`_parse_juan_text` resolves to
+    the marker's own edition.
     """
-    out: dict[str, str] = {}
+    out: dict[tuple[str, str], str] = {}
     for line in text.splitlines():
         cols = line.split("\t")
         if len(cols) < 3:
             continue
         # Col 2 has the form ``<edition> <juan>-<PaB>``; col 3 is the image.
         try:
-            _, page_id = cols[1].split(" ", 1)
+            edition, page_id = cols[1].split(" ", 1)
         except ValueError:
             continue
-        out[page_id.strip()] = cols[2].strip()
+        out[(edition.strip(), page_id.strip())] = cols[2].strip()
     return out
 
 
 def _load_imglist(repo: Path, branch: str | None, path_template: str,
-                  text_id: str, juan_seqs: list[int]) -> dict[str, str]:
-    """Build the union imglist across all juans (``<juan>-<PaB>`` → image)."""
+                  text_id: str, juan_seqs: list[int]) -> dict[tuple[str, str], str]:
+    """Build the union imglist across all juans, keyed by ``(edition, page_id)``."""
     if branch is None:
         return {}
-    out: dict[str, str] = {}
+    out: dict[tuple[str, str], str] = {}
     for seq in juan_seqs:
         path = path_template.format(text_id=text_id, NNN=f"{seq:03d}")
         try:
@@ -100,7 +104,59 @@ def _load_imglist(repo: Path, branch: str | None, path_template: str,
     return out
 
 
+def _lookup_image(imglist: dict[tuple[str, str], str],
+                  page_id: str, short: str) -> str | None:
+    """Resolve the image for a page-break by edition.
+
+    Page-break ids follow ``<text-id>_<edition>_<location>`` (project
+    memory). We extract the edition and look up
+    ``imglist[(edition, short)]`` so each page-break marker resolves to
+    its *own* edition's image — no cross-edition bleed once SBCK and WYG
+    entries share the same ``<juan>-<PaB>`` shorthand.
+
+    Returns ``None`` when the id doesn't decompose as expected, so a
+    malformed marker can't crash the parse.
+    """
+    parts = page_id.split("_")
+    if len(parts) < 3:
+        return None
+    edition = parts[1]
+    return imglist.get((edition, short))
+
+
 _README_TABLE_RE = re.compile(r"^\s*\|\s*([^|]+?)\s*\|\s*(.+?)\s*\|\s*$")
+
+
+def _load_readme_metadata(repo: Path, branch: str | None) -> dict[str, str]:
+    """Parse ``#+TITLE:`` and ``#+DATE:`` from ``branch:Readme.org``.
+
+    Kanripo readmes commonly write the title as ``傅子 / WYG`` (text title +
+    base edition); the trailing `` / <ed>`` suffix is stripped so the
+    bundle's ``metadata.title`` carries the bare title.
+
+    Returns ``{}`` if the file or fields are missing — the synthesizer
+    treats those metadata fields as optional.
+    """
+    if branch is None:
+        return {}
+    try:
+        text = _git_show(repo, branch, "Readme.org")
+    except subprocess.CalledProcessError:
+        return {}
+    out: dict[str, str] = {}
+    for line in text.splitlines()[:30]:
+        s = line.strip()
+        if s.startswith("#+TITLE:"):
+            value = s[len("#+TITLE:"):].strip()
+            if " / " in value:
+                value = value.split(" / ", 1)[0].strip()
+            if value:
+                out["title"] = value
+        elif s.startswith("#+DATE:"):
+            value = s[len("#+DATE:"):].strip()
+            if value:
+                out["date"] = value
+    return out
 
 
 def _load_edition_labels(repo: Path, branch: str | None) -> dict[str, str]:
@@ -153,13 +209,33 @@ def _load_imginfo(repo: Path, branch: str | None) -> dict[str, str]:
 
 
 _PB_RE = re.compile(r"^<pb:([^>]+)>$")
+_MD_RE = re.compile(r"^<md:[^>]+>$")
 _PROP_RE = re.compile(r"^#\+PROPERTY:\s+(\S+)\s*(.*)$")
 _HEADER_RE = re.compile(r"^(#\s|#\+)")
 _PUA_ENTITY_RE = re.compile(r"&KR(\d+);")
 
 
+_PB_INLINE_RE = re.compile(r"<pb:[^>]+>")
+_MD_INLINE_RE = re.compile(r"<md:[^>]+>")
+
+
+def _clean_head_text(raw: str) -> str:
+    """Strip layout markup from a JUAN directive value.
+
+    The KRP source occasionally embeds ``<pb:...>`` or ``<md:...>`` markers
+    and brackets inside ``#+PROPERTY: JUAN`` directives (e.g.
+    ``[提要]<pb:KR3a0013_WYG_000-2a>``). The TOC label should be the bare
+    kanji title; the ``<md:...>`` references in particular point at other
+    editions and are dropped wholesale (see project memory).
+    """
+    cleaned = _PB_INLINE_RE.sub("", raw)
+    cleaned = _MD_INLINE_RE.sub("", cleaned).strip()
+    return cleaned.strip("[]").strip()
+
+
 def _parse_juan_text(text: str, juan_seq: int,
-                     text_id: str, imglist: dict[str, str]) -> Juan:
+                     text_id: str,
+                     imglist: dict[tuple[str, str], str]) -> Juan:
     """Parse one mandoku-view juan source file into a Juan IR.
 
     Strips the org-mode header, walks ``¶``-terminated logical lines, and
@@ -205,7 +281,7 @@ def _parse_juan_text(text: str, juan_seq: int,
         if _HEADER_RE.match(line):
             m = _PROP_RE.match(line)
             if m and m.group(1) == "JUAN":
-                pending_head_text = m.group(2).strip()
+                pending_head_text = _clean_head_text(m.group(2))
                 if not juan_title:
                     juan_title = pending_head_text
             i += 1
@@ -218,6 +294,11 @@ def _parse_juan_text(text: str, juan_seq: int,
     # Storage newlines are layout artifacts; the only meaningful terminator
     # is ``¶``. Drop ``\n`` entirely.
     rest = rest.replace("\n", "")
+    # Some kanripo branches (e.g. WYG of KR3a0001) embed ``<pb:...>`` and
+    # ``<md:...>`` markers inline mid-chunk instead of as standalone lines.
+    # Normalise by wrapping every such marker in ``¶`` so the chunk-level
+    # dispatch below sees them as their own chunks.
+    rest = re.sub(r"(<(?:pb|md):[^>]+>)", r"¶\1¶", rest)
     # Split on ``¶`` so each chunk is one logical line; the trailing chunk
     # after the last ``¶`` is normally empty.
     chunks = rest.split("¶")
@@ -227,8 +308,13 @@ def _parse_juan_text(text: str, juan_seq: int,
             continue
 
         # A logical line may begin with structural tokens that are not part
-        # of the line proper: ``<pb:...>`` and ``#+PROPERTY: JUAN ...``.
+        # of the line proper: ``<pb:...>``, ``<md:...>``, or
+        # ``#+PROPERTY: JUAN ...``. ``<md:...>`` is a non-local cross-edition
+        # reference and is dropped silently — see project memory.
         while True:
+            if _MD_RE.match(chunk):
+                chunk = ""
+                break
             m = _PB_RE.match(chunk)
             if m:
                 page_id = m.group(1)
@@ -241,7 +327,7 @@ def _parse_juan_text(text: str, juan_seq: int,
                     id=page_id,
                 )
                 short = page_id.split("_")[-1]  # e.g. "000-1a"
-                img = imglist.get(short)
+                img = _lookup_image(imglist, page_id, short)
                 if img:
                     marker.extras["image"] = img
                 # If a JUAN directive is pending and this section is empty,
@@ -262,7 +348,7 @@ def _parse_juan_text(text: str, juan_seq: int,
                 # open with content; otherwise just record the head text.
                 m = _PROP_RE.match(chunk)
                 if m and m.group(1) == "JUAN":
-                    new_head = m.group(2).strip()
+                    new_head = _clean_head_text(m.group(2))
                     if head_text:
                         # Close the previous section after recording an
                         # org-directive marker at the current offset.
@@ -405,6 +491,69 @@ def _attach_variants(master: Juan, witness: Juan, witness_short: str) -> None:
         ))
 
 
+def _map_witness_offset(opcodes: list[tuple[str, int, int, int, int]],
+                        j_off: int) -> int:
+    """Map a witness offset (``b``-coordinate) to a master offset (``a``).
+
+    Inside an ``equal`` block the mapping is exact. Inside ``replace`` /
+    ``delete`` / ``insert`` blocks the witness offset is snapped to the
+    start of the corresponding master span — the page-break still lands in
+    the right section, just rounded to the nearest aligned boundary.
+    """
+    last_i2 = 0
+    for tag, i1, i2, j1, j2 in opcodes:
+        if j1 <= j_off < j2:
+            if tag == "equal":
+                return i1 + (j_off - j1)
+            return i1
+        last_i2 = i2
+    return last_i2
+
+
+def _attach_witness_page_breaks(master: Juan, witness: Juan) -> None:
+    """Inject witness page-breaks into ``master`` at aligned offsets.
+
+    Each injected marker keeps the witness id (e.g. ``KR3a0001_WYG_001-1a``)
+    and a copy of the witness ``extras`` (so the image — already resolved
+    per-edition by :func:`_lookup_image` during witness parse — travels
+    with the page-break and never bleeds into another edition).
+
+    Markers whose ``id`` already exists on the master are skipped so the
+    base edition's page-breaks (already in the master source) aren't
+    duplicated. Section markers stay in append order; the writer's
+    offset-stable sort puts them in the right place.
+    """
+    existing_ids = {
+        m.id for sec in master.sections
+        for m in sec.markers if m.type == "page-break"
+    }
+
+    a = _juan_text(master)
+    b = _juan_text(witness)
+    sm = difflib.SequenceMatcher(a=a, b=b, autojunk=False)
+    opcodes = sm.get_opcodes()
+
+    cursor = 0
+    for w_section in witness.sections:
+        for marker in w_section.markers:
+            if marker.type != "page-break":
+                continue
+            if marker.id in existing_ids:
+                continue
+            j_off = cursor + marker.offset
+            i_off = _map_witness_offset(opcodes, j_off)
+            sec_idx, local_off = _section_for_offset(master, i_off)
+            master.sections[sec_idx].markers.append(Marker(
+                type="page-break",
+                offset=local_off,
+                content="",
+                id=marker.id,
+                extras=dict(marker.extras),
+            ))
+            existing_ids.add(marker.id)
+        cursor += len(w_section.text)
+
+
 # ---------- top-level ------------------------------------------------------
 
 
@@ -500,7 +649,10 @@ def read_krp(recipe: Recipe) -> tuple[list[Bundle], Bundle | None]:
             witnesses=list(ms.witnesses),
         )
 
-        # Variant detection: pair master against each witness in declaration order.
+        # Variant detection + page-break merge: pair master against each
+        # witness in declaration order. Witness page-breaks land in the
+        # master at aligned offsets so a master reader sees the page
+        # transitions of every edition, each carrying its own image.
         for wshort in ms.witnesses:
             wbundle = next(
                 (b for b in documentary if b.edition_short == wshort), None,
@@ -509,6 +661,7 @@ def read_krp(recipe: Recipe) -> tuple[list[Bundle], Bundle | None]:
                 continue
             for mj, wj in zip(master.juans, wbundle.juans):
                 _attach_variants(mj, wj, wshort)
+                _attach_witness_page_breaks(mj, wj)
 
         # PUA-map aggregates across the entire bundle (master + every
         # documentary edition), so PUA characters that only appear on the

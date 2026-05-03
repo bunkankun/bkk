@@ -110,8 +110,9 @@ def test_page_break_ids_resolve_to_imglist(out_root: Path):
             for m in juan[bucket]["markers"]:
                 if m["type"] != "page-break":
                     continue
-                short = m["id"].split("_")[-1]
-                assert short in imglist, (
+                parts = m["id"].split("_")
+                edition, short = parts[1], parts[-1]
+                assert (edition, short) in imglist, (
                     f"{juan_path.name}/{bucket} page-break {m['id']} "
                     "missing from imglist"
                 )
@@ -158,7 +159,7 @@ _MIN_JUAN = (
 
 def test_parse_min_juan_basic_shape():
     juan = _parse_juan_text(_MIN_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={"001-1a": "img/test-1a.png"})
+                            imglist={("TEST", "001-1a"): "img/test-1a.png"})
     assert juan.seq == 1
     assert len(juan.sections) == 1
     sec = juan.sections[0]
@@ -169,7 +170,7 @@ def test_parse_min_juan_basic_shape():
 
 def test_parse_min_juan_markers():
     juan = _parse_juan_text(_MIN_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={"001-1a": "img/test-1a.png"})
+                            imglist={("TEST", "001-1a"): "img/test-1a.png"})
     types = [m.type for m in juan.sections[0].markers]
     # Expect: page-break, line-break, indent, line-break, indent
     assert types[0] == "page-break"
@@ -189,3 +190,29 @@ def test_parse_min_juan_offsets_in_range():
         assert 0 <= m.offset <= text_len, (
             f"{m.type} offset {m.offset} out of range (text_len={text_len})"
         )
+
+
+_MD_JUAN = (
+    "# -*- coding: utf-8 -*-\n"
+    "#+TITLE: 試験\n"
+    "#+PROPERTY: ID KRT0001\n"
+    "#+PROPERTY: JUAN 試験篇\n"
+    "<md:KRT0001_OTHER_001-1a>¶"
+    "<pb:KRT0001_TEST_001-1a>¶"
+    "　　第一行は標題なり¶"
+)
+
+
+def test_md_markers_are_dropped():
+    """<md:...> chunks (cross-edition refs) emit no marker and no text."""
+    juan = _parse_juan_text(_MD_JUAN, juan_seq=1, text_id="KRT0001",
+                            imglist={})
+    sec = juan.sections[0]
+    # No marker carries the OTHER edition's id, and the chunk leaves no
+    # textual residue.
+    assert all("OTHER" not in m.id for m in sec.markers)
+    assert "OTHER" not in sec.text
+    assert "<md:" not in sec.text
+    # The real <pb:> marker that follows still lands.
+    pb_ids = [m.id for m in sec.markers if m.type == "page-break"]
+    assert pb_ids == ["KRT0001_TEST_001-1a"]

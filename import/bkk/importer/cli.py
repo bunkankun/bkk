@@ -13,12 +13,27 @@ Expects the TLS repository layout:
 
 KRP invocation::
 
+    # single text from a local kanripo mirror
+    python -m bkk.importer --format krp --in <root> --text-id KR3a0013 --out <out>
+
+    # single text fetched on demand from github.com/kanripo/<id>
+    python -m bkk.importer --format krp --text-id KR3a0013 --out <out>
+
+    # every text under a corpus prefix (prompts for confirmation; --yes skips)
+    python -m bkk.importer --format krp --in <root> --section KR3a --out <out>
+
+    # every discoverable text under SOURCE (prompts for confirmation)
+    python -m bkk.importer --format krp --in <root> --out <out>
+
+    # legacy recipe-driven path (overrides everything else)
     python -m bkk.importer --format krp --recipe <recipe.yaml>
 
-The recipe pins per-text knobs (branch → edition mapping, master witnesses,
-imglist source). See :mod:`bkk.importer.recipe` for the schema.
+The recipe-less paths derive editions, master/imglist branches, witnesses,
+title, and date from the source repo itself (branch list + ``Readme.org``).
+See :mod:`bkk.importer.source` for the discovery + synthesis logic and
+:mod:`bkk.importer.recipe` for the schema recipes still pin.
 
-Either path emits a BKK bundle under ``<out-root>/<text-id>/``.
+Either format emits a BKK bundle under ``<out-root>/<text-id>/``.
 """
 
 from __future__ import annotations
@@ -29,8 +44,12 @@ from pathlib import Path
 
 from .diverge import diff_trees, render_report
 from .read.tls import read_tls
-from .recipe import load_recipe
+from .recipe import Recipe, load_recipe
 from .write.bundle import write_bundle, write_krp_edition, write_krp_master
+
+
+_DEFAULT_GITHUB_USER = "kanripo"
+_DEFAULT_CACHE_DIR = Path.home() / ".cache" / "bkk" / "krp"
 
 
 def _find_tls_text(in_root: Path, text_id: str) -> Path | None:
@@ -61,12 +80,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--format", required=True, choices=["tls", "krp"])
     p.add_argument("--recipe", type=Path, default=None,
                    help="recipe YAML pinning per-text knobs (krp); when given, "
-                        "supplies --in/--out/--text-id defaults")
+                        "supplies --in/--out/--text-id defaults and overrides "
+                        "the auto-discovery path")
     p.add_argument("--in", dest="in_root", type=Path, default=None,
-                   help="source repository root (tls) or krp git repo")
+                   help="source root: tls repo, or kanripo mirror "
+                        "(parent of <prefix>/<text-id>/ clones)")
     p.add_argument("--out", dest="out_root", type=Path, default=None,
                    help="output directory (bundle written under <out>/<text-id>/)")
-    p.add_argument("--text-id", default=None, help="text identifier (e.g. KR6q0053)")
+    p.add_argument("--text-id", default=None, help="single text id (e.g. KR6q0053)")
+    p.add_argument("--section", default=None,
+                   help="krp: import every text under a corpus prefix "
+                        "(e.g. KR3a); requires confirmation")
+    p.add_argument("--github", dest="github_user", default=None,
+                   help=f"krp: github user/org to fetch from "
+                        f"(default {_DEFAULT_GITHUB_USER!r} when --in is unset)")
+    p.add_argument("--master-branch", default="master",
+                   help="krp: branch carrying the curated master (default: master)")
+    p.add_argument("--imglist-branch", default="_data",
+                   help="krp: branch carrying imglist + imginfo (default: _data)")
+    p.add_argument("--cache-dir", type=Path, default=_DEFAULT_CACHE_DIR,
+                   help=f"krp: cache for github clones "
+                        f"(default: {_DEFAULT_CACHE_DIR})")
+    p.add_argument("--yes", action="store_true",
+                   help="krp: skip the bulk-import confirmation prompt")
     p.add_argument("--sample", type=Path, default=None,
                    help="optional sample tree to diff against; emits a "
                         "divergence-from-sample.md alongside the output")
@@ -112,10 +148,67 @@ def _run_tls(args) -> int:
     return 0
 
 
+# ---------- KRP --------------------------------------------------------------
+
+
 def _run_krp(args) -> int:
-    if args.recipe is None:
-        print("error: --recipe is required for --format krp", file=sys.stderr)
+    """Dispatch the KRP path.
+
+    Three shapes:
+
+    1. ``--recipe`` given → legacy: load the recipe verbatim and run it.
+       Preserves every existing test fixture.
+    2. ``--text-id`` given → single text. Source comes from ``--in`` if set,
+       otherwise github.com/<--github|kanripo>/<id>.
+    3. No ``--text-id`` → bulk. ``--section`` narrows to one corpus prefix;
+       omitting both walks the whole source. Both bulk modes prompt for
+       confirmation unless ``--yes`` is set.
+    """
+    if args.recipe is not None:
+        return _run_krp_recipe(args)
+
+    if args.out_root is None:
+        print("error: --out is required for --format krp (without --recipe)",
+              file=sys.stderr)
         return 2
+    if args.text_id is not None and args.section is not None:
+        print("error: --text-id and --section are mutually exclusive",
+              file=sys.stderr)
+        return 2
+    if args.in_root is not None and args.github_user is not None:
+        print("error: --in and --github are mutually exclusive",
+              file=sys.stderr)
+        return 2
+
+    # Resolve the (text_id, repo_path) pairs to import.
+    try:
+        pairs = _resolve_targets(args)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if not pairs:
+        print("error: no texts found to import", file=sys.stderr)
+        return 2
+
+    if len(pairs) > 1 and not args.yes:
+        if not _confirm_bulk(pairs):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    for text_id, repo_path in pairs:
+        try:
+            recipe = _synthesize(args, text_id, repo_path)
+            _import_one(recipe, args.out_root, args.sample if len(pairs) == 1 else None)
+        except Exception as exc:  # noqa: BLE001 — surface per-text failure, keep going
+            print(f"error importing {text_id}: {exc}", file=sys.stderr)
+            rc = 1
+    return rc
+
+
+def _run_krp_recipe(args) -> int:
+    """Legacy path: --recipe is authoritative. Preserves prior behaviour."""
     recipe = load_recipe(args.recipe)
     if recipe.format != "krp":
         print(f"error: recipe at {args.recipe} declares format "
@@ -128,16 +221,79 @@ def _run_krp(args) -> int:
               "`output.bundle` in the recipe", file=sys.stderr)
         return 2
 
-    # Lazy import so the lxml/TLS path stays decoupled from the krp path.
+    _import_one(recipe, out_root, args.sample)
+    return 0
+
+
+def _resolve_targets(args) -> list[tuple[str, Path]]:
+    """Map CLI flags → ``[(text_id, repo_path), ...]`` to import.
+
+    Resolution rules match the docstring on :func:`_run_krp`. Local sources
+    are walked from ``--in``; github sources land in ``--cache-dir``.
+    """
+    # Lazy import: keeps the CLI startup snappy and lets the tls path run
+    # without `requests` installed.
+    from . import source
+
+    use_github = args.in_root is None
+    github_user = args.github_user or (_DEFAULT_GITHUB_USER if use_github else None)
+
+    if args.text_id:
+        if use_github:
+            repo = source.resolve_github_repo(
+                github_user, args.text_id, args.cache_dir,
+            )
+        else:
+            repo = source.resolve_local_repo(args.in_root, args.text_id)
+        return [(args.text_id, repo)]
+
+    # Bulk: list ids first, then resolve each.
+    if use_github:
+        ids = source.list_github_text_ids(github_user, args.section)
+    else:
+        ids = source.list_local_text_ids(args.in_root, args.section)
+
+    pairs: list[tuple[str, Path]] = []
+    for tid in ids:
+        if use_github:
+            repo = source.resolve_github_repo(github_user, tid, args.cache_dir)
+        else:
+            repo = source.resolve_local_repo(args.in_root, tid)
+        pairs.append((tid, repo))
+    return pairs
+
+
+def _synthesize(args, text_id: str, repo: Path) -> Recipe:
+    from . import source
+    return source.synthesize_recipe(
+        repo, text_id,
+        master_branch=args.master_branch,
+        imglist_branch=args.imglist_branch,
+    )
+
+
+def _confirm_bulk(pairs: list[tuple[str, Path]]) -> bool:
+    """Print the discovered ids and ask once. Returns True on yes."""
+    print(f"about to import {len(pairs)} text(s):", file=sys.stderr)
+    for tid, repo in pairs:
+        print(f"  {tid}  ({repo})", file=sys.stderr)
+    try:
+        ans = input(f"Import {len(pairs)} texts? [y/N] ").strip().lower()
+    except EOFError:
+        return False
+    return ans in {"y", "yes"}
+
+
+def _import_one(recipe: Recipe, out_root: Path, sample: Path | None) -> None:
+    """Run read+write for one synthesized or loaded recipe."""
+    # Lazy: keep the lxml/TLS path independent of the krp reader.
     from .read.krp import read_krp
 
     documentary, master = read_krp(recipe)
 
     text_id = recipe.text_id or ""
-    juan_total = 0
     for bundle in documentary:
         s = write_krp_edition(bundle, out_root)
-        juan_total = max(juan_total, len(s["juans"]))
         print(
             f"wrote {len(s['juans'])} juan(s) for {s['text_id']} "
             f"edition {s['edition']} under {s['out_root']}"
@@ -150,10 +306,9 @@ def _run_krp(args) -> int:
             + (f" (+ {s['pua_map']})" if "pua_map" in s else "")
         )
 
-    if args.sample is not None and text_id:
+    if sample is not None and text_id:
         ours_root = out_root / text_id
-        _emit_divergence(args.sample, ours_root, out_root)
-    return 0
+        _emit_divergence(sample, ours_root, out_root)
 
 
 def _emit_divergence(sample: Path, ours_root: Path, out_root: Path) -> None:
