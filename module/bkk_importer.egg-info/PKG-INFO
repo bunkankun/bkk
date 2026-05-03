@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: bkk-importer
+Version: 0.1.0
+Summary: Importer from external sources (TLS, KRP) to the BKK archival format
+Requires-Python: >=3.10
+Requires-Dist: lxml>=4.9
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: requests>=2.28
+Provides-Extra: dev
+Requires-Dist: pytest>=7; extra == "dev"

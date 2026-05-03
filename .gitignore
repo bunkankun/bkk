@@ -13,3 +13,7 @@ import/.pytest_cache
 import/output
 import/exports
 import/export
+module/.pytest_cache
+module/output
+module/exports
+module/export
