@@ -1,0 +1,3 @@
+# BKK serve
+
+We will now plan for the server component of the BKK suite.  We want to serve files from the bundle, whole or in part, query the corpus against the index, do some maintenance tasks on the corpus and browse the contents of the corpus.  The server should OpenAPI compatible access points. For adressing texts, we want to have a REST interface.  The identification of a text will be either based on the textid, or on any of the identifiers enumerated in the metadata section of the manifest.
