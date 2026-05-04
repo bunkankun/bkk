@@ -1,0 +1,240 @@
+"""Section C: juan field constraints (master + edition juans)."""
+
+from __future__ import annotations
+
+import unicodedata
+
+from ..context import ValidationContext, LoadedFile
+
+VALID_BUCKETS = ("front", "body", "back")
+KNOWN_MARKER_TYPES = {
+    "page-break", "line-break", "indent", "punctuation", "paragraph-break",
+    "comment", "head", "variant",
+    "kr:org-directive",
+    "tls:head", "tls:seg", "tls:ann",
+}
+
+REQUIRED_JUAN_KEYS = ("canonical_identifier", "seq", "body", "metadata", "hash")
+REQUIRED_BUCKET_KEYS = ("text", "hash", "markers")
+
+
+def run(ctx: ValidationContext) -> None:
+    # In KRP, the master juan carries markers from each declared witness; in
+    # TLS, it carries the sole witness's markers. Either way the marker
+    # edition segment must match a known witness short.
+    declared_shorts = _declared_witness_shorts(ctx)
+    on_disk_shorts = set(ctx.editions.keys())
+    allowed_master_editions = declared_shorts | on_disk_shorts | {"master"}
+
+    for lf in ctx.master_juans.values():
+        _check_juan(ctx, lf, allowed_marker_editions=allowed_master_editions)
+    for short, ed in ctx.editions.items():
+        for lf in ed.juans.values():
+            _check_juan(ctx, lf, allowed_marker_editions={short})
+
+
+def _declared_witness_shorts(ctx: ValidationContext) -> set[str]:
+    out: set[str] = set()
+    if isinstance(ctx.master_manifest.data, dict):
+        for ed in ctx.master_manifest.data.get("editions") or []:
+            if isinstance(ed, dict) and isinstance(ed.get("short"), str):
+                out.add(ed["short"])
+    return out
+
+
+def _check_juan(
+    ctx: ValidationContext, lf: LoadedFile, *,
+    allowed_marker_editions: set[str],
+) -> None:
+    if not lf.exists:
+        return  # already flagged
+    if lf.parse_error is not None:
+        ctx.report.add(
+            "MANIFEST_PARSE", "error", lf.rel,
+            f"YAML parse error: {lf.parse_error}",
+        )
+        return
+    if not isinstance(lf.data, dict):
+        ctx.report.add(
+            "JUAN_REQUIRED_KEYS", "error", lf.rel,
+            "juan top level is not a mapping",
+        )
+        return
+    data = lf.data
+
+    for key in REQUIRED_JUAN_KEYS:
+        if key not in data:
+            ctx.report.add(
+                "JUAN_REQUIRED_KEYS", "error", lf.rel,
+                f"missing required key '{key}'",
+            )
+
+    # Top-level hash format.
+    _check_hash_format(ctx, lf, "hash", data.get("hash"))
+
+    # Buckets.
+    bucket_keys_present = [k for k in VALID_BUCKETS if k in data]
+    if "body" not in data:
+        ctx.report.add(
+            "JUAN_BUCKETS_VALID", "error", lf.rel,
+            "required bucket 'body' is missing",
+        )
+    # Any keys at top level that look like buckets but aren't valid?
+    for k in data.keys():
+        if k in ("canonical_identifier", "seq", "metadata", "hash", *VALID_BUCKETS):
+            continue
+        # Not a known bucket; only flag if it shadows the bucket namespace by name.
+        # We don't aggressively reject unknown top-level keys (forward compat).
+
+    for bucket_name in bucket_keys_present:
+        _check_bucket(
+            ctx, lf, allowed_marker_editions=allowed_marker_editions,
+            bucket_name=bucket_name,
+        )
+
+
+def _check_bucket(
+    ctx: ValidationContext, lf: LoadedFile, *,
+    allowed_marker_editions: set[str], bucket_name: str,
+) -> None:
+    bucket = lf.data.get(bucket_name)
+    if not isinstance(bucket, dict):
+        ctx.report.add(
+            "JUAN_BUCKETS_VALID", "error", lf.rel,
+            f"bucket '{bucket_name}' is not a mapping",
+        )
+        return
+    for key in REQUIRED_BUCKET_KEYS:
+        if key not in bucket:
+            ctx.report.add(
+                "JUAN_REQUIRED_KEYS", "error", lf.rel,
+                f"bucket '{bucket_name}' missing required key '{key}'",
+            )
+    text = bucket.get("text", "")
+    if not isinstance(text, str):
+        ctx.report.add(
+            "JUAN_REQUIRED_KEYS", "error", lf.rel,
+            f"bucket '{bucket_name}'.text is not a string",
+        )
+        return
+    if unicodedata.normalize("NFC", text) != text:
+        ctx.report.add(
+            "JUAN_TEXT_NFC", "error", lf.rel,
+            f"bucket '{bucket_name}'.text is not in NFC normalization",
+        )
+
+    _check_hash_format(ctx, lf, f"{bucket_name}.hash", bucket.get("hash"))
+
+    markers = bucket.get("markers")
+    if not isinstance(markers, list):
+        return
+    _check_markers(
+        ctx, lf, allowed_marker_editions=allowed_marker_editions,
+        bucket_name=bucket_name, text=text, markers=markers,
+    )
+
+
+def _check_markers(
+    ctx: ValidationContext, lf: LoadedFile, *,
+    allowed_marker_editions: set[str],
+    bucket_name: str, text: str, markers: list,
+) -> None:
+    text_len = len(text)
+    last_offset: int | None = None
+    out_of_order = False
+    seen_ids: dict[str, int] = {}
+
+    for i, m in enumerate(markers):
+        if not isinstance(m, dict):
+            ctx.report.add(
+                "JUAN_REQUIRED_KEYS", "error", lf.rel,
+                f"{bucket_name}.markers[{i}] is not a mapping",
+            )
+            continue
+        mtype = m.get("type")
+        offset = m.get("offset")
+        mid = m.get("id") or ""
+
+        if isinstance(mtype, str) and mtype not in KNOWN_MARKER_TYPES:
+            ctx.report.add(
+                "JUAN_MARKER_TYPE_KNOWN", "warning", lf.rel,
+                f"{bucket_name}.markers[{i}] has unknown type '{mtype}'",
+            )
+        if not isinstance(offset, int):
+            ctx.report.add(
+                "JUAN_MARKER_OFFSET_BOUNDS", "error", lf.rel,
+                f"{bucket_name}.markers[{i}] offset missing or not an int",
+            )
+        else:
+            if not (0 <= offset <= text_len):
+                ctx.report.add(
+                    "JUAN_MARKER_OFFSET_BOUNDS", "error", lf.rel,
+                    f"{bucket_name}.markers[{i}] offset {offset} out of range [0, {text_len}]",
+                )
+            if last_offset is not None and offset < last_offset and not out_of_order:
+                ctx.report.add(
+                    "JUAN_MARKER_OFFSET_ORDER", "warning", lf.rel,
+                    f"{bucket_name}.markers[{i}] offset {offset} precedes previous offset {last_offset}",
+                )
+                out_of_order = True
+            last_offset = offset
+
+        if isinstance(mid, str) and mid:
+            if mid in seen_ids:
+                ctx.report.add(
+                    "JUAN_MARKER_ID_UNIQUE", "error", lf.rel,
+                    f"{bucket_name}.markers[{i}] duplicate id '{mid}' (also at index {seen_ids[mid]})",
+                )
+            else:
+                seen_ids[mid] = i
+            # tls:ann markers carry annotation UUIDs, not the standard
+            # <text-id>_<edition>_<location> form. Skip the format check.
+            if mtype != "tls:ann":
+                _check_marker_id_format(
+                    ctx, lf, bucket_name, i, mid, allowed_marker_editions,
+                )
+
+
+def _check_marker_id_format(
+    ctx: ValidationContext, lf: LoadedFile, bucket: str, i: int, mid: str,
+    allowed_editions: set[str],
+) -> None:
+    # Format: <text-id>_<edition>_<location>
+    parts = mid.split("_", 2)
+    if len(parts) != 3 or not parts[2]:
+        ctx.report.add(
+            "JUAN_MARKER_ID_FORMAT", "error", lf.rel,
+            f"{bucket}.markers[{i}] id '{mid}' does not match <text-id>_<edition>_<location>",
+        )
+        return
+    text_id, edition, _location = parts
+    if text_id != _ctx_text_id(lf):
+        ctx.report.add(
+            "JUAN_MARKER_ID_FORMAT", "error", lf.rel,
+            f"{bucket}.markers[{i}] id '{mid}' text-id segment '{text_id}' does not match file's text-id",
+        )
+        return
+    if allowed_editions and edition not in allowed_editions:
+        ctx.report.add(
+            "JUAN_MARKER_ID_FORMAT", "error", lf.rel,
+            f"{bucket}.markers[{i}] id '{mid}' edition segment '{edition}' not in allowed {sorted(allowed_editions)}",
+        )
+
+
+def _ctx_text_id(lf: LoadedFile) -> str:
+    """Recover the text-id from the juan filename's stem prefix."""
+    stem = lf.path.stem  # e.g. KR3a0013_000 or KR3a0013_000-WYG
+    return stem.split("_", 1)[0]
+
+
+def _check_hash_format(
+    ctx: ValidationContext, lf: LoadedFile, field: str, value: object,
+) -> None:
+    import re
+    if value is None:
+        return
+    if not isinstance(value, str) or not re.match(r"^sha256:[0-9a-f]{64}$", value):
+        ctx.report.add(
+            "HASH_FORMAT", "error", lf.rel,
+            f"{field}: '{value}' does not match sha256:<64-hex>",
+        )

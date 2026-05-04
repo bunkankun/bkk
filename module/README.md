@@ -136,3 +136,113 @@ with Index("corpus.bkkx") as ix:
     for hit in ix.search("甞不盡"):
         print(hit.textid, hit.master_offset, hit.matched_via)
 ```
+
+## Validation
+
+The validator checks a bundle on disk against the structural and field-level
+constraints documented under `Archival format`. It does not recompute or
+verify hashes — only their format (`sha256:<64-hex>`) is checked.
+
+### CLI
+
+```
+python -m bkk.validator <bundle-dir>           # human-readable report
+python -m bkk.validator --json <bundle-dir>    # JSON report
+```
+
+Exit codes: `0` if no error-severity findings (warnings allowed), `1` if any
+error is present, `2` for bad invocation (e.g. path is not a directory).
+
+### Severity
+
+Two tiers: `error` (the bundle violates a hard constraint) and `warning`
+(suspicious but not strictly invalid — e.g. PUA codepoint counts that drift
+from the master text). Warnings do not fail the exit code.
+
+### Python API
+
+```python
+from bkk.validator import validate_bundle
+
+report = validate_bundle("path/to/KR3a0013")
+print(report.render_text())
+for f in report.findings:
+    print(f.rule_id, f.severity, f.path, f.message)
+if report.has_errors:
+    ...
+```
+
+### Rule catalog
+
+Rules are grouped by concern; each emits findings under a stable `rule_id`
+(used for grouping in text output and as the JSON key).
+
+| Module | Concern | Examples |
+|---|---|---|
+| `rules/filesystem.py` | file presence, edition mirroring | `MANIFEST_MISSING`, `EDITION_JUAN_COVERAGE` |
+| `rules/manifest.py`   | manifest field shapes, TOC spans | `CANONICAL_IDENTIFIER_FORMAT`, `TOC_REF_SPAN_BOUNDS` |
+| `rules/juan.py`       | juan buckets, NFC, markers | `JUAN_TEXT_NFC`, `JUAN_MARKER_ID_FORMAT` |
+| `rules/ann.py`        | TLS annotations | `ANN_SEG_ID_RESOLVES`, `ANN_OFFSET_BOUNDS` |
+| `rules/pua.py`        | PUA-map cross-checks | `PUA_ENTRY_KR_CODEPOINT_MATCH`, `PUA_COUNT_MATCHES_TEXT` |
+
+The `Report` collapses runaway repetitions of the same `(rule_id, path)` pair
+after five findings to keep output scannable.
+
+### Updating rules
+
+To **change an existing rule**, edit the relevant module under
+`bkk/validator/rules/` and adjust the `ctx.report.add(rule_id, severity,
+path, message)` call. Severity is `"error"` or `"warning"`. Keep `rule_id`
+stable — downstream tooling and the test suite key on it.
+
+To **add a rule** to an existing section, write the check inside the
+section's `run(ctx)` (or a helper it calls) and emit findings via
+`ctx.report.add(...)`. Pick a new `rule_id` that fits the section's prefix
+(`MANIFEST_*`, `JUAN_*`, …).
+
+To **add a whole new section**, drop a new module under `rules/` exposing a
+`run(ctx) -> None` function, then append it to the `_MODULES` tuple in
+`rules/__init__.py`. Modules run in `_MODULES` order; later rules already
+tolerate missing/broken files because earlier ones flag them and set
+context flags.
+
+Each rule should be **independent** where possible: emit a finding and
+continue, rather than raising. The `ValidationContext` (`context.py`) holds
+parsed manifests, juans, editions, and the running `Report`; reuse those
+rather than re-reading files.
+
+To **test a new rule**, add a case to `tests/test_validator.py`. The pattern
+is: take a `bundle_copy` (per-test copy of a freshly imported bundle),
+mutate it to provoke the rule, call `validate_bundle`, and assert the
+expected `rule_id` appears in the report.
+
+### Possible extension: pluggable YAML/JSON schema
+
+The current rules are pure Python because most checks are cross-file
+(span bounds resolved against the referenced juan's text length, marker ids
+that must agree with the surrounding filename, PUA counts cross-summed
+against master text). These do not fit a declarative schema cleanly.
+
+For the *shape*-level checks (required keys, scalar types, enum values,
+regex-constrained strings) a JSON Schema layer could be slotted in as one
+more rule module without changing the rest of the pipeline:
+
+1. Place schemas under `bkk/validator/schemas/` — one per file kind, e.g.
+   `manifest.schema.json`, `juan.schema.json`, `ann.schema.json`,
+   `pua-map.schema.json`.
+2. Add `rules/schema.py` exposing `run(ctx)` that, for each loaded file in
+   the `ValidationContext`, picks the matching schema and runs it (using
+   `jsonschema` from PyPI) against `lf.data`. Emit findings under a stable
+   `SCHEMA_<kind>` `rule_id` so they group separately from hand-written
+   rules.
+3. Register `schema` in the `_MODULES` tuple in `rules/__init__.py`,
+   ideally after `manifest`/`juan`/`ann` so schema findings appear after
+   the targeted ones.
+4. Move only the redundant shape checks (`MANIFEST_REQUIRED_KEYS`,
+   `JUAN_REQUIRED_KEYS`, `ANN_REQUIRED_KEYS`, simple enums) into the
+   schemas. Leave cross-file checks in Python.
+
+Tradeoff: schemas are easier to read and edit by non-Python contributors
+and travel well as a public spec, but they cannot express constraints that
+need a second file's content. Treat them as a complement to the Python
+rules, not a replacement.
