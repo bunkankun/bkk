@@ -9,11 +9,14 @@ parallel with the bucket/witness id it points at.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 
 from .build import build_index, compute_bkkx_hash
 from .schema import SCHEMA_VERSION, TABLES_DDL, create_heavy_indices
+
+log = logging.getLogger("bkk.index")
 
 
 def discover_bundles(corpus_root: Path | str, prefix: str | None = None) -> list[Path]:
@@ -36,8 +39,11 @@ def discover_bundles(corpus_root: Path | str, prefix: str | None = None) -> list
 
 
 def is_stale(bundle_dir: Path, bkkx_path: Path) -> bool:
-    """Return True iff ``bkkx_path`` is missing or older than any source file."""
+    """Return True iff ``bkkx_path`` is missing, has the wrong schema version,
+    or is older than any source file."""
     if not bkkx_path.exists():
+        return True
+    if _schema_version(bkkx_path) != SCHEMA_VERSION:
         return True
     bkkx_mtime = bkkx_path.stat().st_mtime
     textid = bundle_dir.name
@@ -47,6 +53,20 @@ def is_stale(bundle_dir: Path, bkkx_path: Path) -> bool:
         if src.exists() and src.stat().st_mtime > bkkx_mtime:
             return True
     return False
+
+
+def _schema_version(bkkx_path: Path) -> int:
+    try:
+        conn = sqlite3.connect(f"file:{bkkx_path}?mode=ro", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT value FROM meta WHERE key = 'schema_version'"
+            ).fetchone()
+            return int(row[0]) if row else 0
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError:
+        return 0
 
 
 def merge_bundles(

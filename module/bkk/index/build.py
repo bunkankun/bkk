@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 import unicodedata
 from pathlib import Path
@@ -12,6 +13,8 @@ import yaml
 
 from .schema import DDL, SCHEMA_VERSION
 from .witness import apply_witness
+
+log = logging.getLogger("bkk.index")
 
 
 def build_index(bundle_dir: Path | str, out_path: Path | str | None = None) -> Path:
@@ -50,6 +53,13 @@ def build_index(bundle_dir: Path | str, out_path: Path | str | None = None) -> P
             ref = entry["ref"]
             span = ref.get("span")
             if not span:
+                continue
+            if not (isinstance(span, (list, tuple)) and len(span) == 3):
+                log.warning(
+                    "%s: skipping TOC entry %r with malformed span %r "
+                    "(expected [bucket, start, end])",
+                    textid, ref.get("marker_id"), span,
+                )
                 continue
             bucket, start, end = span
             cur.execute(

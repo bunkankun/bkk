@@ -161,6 +161,69 @@ def test_stale_triggers_rebuild(tmp_path):
     assert len(second) == 1
 
 
+def test_old_schema_version_triggers_rebuild(tmp_path):
+    """A .bkkx with an outdated schema_version is treated as stale so that
+    merge_bundles rebuilds it instead of erroring inside _merge_one."""
+    bundle = _write_bundle(tmp_path, "KR0a0099", "abc")
+    bkkx = bundle / "KR0a0099.bkkx"
+    build_index(bundle, bkkx)
+    assert not is_stale(bundle, bkkx)
+
+    # Downgrade the recorded schema_version on the existing artifact.
+    conn = sqlite3.connect(str(bkkx))
+    try:
+        conn.execute("UPDATE meta SET value = '0' WHERE key = 'schema_version'")
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert is_stale(bundle, bkkx)
+
+    # merge_bundles must rebuild — not raise the version-mismatch ValueError.
+    out = tmp_path / "corpus.bkkx"
+    merge_bundles(tmp_path, out)
+    with Index(out) as ix:
+        assert len(list(ix.search("abc"))) == 1
+
+
+def test_malformed_toc_span_skipped(tmp_path, caplog):
+    """Old TOC entries with a 2-element span must be logged + skipped, not crash."""
+    bundle = _write_bundle(tmp_path, "KR0a0100", "hello world")
+    manifest_path = bundle / "KR0a0100.manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    # Inject a legacy-shaped span (2 elements) and a string-shaped one.
+    manifest["table_of_contents"] = [
+        {"ref": {"seq": 1, "marker_id": "good", "span": ["body", 0, 5]},
+         "label": "good"},
+        {"ref": {"seq": 1, "marker_id": "legacy-2el", "span": [0, 5]},
+         "label": "legacy"},
+        {"ref": {"seq": 1, "marker_id": "legacy-str", "span": ["body", "0:5"]},
+         "label": "legacy"},
+    ]
+    manifest_path.write_text(
+        yaml.safe_dump(manifest, allow_unicode=True), encoding="utf-8"
+    )
+
+    out = tmp_path / "corpus.bkkx"
+    with caplog.at_level("WARNING", logger="bkk.index"):
+        merge_bundles(tmp_path, out)
+
+    # Both malformed entries surfaced as warnings.
+    msgs = "\n".join(r.message for r in caplog.records)
+    assert "legacy-2el" in msgs
+    assert "legacy-str" in msgs
+
+    # Only the well-formed TOC entry made it into the index.
+    conn = sqlite3.connect(str(out))
+    try:
+        rows = conn.execute(
+            "SELECT marker_id FROM toc ORDER BY marker_id"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert [r[0] for r in rows] == ["good"]
+
+
 def test_no_build_errors_when_missing(tmp_path):
     _write_bundle(tmp_path, "KR0a0001", "abc")
     out = tmp_path / "corpus.bkkx"
