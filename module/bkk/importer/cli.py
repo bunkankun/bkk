@@ -2,7 +2,11 @@
 
 TLS invocation::
 
+    # single text
     python -m bkk.importer --format tls --in <tls-root> --out <out-root> --text-id <id>
+
+    # every text discoverable under <tls-root> (prompts for confirmation)
+    python -m bkk.importer --format tls --in <tls-root> --out <out-root>
 
 Expects the TLS repository layout:
 
@@ -102,7 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help=f"krp: cache for github clones "
                         f"(default: {_DEFAULT_CACHE_DIR})")
     p.add_argument("--yes", action="store_true",
-                   help="krp: skip the bulk-import confirmation prompt")
+                   help="skip the bulk-import confirmation prompt")
     p.add_argument("--sample", type=Path, default=None,
                    help="optional sample tree to diff against; emits a "
                         "divergence-from-sample.md alongside the output")
@@ -121,21 +125,79 @@ def run(argv: list[str] | None = None) -> int:
 
 
 def _run_tls(args) -> int:
-    if args.in_root is None or args.out_root is None or args.text_id is None:
-        print("error: --in, --out, --text-id are required for --format tls",
+    """Dispatch the TLS path.
+
+    Two shapes:
+
+    1. ``--text-id`` given → single text, resolved via :func:`_find_tls_text`.
+    2. No ``--text-id`` → bulk: walk ``<in>/tls-texts/data/`` for every
+       ``<id>.xml`` and import each. Prompts for confirmation unless
+       ``--yes`` is set.
+    """
+    if args.in_root is None or args.out_root is None:
+        print("error: --in and --out are required for --format tls",
               file=sys.stderr)
         return 2
-    text_xml = _find_tls_text(args.in_root, args.text_id)
-    if text_xml is None:
-        print(
-            f"error: {args.text_id}.xml not found anywhere under "
-            f"{args.in_root / 'tls-texts' / 'data'}",
-            file=sys.stderr,
-        )
+
+    pairs = _resolve_tls_targets(args)
+    if not pairs:
+        print("error: no texts found to import", file=sys.stderr)
         return 2
-    swl_xml = args.in_root / "tls-data" / "notes" / "swl" / f"{args.text_id}-ann.xml"
-    doc_xml = args.in_root / "tls-data" / "notes" / "doc" / f"{args.text_id}-ann.xml"
-    bundle = read_tls(text_xml, swl_xml, doc_xml, args.text_id)
+
+    if len(pairs) > 1 and not args.yes:
+        if not _confirm_bulk(pairs):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    for text_id, text_xml in pairs:
+        try:
+            _import_one_tls(args, text_id, text_xml,
+                            sample=args.sample if len(pairs) == 1 else None)
+        except Exception as exc:  # noqa: BLE001 — surface per-text failure, keep going
+            print(f"error importing {text_id}: {exc}", file=sys.stderr)
+            rc = 1
+    return rc
+
+
+def _resolve_tls_targets(args) -> list[tuple[str, Path]]:
+    """Map TLS CLI flags → ``[(text_id, text_xml), ...]`` to import.
+
+    With ``--text-id``: single-element list (or empty if the xml is missing,
+    in which case we print the same error the old single-text path used).
+    Without ``--text-id``: enumerate every ``<id>.xml`` under
+    ``<in>/tls-texts/data/``; skip with a warning any id we can't resolve.
+    """
+    from . import source
+
+    if args.text_id is not None:
+        text_xml = _find_tls_text(args.in_root, args.text_id)
+        if text_xml is None:
+            print(
+                f"error: {args.text_id}.xml not found anywhere under "
+                f"{args.in_root / 'tls-texts' / 'data'}",
+                file=sys.stderr,
+            )
+            return []
+        return [(args.text_id, text_xml)]
+
+    pairs: list[tuple[str, Path]] = []
+    for tid in source.list_local_tls_text_ids(args.in_root):
+        text_xml = _find_tls_text(args.in_root, tid)
+        if text_xml is None:
+            print(f"warning: skipping {tid}: xml not resolvable",
+                  file=sys.stderr)
+            continue
+        pairs.append((tid, text_xml))
+    return pairs
+
+
+def _import_one_tls(args, text_id: str, text_xml: Path,
+                    *, sample: Path | None) -> None:
+    """Run read+write for one TLS text."""
+    swl_xml = args.in_root / "tls-data" / "notes" / "swl" / f"{text_id}-ann.xml"
+    doc_xml = args.in_root / "tls-data" / "notes" / "doc" / f"{text_id}-ann.xml"
+    bundle = read_tls(text_xml, swl_xml, doc_xml, text_id)
 
     summary = write_bundle(bundle, args.out_root)
     print(
@@ -143,9 +205,8 @@ def _run_tls(args) -> int:
         f"under {summary['out_root']}"
     )
 
-    if args.sample is not None:
-        _emit_divergence(args.sample, Path(summary["out_root"]), args.out_root)
-    return 0
+    if sample is not None:
+        _emit_divergence(sample, Path(summary["out_root"]), args.out_root)
 
 
 # ---------- KRP --------------------------------------------------------------

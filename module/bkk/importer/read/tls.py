@@ -25,6 +25,7 @@ from pathlib import Path
 
 from lxml import etree
 
+from ..classify import _split_section_at
 from ..ir import Annotation, Bundle, Juan, Marker, Section
 
 
@@ -50,6 +51,27 @@ def _q(local: str, ns: str = TEI_NS) -> str:
 
 def _xmlid(el) -> str:
     return el.get(_q("id", XML_NS), "")
+
+
+def _is_cjk(ch: str) -> bool:
+    cp = ord(ch)
+    return (
+        0x4E00  <= cp <= 0x9FFF   or  # CJK Unified Ideographs
+        0x3400  <= cp <= 0x4DBF   or  # CJK Ext A
+        0x20000 <= cp <= 0x2A6DF  or  # CJK Ext B
+        0x2A700 <= cp <= 0x2EBEF  or  # CJK Ext C–F
+        0xF900  <= cp <= 0xFAFF       # CJK Compatibility
+    )
+
+
+def _cjk_only(s: str) -> str:
+    """Strip non-CJK characters from a TLS head string used as a TOC label.
+
+    TLS heads occasionally pick up whitespace, punctuation, or other debris
+    from mixed-content ``<seg>`` bodies; the TOC label invariant is that it
+    contain only CJK ideographs.
+    """
+    return "".join(ch for ch in s if _is_cjk(ch))
 
 
 def _qname_to_str(qname: str) -> str:
@@ -145,17 +167,172 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
         "annotations": annotations_info,
     }
 
-    juan = Juan(seq=1, sections=sections, annotations=annotations)
+    juans = _build_juans(sections, annotations, text_id)
     source = {"repository": "tls-texts", "path": f"data/tls/{text_id}.xml"}
     metadata.setdefault("source", source)
     return Bundle(
         text_id=text_id,
-        juans=[juan],
+        juans=juans,
         metadata=metadata,
         edition_short=edition_short,
         source=source,
         source_info=source_info,
     )
+
+
+def _build_juans(sections: list[Section], annotations: list[Annotation],
+                 text_id: str) -> list[Juan]:
+    """Group ``sections`` into per-juan :class:`Juan` objects and partition
+    ``annotations`` by which juan contains their seg.
+    """
+    groups = _split_sections_into_juans(sections, text_id)
+    if not groups:
+        return [Juan(seq=1, sections=[], annotations=list(annotations))]
+
+    labels = [lbl for lbl, _ in groups]
+    if all(lbl.isdigit() for lbl in labels):
+        seqs = [int(lbl) for lbl in labels]
+    else:
+        seqs = list(range(1, len(labels) + 1))
+
+    seg_to_idx: dict[str, int] = {}
+    for idx, (_, secs) in enumerate(groups):
+        for sec in secs:
+            for m in sec.markers:
+                if m.type in ("tls:seg", "tls:head") and m.id:
+                    seg_to_idx[m.id] = idx
+
+    buckets: list[list[Annotation]] = [[] for _ in groups]
+    for ann in annotations:
+        idx = seg_to_idx.get(ann.seg_id)
+        if idx is not None:
+            buckets[idx].append(ann)
+
+    return [
+        Juan(seq=seqs[i], sections=secs, annotations=buckets[i])
+        for i, (_, secs) in enumerate(groups)
+    ]
+
+
+_LABEL_BEARING_MARKERS = ("page-break", "tls:head", "tls:seg")
+
+
+def _juan_label_from_marker_id(mid: str, text_id: str,
+                               expected_edition: str | None = None) -> str | None:
+    """Extract the juan label from a TLS marker id.
+
+    Marker ids have the form ``<text-id>_<edition>_<location>`` and the juan
+    label is the part of ``<location>`` before the first ``-`` (e.g.
+    ``KR6q0053_T_001-0495a.4-h`` → ``"001"``). Returns ``None`` if ``mid``
+    doesn't match the expected shape.
+
+    When ``expected_edition`` is given, marker ids from any other edition
+    return ``None`` — used to lock juan detection to the base edition so
+    interleaved markers from variant editions can't synthesise spurious
+    juan boundaries.
+    """
+    if not mid:
+        return None
+    prefix = f"{text_id}_"
+    if not mid.startswith(prefix):
+        return None
+    rest = mid[len(prefix):]
+    parts = rest.split("_", 1)
+    if len(parts) < 2:
+        return None
+    edition, location = parts
+    if expected_edition is not None and edition != expected_edition:
+        return None
+    label, _, _ = location.partition("-")
+    return label or None
+
+
+def _base_edition_from_segs(sections: list[Section],
+                            text_id: str) -> str | None:
+    """Edition of the first ``tls:seg`` marker in document order.
+
+    This pins juan detection to the source's main edition. Returns ``None``
+    if no parseable seg id is found, in which case the splitter falls back
+    to its un-filtered behaviour.
+    """
+    prefix = f"{text_id}_"
+    for sec in sections:
+        for m in sec.markers:
+            if m.type != "tls:seg":
+                continue
+            mid = m.id or ""
+            if not mid.startswith(prefix):
+                continue
+            edition, sep, _ = mid[len(prefix):].partition("_")
+            if sep and edition:
+                return edition
+    return None
+
+
+def _split_sections_into_juans(
+    sections: list[Section], text_id: str,
+) -> list[tuple[str, list[Section]]]:
+    """Group ``sections`` into juans by walking id-bearing markers in order.
+
+    Only markers whose edition matches the base edition (the edition of the
+    first ``tls:seg`` in document order) participate in boundary detection;
+    markers from variant editions are ignored even if they encode a different
+    juan. Sections whose markers all share one juan label go in whole;
+    sections that straddle a juan boundary are split via
+    :func:`_split_section_at` so each piece lands in the correct juan.
+    Sections with no id-bearing markers inherit the previous juan label (or
+    default to ``"001"`` if none has been seen yet).
+    """
+    base_edition = _base_edition_from_segs(sections, text_id)
+    groups: list[tuple[str, list[Section]]] = []
+    running_label: str | None = None
+
+    def append(label: str, sec: Section) -> None:
+        if groups and groups[-1][0] == label:
+            groups[-1][1].append(sec)
+        else:
+            groups.append((label, [sec]))
+
+    for sec in sections:
+        # Boundaries are *internal* label changes in this section. The
+        # section's entry label comes from its first id-bearing marker (or
+        # is inherited if there are none) — never from the running label,
+        # so a between-section transition doesn't synthesise an offset-0
+        # boundary.
+        first_label: str | None = None
+        last_seen: str | None = None
+        boundaries: list[tuple[int, str]] = []
+        for m in sorted(sec.markers, key=lambda x: x.offset):
+            if m.type not in _LABEL_BEARING_MARKERS:
+                continue
+            label = _juan_label_from_marker_id(m.id, text_id, base_edition)
+            if label is None:
+                continue
+            if first_label is None:
+                first_label = label
+                last_seen = label
+            elif label != last_seen:
+                boundaries.append((m.offset, label))
+                last_seen = label
+
+        entry_label = first_label or running_label or "001"
+        if not boundaries:
+            append(entry_label, sec)
+            running_label = entry_label
+            continue
+
+        cursor_label = entry_label
+        head = sec
+        accumulated = 0
+        for offset, new_label in boundaries:
+            front, head = _split_section_at(head, offset - accumulated)
+            append(cursor_label, front)
+            accumulated += len(front.text)
+            cursor_label = new_label
+        append(cursor_label, head)
+        running_label = cursor_label
+
+    return groups
 
 
 def _source_files(text_xml: Path, swl_ann: Path | None,
@@ -267,7 +444,7 @@ def _section_from_div(div) -> tuple[Section, dict, dict]:
                                   content="", id=seg_id))
             text_buf.append(seg_text)
             if not head_text:
-                head_text = seg_text
+                head_text = _cjk_only(seg_text)
                 head_marker_id = seg_id
                 head_attrs = _attrs_to_dict(child.attrib)
                 if head_attrs:

@@ -190,6 +190,31 @@ def list_local_text_ids(in_root: Path, prefix: str | None) -> list[str]:
     return sorted(set(found))
 
 
+# ---------- bulk TLS discovery ---------------------------------------------
+
+
+def list_local_tls_text_ids(in_root: Path) -> list[str]:
+    """Enumerate TLS text ids discoverable under ``in_root``.
+
+    Walks ``<in_root>/tls-texts/data/`` recursively for ``*.xml`` (the same
+    layout :func:`bkk.importer.cli._find_tls_text` searches per-text). The
+    file stem is the text id. Annotation sidecars (``*-ann.xml``) live under
+    ``tls-data/notes/`` rather than ``tls-texts/data/``, but we filter them
+    out defensively in case the layout drifts. Returns ``[]`` if the data
+    directory is missing.
+    """
+    base = in_root / "tls-texts" / "data"
+    if not base.is_dir():
+        return []
+    ids: set[str] = set()
+    for path in base.rglob("*.xml"):
+        stem = path.stem
+        if stem.endswith("-ann"):
+            continue
+        ids.add(stem)
+    return sorted(ids)
+
+
 # ---------- github source ---------------------------------------------------
 
 
