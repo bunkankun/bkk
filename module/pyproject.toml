@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bkk-importer"
+name = "bkk"
 version = "0.1.0"
-description = "Importer from external sources (TLS, KRP) to the BKK archival format"
+description = "BKK (Bunkankun) — bundle format, importer, exporter, index, validator, and HTTP server for premodern Chinese texts"
 requires-python = ">=3.10"
 dependencies = [
     "lxml>=4.9",
@@ -14,9 +14,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+serve = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+]
 dev = [
     "pytest>=7",
+    "httpx>=0.27",
 ]
+
+[project.scripts]
+bkk = "bkk.cli:main"
+bkk-serve = "bkk.serve.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["bkk*"]

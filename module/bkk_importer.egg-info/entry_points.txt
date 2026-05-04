@@ -1,0 +1,2 @@
+[console_scripts]
+bkk-serve = bkk.serve.cli:main
