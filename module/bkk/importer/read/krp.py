@@ -242,6 +242,11 @@ def _parse_juan_text(text: str, juan_seq: int,
     emits one Section per ``#+PROPERTY: JUAN`` directive. Subsequent JUAN
     directives within the same file emit ``kr:org-directive`` markers in the
     *previous* section before closing it.
+
+    Mid-file ``# ...`` comment lines and ``** ...`` heading lines are not part
+    of the canonical text. They are extracted as ``comment`` and ``head``
+    markers (the latter carrying ``extras["level"]`` = number of leading stars)
+    so the body text stays free of org-mode metadata.
     """
     sections: list[Section] = []
 
@@ -253,6 +258,7 @@ def _parse_juan_text(text: str, juan_seq: int,
     juan_title = ""
     current_page_id = ""
     line_counter = 0
+    content_buf: list[str] = []
 
     def offset() -> int:
         return sum(len(p) for p in text_buf)
@@ -270,103 +276,53 @@ def _parse_juan_text(text: str, juan_seq: int,
         head_text = ""
         head_marker_id = ""
 
-    # Consume the org-mode header (before the first <pb:...> or content).
-    raw_lines = text.split("\n")
-    i = 0
-    while i < raw_lines.__len__():
-        line = raw_lines[i]
-        if not line:
-            i += 1
-            continue
-        if _HEADER_RE.match(line):
-            m = _PROP_RE.match(line)
-            if m and m.group(1) == "JUAN":
-                pending_head_text = _clean_head_text(m.group(2))
-                if not juan_title:
-                    juan_title = pending_head_text
-            i += 1
-            continue
-        break
-
-    # Walk the rest, joining storage-newlines but splitting on ``¶`` to get
-    # logical lines.
-    rest = "\n".join(raw_lines[i:])
-    # Storage newlines are layout artifacts; the only meaningful terminator
-    # is ``¶``. Drop ``\n`` entirely.
-    rest = rest.replace("\n", "")
-    # Some kanripo branches (e.g. WYG of KR3a0001) embed ``<pb:...>`` and
-    # ``<md:...>`` markers inline mid-chunk instead of as standalone lines.
-    # Normalise by wrapping every such marker in ``¶`` so the chunk-level
-    # dispatch below sees them as their own chunks.
-    rest = re.sub(r"(<(?:pb|md):[^>]+>)", r"¶\1¶", rest)
-    # Split on ``¶`` so each chunk is one logical line; the trailing chunk
-    # after the last ``¶`` is normally empty.
-    chunks = rest.split("¶")
-
-    for chunk in chunks:
+    def process_chunk(chunk: str) -> None:
+        nonlocal current_page_id, line_counter
+        nonlocal head_text, head_marker_id, pending_head_text
         if not chunk:
-            continue
-
-        # A logical line may begin with structural tokens that are not part
-        # of the line proper: ``<pb:...>``, ``<md:...>``, or
-        # ``#+PROPERTY: JUAN ...``. ``<md:...>`` is a non-local cross-edition
-        # reference and is dropped silently — see project memory.
-        while True:
-            if _MD_RE.match(chunk):
-                chunk = ""
-                break
-            m = _PB_RE.match(chunk)
-            if m:
-                page_id = m.group(1)
-                current_page_id = page_id
-                line_counter = 0
-                marker = Marker(
-                    type="page-break",
-                    offset=offset(),
-                    content="",
-                    id=page_id,
-                )
-                short = page_id.split("_")[-1]  # e.g. "000-1a"
-                img = _lookup_image(imglist, page_id, short)
-                if img:
-                    marker.extras["image"] = img
-                # If a JUAN directive is pending and this section is empty,
-                # this page-break opens the new section's first marker.
-                if pending_head_text and head_text == "":
-                    head_text = pending_head_text
-                    head_marker_id = page_id
-                    pending_head_text = ""
-                markers.append(marker)
-                # Section start: if a directive was pending and we already
-                # had content, ``pending_head_text`` was consumed below in
-                # the directive branch — nothing extra to do here.
-                chunk = ""
-                break
-            if chunk.startswith("#+PROPERTY:"):
-                # JUAN directive splits sections. Emit a ``kr:org-directive``
-                # marker in the *previous* section if there's already one
-                # open with content; otherwise just record the head text.
-                m = _PROP_RE.match(chunk)
-                if m and m.group(1) == "JUAN":
-                    new_head = _clean_head_text(m.group(2))
-                    if head_text:
-                        # Close the previous section after recording an
-                        # org-directive marker at the current offset.
-                        markers.append(Marker(
-                            type="kr:org-directive",
-                            offset=offset(),
-                            content=f"#+PROPERTY: JUAN {new_head}",
-                            id="",
-                        ))
-                        close_section()
-                    pending_head_text = new_head
-                chunk = ""
-                break
-            break
-
-        if not chunk:
-            continue
-
+            return
+        if _MD_RE.match(chunk):
+            return
+        pb = _PB_RE.match(chunk)
+        if pb:
+            page_id = pb.group(1)
+            current_page_id = page_id
+            line_counter = 0
+            marker = Marker(
+                type="page-break",
+                offset=offset(),
+                content="",
+                id=page_id,
+            )
+            short = page_id.split("_")[-1]  # e.g. "000-1a"
+            img = _lookup_image(imglist, page_id, short)
+            if img:
+                marker.extras["image"] = img
+            # If a JUAN directive is pending and this section is empty,
+            # this page-break opens the new section's first marker.
+            if pending_head_text and head_text == "":
+                head_text = pending_head_text
+                head_marker_id = page_id
+                pending_head_text = ""
+            markers.append(marker)
+            return
+        if chunk.startswith("#+PROPERTY:"):
+            # JUAN directive splits sections. Emit a ``kr:org-directive``
+            # marker in the *previous* section if there's already one
+            # open with content; otherwise just record the head text.
+            prop = _PROP_RE.match(chunk)
+            if prop and prop.group(1) == "JUAN":
+                new_head = _clean_head_text(prop.group(2))
+                if head_text:
+                    markers.append(Marker(
+                        type="kr:org-directive",
+                        offset=offset(),
+                        content=f"#+PROPERTY: JUAN {new_head}",
+                        id="",
+                    ))
+                    close_section()
+                pending_head_text = new_head
+            return
         # Plain text line: emit a line-break marker, then walk the chars.
         line_counter += 1
         line_id = f"{current_page_id}{line_counter:02d}"
@@ -374,6 +330,64 @@ def _parse_juan_text(text: str, juan_seq: int,
             type="line-break", offset=offset(), content="", id=line_id,
         ))
         _emit_line_chars(chunk, text_buf, markers, offset)
+
+    def flush_content() -> None:
+        """Process buffered content lines through ¶-chunk dispatch."""
+        if not content_buf:
+            return
+        rest = "".join(content_buf)
+        content_buf.clear()
+        # Some kanripo branches (e.g. WYG of KR3a0001) embed ``<pb:...>`` and
+        # ``<md:...>`` markers inline mid-chunk instead of as standalone
+        # lines. Normalise by wrapping every such marker in ``¶`` so the
+        # chunk dispatch sees them as their own chunks.
+        rest = re.sub(r"(<(?:pb|md):[^>]+>)", r"¶\1¶", rest)
+        for chunk in rest.split("¶"):
+            process_chunk(chunk)
+
+    # Consume the org-mode header (before the first <pb:...> or content).
+    raw_lines = text.split("\n")
+    i = 0
+    while i < len(raw_lines):
+        line = raw_lines[i]
+        if not line:
+            i += 1
+            continue
+        if _HEADER_RE.match(line):
+            prop = _PROP_RE.match(line)
+            if prop and prop.group(1) == "JUAN":
+                pending_head_text = _clean_head_text(prop.group(2))
+                if not juan_title:
+                    juan_title = pending_head_text
+            i += 1
+            continue
+        break
+
+    # Walk the rest line by line. ``# ...`` comments and ``* ...`` headings
+    # become typed markers; everything else is buffered and flushed through
+    # the ¶-chunk pipeline (which handles content, page-breaks, md drops, and
+    # mid-file JUAN directives).
+    for line in raw_lines[i:]:
+        if not line:
+            continue
+        if line.startswith("#") and not line.startswith("#+"):
+            flush_content()
+            markers.append(Marker(
+                type="comment", offset=offset(), content=line, id="",
+            ))
+            continue
+        if line.startswith("*"):
+            n_stars = len(line) - len(line.lstrip("*"))
+            head_content = line[n_stars:].lstrip()
+            flush_content()
+            head_marker = Marker(
+                type="head", offset=offset(), content=head_content, id="",
+            )
+            head_marker.extras["level"] = n_stars
+            markers.append(head_marker)
+            continue
+        content_buf.append(line)
+    flush_content()
 
     if text_buf or markers or head_text:
         # Close any final section. If no JUAN directive ever populated
@@ -398,7 +412,12 @@ def _parse_juan_text(text: str, juan_seq: int,
     )
 
 
-_PUNCT_CHARS = set("()/")
+_PUNCT_CHARS = set(
+    "()/"
+    "，。、；：？！"           # fullwidth + ideographic basics
+    "「」『』《》〈〉〔〕【】〖〗"  # CJK quotation/bracket pairs
+    "・…—–·"                # middle-dot, ellipsis, dashes
+)
 
 
 def _emit_line_chars(line: str, text_buf: list[str], markers: list[Marker],

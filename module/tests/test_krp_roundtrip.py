@@ -216,3 +216,53 @@ def test_md_markers_are_dropped():
     # The real <pb:> marker that follows still lands.
     pb_ids = [m.id for m in sec.markers if m.type == "page-break"]
     assert pb_ids == ["KRT0001_TEST_001-1a"]
+
+
+_HEAD_COMMENT_JUAN = (
+    "# -*- coding: utf-8 -*-\n"
+    "#+TITLE: 試験\n"
+    "#+PROPERTY: ID KRT0001\n"
+    "#+PROPERTY: JUAN 0\n"
+    "<pb:KRT0001_TEST_001-1a>¶\n"
+    "** 1 第一章\n"
+    "\n"
+    "天下皆知美¶\n"
+    "\n"
+    "# src: synthetic source note\n"
+    "# dating: 8120\n"
+    "斯惡已¶\n"
+)
+
+
+def test_heading_and_comment_lines_become_markers():
+    """`** ...` headings → ``head`` markers; `# ...` comments → ``comment``
+    markers. Body text stays free of org metadata."""
+    juan = _parse_juan_text(_HEAD_COMMENT_JUAN, juan_seq=1, text_id="KRT0001",
+                            imglist={})
+    sec = juan.sections[0]
+    # Body is pure CJK content — no `**`, no `#`.
+    assert sec.text == "天下皆知美斯惡已"
+    assert "**" not in sec.text
+    assert "#" not in sec.text
+    # head marker carries level + content.
+    heads = [m for m in sec.markers if m.type == "head"]
+    assert len(heads) == 1
+    assert heads[0].extras["level"] == 2
+    assert heads[0].content == "1 第一章"
+    assert heads[0].offset == 0
+    # comment markers preserve the full source line including leading `#`.
+    comments = [m for m in sec.markers if m.type == "comment"]
+    assert [c.content for c in comments] == [
+        "# src: synthetic source note",
+        "# dating: 8120",
+    ]
+    # Both comments sit at the offset between the two content runs.
+    boundary = len("天下皆知美")
+    assert all(c.offset == boundary for c in comments)
+    # Marker offsets stay monotonic and within text bounds.
+    text_len = len(sec.text)
+    last = -1
+    for m in sec.markers:
+        assert 0 <= m.offset <= text_len
+        assert m.offset >= last
+        last = m.offset

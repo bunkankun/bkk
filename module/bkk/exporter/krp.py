@@ -216,6 +216,12 @@ def _render_juan_body(text: str, markers: list[dict]) -> str:
             out.append(m.get("content", "") or "")
         elif kind == "punctuation":
             out.append(m.get("content", "") or "")
+        elif kind == "comment":
+            out.append("\n" + (m.get("content", "") or "") + "\n")
+        elif kind == "head":
+            level = int(m.get("level", 1) or 1)
+            out.append("\n" + ("*" * level) + " "
+                       + (m.get("content", "") or "") + "\n")
         # variant / kr:org-directive / unknown: silently skipped in v1.
     if cursor < len(text):
         out.append(_encode_pua(text[cursor:]))
