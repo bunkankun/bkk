@@ -1,0 +1,29 @@
+/* CSS custom properties lifted from module/specs/Research Platform.html.
+ * Keep this file restricted to design tokens — layout/components live in
+ * app.css and per-component CSS modules. */
+:root {
+  --bg: #12111a;
+  --bg-act: #0d0c14;
+  --bg-pan: #191727;
+  --bg-ed: #141320;
+  --bg-tab: #1d1b2e;
+
+  --bdr: #252338;
+  --bdr-l: #1e1c30;
+
+  --t1: #dcd8f0;
+  --t2: #7a778f;
+  --t3: #4a4762;
+
+  --amb: oklch(0.72 0.14 65);
+  --amb-d: oklch(0.72 0.14 65 / 0.12);
+  --amb-b: oklch(0.72 0.14 65 / 0.28);
+
+  --blu: oklch(0.65 0.10 255);
+  --grn: oklch(0.65 0.10 160);
+  --hov: rgba(255, 255, 255, 0.045);
+
+  --ff: "IBM Plex Sans", sans-serif;
+  --fm: "IBM Plex Mono", monospace;
+  --fc: "Noto Serif SC", "Songti SC", "SimSun", serif;
+}

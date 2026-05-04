@@ -4,14 +4,22 @@ Usage::
 
     bkk-serve --corpus <dir> [--index PATH] [--host H] [--port N]
               [--admin-token TOKEN] [--reload]
+              [--upstream-repo ORG/REPO] [--web-dist PATH]
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from .config import ServeConfig
+
+
+def app_factory():
+    """Uvicorn import-string entry point used in --reload mode."""
+    from .app import create_app
+    return create_app(ServeConfig.from_env())
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
                         "(default: $BKK_ADMIN_TOKEN; if unset, admin is open)")
     p.add_argument("--reload", action="store_true",
                    help="auto-reload on code changes (development only)")
+    p.add_argument("--upstream-repo", default=None,
+                   help="GitHub upstream texts repo as ORG/REPO "
+                        "(default: $BKK_UPSTREAM_REPO; surfaced on GET / for the SPA)")
+    p.add_argument("--web-dist", type=Path, default=None,
+                   help="directory containing the built SPA to mount at / "
+                        "(default: $BKK_WEB_DIST)")
     return p
 
 
@@ -42,14 +56,37 @@ def run(argv: list[str] | None = None) -> int:
         port=args.port,
         admin_token=args.admin_token,
         reload=args.reload or None,
+        upstream_repo=args.upstream_repo,
+        web_dist=args.web_dist,
     )
 
     import uvicorn
 
-    from .app import create_app
-
-    app = create_app(config)
-    uvicorn.run(app, host=config.host, port=config.port, reload=config.reload)
+    if config.reload:
+        # uvicorn reload mode requires an import string + a factory.
+        # Re-export the resolved config so the factory recovers the same
+        # values on each reload cycle.
+        os.environ["BKK_CORPUS_ROOT"] = str(config.corpus_root)
+        os.environ["BKK_INDEX_PATH"] = str(config.index_path)
+        os.environ["BKK_HOST"] = config.host
+        os.environ["BKK_PORT"] = str(config.port)
+        if config.admin_token is not None:
+            os.environ["BKK_ADMIN_TOKEN"] = config.admin_token
+        if config.upstream_repo is not None:
+            os.environ["BKK_UPSTREAM_REPO"] = config.upstream_repo
+        if config.web_dist is not None:
+            os.environ["BKK_WEB_DIST"] = str(config.web_dist)
+        uvicorn.run(
+            "bkk.serve.cli:app_factory",
+            factory=True,
+            host=config.host,
+            port=config.port,
+            reload=True,
+        )
+    else:
+        from .app import create_app
+        app = create_app(config)
+        uvicorn.run(app, host=config.host, port=config.port)
     return 0
 
 

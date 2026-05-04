@@ -15,6 +15,8 @@ class ServeConfig:
     port: int = 8000
     admin_token: str | None = None
     reload: bool = False
+    upstream_repo: str | None = None
+    web_dist: Path | None = None
 
     @classmethod
     def from_env(cls, *, corpus_root: Path | str | None = None) -> "ServeConfig":
@@ -29,6 +31,9 @@ class ServeConfig:
         env_index = os.environ.get("BKK_INDEX_PATH")
         index = Path(env_index).resolve() if env_index else root / "_corpus.bkkx"
 
+        env_web_dist = os.environ.get("BKK_WEB_DIST")
+        web_dist = Path(env_web_dist).resolve() if env_web_dist else None
+
         return cls(
             corpus_root=root,
             index_path=index,
@@ -36,6 +41,8 @@ class ServeConfig:
             port=int(os.environ.get("BKK_PORT", "8000")),
             admin_token=os.environ.get("BKK_ADMIN_TOKEN"),
             reload=False,
+            upstream_repo=os.environ.get("BKK_UPSTREAM_REPO"),
+            web_dist=web_dist,
         )
 
     def merge_cli(
@@ -47,6 +54,8 @@ class ServeConfig:
         port: int | None = None,
         admin_token: str | None = None,
         reload: bool | None = None,
+        upstream_repo: str | None = None,
+        web_dist: Path | str | None = None,
     ) -> "ServeConfig":
         """Return a copy with any non-``None`` argument overriding the field."""
         updates: dict = {}
@@ -62,4 +71,8 @@ class ServeConfig:
             updates["admin_token"] = admin_token
         if reload is not None:
             updates["reload"] = reload
+        if upstream_repo is not None:
+            updates["upstream_repo"] = upstream_repo
+        if web_dist is not None:
+            updates["web_dist"] = Path(web_dist).resolve()
         return replace(self, **updates)

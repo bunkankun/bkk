@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 def bundle_not_found(textid: str) -> HTTPException:
@@ -35,11 +37,22 @@ def bad_request(error: str, **extra: Any) -> HTTPException:
     return HTTPException(status_code=400, detail=payload)
 
 
-def install_handlers(app: FastAPI) -> None:
-    """Normalize HTTPException bodies to a stable ``{error, ...}`` shape."""
+def install_handlers(app: FastAPI, *, spa_index: Path | None = None) -> None:
+    """Normalize HTTPException bodies to a stable ``{error, ...}`` shape.
 
-    @app.exception_handler(HTTPException)
-    async def _on_http_exc(request: Request, exc: HTTPException):
+    If ``spa_index`` is provided, 404s on non-API paths return that file so
+    client-side routes work after a hard refresh.
+    """
+    from .static import API_PREFIXES
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _on_http_exc(request: Request, exc: StarletteHTTPException):
+        if (
+            spa_index is not None
+            and exc.status_code == 404
+            and not _is_api_path(request.url.path, API_PREFIXES)
+        ):
+            return FileResponse(spa_index)
         if isinstance(exc.detail, dict) and "error" in exc.detail:
             body = exc.detail
         else:
@@ -49,3 +62,7 @@ def install_handlers(app: FastAPI) -> None:
             content=body,
             headers=exc.headers,
         )
+
+
+def _is_api_path(path: str, prefixes: tuple[str, ...]) -> bool:
+    return path == "/" or any(path == p or path.startswith(p + "/") for p in prefixes)

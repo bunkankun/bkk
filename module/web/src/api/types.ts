@@ -1,0 +1,164 @@
+// Hand-written types mirroring module/bkk/serve/schemas.py.
+// Kept narrow enough for v1 read mode + annotations.
+
+export interface EditionInfo {
+  short: string;
+  label?: string | null;
+}
+
+export interface BundleSummary {
+  textid: string;
+  canonical_identifier?: string | null;
+  title?: string | null;
+  edition_short?: string | null;
+  editions: EditionInfo[];
+}
+
+export interface BundleListResponse {
+  bundles: BundleSummary[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface CatalogMatch {
+  textid: string;
+  canonical_identifier?: string | null;
+  title?: string | null;
+  edition_short?: string | null;
+  base_edition?: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface CatalogResponse {
+  total: number;
+  offset: number;
+  limit: number;
+  next_offset?: number | null;
+  filters_applied: Record<string, string[]>;
+  matches: CatalogMatch[];
+  recipe: Record<string, unknown>;
+}
+
+// Manifest is a passthrough dict — type the parts we actually read.
+export interface ManifestPart {
+  seq: number;
+  filename: string;
+  hash?: string;
+  [k: string]: unknown;
+}
+
+export interface TocSpan {
+  // [bucket, start, end]
+  0: string;
+  1: number;
+  2: number;
+}
+
+export interface TocRef {
+  seq: number;
+  marker_id?: string;
+  span?: [string, number, number];
+  [k: string]: unknown;
+}
+
+export interface TocEntry {
+  ref: TocRef;
+  label?: string;
+  [k: string]: unknown;
+}
+
+export interface ManifestEdition {
+  short?: string;
+  label?: string;
+  [k: string]: unknown;
+}
+
+export interface ManifestMetadata {
+  title?: string;
+  edition?: ManifestEdition;
+  [k: string]: unknown;
+}
+
+export interface Manifest {
+  canonical_identifier?: string;
+  editions?: { short: string; label?: string }[];
+  metadata?: ManifestMetadata;
+  assets?: {
+    parts?: ManifestPart[];
+    references?: { filename?: string; name?: string; role?: string }[];
+  };
+  table_of_contents?: TocEntry[];
+  [k: string]: unknown;
+}
+
+// Juan body shape from /bundles/{textid}/juan/{seq}
+export interface JuanMarker {
+  type: string;
+  master_offset?: number;
+  [k: string]: unknown;
+}
+
+export interface JuanBucket {
+  text: string;
+  hash?: string;
+  markers?: JuanMarker[];
+  [k: string]: unknown;
+}
+
+export interface Juan {
+  seq: number;
+  canonical_identifier?: string;
+  hash?: string;
+  body?: JuanBucket;
+  front?: JuanBucket;
+  back?: JuanBucket;
+  [k: string]: unknown;
+}
+
+// Annotations
+export interface AnnotationForm {
+  orig?: string;
+  orth?: string;
+  pron?: string;
+}
+
+export interface AnnotationSense {
+  id?: string;
+  pos?: string;
+  syn_func?: string;
+  sem_feat?: string;
+  def?: string;
+  usage?: Record<string, unknown>;
+}
+
+export interface AnnotationTranslation {
+  text?: string;
+  title?: string;
+  src?: string;
+}
+
+export interface Annotation {
+  id?: string;
+  offset: number;
+  length?: number;
+  concept?: string;
+  concept_id?: string;
+  seg_id?: string;
+  pos?: number;
+  form?: AnnotationForm;
+  sense?: AnnotationSense;
+  translation?: AnnotationTranslation;
+  metadata?: Record<string, unknown>;
+}
+
+// Server identity
+export interface ServerInfo {
+  service?: string;
+  version?: string;
+  corpus_root?: string;
+  index_path?: string;
+  upstream_repo?: string | null;
+  docs?: string;
+  openapi?: string;
+}

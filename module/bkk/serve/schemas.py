@@ -194,3 +194,48 @@ class CatalogResponse(BaseModel):
         ...,
         description="recipe-as-response: pins with role 'match' for every result on this page",
     )
+
+
+class AnnotationForm(BaseModel):
+    orig: str | None = None
+    orth: str | None = None
+    pron: str | None = None
+
+
+class AnnotationSense(BaseModel):
+    id: str | None = None
+    pos: str | None = None
+    syn_func: str | None = None
+    sem_feat: str | None = None
+    def_: str | None = Field(default=None, alias="def")
+    usage: dict[str, Any] | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class AnnotationTranslation(BaseModel):
+    text: str | None = None
+    title: str | None = None
+    src: str | None = None
+
+
+class AnnotationOut(BaseModel):
+    """One annotation pinned to a text offset.
+
+    Fields mirror the on-disk ``*.ann.yaml`` shape (TLS-derived). Absent
+    fields are omitted rather than emitted as null so the JSON stays small.
+    """
+
+    id: str | None = None
+    offset: int = Field(..., description="char offset within the master body text")
+    length: int | None = Field(None, description="annotated span length, if recorded")
+    concept: str | None = None
+    concept_id: str | None = None
+    seg_id: str | None = None
+    pos: int | None = None
+    form: AnnotationForm | None = None
+    sense: AnnotationSense | None = None
+    translation: AnnotationTranslation | None = None
+    metadata: dict[str, Any] | None = None
+
+    model_config = {"populate_by_name": True}
