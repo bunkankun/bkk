@@ -25,11 +25,14 @@ def run(ctx: ValidationContext) -> None:
     # edition segment must match a known witness short.
     declared_shorts = _declared_witness_shorts(ctx)
     on_disk_shorts = set(ctx.editions.keys())
-    # TLS-only shape (master == sole witness): no editions declared, no
-    # editions/ subdir. The marker edition segment is implicit, so don't
-    # constrain it — passing None disables the allowlist check.
-    if not declared_shorts and not on_disk_shorts:
-        allowed_master_editions: set[str] | None = None
+    # TLS-shape bundles don't declare witnesses in the manifest, but their
+    # master juan may still carry markers from any number of upstream witnesses
+    # (WYG, SBCK, CHANT, …) merged in from KRP. Treat editions/ subdirs as
+    # additive rather than exhaustive: if nothing is declared, don't constrain
+    # the master's marker edition segment at all.
+    allowed_master_editions: set[str] | None
+    if not declared_shorts:
+        allowed_master_editions = None
     else:
         allowed_master_editions = declared_shorts | on_disk_shorts | {"master"}
 
