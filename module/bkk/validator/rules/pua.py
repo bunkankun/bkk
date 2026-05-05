@@ -119,8 +119,11 @@ def run(ctx: ValidationContext) -> None:
             )
         del actual_total  # only kept if we wanted to compare with parsed-only
 
-    # Cross-check counts against actual master juan texts.
-    actual_counts = _count_pua_in_master_text(ctx)
+    # Cross-check counts against actual juan texts. The importer aggregates
+    # PUA-map entries across master + every edition (see
+    # bkk.importer.read.krp.read_krp), so the validator must scan the same
+    # set to get matching totals.
+    actual_counts = _count_pua_across_all_editions(ctx)
     declared_counts = {
         cp: count for _, cp, count in parsed
     }
@@ -129,19 +132,22 @@ def run(ctx: ValidationContext) -> None:
         if actual != count:
             ctx.report.add(
                 "PUA_COUNT_MATCHES_TEXT", "warning", lf.rel,
-                f"codepoint U+{cp:X}: declared count {count}, actual occurrences in master text {actual}",
+                f"codepoint U+{cp:X}: declared count {count}, actual occurrences across all editions {actual}",
             )
     for cp, actual in actual_counts.items():
         if cp not in declared_counts:
             ctx.report.add(
                 "PUA_COUNT_MATCHES_TEXT", "warning", lf.rel,
-                f"codepoint U+{cp:X} appears {actual} time(s) in master text but is not in PUA-map.entries",
+                f"codepoint U+{cp:X} appears {actual} time(s) across editions but is not in PUA-map.entries",
             )
 
 
-def _count_pua_in_master_text(ctx: ValidationContext) -> dict[int, int]:
+def _count_pua_across_all_editions(ctx: ValidationContext) -> dict[int, int]:
     counts: dict[int, int] = {}
-    for lf in ctx.master_juans.values():
+    juan_files = list(ctx.master_juans.values())
+    for ed in ctx.editions.values():
+        juan_files.extend(ed.juans.values())
+    for lf in juan_files:
         if not lf.exists or not isinstance(lf.data, dict):
             continue
         for bucket_name in ("front", "body", "back"):

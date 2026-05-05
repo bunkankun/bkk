@@ -76,6 +76,20 @@ def test_fresh_bundle_passes_structural_rules(fresh_bundle: Path):
     )
 
 
+def test_tls_only_marker_edition_not_flagged(fresh_bundle: Path):
+    """TLS-only bundles (no editions[] declared, no editions/ subdir) carry
+    marker ids with edition segment 'tls'. The validator must not enforce
+    an edition allowlist in that shape."""
+    report = validate_bundle(fresh_bundle)
+    bad = [
+        f for f in report.findings
+        if f.rule_id == "JUAN_MARKER_ID_FORMAT" and "edition segment" in f.message
+    ]
+    assert not bad, "TLS-only bundle should not trigger edition-segment check:\n" + "\n".join(
+        f"  {f.path}: {f.message}" for f in bad
+    )
+
+
 def test_missing_master_manifest(bundle_copy: Path):
     (bundle_copy / f"{TEXT_ID}.manifest.yaml").unlink()
     report = validate_bundle(bundle_copy)

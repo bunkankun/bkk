@@ -12,6 +12,7 @@ KNOWN_MARKER_TYPES = {
     "comment", "head", "variant",
     "kr:org-directive",
     "tls:head", "tls:seg", "tls:ann",
+    "tls:div-start", "tls:div-end",
 }
 
 REQUIRED_JUAN_KEYS = ("canonical_identifier", "seq", "body", "metadata", "hash")
@@ -24,7 +25,13 @@ def run(ctx: ValidationContext) -> None:
     # edition segment must match a known witness short.
     declared_shorts = _declared_witness_shorts(ctx)
     on_disk_shorts = set(ctx.editions.keys())
-    allowed_master_editions = declared_shorts | on_disk_shorts | {"master"}
+    # TLS-only shape (master == sole witness): no editions declared, no
+    # editions/ subdir. The marker edition segment is implicit, so don't
+    # constrain it — passing None disables the allowlist check.
+    if not declared_shorts and not on_disk_shorts:
+        allowed_master_editions: set[str] | None = None
+    else:
+        allowed_master_editions = declared_shorts | on_disk_shorts | {"master"}
 
     for lf in ctx.master_juans.values():
         _check_juan(ctx, lf, allowed_marker_editions=allowed_master_editions)
@@ -44,7 +51,7 @@ def _declared_witness_shorts(ctx: ValidationContext) -> set[str]:
 
 def _check_juan(
     ctx: ValidationContext, lf: LoadedFile, *,
-    allowed_marker_editions: set[str],
+    allowed_marker_editions: set[str] | None,
 ) -> None:
     if not lf.exists:
         return  # already flagged
@@ -95,7 +102,7 @@ def _check_juan(
 
 def _check_bucket(
     ctx: ValidationContext, lf: LoadedFile, *,
-    allowed_marker_editions: set[str], bucket_name: str,
+    allowed_marker_editions: set[str] | None, bucket_name: str,
 ) -> None:
     bucket = lf.data.get(bucket_name)
     if not isinstance(bucket, dict):
@@ -136,7 +143,7 @@ def _check_bucket(
 
 def _check_markers(
     ctx: ValidationContext, lf: LoadedFile, *,
-    allowed_marker_editions: set[str],
+    allowed_marker_editions: set[str] | None,
     bucket_name: str, text: str, markers: list,
 ) -> None:
     text_len = len(text)
@@ -180,13 +187,18 @@ def _check_markers(
             last_offset = offset
 
         if isinstance(mid, str) and mid:
-            if mid in seen_ids:
-                ctx.report.add(
-                    "JUAN_MARKER_ID_UNIQUE", "error", lf.rel,
-                    f"{bucket_name}.markers[{i}] duplicate id '{mid}' (also at index {seen_ids[mid]})",
-                )
-            else:
-                seen_ids[mid] = i
+            # tls:div-start / tls:div-end intentionally share the bracketed
+            # head's xml:id as a structural correlation (open/close pairs +
+            # the head marker all carry the same id). Exempt them from the
+            # uniqueness check; the format check still applies.
+            if mtype not in ("tls:div-start", "tls:div-end"):
+                if mid in seen_ids:
+                    ctx.report.add(
+                        "JUAN_MARKER_ID_UNIQUE", "error", lf.rel,
+                        f"{bucket_name}.markers[{i}] duplicate id '{mid}' (also at index {seen_ids[mid]})",
+                    )
+                else:
+                    seen_ids[mid] = i
             # tls:ann markers carry annotation UUIDs, not the standard
             # <text-id>_<edition>_<location> form. Skip the format check.
             if mtype != "tls:ann":
@@ -197,7 +209,7 @@ def _check_markers(
 
 def _check_marker_id_format(
     ctx: ValidationContext, lf: LoadedFile, bucket: str, i: int, mid: str,
-    allowed_editions: set[str],
+    allowed_editions: set[str] | None,
 ) -> None:
     # Format: <text-id>_<edition>_<location>
     parts = mid.split("_", 2)
@@ -214,7 +226,7 @@ def _check_marker_id_format(
             f"{bucket}.markers[{i}] id '{mid}' text-id segment '{text_id}' does not match file's text-id",
         )
         return
-    if allowed_editions and edition not in allowed_editions:
+    if allowed_editions is not None and edition not in allowed_editions:
         ctx.report.add(
             "JUAN_MARKER_ID_FORMAT", "error", lf.rel,
             f"{bucket}.markers[{i}] id '{mid}' edition segment '{edition}' not in allowed {sorted(allowed_editions)}",

@@ -377,11 +377,11 @@ def test_section_head_text_strips_non_cjk():
     ``head_text`` so the TOC label is CJK-only. The body text (which feeds
     into the section.text stream) is left untouched at this layer."""
     div = _build_div_xml("  臨濟 abc，慧照\n禪師  ")
-    section, _div_entry, _markers_info = _section_from_div(div)
+    section, _div_entry, _markers_info, _nested = _section_from_div(div)
     assert section.head_text == "臨濟慧照禪師"
 
 
 def test_section_head_text_pure_cjk_unchanged():
     div = _build_div_xml("勘辨")
-    section, _div_entry, _markers_info = _section_from_div(div)
+    section, _div_entry, _markers_info, _nested = _section_from_div(div)
     assert section.head_text == "勘辨"

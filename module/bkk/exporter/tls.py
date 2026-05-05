@@ -53,39 +53,77 @@ def _ed_attrs_for(marker_id: str, markers_info: dict) -> dict:
     return (markers_info.get(marker_id) or {}).get("attrs", {})
 
 
+class _DivCtx:
+    """One open ``<div>`` during export — current paragraph/seg cursors and
+    per-div ``<p>`` attribute replay state. The stack-bottom is the juan div;
+    each ``tls:div-start`` pushes a fresh context for the nested div.
+    """
+
+    __slots__ = (
+        "el", "p_attrs_list", "p_index", "head_attrs",
+        "head_inner_seg_attrs", "current_p", "current_seg",
+    )
+
+    def __init__(self, el: etree._Element, div_info: dict):
+        self.el = el
+        self.p_attrs_list = div_info.get("p_attrs", []) or []
+        self.p_index = 0
+        self.head_attrs = div_info.get("head_attrs", {})
+        self.head_inner_seg_attrs = div_info.get("head_inner_seg_attrs", {})
+        self.current_p: etree._Element | None = None
+        self.current_seg: etree._Element | None = None
+
+
+def _next_text_consuming_offset(markers: list, start_idx: int,
+                                text_len: int) -> int:
+    """Offset of the next marker after ``markers[start_idx]`` whose presence
+    closes the current ``<head>`` text region. The head's seg text extends up
+    to (but not including) that offset. If no further marker exists, returns
+    ``text_len`` so any trailing text falls into the head's seg.
+    """
+    for j in range(start_idx + 1, len(markers)):
+        return markers[j].offset
+    return text_len
+
+
 def _build_div(section: Section, divs_info: dict, markers_info: dict
                ) -> etree._Element:
     """Emit one ``<div>`` from a Section + sidecar div/marker entries.
 
     Walks ``section.markers`` in order, splicing text from ``section.text``
-    between markers. Same-offset clusters are handled with a one-marker
-    lookahead so page-breaks at seg boundaries land between segs (in ``<p>``)
-    rather than inside the previous seg.
+    between markers. Nested ``<div>`` elements are reconstructed from
+    ``tls:div-start`` / ``tls:div-end`` markers via a context stack so each
+    nested div carries its own attrs, head, and ``<p>`` cursors.
     """
-    div_info = divs_info.get(section.head_marker_id, {})
-    div = etree.Element(_q("div"))
-    _set_attrs(div, div_info.get("div_attrs", {}))
+    juan_info = divs_info.get(section.head_marker_id, {})
+    juan_div = etree.Element(_q("div"))
+    _set_attrs(juan_div, juan_info.get("div_attrs", {}))
+
+    stack: list[_DivCtx] = [_DivCtx(juan_div, juan_info)]
 
     text = section.text
     markers = section.markers
     last_offset = 0
-    current_p: etree._Element | None = None
-    current_seg: etree._Element | None = None
-    p_index = 0
-    p_attrs_list = div_info.get("p_attrs", []) or []
+
+    def active() -> _DivCtx:
+        return stack[-1]
+
+    def text_target(ctx: _DivCtx) -> etree._Element:
+        return ctx.current_seg if ctx.current_seg is not None else (
+            ctx.current_p if ctx.current_p is not None else ctx.el
+        )
 
     i = 0
     while i < len(markers):
         m = markers[i]
+        ctx = active()
 
         # Splice any text gap from the last marker to this one. The gap goes
-        # into whichever container is currently open (seg > p > div).
+        # into whichever container is currently open in the active div
+        # (seg > p > div).
         gap = text[last_offset:m.offset]
         if gap:
-            target = current_seg if current_seg is not None else (
-                current_p if current_p is not None else div
-            )
-            _append_text(target, gap)
+            _append_text(text_target(ctx), gap)
         last_offset = m.offset
 
         if m.type == "page-break":
@@ -100,11 +138,8 @@ def _build_div(section: Section, divs_info: dict, markers_info: dict
                     break
                 j += 1
             if close_seg:
-                current_seg = None
-            target = current_seg if current_seg is not None else (
-                current_p if current_p is not None else div
-            )
-            pb = etree.SubElement(target, _q("pb"))
+                ctx.current_seg = None
+            pb = etree.SubElement(text_target(ctx), _q("pb"))
             if m.id:
                 pb.set(_q("id", XML_NS), m.id)
             _set_attrs(pb, _ed_attrs_for(m.id, markers_info))
@@ -112,37 +147,39 @@ def _build_div(section: Section, divs_info: dict, markers_info: dict
             continue
 
         if m.type == "tls:head":
-            head_attrs = div_info.get("head_attrs", {})
-            head_el = etree.SubElement(div, _q("head"))
-            _set_attrs(head_el, head_attrs)
+            head_el = etree.SubElement(ctx.el, _q("head"))
+            _set_attrs(head_el, ctx.head_attrs)
             seg_el = etree.SubElement(head_el, _q("seg"))
             if m.id:
                 seg_el.set(_q("id", XML_NS), m.id)
-            _set_attrs(seg_el, div_info.get("head_inner_seg_attrs", {}))
-            seg_el.text = section.head_text
-            last_offset = m.offset + len(section.head_text)
+            _set_attrs(seg_el, ctx.head_inner_seg_attrs)
+            # The head's text content occupies section.text from this
+            # marker's offset up to the next marker (or end of text).
+            end = _next_text_consuming_offset(markers, i, len(text))
+            seg_el.text = text[m.offset:end] or None
+            last_offset = end
             i += 1
             continue
 
         if m.type == "paragraph-break":
-            if current_p is None:
-                current_p = etree.SubElement(div, _q("p"))
-                if p_index < len(p_attrs_list):
-                    _set_attrs(current_p, p_attrs_list[p_index])
-                p_index += 1
-                current_seg = None
+            if ctx.current_p is None:
+                ctx.current_p = etree.SubElement(ctx.el, _q("p"))
+                if ctx.p_index < len(ctx.p_attrs_list):
+                    _set_attrs(ctx.current_p, ctx.p_attrs_list[ctx.p_index])
+                ctx.p_index += 1
+                ctx.current_seg = None
             else:
-                current_p = None
-                current_seg = None
+                ctx.current_p = None
+                ctx.current_seg = None
             i += 1
             continue
 
         if m.type == "tls:seg":
-            parent = current_p if current_p is not None else div
-            current_seg = etree.SubElement(parent, _q("seg"))
+            parent = ctx.current_p if ctx.current_p is not None else ctx.el
+            ctx.current_seg = etree.SubElement(parent, _q("seg"))
             if m.id:
-                current_seg.set(_q("id", XML_NS), m.id)
-            _set_attrs(current_seg, _ed_attrs_for(m.id, markers_info))
+                ctx.current_seg.set(_q("id", XML_NS), m.id)
+            _set_attrs(ctx.current_seg, _ed_attrs_for(m.id, markers_info))
             i += 1
             continue
 
@@ -150,12 +187,30 @@ def _build_div(section: Section, divs_info: dict, markers_info: dict
             # Source XML places <c/> inside <seg>, alongside seg text and
             # other inline children. Don't close the current seg — leave it
             # open so subsequent text and punctuation continue inside it.
-            parent = current_seg if current_seg is not None else (
-                current_p if current_p is not None else div
-            )
-            c = etree.SubElement(parent, _q("c"))
+            c = etree.SubElement(text_target(ctx), _q("c"))
             if m.content:
                 c.set("n", m.content)
+            i += 1
+            continue
+
+        if m.type == "tls:div-start":
+            # Open a nested div as a child of the active div, push a fresh
+            # context. Any open <p> in the parent is closed (nested divs
+            # appear between paragraphs in TLS sources, not inside one).
+            ctx.current_p = None
+            ctx.current_seg = None
+            nested_info = divs_info.get(m.id, {}) if m.id else {}
+            nested_div = etree.SubElement(ctx.el, _q("div"))
+            _set_attrs(nested_div, nested_info.get("div_attrs", {}))
+            stack.append(_DivCtx(nested_div, nested_info))
+            i += 1
+            continue
+
+        if m.type == "tls:div-end":
+            # Close the nested div: pop its context. Defensive: never pop
+            # the juan div from the stack base.
+            if len(stack) > 1:
+                stack.pop()
             i += 1
             continue
 
@@ -165,12 +220,9 @@ def _build_div(section: Section, divs_info: dict, markers_info: dict
     # Trailing text after the last marker.
     gap = text[last_offset:]
     if gap:
-        target = current_seg if current_seg is not None else (
-            current_p if current_p is not None else div
-        )
-        _append_text(target, gap)
+        _append_text(text_target(active()), gap)
 
-    return div
+    return juan_div
 
 
 def build_text_xml(bundle: Bundle) -> bytes:

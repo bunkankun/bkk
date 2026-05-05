@@ -152,6 +152,17 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
             annotations_info.update(ann_info)
             ann_files_info[role] = envelope
 
+    # Normalize short juan labels in marker ids to JUAN_LABEL_WIDTH digits so
+    # downstream identifiers conform to spec. No-op when source labels are
+    # already 3+ digits (KR6q0053 etc.); rewrites e.g. KR1a0171's `_01-` to
+    # `_001-`. Run before edition derivation and juan splitting so they see
+    # canonical labels. The exporter therefore emits canonical ids — a known
+    # round-trip divergence for sources that used short labels.
+    _normalize_juan_label_width(
+        sections, divs_info, markers_info, annotations, annotations_info,
+        text_id,
+    )
+
     metadata = _parse_metadata(text_xml, text_id)
     edition_short = _derive_edition_short(sections, text_id)
 
@@ -215,6 +226,75 @@ def _build_juans(sections: list[Section], annotations: list[Annotation],
 
 
 _LABEL_BEARING_MARKERS = ("page-break", "tls:head", "tls:seg")
+
+# Canonical width for the juan-label component of a marker id (the digits
+# between the second underscore and the first hyphen of the location). Some
+# TLS sources (e.g. KR1a0171) use 1- or 2-digit labels; we pad on import so
+# downstream identifiers conform to spec. Re-export will reflect the padded
+# form — a deliberate, documented round-trip divergence.
+JUAN_LABEL_WIDTH = 3
+
+
+def _normalize_marker_id(mid: str, text_id: str,
+                         width: int = JUAN_LABEL_WIDTH) -> str:
+    """Pad a short juan label inside ``mid`` to ``width`` digits.
+
+    Returns the original string unchanged if it doesn't match the
+    ``<text-id>_<edition>_<digits>-<rest>`` shape, if the label is already
+    at least ``width`` digits, or if the label isn't all-digits.
+    """
+    if not mid:
+        return mid
+    prefix = f"{text_id}_"
+    if not mid.startswith(prefix):
+        return mid
+    rest = mid[len(prefix):]
+    parts = rest.split("_", 1)
+    if len(parts) < 2:
+        return mid
+    edition, location = parts
+    label, sep, tail = location.partition("-")
+    if not sep or not label.isdigit() or len(label) >= width:
+        return mid
+    return f"{prefix}{edition}_{label.zfill(width)}-{tail}"
+
+
+def _normalize_juan_label_width(
+    sections: list[Section], divs_info: dict, markers_info: dict,
+    annotations: list[Annotation], annotations_info: dict, text_id: str,
+    width: int = JUAN_LABEL_WIDTH,
+) -> None:
+    """Pad short juan labels (1-2 digits) in every marker id to ``width``.
+
+    Mutates ``sections``, ``divs_info``, ``markers_info``, ``annotations``,
+    and ``annotations_info`` in place. No-op for sources whose marker ids
+    already use the canonical 3-digit form.
+    """
+    def fix(s: str) -> str:
+        return _normalize_marker_id(s, text_id, width)
+
+    for sec in sections:
+        sec.head_marker_id = fix(sec.head_marker_id)
+        for m in sec.markers:
+            if m.id:
+                m.id = fix(m.id)
+
+    for d in (divs_info, markers_info):
+        for old_key in list(d.keys()):
+            new_key = fix(old_key)
+            if new_key != old_key:
+                d[new_key] = d.pop(old_key)
+
+    for ann in annotations:
+        ann.seg_id = fix(ann.seg_id)
+
+    # Annotation entries carry a seg_id pointing back to the body's <seg>;
+    # rewrite that too. The dict's own keys are annotation @xml:ids which
+    # don't follow the juan-label pattern, so they're left alone (the
+    # normalizer is a no-op when the pattern doesn't match).
+    for entry in annotations_info.values():
+        if isinstance(entry, dict) and "seg_id" in entry:
+            entry["seg_id"] = fix(entry["seg_id"])
 
 
 def _juan_label_from_marker_id(mid: str, text_id: str,
@@ -389,12 +469,19 @@ def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict]:
     divs_info: dict = {}
     markers_info: dict = {}
     for div in body.iterfind(_q("div")):
-        section, div_entry, marker_entries = _section_from_div(div)
+        section, juan_entry, marker_entries, nested_div_entries = (
+            _section_from_div(div)
+        )
         sections.append(section)
         if section.head_marker_id:
-            divs_info[section.head_marker_id] = div_entry
+            divs_info[section.head_marker_id] = juan_entry
         for mid, info in marker_entries.items():
             markers_info[mid] = info
+        # Nested divs contribute their own divs_info entries, keyed by each
+        # nested div's head id (matches the id on the surrounding
+        # tls:div-start / tls:div-end markers).
+        for nested_id, nested_entry in nested_div_entries.items():
+            divs_info[nested_id] = nested_entry
 
     tei_info: dict = {}
     if etree.QName(root).localname == "TEI":
@@ -408,25 +495,55 @@ def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict]:
     return sections, divs_info, markers_info, tei_info
 
 
-def _section_from_div(div) -> tuple[Section, dict, dict]:
+def _section_from_div(div) -> tuple[Section, dict, dict, dict]:
     """Walk a top-level <div>, producing a Section with section-local offsets,
-    plus a div_info entry and a markers_info dict for source-attr round-trip.
+    plus a juan_div_entry, markers_info, and nested_divs_info for round-trip.
+
+    Nested ``<div>`` elements (e.g. KR1a0171's chapter sections under each
+    juan div) are walked recursively. Their content is emitted into the same
+    Section, bracketed by paired ``tls:div-start`` / ``tls:div-end`` markers
+    so the exporter can rebuild the source hierarchy. The id on those markers
+    is the nested div's head xml:id, which is also the key under which the
+    nested div's attrs land in ``nested_divs_info``.
     """
     text_buf: list[str] = []
     markers: list[Marker] = []
-    head_text = ""
-    head_marker_id = ""
-
-    div_entry: dict = {}
-    div_attrs = _attrs_to_dict(div.attrib)
-    if div_attrs:
-        div_entry["div_attrs"] = div_attrs
-
     markers_info: dict = {}
+    nested_divs_info: dict = {}
+
+    juan_div_entry: dict = {}
+    juan_div_attrs = _attrs_to_dict(div.attrib)
+    if juan_div_attrs:
+        juan_div_entry["div_attrs"] = juan_div_attrs
+
+    head_state = {"text": "", "id": ""}
 
     def offset() -> int:
         return sum(len(p) for p in text_buf)
 
+    _walk_div_children(
+        div, text_buf, markers, markers_info, nested_divs_info,
+        offset, juan_div_entry, head_state, is_outermost=True,
+    )
+
+    section = Section(
+        head_text=head_state["text"],
+        head_marker_id=head_state["id"],
+        text="".join(text_buf),
+        markers=markers,
+    )
+    return section, juan_div_entry, markers_info, nested_divs_info
+
+
+def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
+                       markers_info: dict, nested_divs_info: dict,
+                       offset, div_entry: dict, head_state: dict,
+                       is_outermost: bool):
+    """Walk one ``<div>``'s children, appending text and markers in document
+    order. ``div_entry`` collects attrs (head_attrs / head_inner_seg_attrs /
+    p_attrs) for *this* div. ``head_state`` tracks the section-level head
+    fields, set only by the outermost div's first ``<head>``.
+    """
     for child in div.iterchildren():
         tag = etree.QName(child).localname
         if tag == "pb":
@@ -443,9 +560,7 @@ def _section_from_div(div) -> tuple[Section, dict, dict]:
             markers.append(Marker(type="tls:head", offset=offset(),
                                   content="", id=seg_id))
             text_buf.append(seg_text)
-            if not head_text:
-                head_text = _cjk_only(seg_text)
-                head_marker_id = seg_id
+            if "head_attrs" not in div_entry:
                 head_attrs = _attrs_to_dict(child.attrib)
                 if head_attrs:
                     div_entry["head_attrs"] = head_attrs
@@ -453,6 +568,9 @@ def _section_from_div(div) -> tuple[Section, dict, dict]:
                     inner_extras = _attrs_minus(inner_seg, ("xml:id",))
                     if inner_extras:
                         div_entry["head_inner_seg_attrs"] = inner_extras
+            if is_outermost and not head_state["text"]:
+                head_state["text"] = _cjk_only(seg_text)
+                head_state["id"] = seg_id
         elif tag == "p":
             markers.append(Marker(type="paragraph-break", offset=offset(),
                                   content="", id=""))
@@ -473,16 +591,41 @@ def _section_from_div(div) -> tuple[Section, dict, dict]:
                 # other inline tags ignored for now
             markers.append(Marker(type="paragraph-break", offset=offset(),
                                   content="", id=""))
-        # Non-element nodes (text/tail) between top-level children are
-        # ignored — they're whitespace only in TLS sources.
+        elif tag == "div":
+            nested_head_id = _find_div_head_id(child)
+            nested_entry: dict = {}
+            nested_div_attrs = _attrs_to_dict(child.attrib)
+            if nested_div_attrs:
+                nested_entry["div_attrs"] = nested_div_attrs
+            markers.append(Marker(type="tls:div-start", offset=offset(),
+                                  content="", id=nested_head_id))
+            _walk_div_children(
+                child, text_buf, markers, markers_info, nested_divs_info,
+                offset, nested_entry, head_state, is_outermost=False,
+            )
+            markers.append(Marker(type="tls:div-end", offset=offset(),
+                                  content="", id=nested_head_id))
+            if nested_head_id:
+                nested_divs_info[nested_head_id] = nested_entry
+        # Non-element nodes (text/tail) between siblings are ignored —
+        # whitespace-only in TLS sources.
 
-    section = Section(
-        head_text=head_text,
-        head_marker_id=head_marker_id,
-        text="".join(text_buf),
-        markers=markers,
-    )
-    return section, div_entry, markers_info
+
+def _find_div_head_id(div) -> str:
+    """Return the xml:id of the inner ``<seg>`` in this div's first ``<head>``
+    child (or the head's own xml:id, or empty string). Used to key nested-div
+    info and to correlate ``tls:div-start`` / ``tls:div-end`` markers with the
+    head marker that follows them.
+    """
+    head = div.find(_q("head"))
+    if head is None:
+        return ""
+    seg = head.find(_q("seg"))
+    if seg is not None:
+        sid = _xmlid(seg)
+        if sid:
+            return sid
+    return _xmlid(head)
 
 
 def _attrs_minus(elem, drop: tuple[str, ...]) -> dict:
