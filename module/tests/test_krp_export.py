@@ -153,6 +153,10 @@ def test_mode_concat_rolls_juans_into_single_file(
 
 
 def test_recipe_validation_single_requires_edition(tmp_path: Path):
+    """`shape: single` with no edition is fine in the file (a generic
+    recipe), but raises at execute time if the CLI doesn't supply one."""
+    from bkk.exporter.recipe import apply_overrides
+
     bundle = tmp_path / "irrelevant"
     p = tmp_path / "r.yaml"
     p.write_text(yaml.safe_dump({
@@ -161,8 +165,9 @@ def test_recipe_validation_single_requires_edition(tmp_path: Path):
         "output_dir": str(tmp_path / "out"),
         "shape": "single",
     }), encoding="utf-8")
+    template = load_recipe(p)  # accepted as a template
     with pytest.raises(RecipeError, match="shape: single requires"):
-        load_recipe(p)
+        apply_overrides(template)  # no --edition supplied → executable check fires
 
 
 def test_recipe_validation_unknown_edition_filter(
