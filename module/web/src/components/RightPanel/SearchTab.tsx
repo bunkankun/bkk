@@ -3,8 +3,40 @@ import { useWorkspace, workspace } from "../../state/useWorkspace";
 
 const PAGE_SIZE = 50;
 
+// Treat sentence-enders as "line" boundaries for KWIC truncation. Same set
+// the read-mode phrase splitter uses (TextViewer.tsx PHRASE_END_RE).
+const PHRASE_END_RE = /[。！？；]/;
+
+// Trim the left context (text before the match) so it begins at the start
+// of a "line": after the most recent phrase-ending punctuation. Falls back
+// to a hard char cap when there's no phrase boundary in the left context.
+function trimLeftContext(s: string, maxChars = 32): string {
+  let cut = -1;
+  for (let i = 0; i < s.length; i++) {
+    if (PHRASE_END_RE.test(s[i])) cut = i;
+  }
+  // Prefer phrase-boundary trim; if it leaves nothing, fall through to cap.
+  if (cut >= 0 && cut < s.length - 1) return s.slice(cut + 1);
+  if (s.length <= maxChars) return s;
+  return s.slice(s.length - maxChars);
+}
+
+// Trim the right context (text after the match) so it ends at the end of a
+// "line": at the next phrase-ending punctuation (inclusive).
+function trimRightContext(s: string, maxChars = 32): string {
+  for (let i = 0; i < s.length; i++) {
+    if (PHRASE_END_RE.test(s[i])) return s.slice(0, i + 1);
+  }
+  if (s.length <= maxChars) return s;
+  return s.slice(0, maxChars);
+}
+
 function HitRow({ hit }: { hit: SearchHit }) {
   const witness = hit.matched_via !== "master" ? hit.matched_via : null;
+  const left = trimLeftContext(hit.left);
+  const right = trimRightContext(hit.right);
+  const leftElided = left.length < hit.left.length;
+  const rightElided = right.length < hit.right.length;
   return (
     <button
       type="button"
@@ -19,9 +51,15 @@ function HitRow({ hit }: { hit: SearchHit }) {
         {witness ? <span className="kwic-chip">{witness}</span> : null}
       </div>
       <div className="kwic-line">
-        <span className="kwic-left">{hit.left}</span>
+        <span className="kwic-left">
+          {leftElided ? <span className="kwic-ell">…</span> : null}
+          {left}
+        </span>
         <mark className="kwic-match">{hit.match}</mark>
-        <span className="kwic-right">{hit.right}</span>
+        <span className="kwic-right">
+          {right}
+          {rightElided ? <span className="kwic-ell">…</span> : null}
+        </span>
       </div>
     </button>
   );

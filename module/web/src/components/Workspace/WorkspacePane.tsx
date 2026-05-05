@@ -32,7 +32,11 @@ export function WorkspacePane() {
         ))}
       </div>
       {activeTab ? (
-        <TextViewer textid={activeTab.textid} seq={activeTab.seq} />
+        <TextViewer
+          key={`${activeTab.textid}:${activeTab.seq}`}
+          textid={activeTab.textid}
+          seq={activeTab.seq}
+        />
       ) : (
         <div className="empty-pane">Select a text from the catalog or TOC.</div>
       )}

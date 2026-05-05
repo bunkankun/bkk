@@ -24,8 +24,8 @@ export function Menubar() {
       <button className="mb-btn" disabled title="v2">
         Help
       </button>
-      <SearchBar />
       <div className="mb-spacer" />
+      <SearchBar />
       <button className="mb-login" disabled title="v2">
         Login
       </button>

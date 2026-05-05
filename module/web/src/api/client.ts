@@ -10,6 +10,7 @@
 import type {
   Annotation,
   CatalogResponse,
+  CategoriesResponse,
   Juan,
   Manifest,
   ManifestPart,
@@ -72,6 +73,10 @@ export async function getCatalog(params?: {
   }
   const qs = q.toString();
   return fetchJson<CatalogResponse>(`${apiBase}/catalog${qs ? `?${qs}` : ""}`);
+}
+
+export async function getCategories(): Promise<CategoriesResponse> {
+  return fetchJson<CategoriesResponse>(`${apiBase}/catalog/categories`);
 }
 
 export async function getManifest(textid: string): Promise<Manifest> {

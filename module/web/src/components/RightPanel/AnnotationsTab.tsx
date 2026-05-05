@@ -62,14 +62,37 @@ export function AnnotationsTab() {
     visible = anns.filter((a) => a.offset >= sel.start && a.offset < sel.end);
   }
 
+  const refString = sel
+    ? `${sel.textid}:${sel.anchorMarkerId ?? `@${sel.start}`}${
+        sel.anchorOffset > 0 ? `+${sel.anchorOffset}` : ""
+      }`
+    : null;
+
+  const onCopyRef = async () => {
+    if (!refString) return;
+    try {
+      await navigator.clipboard.writeText(refString);
+    } catch {
+      /* clipboard blocked — silently swallow */
+    }
+  };
+
+  const onSearchSelection = () => {
+    if (!sel) return;
+    workspace.setSearchQuery(sel.chars.join(""));
+    void workspace.runSearch();
+  };
+
   return (
     <div className="rc">
       {sel && sel.textid === textid && sel.seq === seq && (
         <>
           <div className="sel-summary">{sel.chars.join("")}</div>
           <div className="sel-meta">
-            <span>
-              [{sel.start}, {sel.end})
+            <span title={`master_offset [${sel.start}, ${sel.end})`}>
+              {sel.anchorMarkerId
+                ? `@ ${sel.anchorMarkerId}${sel.anchorOffset > 0 ? ` + ${sel.anchorOffset}` : ""}`
+                : `@ offset ${sel.start}`}
             </span>
             <span>{sel.chars.length} char</span>
             <button
@@ -77,6 +100,18 @@ export function AnnotationsTab() {
               onClick={() => workspace.setSelection(null)}
             >
               clear
+            </button>
+          </div>
+          <div className="sel-actions">
+            <button className="sel-action" onClick={onSearchSelection}>
+              Search this
+            </button>
+            <button
+              className="sel-action"
+              onClick={onCopyRef}
+              title={refString ?? undefined}
+            >
+              Copy ref
             </button>
           </div>
         </>

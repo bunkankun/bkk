@@ -51,13 +51,16 @@ CLI flags override env vars.
 
 ### What works in v1
 
-- Catalog → click a bundle → TOC populates from the manifest
-- Click a juan → body text renders character-by-character
+- Catalog renders the KR taxonomy as a two-level tree (top categories KR1–KR6 → subcategories), bundles lazy-load when a subcategory is opened
+- Selecting a bundle opens its TOC and **auto-opens the first juan** so body text appears in parallel with the TOC
+- Body text renders character-by-character with block-level lazy mounting (paragraph- or phrase-per-line, toggled in the StatusBar via ¶ / ↵)
+- Text is selectable: drag-select a phrase → search box populates and Annotations panel filters to that offset range; "Search this" / "Copy ref" buttons in the selection summary
+- Selection references resolve to the most recent id-bearing marker (`textid:markerId+offset`) for stable cross-edition citations
 - Annotated chars are dotted-underlined; hover for tooltip; click to push into the right-panel selection
-- Drag-select a phrase → annotations panel filters to that offset range
 - Bundles without annotations show "No annotations for this juan."
-- The menubar logo tooltip reports the configured `upstream_repo`
-- Full-text search (Menubar) with five sort modes; results render in a Search tab on the right panel and clicking a hit scrolls + flashes the matched span in the workspace
+- Left and right panel widths are user-draggable (handles between activity-bar/LeftPanel and Workspace/RightPanel) and persisted in localStorage
+- The menubar logo tooltip reports the configured `upstream_repo`; the search bar sits at the right next to the (disabled) Login button
+- Full-text search (Menubar) with five sort modes; results render in a Search tab on the right panel and clicking a hit scrolls + flashes the matched span in the workspace for 15s
 - A pinned filter input on the LeftPanel Catalog narrows the loaded bundle list client-side (title / alt_titles / authors / identifiers)
 
 What does NOT work yet (deferred to later slices): GitHub login, in-browser editing/PRs, translation mode, IIIF facsimile (Inspect), AI/Dharma panels, the cross-text annotation dictionary, pane splits.
@@ -76,6 +79,38 @@ The Menubar carries a search bar with two dropdowns:
 
 The endpoint is `GET /search?q=…&sort=…` (see [module/bkk/serve/routers/search.py](module/bkk/serve/routers/search.py)); the response echoes the `sort` value that took effect. Hits are sorted over the **full** result list before the `offset:offset+limit` slice.
 
-Results render in a third right-panel tab (alongside Annot. and Chat) that appears once a search is in flight and remains for the session. Each row shows `toc_label · textid · juan` plus a KWIC line where the left context is right-aligned via `direction: rtl; unicode-bidi: plaintext`. A `[witness]` chip flags hits whose match came from a non-master witness. Clicking a row opens the juan in the workspace and triggers a 1.2s amber flash on the master span. Pagination uses prev/next over `offset` (page size 50).
+Results render in a third right-panel tab (alongside Annot. and Chat) that appears once a search is in flight and remains for the session. Each row shows `toc_label · textid · juan` plus a KWIC line. The left context is anchored to the right edge via `display: flex; justify-content: flex-end`, so when it overflows the column its **leftmost** chars get clipped (those nearest the match stay visible). Phrase-boundary trim (`。！？；`) preserves clean breakpoints when sentence-enders are present, with an ellipsis chip marking elided text on either side. A `[witness]` chip flags hits whose match came from a non-master witness. Clicking a row opens the juan in the workspace and triggers a 15s amber flash on the master span. Pagination uses prev/next over `offset` (page size 50).
 
 The catalog filter input on the LeftPanel is currently a UI-only client-side substring filter over the already-loaded matches. v2 will swap this for a backend `GET /catalog?q=` endpoint and lift the filter state into the workspace store.
+
+## Catalog tree
+
+The LeftPanel Catalog is a two-level tree of the Kanripo classification, populated from `GET /catalog/categories` ([module/bkk/serve/routers/catalog.py](module/bkk/serve/routers/catalog.py)). The endpoint joins `bkk.data/kr_categories.yaml` (bilingual labels) with per-leaf bundle counts derived from the live corpus.
+
+- Top categories KR1–KR6 are listed at startup with descendant bundle counts; expanding a top reveals its subcategories.
+- Subcategory bundles load lazily on first expand via `GET /catalog?filters=tags.kr-categories=<code>` and are cached for the session.
+- Clicking a bundle calls `workspace.selectBundle(textid)`, which both populates the right-side TOC AND fire-and-forget auto-opens the first part — body text and TOC appear in parallel rather than requiring a TOC click.
+
+## Read view
+
+The Workspace TextViewer ([module/web/src/components/Workspace/TextViewer.tsx](module/web/src/components/Workspace/TextViewer.tsx)) renders juan body text in **blocks** so very long juans don't pay the cost of mounting every span up-front:
+
+- Block boundaries follow `paragraph-break` markers (paragraph mode, default) or `tls:seg` markers (phrase mode), falling back to literal `\n` / phrase-ending punctuation when those markers are absent.
+- Each block lives in an `IntersectionObserver` with `rootMargin: "200% 0px"`; once a block enters the expanded viewport it stays mounted (so scroll position never jumps back).
+- The line-mode toggle (¶ / ↵) lives in the StatusBar and persists in `localStorage["bkk.readPrefs"]`.
+- Punctuation is injected from `punctuation`-type markers at their `offset`, skipping positions where the master text already has punctuation.
+- PUA Kanripo refs (`&KRnnnn;`) are decoded on render via `decodeKrRefs`; only CJK + PUA chars participate in selection (drag-select skips ASCII/whitespace markers).
+
+### Selection refs
+
+A drag-select carries the most recent id-bearing marker at-or-before the selection start. The Annotations panel surfaces it as `@ <markerId> + <offset>` (or just `@ offset N` if no marker is upstream). "Copy ref" copies the canonical form `<textid>:<markerId>+<offset>` to the clipboard; "Search this" runs full-text search on the selected chars.
+
+### Scroll-to-match
+
+Clicking a search hit calls `workspace.openHit(hit)`, which atomically updates the active tab and stages a `pendingHighlight`. WorkspacePane keys `<TextViewer>` by `${textid}:${seq}` so a navigation forces a clean unmount/remount — the previous juan's stale DOM can never be the target of the layout-effect `scrollIntoView`. A `lastFlashedRef` prevents the layout effect from re-flashing on subsequent re-runs (e.g. when the IntersectionObserver expands `visibleBlocks` after the smooth scroll completes), and the 15s clear-timer lives in its own effect keyed on `flashOffsets` so an unrelated dep change can't cancel it.
+
+## Resizable panels
+
+Both the LeftPanel and RightPanel widths are user-draggable. Handles (`<ResizeHandle side="left|right" />` in [module/web/src/App.tsx](module/web/src/App.tsx)) sit between the activity-bar/LeftPanel and Workspace/RightPanel respectively. Widths are clamped to `[180, 600]` px and persisted in `localStorage["bkk.panelWidths"]`.
+
+The drag's terminating `mouseup` bubbles into the Workspace's `.ec` element, whose `handleMouseUp` would otherwise treat any non-collapsed `window.getSelection()` range as a fresh drag-select and switch the right tab to Annotations (hiding live search results). A module-scoped `isResizing` guard in [module/web/src/state/useWorkspace.ts](module/web/src/state/useWorkspace.ts) is set on drag start and cleared in a `setTimeout(0)` after `mouseup` — the deferred clear lets the bubbling event observe the guard as still true and short-circuit. The drag also pre-clears `window.getSelection()` so a stale selection (from before the drag) can't trip the same path.

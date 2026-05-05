@@ -40,6 +40,21 @@ export interface CatalogResponse {
   recipe: Record<string, unknown>;
 }
 
+export interface CategoryNode {
+  code: string;
+  label: string;
+  zh: string;
+  bundle_count: number;
+}
+
+export interface TopCategory extends CategoryNode {
+  subcategories: CategoryNode[];
+}
+
+export interface CategoriesResponse {
+  categories: TopCategory[];
+}
+
 // Manifest is a passthrough dict — type the parts we actually read.
 export interface ManifestPart {
   seq: number;
@@ -95,7 +110,9 @@ export interface Manifest {
 // Juan body shape from /bundles/{textid}/juan/{seq}
 export interface JuanMarker {
   type: string;
-  master_offset?: number;
+  offset?: number;
+  content?: string;
+  id?: string;
   [k: string]: unknown;
 }
 

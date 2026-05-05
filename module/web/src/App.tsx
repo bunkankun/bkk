@@ -9,12 +9,52 @@ import { ChatTab } from "./components/RightPanel/ChatTab";
 import { SearchTab } from "./components/RightPanel/SearchTab";
 import { StatusBar } from "./components/StatusBar";
 import { PaneTree } from "./components/Workspace/PaneTree";
-import { useWorkspace, workspace } from "./state/useWorkspace";
+import { setResizing, useWorkspace, workspace } from "./state/useWorkspace";
+
+function ResizeHandle({ side }: { side: "left" | "right" }) {
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    // Clear any leftover text selection so the drag's terminating mouseup
+    // can't be misread as a fresh drag-select by TextViewer.handleMouseUp.
+    window.getSelection()?.removeAllRanges();
+    setResizing(true);
+    const startX = e.clientX;
+    const startWidth = workspace.state.panelWidths[side];
+    const onMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - startX;
+      const next = side === "left" ? startWidth + dx : startWidth - dx;
+      workspace.setPanelWidth(side, next);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      // Defer clearing until after the bubbling mouseup has been observed
+      // by element-level handlers (so the guard is still true when .ec's
+      // onMouseUp fires).
+      setTimeout(() => setResizing(false), 0);
+    };
+    document.body.style.cursor = "ew-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+  return (
+    <div
+      className="pane-resize"
+      role="separator"
+      aria-orientation="vertical"
+      onMouseDown={onMouseDown}
+    />
+  );
+}
 
 function LeftPanel() {
   const activity = useWorkspace((s) => s.activity);
+  const width = useWorkspace((s) => s.panelWidths.left);
   return (
-    <div className="lp">
+    <div className="lp" style={{ width }}>
       <div className="ph">
         <span>{activity === "catalog" ? "Catalog" : "Texts"}</span>
       </div>
@@ -28,8 +68,9 @@ function LeftPanel() {
 function RightPanel() {
   const tab = useWorkspace((s) => s.rightTab);
   const searchActive = useWorkspace((s) => s.search.status !== "idle");
+  const width = useWorkspace((s) => s.panelWidths.right);
   return (
-    <div className="rp">
+    <div className="rp" style={{ width }}>
       <div className="rt-bar">
         <button
           className={`rt${tab === "annotations" ? " on" : ""}`}
@@ -88,7 +129,9 @@ export function App() {
       <div className="app-main">
         <ActivityBar />
         <LeftPanel />
+        <ResizeHandle side="left" />
         <PaneTree />
+        <ResizeHandle side="right" />
         <RightPanel />
       </div>
       <StatusBar />

@@ -251,7 +251,6 @@ button {
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
-  width: 280px;
 }
 .lp {
   background: var(--bg-pan);
@@ -260,7 +259,24 @@ button {
 .rp {
   background: var(--bg-pan);
   border-left: 1px solid var(--bdr);
-  width: 320px;
+}
+
+/* drag handle that lives between activity-bar/lp and ca/rp.
+ * Visually a hairline; the hit-target spans a few px to either side
+ * via padding so the resize cursor catches without needing pixel-perfect
+ * aim. */
+.pane-resize {
+  flex: 0 0 4px;
+  align-self: stretch;
+  cursor: ew-resize;
+  background: transparent;
+  position: relative;
+  z-index: 50;
+  transition: background 0.15s;
+}
+.pane-resize:hover,
+.pane-resize:active {
+  background: var(--amb-d);
 }
 .ph {
   height: 28px;
@@ -438,13 +454,42 @@ button {
   letter-spacing: 0.04em;
   white-space: pre-wrap;
   word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+.tv-block {
+  display: block;
+}
+.tv-body-paragraph .tv-block {
+  margin-bottom: 0.5em;
+}
+.tv-body-phrase .tv-block {
+  display: block;
+  margin-bottom: 0.15em;
+}
+.tv-block-placeholder {
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    var(--bdr-l) 45%,
+    var(--bdr-l) 55%,
+    transparent 100%
+  );
+  background-size: 100% 4px;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.25;
 }
 .ch {
-  cursor: pointer;
+  cursor: text;
   border-radius: 3px;
   padding: 0 1px;
   display: inline;
   transition: background 0.1s, color 0.1s;
+}
+.ch.has-ann {
+  cursor: pointer;
 }
 .ch:hover,
 .ch.on {
@@ -679,6 +724,65 @@ button {
   color: var(--t1);
 }
 
+/* catalog tree (KR taxonomy) ------------------------------------ */
+.cat-top,
+.cat-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.cat-top {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--bdr-l);
+  font-size: 13px;
+  color: var(--t1);
+}
+.cat-sub {
+  padding: 4px 12px 4px 26px;
+  font-size: 12px;
+  color: var(--t2);
+  border-bottom: 1px solid var(--bdr-l);
+}
+.cat-top:hover:not(.cat-empty),
+.cat-sub:hover:not(.cat-empty) {
+  background: var(--hov);
+}
+.cat-empty {
+  cursor: default;
+  opacity: 0.45;
+}
+.cat-caret {
+  width: 10px;
+  font-family: var(--fm);
+  font-size: 10px;
+  color: var(--t3);
+  text-align: center;
+}
+.cat-zh {
+  font-family: var(--fc);
+  font-size: 14px;
+}
+.cat-sub .cat-zh {
+  font-size: 13px;
+}
+.cat-code {
+  font-family: var(--fm);
+  font-size: 10px;
+  color: var(--t3);
+}
+.cat-count {
+  margin-left: auto;
+  font-family: var(--fm);
+  font-size: 10px;
+  color: var(--t3);
+}
+.cat-bundle {
+  padding-left: 38px;
+}
+
 /* search results (KWIC) ----------------------------------------- */
 .kwic-list {
   padding: 0;
@@ -745,20 +849,40 @@ button {
   font-size: 14px;
   line-height: 1.6;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  /* minmax(0, 1fr) is load-bearing — `1fr` alone resolves to
+   * minmax(auto, 1fr), which lets each side track grow to its
+   * content's max-content width and pushes the match column out. */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: baseline;
   gap: 2px;
   word-break: keep-all;
   white-space: nowrap;
   overflow: hidden;
 }
-.kwic-left {
-  text-align: right;
-  direction: rtl;
-  unicode-bidi: plaintext;
+.kwic-left,
+.kwic-right {
   color: var(--t2);
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
+}
+.kwic-right {
+  display: block;
+}
+/* `text-align: right` does NOT actually right-anchor overflowing nowrap
+ * content — the line-box still starts at the inline-start and extends
+ * past the right edge, so overflow clips the chars adjacent to the match.
+ * Flex + justify-content: flex-end physically anchors children to the
+ * right edge so overflow clips on the FAR LEFT instead. */
+.kwic-left {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  flex-wrap: nowrap;
+}
+.kwic-ell {
+  color: var(--t3);
+  margin: 0 2px;
 }
 .kwic-match {
   background: var(--amb-b);
@@ -766,11 +890,6 @@ button {
   padding: 0 2px;
   border-radius: 2px;
   font-weight: 600;
-}
-.kwic-right {
-  color: var(--t2);
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .kwic-pager {
   display: flex;
@@ -805,13 +924,19 @@ button {
     background: var(--amb);
     color: var(--bg-ed);
   }
+  /* hold the bright color for most of the animation so the user has
+   * plenty of time to spot the match before it fades. */
+  90% {
+    background: var(--amb);
+    color: var(--bg-ed);
+  }
   100% {
     background: transparent;
     color: inherit;
   }
 }
 .ch.kwic-flash {
-  animation: kwic-flash-fade 1.2s ease-out;
+  animation: kwic-flash-fade 15s ease-out;
 }
 
 /* selection summary block in annotations panel */
@@ -845,4 +970,27 @@ button {
 }
 .sel-clear:hover {
   color: var(--t2);
+}
+.sel-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.sel-action {
+  flex: 1;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--t2);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: 0.1s;
+}
+.sel-action:hover {
+  background: var(--hov);
+  color: var(--t1);
+  border-color: var(--amb);
 }
