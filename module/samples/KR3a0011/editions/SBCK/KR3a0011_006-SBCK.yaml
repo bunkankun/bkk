@@ -1,0 +1,42 @@
+canonical_identifier: bkk:krp/KR3a0011/SBCK/v1/juan/6
+seq: 6
+front:
+  text: ''
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  markers: []
+body:
+  text: 䟦申鍳注後右荀悅申鍳五卷乃吳郡黄文學勉之所注也漢史載悅為獻帝黄門侍郎是時政移曹操故申漢故事以為帝鍳及泄𫠦藴負共五篇以上一曰政體二曰時事三曰俗嫌四曰雜言上五曰雜言下皆深切時弊關治化人君𫠦當遵行者悅之用心可謂勤矣勉之感其𫠦遭而先帝之時適有姧臣心迹如操者􅀼弄威柄遂憤激為注此書共得萬四千餘言中𫠦引據又皆漢事尤為博洽少傅守谿王公謂其有感而為者誠然㢤昔揚雄自言𫠦著太玄經後世必有知子雲者今觀勉之之注殆亦深知荀悅者與正德􅉝巳冬十一月望白巗山人喬宇識# SB1_0336-144.png
+  hash: sha256:21b8a9c3652bf3529e1f1bb450e457b1c4ba97c0c370dd6ff5a974987ce01c06
+  markers:
+  - {type: page-break, offset: 0, content: '', id: KR3a0011_SBCK_006-1a}
+  - {type: line-break, offset: 0, content: '', id: KR3a0011_SBCK_006-1a01}
+  - {type: line-break, offset: 5, content: '', id: KR3a0011_SBCK_006-1a02}
+  - {type: line-break, offset: 22, content: '', id: KR3a0011_SBCK_006-1a03}
+  - {type: line-break, offset: 39, content: '', id: KR3a0011_SBCK_006-1a04}
+  - {type: line-break, offset: 56, content: '', id: KR3a0011_SBCK_006-1a05}
+  - {type: line-break, offset: 73, content: '', id: KR3a0011_SBCK_006-1a06}
+  - {type: line-break, offset: 90, content: '', id: KR3a0011_SBCK_006-1a07}
+  - {type: line-break, offset: 107, content: '', id: KR3a0011_SBCK_006-1a08}
+  - {type: line-break, offset: 111, content: '', id: KR3a0011_SBCK_006-1a09}
+  - {type: page-break, offset: 128, content: '', id: KR3a0011_SBCK_006-1b}
+  - {type: line-break, offset: 128, content: '', id: KR3a0011_SBCK_006-1b01}
+  - {type: line-break, offset: 145, content: '', id: KR3a0011_SBCK_006-1b02}
+  - {type: line-break, offset: 162, content: '', id: KR3a0011_SBCK_006-1b03}
+  - {type: line-break, offset: 179, content: '', id: KR3a0011_SBCK_006-1b04}
+  - {type: line-break, offset: 196, content: '', id: KR3a0011_SBCK_006-1b05}
+  - {type: line-break, offset: 202, content: '', id: KR3a0011_SBCK_006-1b06}
+  - {type: page-break, offset: 218, content: '', id: KR3a0011_SBCK_006-2a}
+  - {type: line-break, offset: 218, content: '', id: KR3a0011_SBCK_006-2a01}
+metadata:
+  title: 申鑒
+  edition:
+    short: SBCK
+    label: 【四部叢刊】
+  date: '2015-09-11 03:50:43.078458'
+  juan_title: '6'
+  source:
+    repository: kanripo
+    path: KR3a0011/KR3a0011_006.txt
+  image_base_urls:
+    wyg: http://img.kanripo.org/general/skqs/wyg/
+hash: sha256:46ba60d6c8c0d0059bebb53bfe176b5221fa0224ed0bb053d1b600782673a2f5

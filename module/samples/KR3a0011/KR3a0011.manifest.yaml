@@ -1,0 +1,47 @@
+canonical_identifier: bkk:krp/KR3a0011/v1
+canonical_location: https://kanripo.org/bkk/KR3a0011/v1
+canonical_set:
+  identifier: bkk:charset/cjk-v1
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+entity_encoding:
+  identifier: bkk:encoding/kanripo-pua-v1
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+editions:
+- {short: SBCK, label: 【四部叢刊】}
+- {short: WYG, label: 【四庫全書・文淵閣】}
+assets:
+  parts:
+  - {seq: 0, filename: KR3a0011_000.yaml, hash: 'sha256:363376100929f3e08f55a94331fcbcb0b9c95d214a761ec749bf269b523dd0d0'}
+  - {seq: 1, filename: KR3a0011_001.yaml, hash: 'sha256:b9734cbf3c9819308f5ee222f29c27b52e24d3b3f635a12df53fc9ef7034e9db'}
+  - {seq: 2, filename: KR3a0011_002.yaml, hash: 'sha256:15d4654c03bcb019a97e8ed5e83a30875050a6fe175a8457740d6c434955acd5'}
+  - {seq: 3, filename: KR3a0011_003.yaml, hash: 'sha256:fb5ed18b95a902af1ba00b08b398f7f7832df3f9af322c6e633f3203a91cf64d'}
+  - {seq: 4, filename: KR3a0011_004.yaml, hash: 'sha256:8e85b17a00cd402344c81d0498fa9a9a1ed9dcda5f15038d3ae0d643ab226cf7'}
+  - {seq: 5, filename: KR3a0011_005.yaml, hash: 'sha256:f34d548b3d511316ae1e1478887917e35878fd8cf9cb03f5b437084618326934'}
+  - {seq: 6, filename: KR3a0011_006.yaml, hash: 'sha256:dfedca63b5b466a9f4dc83bb49561b3d051339fbffa56e067495b74e4ae2b703'}
+table_of_contents:
+- ref: {seq: 0, marker_id: KR3a0011_SBCK_000-1a, span: [body, 0, 1165]}
+  label: '0'
+- ref: {seq: 1, marker_id: KR3a0011_SBCK_001-1a, span: [body, 0, 5548]}
+  label: '1'
+- ref: {seq: 2, marker_id: KR3a0011_SBCK_002-1a, span: [body, 0, 6694]}
+  label: '2'
+- ref: {seq: 3, marker_id: KR3a0011_SBCK_003-1a, span: [body, 0, 3040]}
+  label: '3'
+- ref: {seq: 4, marker_id: KR3a0011_SBCK_004-1a, span: [body, 0, 5854]}
+  label: '4'
+- ref: {seq: 5, marker_id: KR3a0011_SBCK_005-1a, span: [body, 0, 3166]}
+  label: '5'
+- ref: {seq: 6, marker_id: KR3a0011_SBCK_006-1a, span: [body, 0, 218]}
+  label: '6'
+metadata:
+  title: 申鑒
+  date: '2015-09-11 03:50:43.078458'
+  source:
+    repository: kanripo
+    path: KR3a0011
+  image_base_urls:
+    wyg: http://img.kanripo.org/general/skqs/wyg/
+  base_edition: SBCK
+  edition:
+    short: bkk
+hash: sha256:7f3adadb61af3c093c0e22e54ff747ccc619d3a07a269ecd4cebbad743661462

@@ -1,0 +1,24 @@
+canonical_identifier: bkk:krp/KR3a0011/WYG/v1/juan/5
+seq: 5
+front:
+  text: ''
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  markers: []
+body:
+  text: 謂
+  hash: sha256:570b61760c720a368e437c99a3407edd379d8f78fc5a074a1474b3b3fe183bc8
+  markers:
+  - {type: line-break, offset: 0, content: '', id: '01'}
+metadata:
+  title: 申鑒
+  edition:
+    short: WYG
+    label: 【四庫全書・文淵閣】
+  date: '2015-09-11 03:50:43.078458'
+  juan_title: '5'
+  source:
+    repository: kanripo
+    path: KR3a0011/KR3a0011_005.txt
+  image_base_urls:
+    wyg: http://img.kanripo.org/general/skqs/wyg/
+hash: sha256:59f1d26f091eee7b3dac2b02132ef740b95274aa6989f2762785d032f7ee7c94

@@ -1,0 +1,7522 @@
+text_id: KR1h0004
+juan: '002'
+edition: tls
+annotations:
+- id: ''
+  concept: GOVERN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-1a.4
+  pos: 2
+  bucket: body
+  offset: 10
+  translation:
+    text: '"If one conducts an administration through inner moral power'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 為
+    pron: wéi
+  sense:
+    id: uuid-3d62569e-3632-4031-ba8c-4097294365fd
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: take charge of; be in charge of, run (a state; a government)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GOVERN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-1a.4
+  pos: 3
+  bucket: body
+  offset: 11
+  translation:
+    text: '"If one conducts an administration through inner moral power'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 政
+    pron: zhèng
+  sense:
+    id: uuid-37eb6fea-b6bf-4b98-8e23-914d330dbb07
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: administration of a state, public administration;  administrative measure;   administrative method; administrative tasks and problems; administrative practice
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: USE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-1a.4
+  pos: 4
+  bucket: body
+  offset: 12
+  translation:
+    text: '"If one conducts an administration through inner moral power'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 以
+    pron: yǐ
+  sense:
+    id: uuid-f68711ab-02c4-43f1-bcb5-d9c7c6bdd953
+    pos: V
+    syn_func: vtoN.postadV
+    usage:
+      warring-states-currency: '5'
+    def: To V by using> by means of N;  with
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: VIRTUE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-1a.4
+  pos: 5
+  bucket: body
+  offset: 13
+  translation:
+    text: '"If one conducts an administration through inner moral power'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 德
+    pron: dé
+  sense:
+    id: uuid-1cdab186-9017-4847-a833-2ab92f47da4a
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '3'
+    def: the highest form of virtue, true virtue, true inner power
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: RESEMBLE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-1a.5
+  pos: 1
+  bucket: body
+  offset: 13
+  translation:
+    text: 'one is like the North Star:'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 譬如
+    pron: pì rú
+  sense:
+    id: uuid-573815e2-5f5e-4d19-ae86-dbb9da78e4b1
+    pos: V
+    syn_func: VPtoN
+    usage:
+      warring-states-currency: '5'
+    def: may be properly compared with (typically with understood subject)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-664d0352-f1ba-4508-8d03-52f1ba3508d8
+  concept: RESEMBLE
+  concept_id: uuid-031779e4-5e29-4947-9e9f-b5edc803c7be
+  seg_id: KR1h0004_tls_002-1a.5
+  pos: 1
+  bucket: body
+  offset: 13
+  translation:
+    text: 'one is like the North Star:'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 譬如
+    pron: pì rú
+  sense:
+    id: uuid-573815e2-5f5e-4d19-ae86-dbb9da78e4b1
+    pos: V
+    syn_func: VPtoN
+    usage:
+      warring-states-currency: '5'
+    def: may be properly compared with (typically with understood subject)
+  metadata:
+    resp: CH
+    created: '2022-04-02T03:51:24.766+09:00'
+- id: ''
+  concept: STAR
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-1a.5
+  pos: 3
+  bucket: body
+  offset: 15
+  translation:
+    text: 'one is like the North Star:'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 北辰
+    pron: běi chén
+  sense:
+    id: uuid-409e1808-7fe5-4464-ae04-fd73355dc25f
+    pos: 'N'
+    syn_func: NP{N1adN2}
+    def: North Pole Star
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DWELL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-2a.1
+  pos: 1
+  bucket: body
+  offset: 17
+  translation:
+    text: It constantly stays in its proper place and the various stars bow to it."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 居
+    pron: jū
+  sense:
+    id: uuid-cf5174b9-2400-449e-a0f4-66d5326aa1a2
+    pos: V
+    syn_func: vtoN
+    sem_feat: stative
+    usage:
+      warring-states-currency: '5'
+    def: 'be situated in; have one''s (permanent, or at least lasting) abode in; spend one''s time (with someone); transferred: be in (such-and-such a condition)'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PLACE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-2a.1
+  pos: 3
+  bucket: body
+  offset: 19
+  translation:
+    text: It constantly stays in its proper place and the various stars bow to it."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 所
+    pron: suǒ
+  sense:
+    id: uuid-ee00626f-1289-4015-a5af-dbf0ddfb39a0
+    pos: 'N'
+    syn_func: 'n'
+    usage:
+      warring-states-currency: '5'
+    def: 'proper location, proper place for one; position one occupies; place LY 居其所 always: occupy one''s proper place;  得其所 current'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: AND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-2a.1
+  pos: 4
+  bucket: body
+  offset: 20
+  translation:
+    text: It constantly stays in its proper place and the various stars bow to it."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-018170e0-ae13-4999-a9ef-8bd356066fd7
+    pos: P
+    syn_func: padS1.post-S2
+    sem_feat: logic
+    usage:
+      warring-states-currency: '5'
+    def: and 任重而道遠"his burden is heavy and the way is far"
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: MANY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-2a.1
+  pos: 5
+  bucket: body
+  offset: 21
+  translation:
+    text: It constantly stays in its proper place and the various stars bow to it."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 眾
+    pron: zhòng
+  sense:
+    id: uuid-5fa8beb6-755c-409d-a482-ecaacf0f5e8d
+    pos: V
+    syn_func: vadN
+    sem_feat: definite
+    usage:
+      warring-states-currency: '5'
+    def: the numerous (primarily of persons), the numerous (dignified objects); the many;   all the various
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: STAR
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-2a.1
+  pos: 5
+  bucket: body
+  offset: 21
+  translation:
+    text: It constantly stays in its proper place and the various stars bow to it."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 眾星
+    pron: zhòng xīng
+  sense:
+    id: uuid-230ec7be-9b15-4ef2-b2b9-fcc124da469d
+    pos: 'N'
+    syn_func: NP
+    sem_feat: definite
+    def: the stares
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: BOW DOWN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-2a.1
+  pos: 7
+  bucket: body
+  offset: 23
+  translation:
+    text: It constantly stays in its proper place and the various stars bow to it."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 共
+    orths:
+    - 共
+    - 拱
+    pron: gōng
+  sense:
+    id: uuid-50b10450-c269-42cb-896c-7b3860de34a1
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: bow to
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SONG
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-2a.3
+  pos: 3
+  bucket: body
+  offset: 29
+  translation:
+    text: '"The Songs are three hundred in number,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 詩
+    pron: shī
+  sense:
+    id: uuid-22523192-0b1f-4aa8-bda2-dcb0c7f3d5e0
+    pos: 'N'
+    syn_func: npr
+    sem_feat: plural
+    usage:
+      warring-states-currency: '3'
+    def: the canonical Songs, particularly those collected in what is known later as Shijing
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SENTENCE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-2a.4
+  pos: 2
+  bucket: body
+  offset: 31
+  translation:
+    text: but one phrase will cover these.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 言
+    pron: yán
+  sense:
+    id: uuid-a26cf40d-b0ab-40ae-83c4-a3010c4e81e1
+    pos: 'N'
+    syn_func: ncc
+    usage:
+      warring-states-currency: '3'
+    def: statements; pronouncements; proposals
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-81ddcd8e-2217-4928-9dcd-8e2217492888
+  concept: COVER
+  concept_id: uuid-034a355a-2b9d-4b18-a495-48944fa2dbfa
+  seg_id: KR1h0004_tls_002-2a.4
+  pos: 4
+  bucket: body
+  offset: 33
+  translation:
+    text: but one phrase will cover these.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 蔽
+    pron: bì
+  sense:
+    id: uuid-30920528-b094-4c4e-8058-6b490466d29e
+    pos: V
+    syn_func: vtoN
+    sem_feat: figurative
+    def: encompass, cover abstractly
+  metadata:
+    resp: twharbsmeier
+    created: '2021-12-28T19:52:56.858+09:00'
+- id: ''
+  concept: PARTICLE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.1
+  pos: 2
+  bucket: body
+  offset: 37
+  translation:
+    text: '"Lo, never be wayward!""'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 思
+    pron: sī
+  sense:
+    id: uuid-c2018f3f-09a4-4853-a0f4-b306d5bf8f23
+    pos: P
+    syn_func: padS
+    usage:
+      warring-states-currency: '2'
+    def: sentence-initial euphonic particle in SHI
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SHOULD NOT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.1
+  pos: 3
+  bucket: body
+  offset: 38
+  translation:
+    text: '"Lo, never be wayward!""'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 無
+    pron: wú
+  sense:
+    id: uuid-a20215bf-4f86-4b21-b115-3ce75ccc2c18
+    pos: V
+    syn_func: vt+V[0]
+    usage:
+      warring-states-currency: '5'
+    def: (GENERALLY probitive) should not in general; should never; should never again
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: WICKED
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.1
+  pos: 4
+  bucket: body
+  offset: 39
+  translation:
+    text: '"Lo, never be wayward!""'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 邪
+    pron: xié
+  sense:
+    id: uuid-b12495bb-4fca-4842-8c04-6594dbe6749a
+    pos: V
+    syn_func: vi
+    usage:
+      warring-states-currency: '4'
+    def: 'be deviant and evil, unacceptable, pernicious; be contrary to the norm; of people, occasionally: be wayward'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LEAD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.3
+  pos: null
+  bucket: body
+  offset: 41
+  translation:
+    text: '"If one guides them through administrative measures,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 導
+    orths:
+    - 導
+    - 導道
+    pron: dǎo
+  sense:
+    id: uuid-a6ee2ee5-97a9-492c-b280-d347aac01945
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: guide and lead the way; lead; guide with respect to
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PRONOUN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.3
+  pos: 3
+  bucket: body
+  offset: 43
+  translation:
+    text: '"If one guides them through administrative measures,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 之
+    pron: zhī
+  sense:
+    id: uuid-d8967b61-059c-425f-88bf-1054a0df3e15
+    pos: 'N'
+    syn_func: npro
+    sem_feat: cataphoric
+    usage:
+      warring-states-currency: '4'
+    def: 'cataphoric: the following object, the object identified further down in the context'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: USE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.3
+  pos: 4
+  bucket: body
+  offset: 44
+  translation:
+    text: '"If one guides them through administrative measures,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 以
+    pron: yǐ
+  sense:
+    id: uuid-f68711ab-02c4-43f1-bcb5-d9c7c6bdd953
+    pos: V
+    syn_func: vtoN.postadV
+    usage:
+      warring-states-currency: '5'
+    def: To V by using> by means of N;  with
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GOVERN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.3
+  pos: 5
+  bucket: body
+  offset: 45
+  translation:
+    text: '"If one guides them through administrative measures,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 政
+    pron: zhèng
+  sense:
+    id: uuid-37eb6fea-b6bf-4b98-8e23-914d330dbb07
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: administration of a state, public administration;  administrative measure;   administrative method; administrative tasks and problems; administrative practice
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: APPROPRIATE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.4
+  pos: 1
+  bucket: body
+  offset: 45
+  translation:
+    text: if one gets them to toe the line through punishments,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 齊
+    pron: qí
+  sense:
+    id: uuid-5cdbea7e-421a-4e79-926b-42e6fb0870a1
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: to harmonise, to bring into balance, to tune properly; bring in line; keep perfectly in line
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: USE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.4
+  pos: 3
+  bucket: body
+  offset: 47
+  translation:
+    text: if one gets them to toe the line through punishments,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 以
+    pron: yǐ
+  sense:
+    id: uuid-f68711ab-02c4-43f1-bcb5-d9c7c6bdd953
+    pos: V
+    syn_func: vtoN.postadV
+    usage:
+      warring-states-currency: '5'
+    def: To V by using> by means of N;  with
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PUNISH
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.4
+  pos: 4
+  bucket: body
+  offset: 48
+  translation:
+    text: if one gets them to toe the line through punishments,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 刑
+    pron: xíng
+  sense:
+    id: uuid-03eb15aa-4ecd-4fe0-9e36-f100ab379498
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '3'
+    def: punishment (physical or otherwise)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: AVOID
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.5
+  pos: 2
+  bucket: body
+  offset: 50
+  translation:
+    text: then the people will try to avoid these things and be without shame;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 免
+    pron: miǎn
+  sense:
+    id: uuid-7ded6280-6302-41e2-8855-e1ea6c62ec5d
+    pos: V
+    syn_func: vt[oN]
+    sem_feat: stative
+    usage:
+      warring-states-currency: '4'
+    def: be evasive, take evasive actions so as to avoid harmful consequences
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: AND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.5
+  pos: 3
+  bucket: body
+  offset: 51
+  translation:
+    text: then the people will try to avoid these things and be without shame;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-37491068-61ff-4da7-8e8d-307e43d6c136
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: logic
+    usage:
+      warring-states-currency: '5'
+    def: and 謹而信"be diligent and trustworthy"
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: WICKED
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.5
+  pos: 4
+  bucket: body
+  offset: 52
+  translation:
+    text: then the people will try to avoid these things and be without shame;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 無恥
+    pron: wú chǐ
+  sense:
+    id: uuid-5f7857ae-2a6c-4490-906b-3d5ab2135572
+    pos: V
+    syn_func: VPi
+    def: lack a sense of shame, have no sense of shame
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SHAME
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.5
+  pos: 5
+  bucket: body
+  offset: 53
+  translation:
+    text: then the people will try to avoid these things and be without shame;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 恥
+    pron: chǐ
+  sense:
+    id: uuid-8dc38649-9103-4b5b-8dfc-1e4a928500bd
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '4'
+    def: the (proper) sense of what is publicly disgraceful, moral integrity
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LEAD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.6
+  pos: null
+  bucket: body
+  offset: 54
+  translation:
+    text: if one guides them through inner moral power,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 導
+    orths:
+    - 導
+    - 導道
+    pron: dǎo
+  sense:
+    id: uuid-a6ee2ee5-97a9-492c-b280-d347aac01945
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: guide and lead the way; lead; guide with respect to
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: USE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.6
+  pos: 3
+  bucket: body
+  offset: 56
+  translation:
+    text: if one guides them through inner moral power,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 以
+    pron: yǐ
+  sense:
+    id: uuid-f68711ab-02c4-43f1-bcb5-d9c7c6bdd953
+    pos: V
+    syn_func: vtoN.postadV
+    usage:
+      warring-states-currency: '5'
+    def: To V by using> by means of N;  with
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: VIRTUE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.6
+  pos: 4
+  bucket: body
+  offset: 57
+  translation:
+    text: if one guides them through inner moral power,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 德
+    pron: dé
+  sense:
+    id: uuid-1cdab186-9017-4847-a833-2ab92f47da4a
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '3'
+    def: the highest form of virtue, true virtue, true inner power
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: USE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.7
+  pos: 3
+  bucket: body
+  offset: 60
+  translation:
+    text: if one gets them to toe the line through ritual propriety,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 以
+    pron: yǐ
+  sense:
+    id: uuid-f68711ab-02c4-43f1-bcb5-d9c7c6bdd953
+    pos: V
+    syn_func: vtoN.postadV
+    usage:
+      warring-states-currency: '5'
+    def: To V by using> by means of N;  with
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: RITUAL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-3a.7
+  pos: 4
+  bucket: body
+  offset: 61
+  translation:
+    text: if one gets them to toe the line through ritual propriety,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 禮
+    pron: lǐ
+  sense:
+    id: uuid-256fb9a4-78ee-43e5-8daf-55d79edf1a30
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '4'
+    def: sensibility for ritual propriety, sense of ritual
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SHAME
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.1
+  pos: 2
+  bucket: body
+  offset: 63
+  translation:
+    text: they will have a sense of shame, and more over they will  straighten themselves out ."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 恥
+    pron: chǐ
+  sense:
+    id: uuid-8dc38649-9103-4b5b-8dfc-1e4a928500bd
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '4'
+    def: the (proper) sense of what is publicly disgraceful, moral integrity
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ALSO
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.1
+  pos: 3
+  bucket: body
+  offset: 64
+  translation:
+    text: they will have a sense of shame, and more over they will  straighten themselves out ."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 且
+    pron: qiě
+  sense:
+    id: uuid-130c5548-dc81-4dc4-8126-36f5ab3b9e65
+    pos: P
+    syn_func: padV1.postV2
+    usage:
+      warring-states-currency: '4'
+    def: moreover, and (between verbs)  且。。。且
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: CORRECT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.1
+  pos: 4
+  bucket: body
+  offset: 65
+  translation:
+    text: they will have a sense of shame, and more over they will  straighten themselves out ."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 格
+    pron: gé
+  sense:
+    id: uuid-855fb7f9-d066-4aa0-8f26-600ae5558e04
+    pos: V
+    syn_func: vi
+    sem_feat: change
+    usage:
+      warring-states-currency: '1'
+    def: straighten oneself out
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-393c8d96-85d6-44dc-bc8d-9685d6f4dc14
+  concept: AND
+  concept_id: uuid-5854d604-060d-4d93-ad54-cd49821919ac
+  seg_id: KR1h0004_tls_002-4a.3
+  pos: 3
+  bucket: body
+  offset: 70
+  translation:
+    text: '"By the age of fifteen my ambition was for study.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 有
+    orths:
+    - 有
+    - 又
+    pron: yǒu
+  sense:
+    id: uuid-212c10be-3cae-4e42-8c20-b31950d176e4
+    syn_func: padv{NUM}.post-v{NUM}
+    def: and in addition
+  metadata:
+    resp: Valerie.Kiel
+    created: '2022-11-17T16:44:07.699+09:00'
+- id: ''
+  concept: THEN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.3
+  pos: 6
+  bucket: body
+  offset: 73
+  translation:
+    text: '"By the age of fifteen my ambition was for study.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-a98f0e67-f39b-4ca8-8cc0-5818647f20bc
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: temporal
+    usage:
+      warring-states-currency: '4'
+    def: at that point in time, then
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ASPIRATION
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.3
+  pos: 7
+  bucket: body
+  offset: 74
+  translation:
+    text: '"By the age of fifteen my ambition was for study.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 志
+    pron: zhì
+  sense:
+    id: uuid-b4ce93f3-d835-4ba0-9850-9544ed13ba95
+    pos: V
+    syn_func: vt+prep+N
+    usage:
+      warring-states-currency: '4'
+    def: aspire to, have one's mind set on 志於
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: TOWARDS
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.3
+  pos: 8
+  bucket: body
+  offset: 75
+  translation:
+    text: '"By the age of fifteen my ambition was for study.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 于
+    pron: yú
+  sense:
+    id: uuid-279dd8a0-bfb0-4d58-b784-5ffb43cf4ec7
+    pos: V
+    syn_func: vt[0]oN.postadV
+    def: 'OBI, archaic: marks indirect object/beneficiary'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: STUDY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.3
+  pos: 9
+  bucket: body
+  offset: 76
+  translation:
+    text: '"By the age of fifteen my ambition was for study.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 學
+    pron: xué
+  sense:
+    id: uuid-0ac2235c-be0b-435a-9e83-ff36f3cdad18
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '3'
+    def: the attempt to learn about things (typically from a teacher) study; the pursuit of intellectual/moral self-development; learning
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: AGE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.4
+  pos: 3
+  bucket: body
+  offset: 78
+  translation:
+    text: By the age of thirty I had taken my stand.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而立
+    pron: ér lì
+  sense:
+    id: uuid-114f06e8-ac57-4c70-906e-1e408b9a09a8
+    pos: V
+    syn_func: VPi
+    usage:
+      warring-states-currency: '0'
+    def: 30 years of age (based on LY)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: INSTALL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.4
+  pos: 4
+  bucket: body
+  offset: 79
+  translation:
+    text: By the age of thirty I had taken my stand.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 立
+    pron: lì
+  sense:
+    id: uuid-f47a2b35-3eb2-401b-8379-4a330788e59c
+    pos: V
+    syn_func: vtoN
+    sem_feat: middle voice
+    usage:
+      warring-states-currency: '5'
+    def: be formally established, be established and achieve proper status; be firmly established, be established as true; take a firm stance on life
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: AGE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.5
+  pos: 4
+  bucket: body
+  offset: 83
+  translation:
+    text: By the age of forty I was not confused.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 不惑
+    pron: bù huò
+  sense:
+    id: uuid-faf730bf-7a0d-40d0-b984-cd8b2085aa7e
+    pos: V
+    syn_func: VPi
+    usage:
+      warring-states-currency: '0'
+    def: 'LY 2.4: 40 years of age'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: CONFUSED
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.5
+  pos: 5
+  bucket: body
+  offset: 84
+  translation:
+    text: By the age of forty I was not confused.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 惑
+    pron: huò
+  sense:
+    id: uuid-44205ee0-e0cf-4195-a91c-7a11970edb01
+    pos: V
+    syn_func: vi
+    sem_feat: middle voice
+    usage:
+      warring-states-currency: '3'
+    def: be misguided, deluded, confused
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: UNDERSTAND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.6
+  pos: 4
+  bucket: body
+  offset: 88
+  translation:
+    text: By the age of fifty I understood what was ordained by Heaven.[1]
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 知
+    pron: zhī
+  sense:
+    id: uuid-bf6a1211-f6b1-4433-80fc-539643fa7103
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: understand properly; understand and respect properly;  be sure of the workings (of something);
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: FATE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.6
+  pos: 5
+  bucket: body
+  offset: 89
+  translation:
+    text: By the age of fifty I understood what was ordained by Heaven.[1]
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 天命
+    pron: tiān mìng
+  sense:
+    id: uuid-3a2b94b0-8134-4aac-8eb8-6ac868433173
+    pos: 'N'
+    syn_func: NPab{N1adN2}
+    sem_feat: system
+    def: the system of what is ordained by Heaven as the natural course of events
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: FATE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.6
+  pos: 5
+  bucket: body
+  offset: 89
+  translation:
+    text: By the age of fifty I understood what was ordained by Heaven.[1]
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 天命
+    pron: tiān mìng
+  sense:
+    id: uuid-26c29abc-71ef-4a17-87a4-97a6b5dcc21c
+    pos: 'N'
+    syn_func: NPab{N1adN2}
+    sem_feat: metaphysical
+    usage:
+      warring-states-currency: '5'
+    def: commands of Heaven; fate
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: AGE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.7
+  pos: 4
+  bucket: body
+  offset: 94
+  translation:
+    text: By the age of sixty my ears were attuned.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 耳順
+    pron: ěr shùn
+  sense:
+    id: uuid-ca6f1305-097a-4ddb-b0df-337f6d312153
+    pos: V
+    syn_func: VPi
+    def: 'LY 2.4: 60 years of age'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: EAR
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.7
+  pos: 4
+  bucket: body
+  offset: 94
+  translation:
+    text: By the age of sixty my ears were attuned.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 耳
+    pron: ěr
+  sense:
+    id: uuid-6a8f34ac-ed10-4d4e-8299-bd68abd0ed11
+    pos: 'N'
+    syn_func: 'n'
+    usage:
+      warring-states-currency: '5'
+    def: ear
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: OBEY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.7
+  pos: 5
+  bucket: body
+  offset: 95
+  translation:
+    text: By the age of sixty my ears were attuned.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 順
+    pron: shùn
+  sense:
+    id: uuid-a92c5aa1-8343-4f4f-9169-479ac9f3ab51
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '3'
+    def: be obedient, be not obstreporous
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: CONFORM
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.8
+  pos: 4
+  bucket: body
+  offset: 99
+  translation:
+    text: By the age of seventy, when I followed my heart's desires
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 從
+    pron: cóng
+  sense:
+    id: uuid-6efa1bbc-636d-4b21-b9e9-85da3c1015a5
+    pos: V
+    syn_func: vtoN
+    sem_feat: figurative
+    usage:
+      warring-states-currency: '5'
+    def: 'decide to follow (advice or suggestions); follow intentions; obey (laws etc); act in accordance with (a tradition etc); LY: follow (a dynasty) and take one''s values from; follow (a path[which is not an ordinary act of following behind])'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: MIND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.8
+  pos: 5
+  bucket: body
+  offset: 100
+  translation:
+    text: By the age of seventy, when I followed my heart's desires
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 心
+    pron: xīn
+  sense:
+    id: uuid-99797c97-0d86-427b-a38c-ae43527a1d18
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    def: 'mind (Most of these examples are really nab(post-N) or nab[post-N]. The subdivision has not been implemented so far.)BUDDH: skr. citta (the concept of 心 in Buddhist texts is extremely complicated!)'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PRONOUN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-4a.8
+  pos: 6
+  bucket: body
+  offset: 101
+  translation:
+    text: By the age of seventy, when I followed my heart's desires
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 所
+    pron: suǒ
+  sense:
+    id: uuid-d8db6c6b-bfc9-44ef-bf0b-f9af7f826f30
+    pos: 'N'
+    syn_func: npro{OBJ}+Vt.postN{SUBJ}
+    sem_feat: npro=obj
+    def: 爾所及　"what you reach"
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: OFFEND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-5a.1
+  pos: null
+  bucket: body
+  offset: 103
+  translation:
+    text: I would not overstep the rules."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 逾
+    pron: yú
+  sense:
+    id: uuid-0bebd606-0299-4500-b2ba-2648fa492a38
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '2'
+    def: go against (one's ruler etc); go beyond (one's duties)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LAW
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-5a.1
+  pos: 3
+  bucket: body
+  offset: 105
+  translation:
+    text: I would not overstep the rules."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 矩
+    pron: jǔ
+  sense:
+    id: uuid-ae86d021-07be-4bfa-b2dc-743ea7872e1e
+    pos: 'N'
+    syn_func: nab
+    sem_feat: method
+    usage:
+      warring-states-currency: '4'
+    def: the prescribed rules
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ASK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-5a.2
+  pos: 7
+  bucket: body
+  offset: 112
+  translation:
+    text: Mèng Yìzǐ asked about filial piety.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 問
+    pron: wèn
+  sense:
+    id: uuid-78b7ed8c-b69f-4bfb-8210-22031338baae
+    pos: V
+    syn_func: vtoN
+    sem_feat: object=problem
+    usage:
+      warring-states-currency: '5'
+    def: ask about (something or someone to be discussed)　問政
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: VIRTUE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-5a.2
+  pos: 8
+  bucket: body
+  offset: 113
+  translation:
+    text: Mèng Yìzǐ asked about filial piety.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 孝
+    pron: xiào
+  sense:
+    id: uuid-40fa35ca-d157-4d1f-bae8-47abdd68a636
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: filial piety, devotion to one's living and dead forbears
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SHOULD NOT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.1
+  pos: 2
+  bucket: body
+  offset: 114
+  translation:
+    text: '"It is that one should never be disobedient."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 無
+    pron: wú
+  sense:
+    id: uuid-a20215bf-4f86-4b21-b115-3ce75ccc2c18
+    pos: V
+    syn_func: vt+V[0]
+    usage:
+      warring-states-currency: '5'
+    def: (GENERALLY probitive) should not in general; should never; should never again
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: OFFEND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.1
+  pos: 3
+  bucket: body
+  offset: 115
+  translation:
+    text: '"It is that one should never be disobedient."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 違
+    pron: wéi
+  sense:
+    id: uuid-1c8bfa24-190b-46c4-a88d-c88b3fa4ec39
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '3'
+    def: be disobedient; show disobedience;
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DRIVE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.2
+  pos: 3
+  bucket: body
+  offset: 117
+  translation:
+    text: When Fán Chi was driving the chariot
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 御
+    orths:
+    - 御
+    - 馭
+    pron: yù
+  sense:
+    id: uuid-a4ef897f-4f86-4b4f-922a-7f2392ae524d
+    pos: V
+    syn_func: vi
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: do the driving of a carriage; act as driver
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: REPORT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.3
+  pos: 2
+  bucket: body
+  offset: 119
+  translation:
+    text: 'the master reported this to him:'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 告
+    pron: gào
+  sense:
+    id: uuid-5fdc0518-61ab-494a-8fa9-1ebae060b94b
+    pos: V
+    syn_func: vtoN.+VtoS
+    def: tell (someone) (and say...) 告之曰 (directed at superiors or inferiors)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ASK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.4
+  pos: 4
+  bucket: body
+  offset: 125
+  translation:
+    text: '"Mèngsūn asked me about filial piety.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 問
+    pron: wèn
+  sense:
+    id: uuid-dbbbea59-9bb4-41ba-a2cf-dec1f8326b63
+    pos: V
+    syn_func: vttoN1.+prep+N2
+    usage:
+      warring-states-currency: '3'
+    def: ask (someone N2) about (something N1)　問孝於我
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LOVE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.4
+  pos: 5
+  bucket: body
+  offset: 126
+  translation:
+    text: '"Mèngsūn asked me about filial piety.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 孝
+    pron: xiào
+  sense:
+    id: uuid-8ac21d7b-a007-4784-9337-70ec009ff267
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '5'
+    def: loving respect for one's parents and ancestors (see also VIRTUE)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-a03081b1-9bcf-4a2d-b081-b19bcfaa2d94
+  concept: TOWARDS
+  concept_id: uuid-2313d986-de8b-46fa-a62d-5b1f29122caa
+  seg_id: KR1h0004_tls_002-6a.4
+  pos: 5
+  bucket: body
+  offset: 126
+  translation:
+    text: '"Mèngsūn asked me about filial piety.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 於
+    pron: yú
+  sense:
+    id: uuid-9ee3e661-f463-45d6-9831-1007c647acd1
+    pos: V
+    syn_func: vt[0]oN.postadV
+    def: '問於子貢"put a question to Zigong": towards, in the direction of, to'
+  metadata:
+    resp: CH
+    created: '2022-07-23T18:10:19.267+09:00'
+- id: ''
+  concept: WHAT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.8
+  pos: 2
+  bucket: body
+  offset: 137
+  translation:
+    text: '"What did you mean?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 何
+    pron: hé
+  sense:
+    id: uuid-47eddd06-f818-452e-9f8b-ef68867cc989
+    pos: 'N'
+    syn_func: npro{OBJ}+Vt
+    usage:
+      warring-states-currency: '3'
+    def: what (object?)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: MEAN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.8
+  pos: 3
+  bucket: body
+  offset: 138
+  translation:
+    text: '"What did you mean?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 謂
+    pron: wèi
+  sense:
+    id: uuid-d58b6f2b-d4c5-46a6-9ac0-89c87231c787
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: refer to; apply to; (of a person or a text) mean [We need to separate out the cases where the word refers to an action, that of referring to something, meaning something, having something in mind", and the stative meaning as in "this word X means/refers to Y".]
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-9095ac33-6a63-4efb-95ac-336a633efb4d
+  concept: QUESTION PARTICLES
+  concept_id: uuid-dcc17735-c9ff-4ec5-b729-0b86a2302836
+  seg_id: KR1h0004_tls_002-6a.8
+  pos: 4
+  bucket: body
+  offset: 139
+  translation:
+    text: '"What did you mean?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 也
+    pron: yě
+  sense:
+    id: uuid-ec109583-90f8-45be-9dc4-8cf63c7f1853
+    pos: P
+    syn_func: ppostadS
+    sem_feat: question
+    usage:
+      warring-states-currency: '3'
+    def: marks a judgmental question sentence  何謂也What does this mean?
+  metadata:
+    resp: CH
+    created: '2022-01-30T23:21:19.442+09:00'
+- id: ''
+  concept: LIVE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.10
+  pos: 2
+  bucket: body
+  offset: 142
+  translation:
+    text: '"While they are alive one serves them according to ritual propriety;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 生
+    pron: shēng
+  sense:
+    id: uuid-fcd2f973-9801-4918-8d17-919d16ff5829
+    pos: V
+    syn_func: vi
+    sem_feat: continuous
+    usage:
+      warring-states-currency: '5'
+    def: be alive; remain alive
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SERVE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.10
+  pos: 4
+  bucket: body
+  offset: 144
+  translation:
+    text: '"While they are alive one serves them according to ritual propriety;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 事
+    pron: shì
+  sense:
+    id: uuid-1b3a8086-8850-4725-a462-7234e9901467
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: 'serve (as minister or aide, as one state another etc.), be in the service of; enter the services of;  side with; specifically:  serve and cultivate through gifts; attend to'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: RITUAL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-6a.10
+  pos: 7
+  bucket: body
+  offset: 147
+  translation:
+    text: '"While they are alive one serves them according to ritual propriety;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 禮
+    pron: lǐ
+  sense:
+    id: uuid-a4337779-0f11-42f0-8361-7d31c40351ff
+    pos: 'N'
+    syn_func: nab
+    sem_feat: concept
+    usage:
+      valuation: +
+    def: ritual propriety, the rules and principles of ritual propriety; the demands of ritual
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-a04cac6b-5f19-4ec1-8cac-6b5f192ec1a3
+  concept: BURY
+  concept_id: uuid-7f6b1acc-dc55-4b52-bfdb-9cda3dbd3326
+  seg_id: KR1h0004_tls_002-6a.11
+  pos: 3
+  bucket: body
+  offset: 148
+  translation:
+    text: When they die, one buries them according to ritual propriety,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 葬
+    pron: zàng
+  sense:
+    id: uuid-b732f8f7-cb98-47ad-9cfa-24d03d24b753
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: bury, inter
+  metadata:
+    resp: twharbsmeier
+    created: '2021-12-29T02:23:41.749+09:00'
+- id: ''
+  concept: SACRIFICE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-7a.1
+  pos: 1
+  bucket: body
+  offset: 151
+  translation:
+    text: and one sacrifices to them according to ritual propriety."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 祭
+    pron: jì
+  sense:
+    id: uuid-38e50e30-6346-49cc-b48b-5e3fdcf9ed56
+    pos: V
+    syn_func: vtoN
+    sem_feat: object=deity
+    usage:
+      warring-states-currency: '5'
+    def: 'sacrifice to (specifically to the spirits of the Earth) with wine, grain, and meat[also: sacrifice (something)][CA]'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ASK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-7a.2
+  pos: 7
+  bucket: body
+  offset: 161
+  translation:
+    text: Mèng Wǔbó asked about filial piety.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 問
+    pron: wèn
+  sense:
+    id: uuid-78b7ed8c-b69f-4bfb-8210-22031338baae
+    pos: V
+    syn_func: vtoN
+    sem_feat: object=problem
+    usage:
+      warring-states-currency: '5'
+    def: ask about (something or someone to be discussed)　問政
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LOVE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-7a.2
+  pos: 8
+  bucket: body
+  offset: 162
+  translation:
+    text: Mèng Wǔbó asked about filial piety.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 孝
+    pron: xiào
+  sense:
+    id: uuid-8ac21d7b-a007-4784-9337-70ec009ff267
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '5'
+    def: loving respect for one's parents and ancestors (see also VIRTUE)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PARENT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.1
+  pos: 2
+  bucket: body
+  offset: 163
+  translation:
+    text: '"It is when one''s father and mother only have one''s acute illnesses to worry about."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 父母
+    pron: fù mǔ
+  sense:
+    id: uuid-5a63396c-ab2f-4096-957d-f86706b2e0ae
+    pos: 'N'
+    syn_func: NP{N1&N2}
+    sem_feat: indefinite
+    usage:
+      warring-states-currency: '5'
+    def: father and mother; parents
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ONLY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.1
+  pos: 4
+  bucket: body
+  offset: 165
+  translation:
+    text: '"It is when one''s father and mother only have one''s acute illnesses to worry about."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 唯
+    pron: wéi
+  sense:
+    id: uuid-80667361-d494-4d47-967f-341eea9bdb58
+    pos: V
+    syn_func: vadN
+    sem_feat: restrictive
+    usage:
+      warring-states-currency: '5'
+    def: only (the N)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ILLNESS
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.1
+  pos: 6
+  bucket: body
+  offset: 167
+  translation:
+    text: '"It is when one''s father and mother only have one''s acute illnesses to worry about."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 疾
+    pron: jí
+  sense:
+    id: uuid-ab11e6ff-bbb5-486c-be0e-7e34ab1df13f
+    pos: 'N'
+    syn_func: nab
+    sem_feat: stative
+    usage:
+      warring-states-currency: '5'
+    def: 'OBI 5: acute sickness; current state of sickness; also: xīn jí 心疾 "indisposition/illness of the heart/mind"; sickness 斯疾  temporary indisposition;   falling sick'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: WORRY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.1
+  pos: 8
+  bucket: body
+  offset: 169
+  translation:
+    text: '"It is when one''s father and mother only have one''s acute illnesses to worry about."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 憂
+    pron: yōu
+  sense:
+    id: uuid-51f1eda2-617c-4423-98ca-002d782b3a9c
+    pos: V
+    syn_func: vtoN
+    sem_feat: graded
+    usage:
+      warring-states-currency: '5'
+    def: be intensely worried about, be very concerned about, be very apprehensive about
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-b6213217-2a8f-443c-900b-f8df5aa7ce61
+  concept: CONFUCIANS
+  concept_id: uuid-6e9761b4-0763-4a61-a99e-37055c83ddf1
+  seg_id: KR1h0004_tls_002-8a.2
+  pos: null
+  bucket: body
+  offset: 169
+  translation:
+    text: Zǐyóu asked about filial piety.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 言偃
+    orths:
+    - 言偃
+    - 子游
+    pron: yán yǎn
+  sense:
+    id: uuid-97694a1f-c93e-440b-b7d1-1fbbe4e5bbd8
+    pos: 'N'
+    syn_func: NPpr
+    def: Name of a disciple of Confucius
+  metadata:
+    resp: test
+    created: '2019-10-15T12:05:44.026+09:00'
+- id: ''
+  concept: ASK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.2
+  pos: 6
+  bucket: body
+  offset: 174
+  translation:
+    text: Zǐyóu asked about filial piety.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 問
+    pron: wèn
+  sense:
+    id: uuid-78b7ed8c-b69f-4bfb-8210-22031338baae
+    pos: V
+    syn_func: vtoN
+    sem_feat: object=problem
+    usage:
+      warring-states-currency: '5'
+    def: ask about (something or someone to be discussed)　問政
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LOVE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.2
+  pos: 7
+  bucket: body
+  offset: 175
+  translation:
+    text: Zǐyóu asked about filial piety.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 孝
+    pron: xiào
+  sense:
+    id: uuid-8ac21d7b-a007-4784-9337-70ec009ff267
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '5'
+    def: loving respect for one's parents and ancestors (see also VIRTUE)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: NOW
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.4
+  pos: 2
+  bucket: body
+  offset: 176
+  translation:
+    text: '"As for filial piety these days,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 今
+    pron: jīn
+  sense:
+    id: uuid-971abe65-7c61-43f3-bfd6-94150afe0db1
+    pos: 'N'
+    syn_func: nab
+    usage:
+      warring-states-currency: '5'
+    def: the present, the present time;  the present age
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-03c21af3-e799-40a2-821a-f3e79970a2dd
+  concept: LOVE
+  concept_id: uuid-298d9710-caa5-43f5-a9f7-85ca84e7815c
+  seg_id: KR1h0004_tls_002-8a.4
+  pos: 4
+  bucket: body
+  offset: 178
+  translation:
+    text: '"As for filial piety these days,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 孝
+    pron: xiào
+  sense:
+    id: uuid-8ac21d7b-a007-4784-9337-70ec009ff267
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '5'
+    def: loving respect for one's parents and ancestors (see also VIRTUE)
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:10:18.806+09:00'
+- id: uuid-408e3e44-4a25-4858-85a2-44ad76869644
+  concept: ''
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.4
+  pos: 5
+  bucket: body
+  offset: 179
+  translation:
+    text: '"As for filial piety these days,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: 者
+    orth: 者
+    pron: zhě
+  sense:
+    id: uuid-131bc4a0-8b6a-492f-a3db-aef6cdd70058
+    pos: 'N'
+    syn_func: npro.post-N{PRED}
+    def: nominalising suffix after nominal elements, marking subjects that are topics at the same time  仁者 "as for goodness" (Note the occasional presence of demonstrative pronouns as in 彼聖人者)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-de42209e-aadd-4c20-8220-9eaadd4c2068
+  concept: THIS
+  concept_id: uuid-6106f200-6c09-483d-b636-68f140442ca0
+  seg_id: KR1h0004_tls_002-8a.5
+  pos: 1
+  bucket: body
+  offset: 179
+  translation:
+    text: this refers to being able to nourish.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 是
+    pron: shì
+  sense:
+    id: uuid-bc4a424d-14a6-4306-9260-7d46ea1202fc
+    pos: 'N'
+    syn_func: npro
+    sem_feat: N=concrete
+    def: this (particular above-mentioned thing)
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:11:23.485+09:00'
+- id: ''
+  concept: ABLE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.5
+  pos: 3
+  bucket: body
+  offset: 181
+  translation:
+    text: this refers to being able to nourish.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 能
+    pron: néng
+  sense:
+    id: uuid-9b94b935-e39a-412c-be8b-c6177933825e
+    pos: V
+    syn_func: vt+V[0]
+    usage:
+      warring-states-currency: '5'
+    def: have the capacity to VERB properly, be constitutionally able to VERB; be physically capable of, be actually able to
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: REAR
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.5
+  pos: 4
+  bucket: body
+  offset: 182
+  translation:
+    text: this refers to being able to nourish.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 養
+    pron: yǎng
+  sense:
+    id: uuid-1d0a0300-5e18-4cad-ace0-f97b15764f03
+    pos: V
+    syn_func: vi
+    usage:
+      warring-states-currency: '2'
+    def: show a caring attitude; make a living
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-bec4cad7-b3ba-4bc5-84ca-d7b3ba1bc58f
+  concept: REAR
+  concept_id: uuid-479e9d4c-36c2-4240-80b0-ad86e1161d5f
+  seg_id: KR1h0004_tls_002-8a.5
+  pos: 4
+  bucket: body
+  offset: 182
+  translation:
+    text: this refers to being able to nourish.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 養
+    pron: yǎng
+  sense:
+    id: uuid-715c6fbc-8f9b-474f-9183-f601310ad1df
+    pos: V
+    syn_func: vt(oN)
+    sem_feat: om
+    usage:
+      warring-states-currency: '3'
+    def: care properly for a contextually determinate N
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:13:27.119+09:00'
+- id: ''
+  concept: TOPIC MARKER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.6
+  pos: 1
+  bucket: body
+  offset: 183
+  translation:
+    text: But when it comes to dogs and horses
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 至
+    pron: zhì
+  sense:
+    id: uuid-25e44afe-61dd-4585-82f9-a41295c27bb2
+    pos: V
+    syn_func: vt0.+prep+N(TOPIC):+S
+    sem_feat: topic
+    usage:
+      warring-states-currency: '3'
+    def: when it comes to 至於
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-56c3043d-f8fd-4b5a-8304-3df8fd2b5a45
+  concept: REACH
+  concept_id: uuid-68e6aef4-6b8e-43bc-8276-28706936c1fe
+  seg_id: KR1h0004_tls_002-8a.6
+  pos: 1
+  bucket: body
+  offset: 183
+  translation:
+    text: But when it comes to dogs and horses
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 於
+    pron: yú
+  sense:
+    id: uuid-b79f85e5-0252-4443-9f85-e50252a44387
+    pos: V
+    syn_func: vt[0]oN.postadV
+    sem_feat: figurative
+    def: transitive verb with a lexically determinate understood subject modifying a preceding verbal expression.
+  metadata:
+    resp: CH
+    created: '2022-07-23T18:12:44.181+09:00'
+- id: uuid-cdcd3a3f-e76e-4d93-8d3a-3fe76efd935b
+  concept: TOPIC MARKER
+  concept_id: uuid-3f3cdd08-3cfd-413f-bcab-ef13143318dd
+  seg_id: KR1h0004_tls_002-8a.6
+  pos: 1
+  bucket: body
+  offset: 183
+  translation:
+    text: But when it comes to dogs and horses
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 至於
+    pron: zhì yú
+  sense:
+    id: uuid-affb9c4d-bfa0-416f-997f-d5a8f9030a63
+    pos: V
+    syn_func: VPt0oN{TOP}.+S
+    def: When it comes to
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:14:16.27+09:00'
+- id: ''
+  concept: DOG
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.6
+  pos: 3
+  bucket: body
+  offset: 185
+  translation:
+    text: But when it comes to dogs and horses
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 犬
+    pron: quǎn
+  sense:
+    id: uuid-a9ccfd1b-c3e2-4d3f-a7c3-61a30bf5a534
+    pos: 'N'
+    syn_func: 'n'
+    usage:
+      warring-states-currency: '3'
+    def: dog
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: HORSE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.6
+  pos: 4
+  bucket: body
+  offset: 186
+  translation:
+    text: But when it comes to dogs and horses
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 馬
+    pron: mǎ
+  sense:
+    id: uuid-50747786-2863-4509-a2ae-ad9caf9989ff
+    pos: 'N'
+    syn_func: 'n'
+    usage:
+      warring-states-currency: '5'
+    def: horse (said to resemble a deer, which goes to show that the horse was more like a pony)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-fe279fb5-f944-4127-a79f-b5f944c12702
+  concept: ALL
+  concept_id: uuid-78fc2812-4bf3-4e0a-8efe-78907250d397
+  seg_id: KR1h0004_tls_002-8a.7
+  pos: 1
+  bucket: body
+  offset: 187
+  translation:
+    text: they are all able to have those they take proper care of and nourish.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 皆
+    pron: jiē
+  sense:
+    id: uuid-0d45035a-4a42-4874-96d3-b68fcb697cd0
+    pos: 'N'
+    syn_func: npro
+    sem_feat: anaphoric
+    def: all these things
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:16:54.459+09:00'
+- id: uuid-dc79435f-8403-4545-b943-5f8403854558
+  concept: ABLE
+  concept_id: uuid-3eb2c600-e234-4c6b-bb79-40e8eff9ee14
+  seg_id: KR1h0004_tls_002-8a.7
+  pos: 2
+  bucket: body
+  offset: 188
+  translation:
+    text: they are all able to have those they take proper care of and nourish.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 能
+    pron: néng
+  sense:
+    id: uuid-9b94b935-e39a-412c-be8b-c6177933825e
+    pos: V
+    syn_func: vt+V[0]
+    usage:
+      warring-states-currency: '5'
+    def: have the capacity to VERB properly, be constitutionally able to VERB; be physically capable of, be actually able to
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:18:18.65+09:00'
+- id: uuid-f98af535-8d94-42fd-8af5-358d94a2fde9
+  concept: HAVE
+  concept_id: uuid-fb02970d-7e8c-43ca-b0fd-fddc6055d130
+  seg_id: KR1h0004_tls_002-8a.7
+  pos: 3
+  bucket: body
+  offset: 189
+  translation:
+    text: they are all able to have those they take proper care of and nourish.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 有
+    pron: yǒu
+  sense:
+    id: uuid-d94c382b-e2af-4360-aaea-2c374eb0445e
+    pos: V
+    syn_func: vt+V[0]
+    sem_feat: V=object of V
+    usage:
+      warring-states-currency: '3'
+    def: =有所 have something which one Vs
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:24:09.88+09:00'
+- id: uuid-86ac7fd0-7b6f-483f-ac7f-d07b6f183f3a
+  concept: REAR
+  concept_id: uuid-479e9d4c-36c2-4240-80b0-ad86e1161d5f
+  seg_id: KR1h0004_tls_002-8a.7
+  pos: 4
+  bucket: body
+  offset: 190
+  translation:
+    text: they are all able to have those they take proper care of and nourish.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 養
+    pron: yǎng
+  sense:
+    id: uuid-6f18ea3a-6945-4483-863c-918213e8dc86
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: nurture, nourish, bring up, rear, take good care of, provide for; provide for the needs of; maintain, provide a maintenance allowance for
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:24:53.191+09:00'
+- id: ''
+  concept: DILIGENT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-8a.8
+  pos: 2
+  bucket: body
+  offset: 192
+  translation:
+    text: If one is not showing proper respect,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 敬
+    pron: jìng
+  sense:
+    id: uuid-8e417355-b9ec-42cc-a8f1-3eb30caeb4f2
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '5'
+    def: （degree verb, see 甚敬）be morally earnest in one's behaviour and attitudes; show a respectful attitude
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: WHAT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.1
+  pos: 1
+  bucket: body
+  offset: 193
+  translation:
+    text: whereby is one to make the distinction?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 何
+    pron: hé
+  sense:
+    id: uuid-c54d51ed-5c3a-4c50-9b0d-ed553998d662
+    pos: 'N'
+    syn_func: npro{OBJ}+Vt.adV
+    usage:
+      warring-states-currency: '3'
+    def: 何以知其然 "using what does one know that this is so?"
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-6e0106db-1eeb-484b-8106-db1eeb884b15
+  concept: HOW
+  concept_id: uuid-6690ec1a-d5ad-4c69-9ce3-997406c2ddf1
+  seg_id: KR1h0004_tls_002-9a.1
+  pos: 1
+  bucket: body
+  offset: 193
+  translation:
+    text: whereby is one to make the distinction?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 何以
+    pron: hé yǐ
+  sense:
+    id: uuid-25edd7d4-c9d5-444a-87f9-a0c52a312c48
+    pos: P
+    syn_func: PPadV
+    sem_feat: question
+    usage:
+      warring-states-currency: '4'
+    def: how? by what means? (non-rhet.)
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:26:02.128+09:00'
+- id: ''
+  concept: DISTINGUISH
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.1
+  pos: 3
+  bucket: body
+  offset: 195
+  translation:
+    text: whereby is one to make the distinction?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 別
+    pron: bié
+  sense:
+    id: uuid-e2df5db9-967c-424a-996c-2926d99bc8ce
+    pos: V
+    syn_func: vt(oN)
+    usage:
+      warring-states-currency: '3'
+    def: make the relevant distinction between contextually determinate things
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-688ce1f8-682a-410d-8ce1-f8682a410d88
+  concept: DIFFERENT
+  concept_id: uuid-ca045057-e00e-453b-80b6-5514649846a6
+  seg_id: KR1h0004_tls_002-9a.1
+  pos: 3
+  bucket: body
+  offset: 195
+  translation:
+    text: whereby is one to make the distinction?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 別
+    pron: bié
+  sense:
+    id: uuid-eb88dd5f-487c-4c93-a028-7ac79a0036c4
+    pos: V
+    syn_func: vt(oN)
+    usage:
+      warring-states-currency: '3'
+    def: be different from the contextually determinate N
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:27:08.267+09:00'
+- id: ''
+  concept: ASK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.2
+  pos: 6
+  bucket: body
+  offset: 202
+  translation:
+    text: Zǐxià asked about filial piety.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 問
+    pron: wèn
+  sense:
+    id: uuid-78b7ed8c-b69f-4bfb-8210-22031338baae
+    pos: V
+    syn_func: vtoN
+    sem_feat: object=problem
+    usage:
+      warring-states-currency: '5'
+    def: ask about (something or someone to be discussed)　問政
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LOVE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.2
+  pos: 7
+  bucket: body
+  offset: 203
+  translation:
+    text: Zǐxià asked about filial piety.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 孝
+    pron: xiào
+  sense:
+    id: uuid-8ac21d7b-a007-4784-9337-70ec009ff267
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '5'
+    def: loving respect for one's parents and ancestors (see also VIRTUE)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: FACE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.4
+  pos: 2
+  bucket: body
+  offset: 204
+  translation:
+    text: '"The spirit displayed<1> is the difficult point.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 色
+    pron: sè
+  sense:
+    id: uuid-4bc8df68-ccc3-44a4-958e-11440e4b9ed7
+    pos: 'N'
+    syn_func: 'n'
+    usage:
+      warring-states-currency: '5'
+    def: outer facial expression as expressive of an inner mental state or psychological disposition; spirit displayed
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-848c2d17-0838-43e1-8c2d-17083853e11f
+  concept: PROBLEM
+  concept_id: uuid-de7716e3-bbbf-439b-a54b-f4c50d622309
+  seg_id: KR1h0004_tls_002-9a.4
+  pos: 3
+  bucket: body
+  offset: 205
+  translation:
+    text: '"The spirit displayed<1> is the difficult point.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 難
+    pron: nàn
+  sense:
+    id: uuid-8915cde7-1163-4494-95cd-e71163b494fc
+    pos: V
+    syn_func: vi
+    def: be problematic; be hard to understand; be a weird thing to deal with; be the problematic point
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:28:59.57+09:00'
+- id: uuid-c9579b1f-ef1e-4eec-979b-1fef1eceecf2
+  concept: WORK
+  concept_id: uuid-774430bc-d50c-4b45-a8e5-e4edb72dbce1
+  seg_id: KR1h0004_tls_002-9a.5
+  pos: 2
+  bucket: body
+  offset: 206
+  translation:
+    text: If when there is something to be done
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 事
+    pron: shì
+  sense:
+    id: uuid-e9205ab3-39f5-4f62-9d54-6c14a4b2a230
+    pos: 'N'
+    syn_func: nab
+    def: important business to work on
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:32:23.016+09:00'
+- id: ''
+  concept: YOUNG
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.6
+  pos: 1
+  bucket: body
+  offset: 207
+  translation:
+    text: then the juniors will take on the work;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 弟子
+    pron: dì zǐ
+  sense:
+    id: uuid-dc9a87cd-3d5e-4c40-9284-9ddbb94e1617
+    pos: 'N'
+    syn_func: NP
+    sem_feat: plural
+    usage:
+      warring-states-currency: '4'
+    def: young man; juniors
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ACT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.6
+  pos: 3
+  bucket: body
+  offset: 209
+  translation:
+    text: then the juniors will take on the work;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 服
+    pron: fú
+  sense:
+    id: uuid-cacd442b-b48b-4995-8b3a-f88e85e65d01
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '3'
+    def: undertake to perform (a duty, hard work)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-0639d292-7765-4320-b9d2-927765b32080
+  concept: THIS
+  concept_id: uuid-6106f200-6c09-483d-b636-68f140442ca0
+  seg_id: KR1h0004_tls_002-9a.6
+  pos: 4
+  bucket: body
+  offset: 210
+  translation:
+    text: then the juniors will take on the work;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 其
+    pron: qí
+  sense:
+    id: uuid-c56d329d-a25e-4dbc-ba83-99002e6080a3
+    pos: 'N'
+    syn_func: npro.adN
+    sem_feat: anaphoric
+    usage:
+      warring-states-currency: '5'
+    def: '"the relevant N, that relevant N, the N in question, the N involved"'
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:34:04.982+09:00'
+- id: ''
+  concept: LABOUR
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.6
+  pos: 5
+  bucket: body
+  offset: 211
+  translation:
+    text: then the juniors will take on the work;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 勞
+    pron: láo
+  sense:
+    id: uuid-e024eecb-56ed-4dae-aff1-475371078381
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: hard work, tiresome effort; toil; meritorious hardship
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-97d81e72-ea19-438f-981e-72ea19538f23
+  concept: HAPPEN
+  concept_id: uuid-fb1df69b-23c3-4d03-ae97-5af1b41a8f6c
+  seg_id: KR1h0004_tls_002-9a.7
+  pos: 1
+  bucket: body
+  offset: 212
+  translation:
+    text: if when there is wine or food
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 有
+    pron: yǒu
+  sense:
+    id: uuid-cf2d7893-a0bc-469d-a887-03435f53909f
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: have happened 有諸 "has this happened"
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:35:16.722+09:00'
+- id: ''
+  concept: LIQUOR
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.7
+  pos: 2
+  bucket: body
+  offset: 213
+  translation:
+    text: if when there is wine or food
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 酒
+    pron: jiǔ
+  sense:
+    id: uuid-c496eb95-590e-416b-9727-9c76c567e408
+    pos: 'N'
+    syn_func: nm
+    usage:
+      warring-states-currency: '5'
+    def: ale
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: FOOD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.7
+  pos: 2
+  bucket: body
+  offset: 213
+  translation:
+    text: if when there is wine or food
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 酒食
+    pron: jiǔ shí
+  sense:
+    id: uuid-73f0f9c0-13f1-46c6-8bf0-8c393b9b5c6f
+    pos: 'N'
+    syn_func: NP{N1&N2}
+    usage:
+      warring-states-currency: '3'
+    def: elaborate meal where wine is being served
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-ccf3cf02-6cb3-4326-b3cf-026cb393261d
+  concept: MEAL
+  concept_id: uuid-3ed11fd2-9383-4078-93ac-837845fbad3b
+  seg_id: KR1h0004_tls_002-9a.7
+  pos: 2
+  bucket: body
+  offset: 213
+  translation:
+    text: if when there is wine or food
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 酒食
+    pron: jiǔ shí
+  sense:
+    id: uuid-4f4192db-1788-46f2-8192-db178846f221
+    pos: 'N'
+    syn_func: NP
+    def: elaborate meal served with alcohol
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:37:11.419+09:00'
+- id: ''
+  concept: FOOD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.7
+  pos: 3
+  bucket: body
+  offset: 214
+  translation:
+    text: if when there is wine or food
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 食
+    pron: shí
+  sense:
+    id: uuid-cd902983-7a39-4205-b48c-0394ac183b08
+    pos: 'N'
+    syn_func: nm
+    usage:
+      warring-states-currency: '5'
+    def: 'Note that Lù Démíng reads this meaning as sì in several places of 經典釋文: provisions; food supply; staple food; food for general sustenance while at home; (e.g. beg for) something to eat; food supplies;  fodder (e.g. for horses)'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: OLD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.8
+  pos: 1
+  bucket: body
+  offset: 215
+  translation:
+    text: elders get to eat their fill,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 先生
+    pron: xiān shēng
+  sense:
+    id: uuid-45219518-85d6-428d-8990-f24de04c9dbd
+    pos: 'N'
+    syn_func: NP
+    sem_feat: plural
+    usage:
+      warring-states-currency: '3'
+    def: elders
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: EAT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-9a.8
+  pos: 3
+  bucket: body
+  offset: 217
+  translation:
+    text: elders get to eat their fill,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 饌
+    pron: zhuàn
+  sense:
+    id: uuid-e7957f0f-d15d-44d8-ae3e-a7fb62dd28b8
+    pos: V
+    syn_func: vi
+    sem_feat: act
+    usage:
+      warring-states-currency: '3'
+    def: eat lavishly, eat one's fill
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PAST
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.1
+  pos: 1
+  bucket: body
+  offset: 218
+  translation:
+    text: should one ever consider such behaviour as filial?
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 曾
+    pron: céng
+  sense:
+    id: uuid-db5908f3-7724-49f6-91e8-1192c6358170
+    pos: P
+    syn_func: padS
+    sem_feat: rhetorical question
+    def: ever?
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-31683d1d-9c06-4626-a83d-1d9c067626b3
+  concept: THIS
+  concept_id: uuid-6106f200-6c09-483d-b636-68f140442ca0
+  seg_id: KR1h0004_tls_002-10a.1
+  pos: 2
+  bucket: body
+  offset: 219
+  translation:
+    text: should one ever consider such behaviour as filial?
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 是
+    pron: shì
+  sense:
+    id: uuid-efe1c00b-1f78-4194-a1c0-0b1f7821946d
+    pos: 'N'
+    syn_func: npro(.adN)
+    sem_feat: anaphoric
+    def: this (kind of) N (may come close to a personal pronoun)
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:39:40.221+09:00'
+- id: uuid-d32469ee-6463-4463-a469-ee64639463d9
+  concept: BELIEVE
+  concept_id: uuid-18d48e82-a2fa-4945-8258-1cf886fc50c3
+  seg_id: KR1h0004_tls_002-10a.1
+  pos: 3
+  bucket: body
+  offset: 220
+  translation:
+    text: should one ever consider such behaviour as filial?
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 以為
+    pron: yǐ wéi
+  sense:
+    id: uuid-19be4625-b567-473d-86f8-cac647580212
+    pos: V
+    syn_func: VPtt(oN1.)+N2{PRED}
+    sem_feat: pivot
+    def: consider the contextually determinate N1 to be an N2
+  metadata:
+    resp: CH
+    created: '2022-02-14T18:42:30.279+09:00'
+- id: ''
+  concept: VIRTUE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.1
+  pos: 5
+  bucket: body
+  offset: 222
+  translation:
+    text: should one ever consider such behaviour as filial?
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 孝
+    pron: xiào
+  sense:
+    id: uuid-47c5eaee-72be-4dd3-83df-3ea2188f2349
+    pos: V
+    syn_func: vi
+    usage:
+      warring-states-currency: '3'
+    def: be characterised by feelings of filial piety and a disposition to act on these
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-c94d438c-9400-41a0-8d43-8c940041a088
+  concept: EGO
+  concept_id: uuid-5a6418f0-0044-439d-a1eb-858537fd25e2
+  seg_id: KR1h0004_tls_002-10a.3
+  pos: 2
+  bucket: body
+  offset: 227
+  translation:
+    text: '"When I discuss things with Huí'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 吾
+    orths:
+    - 吾
+    - 䱷
+    pron: wú
+  sense:
+    id: uuid-2010a058-b2d3-4b56-a56d-9f4750004dae
+    pos: 'N'
+    syn_func: npro
+    sem_feat: 1. person singular
+    usage:
+      warring-states-currency: '5'
+    def: I (unmarked, non-contrastive, weak)
+  metadata:
+    resp: CH
+    created: '2022-02-14T19:03:48.243+09:00'
+- id: ''
+  concept: WITH
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.3
+  pos: 3
+  bucket: body
+  offset: 228
+  translation:
+    text: '"When I discuss things with Huí'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 與
+    pron: yǔ
+  sense:
+    id: uuid-230a526c-700a-4a18-8f2d-a78e538b7b1e
+    pos: V
+    syn_func: vtoN.adV
+    sem_feat: interact
+    usage:
+      warring-states-currency: '5'
+    def: 'in interaction with; in association with; with; in collusion with, in cooperation with (NB: MOVE THE HOSTILE CASES TO THE HOSTILE VARIANT!)'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DISCUSS
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.3
+  pos: 5
+  bucket: body
+  offset: 230
+  translation:
+    text: '"When I discuss things with Huí'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 言
+    pron: yán
+  sense:
+    id: uuid-403c651e-0fb3-40aa-bf6a-afa66496f0e2
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '3'
+    def: engage in serious discussion (with someone), discuss things (with someone)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DAY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.4
+  pos: 1
+  bucket: body
+  offset: 230
+  translation:
+    text: for a whole day he does not once disagree,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 終日
+    pron: zhōng rì
+  sense:
+    id: uuid-a046d555-3fb2-42f1-9611-d78be080a27c
+    pos: V
+    syn_func: VPadV
+    usage:
+      warring-states-currency: '3'
+    def: the whole day, all day long, day after day
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: END
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.4
+  pos: 1
+  bucket: body
+  offset: 230
+  translation:
+    text: for a whole day he does not once disagree,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 終
+    pron: zhōng
+  sense:
+    id: uuid-89cbf3ff-4dab-4ecf-8b35-b029fe1ee46c
+    pos: V
+    syn_func: vt[0]oN.postadV
+    usage:
+      warring-states-currency: '4'
+    def: until the end of N
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DAY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.4
+  pos: 2
+  bucket: body
+  offset: 231
+  translation:
+    text: for a whole day he does not once disagree,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 日
+    pron: rì
+  sense:
+    id: uuid-196a048c-239d-492d-9713-e48c217485c0
+    pos: 'N'
+    syn_func: 'n'
+    usage:
+      warring-states-currency: '5'
+    def: day, the length of a day counted as day-time; day on which something is to be done>date
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DISAGREE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.4
+  pos: 5
+  bucket: body
+  offset: 234
+  translation:
+    text: for a whole day he does not once disagree,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 違
+    pron: wéi
+  sense:
+    id: uuid-9024342f-4efc-4d91-adb6-1e27706db88d
+    pos: V
+    syn_func: vt(oN)
+    usage:
+      warring-states-currency: '3'
+    def: disagree with a contextually determinate person
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-1f0b2401-4dbe-4a95-8b24-014dbe8a956e
+  concept: AS IF
+  concept_id: uuid-b019dfb7-1d6d-4e8d-9b24-7947c71824ff
+  seg_id: KR1h0004_tls_002-10a.5
+  pos: 1
+  bucket: body
+  offset: 234
+  translation:
+    text: as if he was stupid.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 如
+    pron: rú
+  sense:
+    id: uuid-a2b15f7f-0c9d-405b-82b3-70850a866a20
+    pos: V
+    syn_func: vt+S.postadV
+    usage:
+      warring-states-currency: '4'
+    def: as if LY 祭如神在
+  metadata:
+    resp: CH
+    created: '2022-04-02T04:06:54.27+09:00'
+- id: uuid-bd771f8c-6858-4859-b71f-8c6858b8594d
+  concept: AS IF
+  concept_id: uuid-b019dfb7-1d6d-4e8d-9b24-7947c71824ff
+  seg_id: KR1h0004_tls_002-10a.5
+  pos: 1
+  bucket: body
+  offset: 234
+  translation:
+    text: as if he was stupid.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 如
+    pron: rú
+  sense:
+    id: uuid-0f8f5822-172a-4b8e-9638-0b8d81efa46d
+    pos: V
+    syn_func: vt+V1.postadV2
+    sem_feat: as if V-ing
+    usage:
+      warring-states-currency: '4'
+    def: as if 出門如見大賓
+  metadata:
+    resp: CH
+    created: '2022-02-14T19:07:17.849+09:00'
+- id: uuid-c5a64bdb-fc2b-49db-a64b-dbfc2b79db80
+  concept: AS IF
+  concept_id: uuid-b019dfb7-1d6d-4e8d-9b24-7947c71824ff
+  seg_id: KR1h0004_tls_002-10a.5
+  pos: 1
+  bucket: body
+  offset: 234
+  translation:
+    text: as if he was stupid.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 如
+    pron: rú
+  sense:
+    id: uuid-87260a9b-a738-44ca-af12-bd307409dbd6
+    syn_func: vt+V(0)
+    def: be as if one V-s; act as if one V-s; be as if V-ing
+  metadata:
+    resp: CH
+    created: '2022-04-02T03:52:06.974+09:00'
+- id: ''
+  concept: STUPID
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.5
+  pos: 2
+  bucket: body
+  offset: 235
+  translation:
+    text: as if he was stupid.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 愚
+    pron: yú
+  sense:
+    id: uuid-a013a679-5b25-408c-9664-ea45994bed61
+    pos: V
+    syn_func: v[adN]
+    sem_feat: N=human
+    usage:
+      warring-states-currency: '3'
+    def: a stupid person; simpleton, dullard
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: WITHDRAW
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.6
+  pos: 1
+  bucket: body
+  offset: 236
+  translation:
+    text: But after he leaves he examines his personal life,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 退
+    pron: tuì
+  sense:
+    id: uuid-0347d22a-1665-4b77-a718-a127c0b08044
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '5'
+    def: 'move backward, (typically decide to) withdraw (usually to the point where one came from); leave, leave the room;  withdraw from court; imp: out of my sight!'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: THEN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.6
+  pos: 2
+  bucket: body
+  offset: 237
+  translation:
+    text: But after he leaves he examines his personal life,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-a98f0e67-f39b-4ca8-8cc0-5818647f20bc
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: temporal
+    usage:
+      warring-states-currency: '4'
+    def: at that point in time, then
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: INVESTIGATE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.6
+  pos: 3
+  bucket: body
+  offset: 238
+  translation:
+    text: But after he leaves he examines his personal life,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 省
+    pron: xǐng
+  sense:
+    id: uuid-3a0f1374-9f22-42d1-ae81-9b2ac36edf73
+    pos: V
+    syn_func: vtoN
+    sem_feat: figurative
+    usage:
+      warring-states-currency: '5'
+    def: examine (oneself in three respects etc)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-f8d074d9-1d4e-4bf6-9074-d91d4e0bf6ef
+  concept: PRONOUN
+  concept_id: uuid-c1654743-3e55-4188-816b-511da251682f
+  seg_id: KR1h0004_tls_002-10a.6
+  pos: 4
+  bucket: body
+  offset: 239
+  translation:
+    text: But after he leaves he examines his personal life,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 其
+    pron: qí
+  sense:
+    id: uuid-a7cb598d-552d-4091-84fa-945a532d13e9
+    pos: 'N'
+    syn_func: npro.adN
+    sem_feat: reflexive
+    def: 'singular: the subject''s, her, his'
+  metadata:
+    resp: CH
+    created: '2022-02-14T19:08:39.573+09:00'
+- id: ''
+  concept: PRIVATE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.6
+  pos: 5
+  bucket: body
+  offset: 240
+  translation:
+    text: But after he leaves he examines his personal life,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 私
+    pron: sī
+  sense:
+    id: uuid-a23f2aaf-f53b-4510-aaab-3fa89534233f
+    pos: 'N'
+    syn_func: nab
+    usage:
+      warring-states-currency: '3'
+    def: that which is private, private affairs; private actions; what is non-official; private benefits; private interests
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-5b02ca73-9c87-4ae8-82ca-739c879ae8a2
+  concept: CONFORM
+  concept_id: uuid-f9e3551f-7344-4e58-99fc-c99d8c3d3944
+  seg_id: KR1h0004_tls_002-10a.7
+  pos: 1
+  bucket: body
+  offset: 241
+  translation:
+    text: and then he surely is in a position to deploy his skills.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 亦
+    pron: yì
+  sense:
+    id: uuid-8310edff-d76c-4d91-88d9-6891273a06b6
+    pos: P
+    syn_func: padV
+    usage:
+      warring-states-currency: '3'
+    def: accordingly
+  metadata:
+    resp: CH
+    created: '2022-02-14T19:09:16.939+09:00'
+- id: ''
+  concept: ABLE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.7
+  pos: 2
+  bucket: body
+  offset: 242
+  translation:
+    text: and then he surely is in a position to deploy his skills.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 足以
+    pron: zú yǐ
+  sense:
+    id: uuid-aa7b7de9-a781-4ee1-810f-ad3a0aaebd99
+    pos: V
+    syn_func: VPt+V[0]
+    usage:
+      warring-states-currency: '5'
+    def: 'be capable of V-ing  (NOT: be sufficient to V with)'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ARISE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-10a.7
+  pos: 4
+  bucket: body
+  offset: 244
+  translation:
+    text: and then he surely is in a position to deploy his skills.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 發
+    pron: fā
+  sense:
+    id: uuid-1ad0dabc-d0a4-4e9f-ac6f-f7b42790cd2c
+    pos: V
+    syn_func: vi
+    sem_feat: change
+    usage:
+      warring-states-currency: '4'
+    def: erupt into action, develop; erupt, emerge; develop one's skills
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: TOPIC MARKER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.1
+  pos: 2
+  bucket: body
+  offset: 246
+  translation:
+    text: Huí is not stupid."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 也
+    pron: yě
+  sense:
+    id: uuid-42493b46-fa43-4801-ae54-49533518d815
+    pos: P
+    syn_func: ppostNpr{SUBJ}.+V{PRED}
+    usage:
+      warring-states-currency: '4'
+    def: 'after personal names: that fellow NN; our friend NN; our friends NN and NN'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: STUPID
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.1
+  pos: 4
+  bucket: body
+  offset: 248
+  translation:
+    text: Huí is not stupid."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 愚
+    pron: yú
+  sense:
+    id: uuid-eb22a6ab-a4f7-41fc-b058-64b17e7a9e21
+    pos: V
+    syn_func: vi
+    usage:
+      warring-states-currency: '5'
+    def: be stupid; be simple-minded; be incompetent
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LOOK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.3
+  pos: 2
+  bucket: body
+  offset: 252
+  translation:
+    text: '"Look at what he takes as his reasons,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 視
+    pron: shì
+  sense:
+    id: uuid-36a6edbc-28f8-41be-b553-f420ac71b828
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: look at; look out for
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-98c34d4d-9bf6-4ae4-834d-4d9bf6eae467
+  concept: PRONOUN
+  concept_id: uuid-c1654743-3e55-4188-816b-511da251682f
+  seg_id: KR1h0004_tls_002-11a.3
+  pos: 4
+  bucket: body
+  offset: 254
+  translation:
+    src: TLS Project
+  form:
+    orig: ''
+    orth: 所
+    pron: suǒ
+  sense:
+    id: uuid-7025f070-6f78-4a3c-a5f0-706f78fa3c62
+    pos: 'N'
+    syn_func: npro{OBJ}-Vt
+    def: 'direct object: e.g. 所樂 "what (the understood/contextually determinate subject) enjoys": that which (the understood subject) Vt-s； the object Vt-ed by the the understood subject'
+  metadata:
+    resp: CH
+    created: '2020-04-30T01:05:50.453+09:00'
+- id: uuid-b496655e-9fe7-49b3-9665-5e9fe719b3c3
+  concept: PRONOUN
+  concept_id: uuid-c1654743-3e55-4188-816b-511da251682f
+  seg_id: KR1h0004_tls_002-11a.3
+  pos: 4
+  bucket: body
+  offset: 254
+  translation:
+    src: TLS Project
+  form:
+    orig: ''
+    orth: 所
+    pron: suǒ
+  sense:
+    id: uuid-57123ae2-2aec-427d-923a-e22aec727da6
+    pos: 'N'
+    syn_func: npro{OBJ}-Vt.post-N
+    def: e.g. 人所制 "someone controlled by others" the object npro that N Vt-ed;  the object Vt-ed by N> that which is Vt-ed by N, he who is Vt-ed by N
+  metadata:
+    resp: CH
+    created: '2020-04-29T02:45:08.206+09:00'
+- id: ''
+  concept: CONFORM
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.3
+  pos: 5
+  bucket: body
+  offset: 255
+  translation:
+    text: '"Look at what he takes as his reasons,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 以
+    pron: yǐ
+  sense:
+    id: uuid-71de3f40-ec5b-434d-bd2d-6c2c3cf07e8e
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: use as a standard of behaviour
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: INVESTIGATE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.4
+  pos: 1
+  bucket: body
+  offset: 255
+  translation:
+    text: observe what he follows,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 觀
+    pron: guān
+  sense:
+    id: uuid-d119c4f1-6679-4cb8-af69-1237eca49192
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: critically observe, watch carefully; look over carefully and systematically, make an overall investigation; survey and examine
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PRONOUN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.4
+  pos: 3
+  bucket: body
+  offset: 257
+  translation:
+    text: observe what he follows,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 所
+    pron: suǒ
+  sense:
+    id: uuid-0c429576-75fc-4cca-a3f5-8ef5728b65cd
+    pos: 'N'
+    syn_func: npro1+Vt.postnpro2
+    def: 其所安
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-251331c3-ab26-4f12-9331-c3ab261f1288
+  concept: PRONOUN
+  concept_id: uuid-c1654743-3e55-4188-816b-511da251682f
+  seg_id: KR1h0004_tls_002-11a.4
+  pos: 3
+  bucket: body
+  offset: 257
+  translation:
+    src: TLS Project
+  form:
+    orig: ''
+    orth: 所
+    pron: suǒ
+  sense:
+    id: uuid-57123ae2-2aec-427d-923a-e22aec727da6
+    pos: 'N'
+    syn_func: npro{OBJ}-Vt.post-N
+    def: e.g. 人所制 "someone controlled by others" the object npro that N Vt-ed;  the object Vt-ed by N> that which is Vt-ed by N, he who is Vt-ed by N
+  metadata:
+    resp: CH
+    created: '2020-04-29T02:45:26.713+09:00'
+- id: ''
+  concept: CONFORM
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.4
+  pos: 4
+  bucket: body
+  offset: 258
+  translation:
+    text: observe what he follows,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 由
+    pron: yóu
+  sense:
+    id: uuid-c8d83ddb-2314-4462-9bbf-b1e95386c12b
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: take as one's starting point, start out from; follow as a path or course of action
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: INVESTIGATE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.5
+  pos: 1
+  bucket: body
+  offset: 259
+  translation:
+    text: investigate where he finds his peace.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 察
+    pron: chá
+  sense:
+    id: uuid-6e9fc98e-8eed-4a57-99ea-29374fd28d65
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: look closely into, pay close attention to and investigate
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-1ac1baf9-6cd5-4031-81ba-f96cd5003158
+  concept: PRONOUN
+  concept_id: uuid-c1654743-3e55-4188-816b-511da251682f
+  seg_id: KR1h0004_tls_002-11a.5
+  pos: 3
+  bucket: body
+  offset: 261
+  translation:
+    src: TLS Project
+  form:
+    orig: ''
+    orth: 所
+    pron: suǒ
+  sense:
+    id: uuid-57123ae2-2aec-427d-923a-e22aec727da6
+    pos: 'N'
+    syn_func: npro{OBJ}-Vt.post-N
+    def: e.g. 人所制 "someone controlled by others" the object npro that N Vt-ed;  the object Vt-ed by N> that which is Vt-ed by N, he who is Vt-ed by N
+  metadata:
+    resp: CH
+    created: '2020-04-29T02:45:45.047+09:00'
+- id: ''
+  concept: PEACEFUL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.5
+  pos: 4
+  bucket: body
+  offset: 262
+  translation:
+    text: investigate where he finds his peace.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 安
+    pron: ān
+  sense:
+    id: uuid-1ac00cda-243a-47fe-8f44-917409608f85
+    pos: V
+    syn_func: vtoN
+    sem_feat: putative
+    usage:
+      warring-states-currency: '5'
+    def: regard as conducive to peace; feel at ease with, feel comfortable with; find one's peace in; be content with; find comfort in (women and feasting)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: HUMAN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.6
+  pos: 1
+  bucket: body
+  offset: 263
+  translation:
+    text: Where can the man hide?
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 人
+    pron: rén
+  sense:
+    id: uuid-a558d781-66f0-4399-9fe7-58da6d73d48a
+    pos: 'N'
+    syn_func: 'n'
+    sem_feat: indefinite
+    usage:
+      warring-states-currency: '3'
+    def: a person, someone
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: WHITHER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.6
+  pos: 2
+  bucket: body
+  offset: 264
+  translation:
+    text: Where can the man hide?
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 焉
+    pron: yān
+  sense:
+    id: uuid-5f33d990-7738-4fbf-a86a-cc99fea2a2e6
+    pos: P
+    syn_func: padV
+    sem_feat: whereto
+    def: whereto?
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-af1d8085-5192-476a-9d80-855192476aff
+  concept: HOW
+  concept_id: uuid-6690ec1a-d5ad-4c69-9ce3-997406c2ddf1
+  seg_id: KR1h0004_tls_002-11a.6
+  pos: 2
+  bucket: body
+  offset: 264
+  translation:
+    text: How, ***then, can the man hide (who he is)?
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 焉
+    pron: yān
+  sense:
+    id: uuid-5f5ed32a-4730-4785-b657-ed54cf450671
+    pos: P
+    syn_func: padV
+    sem_feat: 'expected answer: no!'
+    usage:
+      warring-states-currency: '5'
+    def: how? 焉得儉"How could he get to count as stingy?"　焉辟"how can one avoid?"
+  metadata:
+    resp: CH
+    created: '2025-03-24T07:16:14.906+09:00'
+- id: ''
+  concept: CONCEAL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-11a.6
+  pos: 3
+  bucket: body
+  offset: 265
+  translation:
+    text: Where can the man hide?
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 廋
+    pron: sōu
+  sense:
+    id: uuid-8b306d91-fab8-4b60-b3f4-4d7e0e3eb0f5
+    pos: V
+    syn_func: vi
+    def: 'rare: be hidden from view; dissimulate'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: UNDERSTAND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-12a.3
+  pos: 2
+  bucket: body
+  offset: 274
+  translation:
+    text: '"If one is warmly familiar with the old and understand the recent'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 溫
+    pron: wēn
+  sense:
+    id: uuid-69495a8a-d737-486e-af5a-0008dbc3c228
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: be thoroughly familiar with
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PAST
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-12a.3
+  pos: 3
+  bucket: body
+  offset: 275
+  translation:
+    text: '"If one is warmly familiar with the old and understand the recent'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 故
+    pron: gù
+  sense:
+    id: uuid-578b63a2-dd91-4055-9c7d-b8d863d44cb5
+    pos: 'N'
+    syn_func: nab
+    sem_feat: dimension
+    usage:
+      warring-states-currency: '4'
+    def: 1. the past; 2. what is ancient, antiquity
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: AND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-12a.3
+  pos: 4
+  bucket: body
+  offset: 276
+  translation:
+    text: '"If one is warmly familiar with the old and understand the recent'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-37491068-61ff-4da7-8e8d-307e43d6c136
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: logic
+    usage:
+      warring-states-currency: '5'
+    def: and 謹而信"be diligent and trustworthy"
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: UNDERSTAND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-12a.3
+  pos: 5
+  bucket: body
+  offset: 277
+  translation:
+    text: '"If one is warmly familiar with the old and understand the recent'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 知
+    pron: zhī
+  sense:
+    id: uuid-bf6a1211-f6b1-4433-80fc-539643fa7103
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: understand properly; understand and respect properly;  be sure of the workings (of something);
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: RECENT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-12a.3
+  pos: 6
+  bucket: body
+  offset: 278
+  translation:
+    text: '"If one is warmly familiar with the old and understand the recent'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 新
+    pron: xīn
+  sense:
+    id: uuid-182b4e46-a480-4ec6-a63f-ba09bf0c4e68
+    pos: 'N'
+    syn_func: 'n'
+    sem_feat: subj=nonhuman
+    def: what is recent
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: NEW
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-12a.3
+  pos: 6
+  bucket: body
+  offset: 278
+  translation:
+    text: '"If one is warmly familiar with the old and understand the recent'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 新
+    pron: xīn
+  sense:
+    id: uuid-8b3ed577-6feb-45ba-a5be-be2fd9fead5d
+    pos: 'N'
+    syn_func: 'n'
+    sem_feat: subj=nonhuman
+    usage:
+      warring-states-currency: '3'
+    def: what is new; the new ones; new stuff
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-466782e5-6b06-44f8-a782-e56b06b4f897
+  concept: ABLE
+  concept_id: uuid-3eb2c600-e234-4c6b-bb79-40e8eff9ee14
+  seg_id: KR1h0004_tls_002-13a.1
+  pos: 0
+  bucket: body
+  offset: 278
+  translation:
+    text: poterit inde fieri magister."
+    title: Les Quatre Livres
+    src: Couvreur 1895
+  form:
+    orig: ''
+    orth: 可以
+    pron: kě yǐ
+  sense:
+    id: uuid-c833d9bb-b736-432e-91d0-b69c67cb2ece
+    pos: V
+    syn_func: VPt+V[0]
+    def: be (thus 以之) in an objective position to, have the (circumstantially determined) possibility to
+  metadata:
+    resp: CH
+    created: '2024-05-31T01:24:16.832+09:00'
+- id: ''
+  concept: BECOME
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-13a.1
+  pos: 3
+  bucket: body
+  offset: 280
+  translation:
+    text: one may become a teacher."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 為
+    pron: wéi
+  sense:
+    id: uuid-c102cc2b-db8d-49de-8c1b-efa5af18412d
+    pos: V
+    syn_func: vt+N
+    usage:
+      warring-states-currency: '5'
+    def: become (ruler, one's own enemy etc)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-1227c54b-f9af-4388-a7c5-4bf9af73884f
+  concept: TEACHER
+  concept_id: uuid-99d50267-f112-4b2e-ac96-d8a1b59aa1ad
+  seg_id: KR1h0004_tls_002-13a.1
+  pos: 4
+  bucket: body
+  offset: 281
+  translation:
+    text: 'one may become a teacher."  【1. Enthusiastic familiarity with the constitutive ancient tradition of the ancient founding fathers is not enough: a subtle understanding of what is radically new 新 in the present is taken equally to be of the essence.   2. Note the avoidance of the conventional standard opposition 古/今  in favour of the 古/新 which involves the nuance of the innovative rejection of the old.   3. 可以 "have the objective possibility for" is chosen as against  能 "have the internal ability for".  4. 為 "inchoative: become, come to act as" and not copulative "be".】'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 師
+    pron: shī
+  sense:
+    id: uuid-ef0938a3-dc62-4bae-8938-a3dc628bae28
+    pos: 'N'
+    syn_func: n[post-N]
+    sem_feat: N=nonreferential
+    def: a teacher of others
+  metadata:
+    resp: CH
+    created: '2025-03-24T17:52:49.436+09:00'
+- id: ''
+  concept: GOOD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-14a.1
+  pos: 2
+  bucket: body
+  offset: 286
+  translation:
+    text: '"The gentleman does not conduct himself as an instrument [for others to use]."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 君子
+    pron: jūn zǐ
+  sense:
+    id: uuid-cd13d5df-e93d-49ca-8496-22eeb60aa461
+    pos: 'N'
+    syn_func: NP
+    sem_feat: nonreferential
+    usage:
+      warring-states-currency: '3'
+    def: a person of superior character; the person of superior character 得見君子者斯可矣。
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: TOOL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-14a.1
+  pos: 5
+  bucket: body
+  offset: 289
+  translation:
+    text: '"The gentleman does not conduct himself as an instrument [for others to use]."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 器
+    pron: qì
+  sense:
+    id: uuid-f90a4299-e13c-48f6-8aa4-689ed32e5321
+    pos: V
+    syn_func: vi
+    sem_feat: act
+    usage:
+      warring-states-currency: '4'
+    def: act as a tool
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ASK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-14a.2
+  pos: 7
+  bucket: body
+  offset: 295
+  translation:
+    text: Zǐgòng asked about the superior man.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 問
+    pron: wèn
+  sense:
+    id: uuid-78b7ed8c-b69f-4bfb-8210-22031338baae
+    pos: V
+    syn_func: vtoN
+    sem_feat: object=problem
+    usage:
+      warring-states-currency: '5'
+    def: ask about (something or someone to be discussed)　問政
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GOOD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-14a.2
+  pos: 8
+  bucket: body
+  offset: 296
+  translation:
+    text: Zǐgòng asked about the superior man.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 君子
+    pron: jūn zǐ
+  sense:
+    id: uuid-0f774508-0dfa-494c-a6d0-450ddca0d491
+    pos: 'N'
+    syn_func: NPab
+    sem_feat: concept
+    usage:
+      warring-states-currency: '3'
+    def: the notion of a person of superior character　子路問君子
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PRECEDE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.1
+  pos: 2
+  bucket: body
+  offset: 297
+  translation:
+    text: '"He is the first to act on his pronouncements, and then, afterwards, goes on to act in their spirit." Roderick Whitfield: "He first marshals his words, and then acts accordingly."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 先
+    orths:
+    - 先
+    - 先
+    pron: xiān
+  sense:
+    id: uuid-bc40d469-e0bd-4dbd-b0e2-aa93d4e6efc3
+    pos: V
+    syn_func: vadV
+    sem_feat: first step
+    usage:
+      warring-states-currency: '5'
+    def: as the first thing, to start with, before anything else, before something else
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ACT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.1
+  pos: 3
+  bucket: body
+  offset: 298
+  translation:
+    text: '"He is the first to act on his pronouncements, and then, afterwards, goes on to act in their spirit." Roderick Whitfield: "He first marshals his words, and then acts accordingly."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 行
+    pron: xíng
+  sense:
+    id: uuid-f6cce261-448b-4fbb-b1e1-f8ae49d3ef51
+    pos: V
+    syn_func: vtoN
+    sem_feat: object=role
+    usage:
+      warring-states-currency: '5'
+    def: conduct (one's person); act out (the role of a gentleman etc);
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PROMISE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.1
+  pos: 5
+  bucket: body
+  offset: 300
+  translation:
+    text: '"He is the first to act on his pronouncements, and then, afterwards, goes on to act in their spirit." Roderick Whitfield: "He first marshals his words, and then acts accordingly."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 言
+    pron: yán
+  sense:
+    id: uuid-9cfd14f9-d56c-49db-a9b3-4b6603b7c5cc
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '4'
+    def: public commitments, public promises;   promises, commitments
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-fdc8edb9-cb1c-4d9f-88ed-b9cb1cfd9f65
+  concept: SUGGEST
+  concept_id: uuid-cc17ae5b-4fc7-41d3-a1f0-94e8c9a4a1ea
+  seg_id: KR1h0004_tls_002-15a.1
+  pos: 5
+  bucket: body
+  offset: 300
+  translation:
+    text: '***"He does not preach anything before he has put it into practice."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 言
+    pron: yán
+  sense:
+    id: uuid-f8bc6334-fb21-47f6-bc63-34fb21a7f610
+    pos: 'N'
+    syn_func: nab.post-N
+    def: proposal(s)
+  metadata:
+    resp: CH
+    created: '2025-03-24T18:14:36.303+09:00'
+- id: ''
+  concept: ONLY THEN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.1
+  pos: 6
+  bucket: body
+  offset: 301
+  translation:
+    text: '"He is the first to act on his pronouncements, and then, afterwards, goes on to act in their spirit." Roderick Whitfield: "He first marshals his words, and then acts accordingly."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而後
+    pron: ér hòu
+  sense:
+    id: uuid-ec9a4de5-e124-47f1-a2ec-a391a9c6e33f
+    pos: P
+    syn_func: PPadV.postS
+    usage:
+      warring-states-currency: '3'
+    def: only then; after
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: THEREUPON
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.1
+  pos: 7
+  bucket: body
+  offset: 302
+  translation:
+    text: '"He is the first to act on his pronouncements, and then, afterwards, goes on to act in their spirit." Roderick Whitfield: "He first marshals his words, and then acts accordingly."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 後
+    pron: hòu
+  sense:
+    id: uuid-acd531e9-3f41-4118-91b1-bb6c3f1dcb32
+    pos: V
+    syn_func: vadV
+    usage:
+      warring-states-currency: '4'
+    def: afterwards; later
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PRONOUN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.1
+  pos: 9
+  bucket: body
+  offset: 304
+  translation:
+    text: '"He is the first to act on his pronouncements, and then, afterwards, goes on to act in their spirit." Roderick Whitfield: "He first marshals his words, and then acts accordingly."'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 之
+    pron: zhī
+  sense:
+    id: uuid-3fbc8532-a798-4fb2-8ff7-a174b6c24ed7
+    pos: 'N'
+    syn_func: npro.postVt
+    sem_feat: anaphoric
+    usage:
+      warring-states-currency: '5'
+    def: 'anaphoric, referring to an aforementioned object: him, her, it; you'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GOOD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.3
+  pos: 2
+  bucket: body
+  offset: 307
+  translation:
+    text: '"The gentleman is catholic and not partial;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 君子
+    pron: jūn zǐ
+  sense:
+    id: uuid-cd13d5df-e93d-49ca-8496-22eeb60aa461
+    pos: 'N'
+    syn_func: NP
+    sem_feat: nonreferential
+    usage:
+      warring-states-currency: '3'
+    def: a person of superior character; the person of superior character 得見君子者斯可矣。
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: BROAD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.3
+  pos: 4
+  bucket: body
+  offset: 309
+  translation:
+    text: '"The gentleman is catholic and not partial;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 周
+    pron: zhōu
+  sense:
+    id: uuid-33d778ee-877a-4e10-8866-20680033c49d
+    pos: V
+    syn_func: vi
+    sem_feat: figurative
+    usage:
+      warring-states-currency: '3'
+    def: range widely, range universally; be catholic
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ID EST
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.3
+  pos: 5
+  bucket: body
+  offset: 310
+  translation:
+    text: '"The gentleman is catholic and not partial;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-3543598e-eac5-4622-8446-dca5c2626afb
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: epexegetic
+    usage:
+      warring-states-currency: '3'
+    def: that is to say, i.e., in other words 述而不作"transmit and not create"
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: NOT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.3
+  pos: 6
+  bucket: body
+  offset: 311
+  translation:
+    text: '"The gentleman is catholic and not partial;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 不
+    pron: bù
+  sense:
+    id: uuid-a30b7221-bf70-4e03-a32c-9deb65b1d75a
+    pos: V
+    syn_func: vt+V[0]
+    def: not
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PARTIAL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-15a.3
+  pos: 7
+  bucket: body
+  offset: 312
+  translation:
+    text: '"The gentleman is catholic and not partial;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 比
+    pron: bì
+  sense:
+    id: uuid-dd28b1c9-6076-4ee3-92f1-998c51002967
+    pos: V
+    syn_func: vi
+    sem_feat: act
+    usage:
+      warring-states-currency: '3'
+    def: be partial; form factions
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: BAD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-16a.1
+  pos: 1
+  bucket: body
+  offset: 312
+  translation:
+    text: the small man is partial and not catholic."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 小人
+    pron: xiǎo rén
+  sense:
+    id: uuid-86710c17-18a5-4621-866f-eac5b8c9422e
+    pos: 'N'
+    syn_func: NP
+    sem_feat: nonreferential
+    usage:
+      warring-states-currency: '5'
+    def: petty person
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ID EST
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-16a.1
+  pos: 4
+  bucket: body
+  offset: 315
+  translation:
+    text: the small man is partial and not catholic."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-3543598e-eac5-4622-8446-dca5c2626afb
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: epexegetic
+    usage:
+      warring-states-currency: '3'
+    def: that is to say, i.e., in other words 述而不作"transmit and not create"
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: STUDY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-16a.3
+  pos: 2
+  bucket: body
+  offset: 321
+  translation:
+    text: '"If one studies without reflecting then one gets trapped;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 學
+    pron: xué
+  sense:
+    id: uuid-af79bba7-a472-4847-8296-d7dc24ddf609
+    pos: V
+    syn_func: vt[oN]
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: devote oneself to study; be devoted to study; engage in intellectual work;  work to improve oneself morally/intellectually
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: BUT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-16a.3
+  pos: 3
+  bucket: body
+  offset: 322
+  translation:
+    text: '"If one studies without reflecting then one gets trapped;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-de4ec549-b092-47d5-96a1-fb1726ec55f8
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: adversative
+    usage:
+      warring-states-currency: '5'
+    def: but on the other hand; but on the contrary; and yet; but; whereas;樂而不淫"is joyful without being extravagant"  between subject and predicate the word indicates that the predication is unexpected
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: THINK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-16a.3
+  pos: 5
+  bucket: body
+  offset: 324
+  translation:
+    text: '"If one studies without reflecting then one gets trapped;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 思
+    pron: sī
+  sense:
+    id: uuid-f22f9365-a4f4-4f62-8f79-6e9c14d8f310
+    pos: V
+    syn_func: vi
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: engage in reflection
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: CHEAT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-16a.3
+  pos: 7
+  bucket: body
+  offset: 326
+  translation:
+    text: '"If one studies without reflecting then one gets trapped;'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 罔
+    pron: wǎng
+  sense:
+    id: uuid-7db91d78-5ca8-448e-a739-48f0c7804908
+    pos: V
+    syn_func: vi
+    sem_feat: change
+    usage:
+      warring-states-currency: '3'
+    def: be mislead, lose one's way
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: THINK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-17a.1
+  pos: 1
+  bucket: body
+  offset: 326
+  translation:
+    text: if one reflects without studying one is embarking on a dangerous course."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 思
+    pron: sī
+  sense:
+    id: uuid-f22f9365-a4f4-4f62-8f79-6e9c14d8f310
+    pos: V
+    syn_func: vi
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: engage in reflection
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: BUT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-17a.1
+  pos: 2
+  bucket: body
+  offset: 327
+  translation:
+    text: if one reflects without studying one is embarking on a dangerous course."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-de4ec549-b092-47d5-96a1-fb1726ec55f8
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: adversative
+    usage:
+      warring-states-currency: '5'
+    def: but on the other hand; but on the contrary; and yet; but; whereas;樂而不淫"is joyful without being extravagant"  between subject and predicate the word indicates that the predication is unexpected
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DANGER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-17a.1
+  pos: 6
+  bucket: body
+  offset: 331
+  translation:
+    text: if one reflects without studying one is embarking on a dangerous course."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 殆
+    pron: dài
+  sense:
+    id: uuid-7454e1f8-1c4c-47d2-b178-db123461e324
+    pos: V
+    syn_func: vi
+    sem_feat: change
+    usage:
+      warring-states-currency: '4'
+    def: get into danger
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-8848d013-7cb1-4cc3-88d0-137cb1acc341
+  concept: TARGET
+  concept_id: uuid-464e6eda-9d70-4a07-8d2c-cae4282f781d
+  seg_id: KR1h0004_tls_002-17a.3
+  pos: 2
+  bucket: body
+  offset: 335
+  translation:
+    text: If one devotes ones energies to divergent approaches
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 乎
+    pron: hū
+  sense:
+    id: uuid-f4f9fddf-bb52-4b1e-b9fd-dfbb529b1ec1
+    pos: V
+    syn_func: vt0oN.postadV
+    def: directed at (as a grammatical object)
+  metadata:
+    resp: CH
+    created: '2022-07-23T23:17:08.367+09:00'
+- id: ''
+  concept: OTHER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-17a.3
+  pos: 4
+  bucket: body
+  offset: 337
+  translation:
+    text: If one devotes ones energies to divergent approaches
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 異
+    pron: yì
+  sense:
+    id: uuid-18a5f9ae-d629-4f79-94c2-9fc56c8f71b7
+    pos: V
+    syn_func: vadN
+    usage:
+      warring-states-currency: '3'
+    def: other; diverse 異日
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: BASIS
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-17a.3
+  pos: 5
+  bucket: body
+  offset: 338
+  translation:
+    text: If one devotes ones energies to divergent approaches
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 端
+    pron: duān
+  sense:
+    id: uuid-f0cddcbd-05ef-462c-96b6-5b3cdda49896
+    pos: 'N'
+    syn_func: nab
+    sem_feat: metaphysical
+    usage:
+      warring-states-currency: '5'
+    def: psychological basis (see also FEELING); basic elements; basic point made; basic orientation; point of view, approach; basic motives
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: THEN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-18a.1
+  pos: 1
+  bucket: body
+  offset: 338
+  translation:
+    text: then this will indeed definitely bring harm!
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 斯
+    pron: sī
+  sense:
+    id: uuid-9224a4f3-4860-4eed-858f-a2a6ca28c553
+    pos: 'N'
+    syn_func: npro.adS1:postS2
+    usage:
+      warring-states-currency: '3'
+    def: 'then under such circumstances; then indeed, then in point of fact; then as an important (often final) result;  sometimes hybrid: then this'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-25f6db21-a42b-4fb2-b6db-21a42bafb2cb
+  concept: THIS
+  concept_id: uuid-6106f200-6c09-483d-b636-68f140442ca0
+  seg_id: KR1h0004_tls_002-18a.1
+  pos: 0
+  bucket: body
+  offset: 338
+  translation:
+    text: then this will indeed definitely bring harm!
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 斯
+    pron: sī
+  sense:
+    id: uuid-f7acfcd1-30cb-450a-b634-5dce88296fce
+    pos: 'N'
+    syn_func: npro
+    sem_feat: abstract
+    usage:
+      warring-states-currency: '4'
+    def: often emphatic:this abstract thing; this event; this course of action; this point; nothing other than this
+  metadata:
+    resp: CH
+    created: '2022-11-11T18:53:22.563+09:00'
+- id: uuid-c28523ba-8c9d-4b5e-8523-ba8c9d5b5e6c
+  concept: DAMAGE
+  concept_id: uuid-3c521172-fd8c-405e-b8d5-5b78a4eeb944
+  seg_id: KR1h0004_tls_002-18a.1
+  pos: 1
+  bucket: body
+  offset: 338
+  translation:
+    text: приносит тольковред11.
+    title: Aforismy Konfutsiya
+    src: I.I. Semenenko
+  form:
+    orig: ''
+    orth: 害
+    pron: hài
+  sense:
+    id: uuid-5b3a0582-46e6-43d7-ba05-8246e643d7c7
+    pos: V
+    syn_func: vi
+    def: cause harm; be harmful
+  metadata:
+    resp: CH
+    created: '2024-10-20T21:54:14.494+09:00'
+- id: ''
+  concept: DAMAGE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-18a.1
+  pos: 2
+  bucket: body
+  offset: 339
+  translation:
+    text: then this will indeed definitely bring harm!
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 害
+    pron: hài
+  sense:
+    id: uuid-da58fa69-e583-4a35-b833-a871d0b4d633
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '4'
+    def: be harmful; do damage to others; be harmful in any way; be a harmful thing to do
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-203ca2a2-07f9-4b50-bca2-a207f93b5089
+  concept: MODAL PARTICLES
+  concept_id: uuid-3ecbc80a-34eb-4b0f-ae75-a2902596aaca
+  seg_id: KR1h0004_tls_002-18a.1
+  pos: 3
+  bucket: body
+  offset: 340
+  translation:
+    text: then this will indeed definitely bring harm!
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 也已
+    pron: yě yǐ
+  sense:
+    id: uuid-b1570b79-7f57-4b33-8862-933181f34b72
+    pos: P
+    syn_func: PPpostadS
+    def: assertive combination of final particles
+  metadata:
+    resp: CH
+    created: '2022-02-15T23:23:53.81+09:00'
+- id: ''
+  concept: TEACH
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-18a.4
+  pos: 1
+  bucket: body
+  offset: 345
+  translation:
+    text: I will teach you to understand things.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 誨
+    pron: huì
+  sense:
+    id: uuid-3bf85b26-1eab-45d8-bed3-4f6f25532f9f
+    pos: V
+    syn_func: vttoN.+V[0]
+    sem_feat: pivot
+    usage:
+      warring-states-currency: '3'
+    def: teach someone to do something 誨之琴
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: YOU
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-18a.4
+  pos: null
+  bucket: body
+  offset: 345
+  translation:
+    text: I will teach you to understand things.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 汝
+    orths:
+    - 汝
+    - 女
+    pron: rǔ
+  sense:
+    id: uuid-5892ffee-8eca-4e4f-b85f-929d5f880eac
+    pos: 'N'
+    syn_func: npro
+    sem_feat: 2. person singular
+    usage:
+      warring-states-currency: '3'
+    def: familiar, informal you
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-ea16b8b3-1f6f-49c7-96b8-b31f6f59c7b0
+  concept: TEACH
+  concept_id: uuid-afbdd6b9-b5e4-42ff-a8ae-7bf4522b1f4f
+  seg_id: KR1h0004_tls_002-18a.4
+  pos: 0
+  bucket: body
+  offset: 345
+  translation:
+    text: I will teach you (what it is) to understand things!
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 誨
+    pron: huì
+  sense:
+    id: uuid-2da03914-4ab4-4d41-965d-ee1d8f97fd36
+    pos: V
+    syn_func: vttoN1.+N2
+    usage:
+      warring-states-currency: '3'
+    def: teach (someone N1) (the art of N2)
+  metadata:
+    resp: CH
+    created: '2024-03-09T17:33:49.255+09:00'
+- id: uuid-55fcd39a-12a2-4d1c-bcd3-9a12a2fd1caf
+  concept: UNDERSTAND
+  concept_id: uuid-1a85cf98-1f53-4d3f-8f63-7e3acd73bcbe
+  seg_id: KR1h0004_tls_002-18a.4
+  pos: 2
+  bucket: body
+  offset: 346
+  translation:
+    text: I will teach you (what it is) to understand things!
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 知之
+    pron: zhī zhī
+  sense:
+    id: uuid-275dd4b3-ad31-4bf0-9dd4-b3ad315bf09c
+    pos: 'N'
+    syn_func: NPab
+    def: the (art of) understanding things
+  metadata:
+    resp: CH
+    created: '2024-03-09T17:31:39.568+09:00'
+- id: ''
+  concept: UNDERSTAND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-18a.4
+  pos: 3
+  bucket: body
+  offset: 347
+  translation:
+    text: I will teach you to understand things.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 知
+    pron: zhī
+  sense:
+    id: uuid-bf6a1211-f6b1-4433-80fc-539643fa7103
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: understand properly; understand and respect properly;  be sure of the workings (of something);
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-0fdc5512-0cae-4e25-b44f-bdde9819243d
+  concept: PRONOUN
+  concept_id: uuid-c1654743-3e55-4188-816b-511da251682f
+  seg_id: KR1h0004_tls_002-18a.4
+  pos: 4
+  bucket: body
+  offset: 348
+  translation:
+    text: I will teach you to understand things.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 之
+    pron: zhī
+  sense:
+    id: uuid-620fab5a-64e8-44e6-8dd5-e37dbc111d8e
+    pos: 'N'
+    syn_func: npro.postVt
+    sem_feat: nonreferential
+    usage:
+      warring-states-currency: '3'
+    def: 'cognate object; indefinite dummy object pronouns without reference: things, people; someone  以約失之者"Those who, through keeping to the main thing, get things wrong"'
+  metadata:
+    resp: CH
+    created: '2019-12-23T22:19:03.162+09:00'
+- id: uuid-5bbfd828-01b8-4d9a-bfd8-2801b85d9a3c
+  concept: EXCLAMATORY PARTICLE
+  concept_id: uuid-1db817e2-4fe1-4aa2-bacd-ff56264d241f
+  seg_id: KR1h0004_tls_002-18a.4
+  pos: 4
+  bucket: body
+  offset: 348
+  translation:
+    text: I will teach you to understand things.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 乎
+    pron: hū
+  sense:
+    id: uuid-9ac54b49-d9fe-4b48-8ba7-f303c443f07f
+    pos: P
+    syn_func: ppostadS
+    sem_feat: exclamatory
+    usage:
+      warring-states-currency: '3'
+    def: final exclamatory particle 必也射乎And if he has to, it is surely in archery!
+  metadata:
+    resp: CH
+    created: '2024-03-09T03:09:42.554+09:00'
+- id: uuid-47683095-5bcf-440a-938f-b2aab3760a79
+  concept: PRONOUN
+  concept_id: uuid-c1654743-3e55-4188-816b-511da251682f
+  seg_id: KR1h0004_tls_002-18a.5
+  pos: null
+  bucket: body
+  offset: 350
+  translation:
+    text: When you understand something consider that you understand it;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 之
+    pron: zhī
+  sense:
+    id: uuid-3fbc8532-a798-4fb2-8ff7-a174b6c24ed7
+    pos: 'N'
+    syn_func: npro.postVt
+    sem_feat: anaphoric
+    usage:
+      warring-states-currency: '5'
+    def: 'anaphoric, referring to an aforementioned object: him, her, it; you'
+  metadata:
+    resp: CH
+    created: '2019-12-23T22:22:44.053+09:00'
+- id: uuid-1b09446f-2d86-4dda-94af-e5fc2e76afbf
+  concept: BELIEVE
+  concept_id: uuid-18d48e82-a2fa-4945-8258-1cf886fc50c3
+  seg_id: KR1h0004_tls_002-18a.5
+  pos: 3
+  bucket: body
+  offset: 352
+  translation:
+    text: When you understand something consider that you understand it;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 為
+    pron: wéi
+  sense:
+    id: uuid-ae83d605-204a-4213-b63a-396b10cf9416
+    pos: V
+    syn_func: vtoS
+    def: take it to be the case that S, consider that S
+  metadata:
+    resp: CH
+    created: '2019-12-23T22:28:03.274+09:00'
+- id: uuid-760f3590-feba-4598-a7fc-5dbd43f7347a
+  concept: BELIEVE
+  concept_id: uuid-18d48e82-a2fa-4945-8258-1cf886fc50c3
+  seg_id: KR1h0004_tls_002-18a.6
+  pos: 3
+  bucket: body
+  offset: 357
+  translation:
+    text: when you do not understand something, consider that you do not understand it.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 為
+    pron: wéi
+  sense:
+    id: uuid-ae83d605-204a-4213-b63a-396b10cf9416
+    pos: V
+    syn_func: vtoS
+    def: take it to be the case that S, consider that S
+  metadata:
+    resp: CH
+    created: '2019-12-23T22:28:42.183+09:00'
+- id: uuid-faf608c4-60b1-42e3-86fe-a5d49e04cf2a
+  concept: SUCH
+  concept_id: uuid-ba9c161d-932b-4862-9fb9-906c41594e75
+  seg_id: KR1h0004_tls_002-19a.1
+  pos: 1
+  bucket: body
+  offset: 360
+  translation:
+    text: In such a way you will understand."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 是
+    pron: shì
+  sense:
+    id: uuid-31b6cad8-33aa-4e7a-95f3-26c210a27b7d
+    pos: 'N'
+    syn_func: npro
+    sem_feat: act
+    usage:
+      warring-states-currency: '4'
+    def: such an (as aforementioned) action, such behaviour
+  metadata:
+    resp: CH
+    created: '2019-12-23T22:28:50.975+09:00'
+- id: ''
+  concept: UNDERSTAND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.1
+  pos: 2
+  bucket: body
+  offset: 361
+  translation:
+    text: In such a way you will understand."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 知
+    pron: zhī
+  sense:
+    id: uuid-acc73bd3-e336-44a9-8a7a-a4a492b1c8e9
+    pos: 'N'
+    syn_func: nab
+    sem_feat: positive
+    usage:
+      valuation: +
+    def: 'read zhì: understanding; proper knowledge'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-14046ad2-c04d-4002-846a-d2c04dd00212
+  concept: MODAL PARTICLES
+  concept_id: uuid-3ecbc80a-34eb-4b0f-ae75-a2902596aaca
+  seg_id: KR1h0004_tls_002-19a.1
+  pos: 3
+  bucket: body
+  offset: 362
+  translation:
+    text: Such is understanding."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 也
+    pron: yě
+  sense:
+    id: uuid-f9452511-90e8-4c34-a098-573d9fad928c
+    pos: P
+    syn_func: ppostadN{PRED}
+    sem_feat: classification
+    usage:
+      warring-states-currency: '5'
+    def: is to be classified as an N; is a case of N
+  metadata:
+    resp: CH
+    created: '2022-02-19T20:05:45.539+09:00'
+- id: ''
+  concept: STUDY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.2
+  pos: 7
+  bucket: body
+  offset: 369
+  translation:
+    text: Zǐzhāng was studying in order to seek a position with official rewards attached.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 學
+    pron: xué
+  sense:
+    id: uuid-37eb2e26-0e4d-4aef-a64f-494876c68d9e
+    pos: V
+    syn_func: vt+V[0]
+    sem_feat: conative
+    def: try to learn to VERB
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SEEK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.2
+  pos: 8
+  bucket: body
+  offset: 370
+  translation:
+    text: Zǐzhāng was studying in order to seek a position with official rewards attached.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 干
+    pron: gān
+  sense:
+    id: uuid-6a080396-38ae-4723-a497-66a784b68bcd
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '3'
+    def: go after, seek, do everything to obtain
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SALARY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.2
+  pos: 9
+  bucket: body
+  offset: 371
+  translation:
+    text: Zǐzhāng was studying in order to seek a position with official rewards attached.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 祿
+    pron: lù
+  sense:
+    id: uuid-8721695b-c7ba-4ec2-980c-b9594fe0251e
+    pos: 'N'
+    syn_func: nm
+    usage:
+      register: '2'
+    def: salary, official stipend, public emoluments, public remuneration; salary levels
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: MANY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.4
+  pos: 2
+  bucket: body
+  offset: 371
+  translation:
+    text: '"Learn broadly and suspend judgment on what is doubtful,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 多
+    pron: duō
+  sense:
+    id: uuid-b9c47179-e54c-498b-9059-989923f48f66
+    pos: V
+    syn_func: vadV
+    usage:
+      warring-states-currency: '5'
+    def: 'in large numbers, one a wide scale; in large quantities on a large scale; referring to the object: many objects; most subjects'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LEARN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.4
+  pos: 3
+  bucket: body
+  offset: 372
+  translation:
+    text: '"Learn broadly and suspend judgment on what is doubtful,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 聞
+    pron: wén
+  sense:
+    id: uuid-dab7125b-7838-4e03-99b5-2e59a1b84d9f
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: 'be told as a reliable truth; hear about (something); have been told about; learn (from an authoritative source) as true; learn about (a battle or war etc., or a doctrine); later, XUN 1: come to hear, simply acoustically, without connotations of understanding and learning; hear that (something either true or false) CHECK ATTRIBUTIONS!'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DOUBT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.4
+  pos: 4
+  bucket: body
+  offset: 373
+  translation:
+    text: '"Learn broadly and suspend judgment on what is doubtful,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 闕
+    pron: què, quē
+  sense:
+    id: uuid-d0830a51-1e07-437c-8ee6-896bd81d0dd4
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '3'
+    def: suspend judgment on, refuse to pronounce judgment on
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DOUBT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.4
+  pos: 5
+  bucket: body
+  offset: 374
+  translation:
+    text: '"Learn broadly and suspend judgment on what is doubtful,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 疑
+    pron: yí
+  sense:
+    id: uuid-664b3a1c-0efd-44a4-9051-6a04c6f181ba
+    pos: 'N'
+    syn_func: nab
+    sem_feat: factual
+    usage:
+      warring-states-currency: '5'
+    def: 'passive: what is doubted;    doubtful point;    doubtful situation;'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DILIGENT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.5
+  pos: 1
+  bucket: body
+  offset: 374
+  translation:
+    text: speak carefully about what remains,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 慎
+    pron: shèn
+  sense:
+    id: uuid-b95513cd-a502-4dbf-ad47-93278dd214f0
+    pos: V
+    syn_func: vadV
+    usage:
+      warring-states-currency: '3'
+    def: carefully, warily
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ACT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.8
+  pos: 2
+  bucket: body
+  offset: 386
+  translation:
+    text: act carefully regarding the rest
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 行
+    pron: xíng
+  sense:
+    id: uuid-aaddf315-d2b7-43f0-963d-63874ec1cc4e
+    pos: V
+    syn_func: vtoN
+    sem_feat: positive
+    usage:
+      valuation: +
+    def: enact; implement as an official; carry out as a morally responsible agent; put into practice, practise, carry out; operate according to;  implement (a law) and apply it to
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: OTHER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.8
+  pos: 3
+  bucket: body
+  offset: 387
+  translation:
+    text: act carefully regarding the rest
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 其餘
+    pron: qí yú
+  sense:
+    id: uuid-5d26752c-8f3a-435e-b514-82f8bdd05a9c
+    pos: 'N'
+    syn_func: NP
+    sem_feat: non-human
+    usage:
+      warring-states-currency: '3'
+    def: the rest, the other things
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: REGRET
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.9
+  pos: 3
+  bucket: body
+  offset: 391
+  translation:
+    text: then you will have few regrets.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 悔
+    pron: huǐ
+  sense:
+    id: uuid-331643b2-4d04-412b-b266-4a84fed4abab
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '3'
+    def: regrets, regret
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SPEAK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.10
+  pos: 1
+  bucket: body
+  offset: 392
+  translation:
+    text: If in one's public pronouncements one makes few mistakes
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 言
+    pron: yán
+  sense:
+    id: uuid-58248328-733b-4587-bbd8-7c8aa830eebf
+    pos: 'N'
+    syn_func: nab
+    sem_feat: object
+    usage:
+      warring-states-currency: '5'
+    def: 'statements of opinion, proposal; public or formal utterance which commits the speaker; pronouncement; public or formal pronouncement, public or formal suggestion; Sometimes less specifically: proposal; what one says, speech; language; public proposal, public speech, words'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GUILT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-19a.10
+  pos: 3
+  bucket: body
+  offset: 394
+  translation:
+    text: If in one's public pronouncements one makes few mistakes
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 尤
+    pron: yóu
+  sense:
+    id: uuid-db058557-c080-402a-afdf-1d68723163e6
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '3'
+    def: 'SHI 54: SHI 204 blameworthy points, faults; mistakes 亡尤'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SALARY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.1
+  pos: 1
+  bucket: body
+  offset: 398
+  translation:
+    text: there is a reward in this in itself."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 祿
+    pron: lù
+  sense:
+    id: uuid-55a4e89a-6583-4011-9109-331300d9de54
+    pos: 'N'
+    syn_func: nm
+    sem_feat: figurative
+    usage:
+      warring-states-currency: '3'
+    def: salary
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: INSIDE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.1
+  pos: 4
+  bucket: body
+  offset: 401
+  translation:
+    text: there is a reward in this in itself."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 中
+    pron: zhōng
+  sense:
+    id: uuid-9e50d535-11a3-4299-8e5e-7d735836b5a8
+    pos: 'N'
+    syn_func: npost-N
+    usage:
+      warring-states-currency: '3'
+    def: the inside of, in
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-9d44d38b-b9d3-40a5-84d3-8bb9d3e0a519
+  concept: THEN
+  concept_id: uuid-1e28e6d2-b3ea-42dc-bcca-a8032ea73c6e
+  seg_id: KR1h0004_tls_002-20a.1
+  pos: 5
+  bucket: body
+  offset: 402
+  translation:
+    text: there is a reward in this in itself."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 矣
+    pron: yǐ
+  sense:
+    id: uuid-562a8cd5-71bd-47b2-aa8c-d571bde7b273
+    pos: P
+    syn_func: ppostadS1.post-S2
+    def: final particle after the apodosis S1 of a conditional or temporal subordinate clause S2
+  metadata:
+    resp: CH
+    created: '2022-02-19T20:52:11.239+09:00'
+- id: uuid-f2f04f34-245a-4b9f-b04f-34245afb9fb7
+  concept: MODAL PARTICLES
+  concept_id: uuid-3ecbc80a-34eb-4b0f-ae75-a2902596aaca
+  seg_id: KR1h0004_tls_002-20a.1
+  pos: 5
+  bucket: body
+  offset: 402
+  translation:
+    text: there is a reward in this in itself."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 矣
+    pron: yǐ
+  sense:
+    id: uuid-4d760dca-d098-43c8-ba56-693212e180aa
+    pos: P
+    syn_func: ppostadS1.post-S2
+    sem_feat: S=apodosis
+    usage:
+      warring-states-currency: '5'
+    def: sentence-final particle after apodosis of conditional
+  metadata:
+    resp: CH
+    created: '2022-02-15T23:54:32.366+09:00'
+- id: ''
+  concept: WHAT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.3
+  pos: 2
+  bucket: body
+  offset: 408
+  translation:
+    text: '"What must one do for the people in general to fulfil their functions obediently?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 何
+    pron: hé
+  sense:
+    id: uuid-47eddd06-f818-452e-9f8b-ef68867cc989
+    pos: 'N'
+    syn_func: npro{OBJ}+Vt
+    usage:
+      warring-states-currency: '3'
+    def: what (object?)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ASK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.2
+  pos: 7
+  bucket: body
+  offset: 409
+  translation:
+    text: 'Duke Āi asked:'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 問曰
+    pron: wèn yuē
+  sense:
+    id: uuid-28616566-0883-425a-8fe1-ba64997237ed
+    pos: V
+    syn_func: VPtoS
+    usage:
+      warring-states-currency: '5'
+    def: to ask (followed by direct speech)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ACT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.3
+  pos: 3
+  bucket: body
+  offset: 409
+  translation:
+    text: '"What must one do for the people in general to fulfil their functions obediently?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 為
+    pron: wéi
+  sense:
+    id: uuid-e0b0a5d1-6d70-419c-88f8-2f06fedebf58
+    pos: V
+    syn_func: vtoNab
+    usage:
+      warring-states-currency: '3'
+    def: undertake; do deliberately (something right or something wrong), commit (a crime etc); act out (a virtue); conduct (government); engage in (thievery); set out to do
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: OBEY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.3
+  pos: 6
+  bucket: body
+  offset: 412
+  translation:
+    text: '"What must one do for the people in general to fulfil their functions obediently?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 服
+    pron: fú
+  sense:
+    id: uuid-6fa52522-c9c5-4a5c-a5ad-58a5b87c4aff
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '3'
+    def: submit to higher authority and do as one is told; fulfil one's functions obediently
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ANSWER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.4
+  pos: 3
+  bucket: body
+  offset: 414
+  translation:
+    text: 'Confucius replied politely:'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 對
+    pron: duì
+  sense:
+    id: uuid-f0c8960f-edf4-4b81-a11c-0beedca68a3a
+    pos: V
+    syn_func: vt(oN.)+V
+    usage:
+      warring-states-currency: '5'
+    def: respond politely to what has been said; reply politely (typically to a superior)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PROMOTE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.5
+  pos: 2
+  bucket: body
+  offset: 417
+  translation:
+    text: '"If one promotes those who are straight and sets aside all those who are warped'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 舉
+    pron: jǔ
+  sense:
+    id: uuid-6c2c4760-74b1-45b4-ae1f-059a7b6f0752
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: elevate to a high position, promote (as someone who has the authority to promote)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GOOD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.5
+  pos: 3
+  bucket: body
+  offset: 418
+  translation:
+    text: '"If one promotes those who are straight and sets aside all those who are warped'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 直
+    pron: zhí
+  sense:
+    id: uuid-3976a7e0-3b49-4ee0-a856-1fe455cc44aa
+    pos: 'N'
+    syn_func: 'n'
+    sem_feat: nonreferential
+    usage:
+      warring-states-currency: '4'
+    def: the straighforward, the morally straight
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: UNJUST
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.5
+  pos: 6
+  bucket: body
+  offset: 421
+  translation:
+    text: '"If one promotes those who are straight and sets aside all those who are warped'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 枉
+    pron: wǎng
+  sense:
+    id: uuid-b025009f-5dff-487d-ad0d-f0b0bacfc40d
+    pos: 'N'
+    syn_func: 'n'
+    sem_feat: nonreferential
+    usage:
+      warring-states-currency: '3'
+    def: the crooked, the unjust, the depraved
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: OBEY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.6
+  pos: 3
+  bucket: body
+  offset: 423
+  translation:
+    text: then the people will fulfil their functions obediently.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 服
+    pron: fú
+  sense:
+    id: uuid-6fa52522-c9c5-4a5c-a5ad-58a5b87c4aff
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '3'
+    def: submit to higher authority and do as one is told; fulfil one's functions obediently
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DISCARD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-20a.7
+  pos: 3
+  bucket: body
+  offset: 426
+  translation:
+    text: If one promotes those who are warped and sets aside all those who are straight
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 錯
+    pron: cuò
+  sense:
+    id: uuid-24bc823a-0740-446b-8006-983ce8b7faf5
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: set aside
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: OBEY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.1
+  pos: 4
+  bucket: body
+  offset: 432
+  translation:
+    text: then the people will not fulfil their functions obediently."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 服
+    pron: fú
+  sense:
+    id: uuid-6fa52522-c9c5-4a5c-a5ad-58a5b87c4aff
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '3'
+    def: submit to higher authority and do as one is told; fulfil one's functions obediently
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: CAUSE TO
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.3
+  pos: 2
+  bucket: body
+  offset: 438
+  translation:
+    text: '"In order to make the people respectful and prepared to do their best for one, so as to encourage them'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 使
+    pron: shǐ
+  sense:
+    id: uuid-11b1c91c-9a95-42c3-822e-38661cc04106
+    pos: V
+    syn_func: vttoN.+V[0]
+    sem_feat: pivot
+    usage:
+      warring-states-currency: '5'
+    def: 'cause N to V, bring it about that N V-s 使之聞之 [NB: the first 之shows that the object of 使 does function as an object and not only as a subject of wén 聞. Thus technically speaking we do not have a sentence after the vt.]'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ASK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.2
+  pos: 8
+  bucket: body
+  offset: 440
+  translation:
+    text: 'Jì Kāngzǐ asked:'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 問
+    pron: wèn
+  sense:
+    id: uuid-28388240-074a-4718-93bd-7dc535dd588c
+    pos: V
+    syn_func: vtoS
+    sem_feat: object=speech
+    usage:
+      warring-states-currency: '3'
+    def: 'ask and say (: "...", with direct object without yuē 曰)'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: DILIGENT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.3
+  pos: 4
+  bucket: body
+  offset: 440
+  translation:
+    text: '"In order to make the people respectful and prepared to do their best for one, so as to encourage them'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 敬
+    pron: jìng
+  sense:
+    id: uuid-8e417355-b9ec-42cc-a8f1-3eb30caeb4f2
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '5'
+    def: （degree verb, see 甚敬）be morally earnest in one's behaviour and attitudes; show a respectful attitude
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: HOW
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.4
+  pos: 1
+  bucket: body
+  offset: 443
+  translation:
+    text: what is one to do?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 如之何
+    pron: rú zhī hé
+  sense:
+    id: uuid-c2de517f-f5e9-4f0f-a546-d0000c283a30
+    pos: V
+    syn_func: VPi0
+    sem_feat: question
+    usage:
+      warring-states-currency: '5'
+    def: What to do?  What about that? How about that?
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ENCOURAGE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.3
+  pos: 8
+  bucket: body
+  offset: 444
+  translation:
+    text: '"In order to make the people respectful and prepared to do their best for one, so as to encourage them'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 勸
+    pron: quàn
+  sense:
+    id: uuid-76139bc6-22cd-4ee3-9211-3d4cff2c9836
+    pos: V
+    syn_func: vtoN
+    sem_feat: passive
+    usage:
+      warring-states-currency: '5'
+    def: be encouraged (to do something); feel encouraged; feel  encouraged towards (meritorious effort)　愈勸
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: HOW
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.4
+  pos: 3
+  bucket: body
+  offset: 445
+  translation:
+    text: what is one to do?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 何
+    pron: hé
+  sense:
+    id: uuid-e3f108c9-a4c8-4cee-b92c-229a4256e2be
+    pos: 'N'
+    syn_func: npro.postV
+    usage:
+      warring-states-currency: '3'
+    def: how? 如之何
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GOVERN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.6
+  pos: 2
+  bucket: body
+  offset: 449
+  translation:
+    text: '"Approach them with dignified seriousness,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 臨
+    pron: lín
+  sense:
+    id: uuid-afb6576f-432c-4843-9db5-343b7c0f28a1
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: deal with administratively;   deal with effectively; come to be in effective control of, dominate; take spiritual charge of
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SERIOUS
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.6
+  pos: 5
+  bucket: body
+  offset: 452
+  translation:
+    text: '"Approach them with dignified seriousness,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 莊
+    pron: zhuāng
+  sense:
+    id: uuid-b13e9177-8991-49de-b3c0-fd445e2c06c1
+    pos: 'N'
+    syn_func: nab
+    sem_feat: psych
+    usage:
+      warring-states-currency: '3'
+    def: seriousness, dignified pondus; serious concern with something
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: VIRTUE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.8
+  pos: 1
+  bucket: body
+  offset: 454
+  translation:
+    text: show filial piety and parental love,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 孝
+    pron: xiào
+  sense:
+    id: uuid-c4bb8925-991c-46ce-92fe-c89c5d7cf9dc
+    pos: V
+    syn_func: vi
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: be filial; show filial piety
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: LOVE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.8
+  pos: 2
+  bucket: body
+  offset: 455
+  translation:
+    text: show filial piety and parental love,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 慈
+    pron: cí
+  sense:
+    id: uuid-4fe937a6-ba84-4abc-a4c3-e7ec5eb2041f
+    pos: V
+    syn_func: vt[oN]
+    usage:
+      warring-states-currency: '4'
+    def: show loving kindness in action
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: FAITHFUL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.9
+  pos: 2
+  bucket: body
+  offset: 457
+  translation:
+    text: then they will do their loyal best for you;
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 忠
+    pron: zhōng
+  sense:
+    id: uuid-85ef8537-e6ad-4b9a-a705-9e2d2ad6b0c5
+    pos: V
+    syn_func: vt(oN)
+    def: make a devoted effort for a contextually determinate superior
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PROMOTE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.10
+  pos: 1
+  bucket: body
+  offset: 458
+  translation:
+    text: if one promotes the good and instructs the incompetent,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 舉
+    pron: jǔ
+  sense:
+    id: uuid-6c2c4760-74b1-45b4-ae1f-059a7b6f0752
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: elevate to a high position, promote (as someone who has the authority to promote)
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: EXCELLENT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.10
+  pos: 2
+  bucket: body
+  offset: 459
+  translation:
+    text: if one promotes the good and instructs the incompetent,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 善
+    pron: shàn
+  sense:
+    id: uuid-e5ce725f-eb50-4b4f-b40f-8f3b576965b8
+    pos: V
+    syn_func: v[adN]
+    sem_feat: N=human
+    usage:
+      warring-states-currency: '5'
+    def: those who are capable and competent; those who are excellent; those who are more distinguished/of greater excellence
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: AND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.10
+  pos: 3
+  bucket: body
+  offset: 460
+  translation:
+    text: if one promotes the good and instructs the incompetent,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-37491068-61ff-4da7-8e8d-307e43d6c136
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: logic
+    usage:
+      warring-states-currency: '5'
+    def: and 謹而信"be diligent and trustworthy"
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: TEACH
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.10
+  pos: 4
+  bucket: body
+  offset: 461
+  translation:
+    text: if one promotes the good and instructs the incompetent,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 教
+    pron: jiào
+  sense:
+    id: uuid-fad1b2e5-dd78-49a7-8f9e-79d3e2e20a16
+    pos: V
+    syn_func: vtoN
+    sem_feat: N=human
+    usage:
+      warring-states-currency: '4'
+    def: instruct, give instruction to; train up (prototypically military); train up properly, instruct properly
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: INCOMPETENT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-21a.10
+  pos: 5
+  bucket: body
+  offset: 462
+  translation:
+    text: if one promotes the good and instructs the incompetent,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 不能
+    pron: bù néng
+  sense:
+    id: uuid-2198d9f6-4e7c-474f-99ef-2669d44c3133
+    pos: 'N'
+    syn_func: NP{vt{NEG}+V(.adN)}
+    sem_feat: nonreferential
+    usage:
+      warring-states-currency: '3'
+    def: those who are incompetent
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PRONOUN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.2
+  pos: 5
+  bucket: body
+  offset: 470
+  translation:
+    text: 'Somebody said to Confucius:'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 或
+    pron: huò
+  sense:
+    id: uuid-8b70e079-222a-438f-8bc6-506c1c9c0a92
+    syn_func: npro+V{PRED}
+    sem_feat: referential
+    def: a certain person
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: YOU
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.3
+  pos: 2
+  bucket: body
+  offset: 472
+  translation:
+    text: '"Why are you not running a government?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 子
+    pron: zǐ
+  sense:
+    id: uuid-4d5dabba-7b00-4726-a9bc-72cada4f347e
+    pos: 'N'
+    syn_func: npro
+    sem_feat: 2. person singular
+    usage:
+      warring-states-currency: '5'
+    def: you, sir; you, madam
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: WHY
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.3
+  pos: 3
+  bucket: body
+  offset: 473
+  translation:
+    text: '"Why are you not running a government?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 奚
+    pron: xī
+  sense:
+    id: uuid-4dad522e-0fc1-468c-901a-e1158597b403
+    pos: P
+    syn_func: padV
+    sem_feat: question
+    usage:
+      warring-states-currency: '3'
+    def: why?
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ACT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.3
+  pos: 5
+  bucket: body
+  offset: 475
+  translation:
+    text: '"Why are you not running a government?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 為
+    pron: wéi
+  sense:
+    id: uuid-e0b0a5d1-6d70-419c-88f8-2f06fedebf58
+    pos: V
+    syn_func: vtoNab
+    usage:
+      warring-states-currency: '3'
+    def: undertake; do deliberately (something right or something wrong), commit (a crime etc); act out (a virtue); conduct (government); engage in (thievery); set out to do
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GOVERN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.3
+  pos: 6
+  bucket: body
+  offset: 476
+  translation:
+    text: '"Why are you not running a government?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 政
+    pron: zhèng
+  sense:
+    id: uuid-37eb6fea-b6bf-4b98-8e23-914d330dbb07
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: administration of a state, public administration;  administrative measure;   administrative method; administrative tasks and problems; administrative practice
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: FRIEND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.7
+  pos: 1
+  bucket: body
+  offset: 484
+  translation:
+    text: and of cultivating friendly relations with one's brothers,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 友
+    pron: yǒu
+  sense:
+    id: uuid-c89825bd-5f26-4117-9599-9dd80f9f072b
+    pos: V
+    syn_func: vt+prep+N
+    usage:
+      warring-states-currency: '3'
+    def: cultivate the friendship of; be friends with
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: FRIEND
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.7
+  pos: 1
+  bucket: body
+  offset: 484
+  translation:
+    text: and of cultivating friendly relations with one's brothers,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 友
+    pron: yǒu
+  sense:
+    id: uuid-e7412f43-f74b-4636-a613-22238c6783be
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '3'
+    def: show friendship to, give friendly support to; cultivate the friendship of; treat as a friend;      gain as a friend
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: TOWARDS
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.7
+  pos: 2
+  bucket: body
+  offset: 485
+  translation:
+    text: and of cultivating friendly relations with one's brothers,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 于
+    pron: yú
+  sense:
+    id: uuid-279dd8a0-bfb0-4d58-b784-5ffb43cf4ec7
+    pos: V
+    syn_func: vt[0]oN.postadV
+    def: 'OBI, archaic: marks indirect object/beneficiary'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: BROTHER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.7
+  pos: 3
+  bucket: body
+  offset: 486
+  translation:
+    text: and of cultivating friendly relations with one's brothers,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 兄弟
+    pron: xiōng dì
+  sense:
+    id: uuid-3be2e3f2-9565-45d8-bc07-89ab882461f5
+    pos: 'N'
+    syn_func: NP[post-N]
+    usage:
+      warring-states-currency: '4'
+    def: one's brothers
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: BROTHER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.7
+  pos: 3
+  bucket: body
+  offset: 486
+  translation:
+    text: and of cultivating friendly relations with one's brothers,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 兄
+    pron: xiōng
+  sense:
+    id: uuid-a68c059d-d552-435a-8dab-4ce022fd643b
+    pos: 'N'
+    syn_func: n[post-N]
+    sem_feat: plural
+    def: elder brothers
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: INFLUENCE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.8
+  pos: 1
+  bucket: body
+  offset: 488
+  translation:
+    text: one may have an impact on those who run the government.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 施
+    pron: shī
+  sense:
+    id: uuid-3f5132b2-b4d1-4be2-87e0-9e74e574bbc7
+    pos: V
+    syn_func: vt+prep+N
+    usage:
+      warring-states-currency: '3'
+    def: have an impact on, have an influence on
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-39b3d50d-bd80-4653-b3d5-0dbd80265320
+  concept: REACH
+  concept_id: uuid-68e6aef4-6b8e-43bc-8276-28706936c1fe
+  seg_id: KR1h0004_tls_002-22a.8
+  pos: 1
+  bucket: body
+  offset: 488
+  translation:
+    text: one may have an impact on those who run the government.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 於
+    pron: yú
+  sense:
+    id: uuid-b79f85e5-0252-4443-9f85-e50252a44387
+    pos: V
+    syn_func: vt[0]oN.postadV
+    sem_feat: figurative
+    def: transitive verb with a lexically determinate understood subject modifying a preceding verbal expression.
+  metadata:
+    resp: CH
+    created: '2022-07-23T18:13:28.185+09:00'
+- id: ''
+  concept: GOVERN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.8
+  pos: 3
+  bucket: body
+  offset: 490
+  translation:
+    text: one may have an impact on those who run the government.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 有
+    pron: yǒu
+  sense:
+    id: uuid-e40a9d77-6df9-4efe-9de7-9e18ed703b4b
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: 'HF 9.2.34: be formally or effectively in charge of (a state); control (a person)　有國'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: RULER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-22a.8
+  pos: 3
+  bucket: body
+  offset: 490
+  translation:
+    text: one may have an impact on those who run the government.'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 有政
+    pron: yǒu zhèng
+  sense:
+    id: uuid-572d459e-9ae0-401b-981f-d3a780c993f2
+    pos: 'N'
+    syn_func: NP{VtoN1(.adN2)}
+    sem_feat: subject=human
+    usage:
+      warring-states-currency: '4'
+    def: those in charge of government
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: IF
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-23a.3
+  pos: 3
+  bucket: body
+  offset: 505
+  translation:
+    text: '"If a person lacks good faith'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-03a7aaba-db5c-423b-bf15-ca055b495237
+    pos: P
+    syn_func: padV.postN{SUBJ}:postS
+    def: 'if (often indistinguishable from AND - relative clause)　GY: 王而飾之'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: FAITHFUL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-23a.3
+  pos: 5
+  bucket: body
+  offset: 507
+  translation:
+    text: '"If a person lacks good faith'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 信
+    pron: xìn
+  sense:
+    id: uuid-b4888133-d285-4c43-89f4-91971c0799be
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '5'
+    def: credibility; trustworthiness, good faith, dependability, reliability
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: KNOW
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-23a.4
+  pos: 2
+  bucket: body
+  offset: 508
+  translation:
+    text: then I do not know what is acceptable about him.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 知
+    pron: zhī
+  sense:
+    id: uuid-73632098-de18-4b05-92cd-7877265f059e
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: know, be sure of; know all about
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GOOD
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-23a.4
+  pos: 4
+  bucket: body
+  offset: 510
+  translation:
+    text: then I do not know what is acceptable about him.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 可
+    pron: kě
+  sense:
+    id: uuid-d1c7d7e9-9a66-4389-99a1-ef62b5f3c1b9
+    pos: V
+    syn_func: vi
+    usage:
+      warring-states-currency: '4'
+    def: be morally acceptable; be OK; be advisable
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-8d149654-4cfc-4ab2-9496-544cfc0ab272
+  concept: MODAL PARTICLES
+  concept_id: uuid-3ecbc80a-34eb-4b0f-ae75-a2902596aaca
+  seg_id: KR1h0004_tls_002-23a.4
+  pos: 5
+  bucket: body
+  offset: 511
+  translation:
+    text: then I do not know what is acceptable about him.
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 也
+    pron: yě
+  sense:
+    id: uuid-379ee73e-fdaa-4d19-9ee7-3efdaa5d19dd
+    pos: P
+    syn_func: ppostad.NPab{S}postVt
+    def: marker of sentential complements, which are typically nominalised by 之/其
+  metadata:
+    resp: CH
+    created: '2022-02-15T23:55:25.477+09:00'
+- id: ''
+  concept: VEHICLE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-23a.5
+  pos: 2
+  bucket: body
+  offset: 513
+  translation:
+    text: If a large vehicle doesn't have its large cross-bar at the end of the carriage pole
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 車
+    orths:
+    - 車
+    - 車
+    pron: chē
+  sense:
+    id: uuid-653217e2-fd3d-47f3-ba1b-3200cb54924c
+    pos: 'N'
+    syn_func: 'n'
+    def: conveyance, cart; vehicle on wheels, especially but not always for longish-distance travel; contraption with wheels;
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: CARRIAGE POLE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-23a.5
+  pos: 4
+  bucket: body
+  offset: 515
+  translation:
+    text: If a large vehicle doesn't have its large cross-bar at the end of the carriage pole
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 輗
+    pron: ní
+  sense:
+    id: uuid-90eee35f-ab4b-4d9d-8c9e-1243e213e132
+    pos: 'N'
+    syn_func: 'n'
+    usage:
+      warring-states-currency: '3'
+    def: 'LY: Small piece of wood inserted in two yuán 轅 to link the héng 衡 into the two yuán 轅 "carriage poles", the single carriage pole being known as the zhōu 輈 "carriage pole".'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: CARRIAGE POLE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-23a.6
+  pos: 4
+  bucket: body
+  offset: 519
+  translation:
+    text: or if a small vehicle doesn't have its small cross-bar,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 軏
+    orths:
+    - 軏
+    - 軏
+    pron: yuè
+  sense:
+    id: uuid-570ca606-5c4c-4e51-8715-bd58ee422519
+    pos: 'N'
+    syn_func: 'n'
+    usage:
+      warring-states-currency: '2'
+    def: small piece of wood inerted where the zhōu 輈 meets the héng 衡.
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PROBABLE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.1
+  pos: 1
+  bucket: body
+  offset: 520
+  translation:
+    text: how can one make these proceed?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 其
+    pron: qí
+  sense:
+    id: uuid-c1c8eab5-70e6-4772-8891-248f3edfb35f
+    pos: P
+    syn_func: padV
+    sem_feat: 'expected answer: no!'
+    usage:
+      warring-states-currency: '5'
+    def: '", I wonder?"'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: WHAT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.1
+  pos: 2
+  bucket: body
+  offset: 521
+  translation:
+    text: how can one make these proceed?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 何
+    pron: hé
+  sense:
+    id: uuid-c54d51ed-5c3a-4c50-9b0d-ed553998d662
+    pos: 'N'
+    syn_func: npro{OBJ}+Vt.adV
+    usage:
+      warring-states-currency: '3'
+    def: 何以知其然 "using what does one know that this is so?"
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: MOVE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.1
+  pos: 4
+  bucket: body
+  offset: 523
+  translation:
+    text: how can one make these proceed?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 行
+    pron: xíng
+  sense:
+    id: uuid-301ce0a2-4703-4851-8ea7-fc78c6f5624e
+    pos: V
+    syn_func: vtoN
+    sem_feat: causative
+    usage:
+      warring-states-currency: '5'
+    def: cause to proceed, cause to move, make move
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-07de7dd9-e6ea-402a-9e7d-d9e6ea002af5
+  concept: QUESTION PARTICLES
+  concept_id: uuid-dcc17735-c9ff-4ec5-b729-0b86a2302836
+  seg_id: KR1h0004_tls_002-24a.1
+  pos: 6
+  bucket: body
+  offset: 525
+  translation:
+    text: how can one make these proceed?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 哉
+    pron: zāi
+  sense:
+    id: uuid-cb6f207b-5cbf-42ce-aced-42965f1f40a5
+    pos: P
+    syn_func: ppostad.npro{Q}
+    sem_feat: question
+    usage:
+      warring-states-currency: '3'
+    def: question marker
+  metadata:
+    resp: CH
+    created: '2022-02-15T23:56:43.717+09:00'
+- id: uuid-e43f39cc-7169-4983-bf39-cc7169098341
+  concept: QUESTION PARTICLES
+  concept_id: uuid-dcc17735-c9ff-4ec5-b729-0b86a2302836
+  seg_id: KR1h0004_tls_002-24a.1
+  pos: 6
+  bucket: body
+  offset: 525
+  translation:
+    text: how can one make these proceed?"
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 哉
+    pron: zāi
+  sense:
+    id: uuid-d539d007-f929-41e8-9290-fe66331e0289
+    pos: P
+    syn_func: ppostadS
+    sem_feat: rhetorical question
+    usage:
+      warring-states-currency: '5'
+    def: (in questions) rhetorical (marked explicitly as rhetorical by such particles as 豈)
+  metadata:
+    resp: CH
+    created: '2022-02-15T23:57:04.039+09:00'
+- id: ''
+  concept: GENERATION
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.3
+  pos: 3
+  bucket: body
+  offset: 531
+  translation:
+    text: '"Can one understand matters ten generations ago?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 世
+    pron: shì
+  sense:
+    id: uuid-44fb4e86-8d04-444b-bdc8-7cb86ca4b643
+    pos: 'N'
+    syn_func: ncc
+    usage:
+      warring-states-currency: '5'
+    def: 'generation 三世 "three generations";  one''s own time; our own time;   (e.g. the present) age, historical period;  historical conditions;  specifically: a period of thirty years.'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ASK
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.2
+  pos: 7
+  bucket: body
+  offset: 532
+  translation:
+    text: 'Zǐzhāng asked:'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 問
+    pron: wèn
+  sense:
+    id: uuid-28388240-074a-4718-93bd-7dc535dd588c
+    pos: V
+    syn_func: vtoS
+    sem_feat: object=speech
+    usage:
+      warring-states-currency: '3'
+    def: 'ask and say (: "...", with direct object without yuē 曰)'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-9f5c80e1-8a62-49e1-9c80-e18a62b9e14d
+  concept: QUESTION PARTICLES
+  concept_id: uuid-dcc17735-c9ff-4ec5-b729-0b86a2302836
+  seg_id: KR1h0004_tls_002-24a.3
+  pos: 6
+  bucket: body
+  offset: 534
+  translation:
+    text: '"Can one understand matters ten generations ago?"'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 也
+    pron: yě
+  sense:
+    id: uuid-ab0af6b9-5150-42e8-8af6-b9515022e820
+    pos: P
+    syn_func: ppostadS
+    sem_feat: without question pronoun
+    def: marks judgmental general questions
+  metadata:
+    resp: CH
+    created: '2022-02-26T04:18:51.565+09:00'
+- id: ''
+  concept: RELY ON
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.5
+  pos: 3
+  bucket: body
+  offset: 538
+  translation:
+    text: '"The Yīn based themselves on the rituals of the Xià,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 因
+    pron: yīn
+  sense:
+    id: uuid-01c26f30-1bc1-4872-bbbd-b536ceca0108
+    pos: V
+    syn_func: vt+prep+N
+    usage:
+      warring-states-currency: '3'
+    def: rely on, depend on
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-c1b09c93-6df3-4571-b09c-936df32571e3
+  concept: RELATION
+  concept_id: uuid-87a0729f-0c38-4ded-950b-0cb39f37e6f9
+  seg_id: KR1h0004_tls_002-24a.5
+  pos: 3
+  bucket: body
+  offset: 538
+  translation:
+    text: '"The Yīn based themselves on the rituals of the Xià,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 於
+    pron: yú
+  sense:
+    id: uuid-0db63956-3cad-4f2a-a7a0-6499e6d813b8
+    pos: V
+    syn_func: vt[0]oN.postadV
+    usage:
+      warring-states-currency: '5'
+    def: 得罪於君"fall foul of the ruler": in relation to, with respect to; in the matter of
+  metadata:
+    resp: CH
+    created: '2022-07-23T18:14:32.874+09:00'
+- id: ''
+  concept: RITUAL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.5
+  pos: 6
+  bucket: body
+  offset: 541
+  translation:
+    text: '"The Yīn based themselves on the rituals of the Xià,'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 禮
+    pron: lǐ
+  sense:
+    id: uuid-ca3b5947-5e12-432f-9e7c-a6fa034969fa
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      valuation: +
+    def: 'descriptive: ritual practices, rituals; ritual; the ceremonies'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: REDUCE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.6
+  pos: 2
+  bucket: body
+  offset: 542
+  translation:
+    text: and what they subtracted and added
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 損
+    pron: sǔn
+  sense:
+    id: uuid-9bcf5dfb-223e-4752-b8d9-eca7e9b17f6f
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '4'
+    def: diminish, subtract from;
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: INCREASE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.6
+  pos: 3
+  bucket: body
+  offset: 543
+  translation:
+    text: and what they subtracted and added
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 益
+    pron: yì
+  sense:
+    id: uuid-20bf9a5c-313e-4cd8-8135-e20b1bc1a550
+    pos: V
+    syn_func: vtoN
+    usage:
+      warring-states-currency: '5'
+    def: increase; give more
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: RELY ON
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.8
+  pos: 2
+  bucket: body
+  offset: 548
+  translation:
+    text: the Zhōu based themselves on the Yīn rituals,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 因
+    pron: yīn
+  sense:
+    id: uuid-01c26f30-1bc1-4872-bbbd-b536ceca0108
+    pos: V
+    syn_func: vt+prep+N
+    usage:
+      warring-states-currency: '3'
+    def: rely on, depend on
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: RITUAL
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.8
+  pos: 5
+  bucket: body
+  offset: 551
+  translation:
+    text: the Zhōu based themselves on the Yīn rituals,
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 禮
+    pron: lǐ
+  sense:
+    id: uuid-ca3b5947-5e12-432f-9e7c-a6fa034969fa
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      valuation: +
+    def: 'descriptive: ritual practices, rituals; ritual; the ceremonies'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: PRONOUN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-24a.9
+  pos: 1
+  bucket: body
+  offset: 552
+  translation:
+    text: and what they subtracted and added
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 所
+    pron: suǒ
+  sense:
+    id: uuid-fb7db905-1970-42fc-8f20-8615aeab5f4e
+    pos: 'N'
+    syn_func: npro{OBJ}+Vt
+    sem_feat: definite
+    usage:
+      register: '0'
+    def: the object which
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GENERATION
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-25a.1
+  pos: 3
+  bucket: body
+  offset: 565
+  translation:
+    text: then even matters a hundred generations ago can be understood."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 世
+    pron: shì
+  sense:
+    id: uuid-44fb4e86-8d04-444b-bdc8-7cb86ca4b643
+    pos: 'N'
+    syn_func: ncc
+    usage:
+      warring-states-currency: '5'
+    def: 'generation 三世 "three generations";  one''s own time; our own time;   (e.g. the present) age, historical period;  historical conditions;  specifically: a period of thirty years.'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: uuid-19501545-5f5d-4e12-9015-455f5d9e1265
+  concept: MODAL PARTICLES
+  concept_id: uuid-3ecbc80a-34eb-4b0f-ae75-a2902596aaca
+  seg_id: KR1h0004_tls_002-25a.1
+  pos: 6
+  bucket: body
+  offset: 568
+  translation:
+    text: then even matters a hundred generations ago can be understood."
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orig: ''
+    orth: 也
+    pron: yě
+  sense:
+    id: uuid-55fcd60d-e080-4c32-bcd6-0de080fc321b
+    pos: P
+    syn_func: ppostadS
+    sem_feat: generalising
+    def: particle marking a generalising and not particular judgment
+  metadata:
+    resp: CH
+    created: '2022-02-16T00:05:14.034+09:00'
+- id: ''
+  concept: IF NOT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-25a.3
+  pos: 2
+  bucket: body
+  offset: 572
+  translation:
+    text: '"To sacrifice to other than the right kind of ghost'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 非
+    pron: fēi
+  sense:
+    id: uuid-91f4e3c9-8829-4957-84f3-257f8ef0b256
+    pos: V
+    syn_func: vtoN.adV
+    usage:
+      warring-states-currency: '5'
+    def: except 非禮不聽
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: APPROPRIATE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-25a.3
+  pos: 3
+  bucket: body
+  offset: 573
+  translation:
+    text: '"To sacrifice to other than the right kind of ghost'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 其
+    pron: qí
+  sense:
+    id: uuid-2d20637a-a14e-4308-a35b-5f70e7994a97
+    pos: 'N'
+    syn_func: npro.adN
+    usage:
+      warring-states-currency: '5'
+    def: the right kind of, the appropriate, the relevant, the suitable 其人
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: GHOST
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-25a.3
+  pos: 4
+  bucket: body
+  offset: 574
+  translation:
+    text: '"To sacrifice to other than the right kind of ghost'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 鬼
+    pron: guǐ
+  sense:
+    id: uuid-e1c38b23-e8f4-4a13-afaf-d6dfbf06803c
+    pos: 'N'
+    syn_func: nab
+    sem_feat: metaphysical
+    usage:
+      warring-states-currency: '5'
+    def: ghost of a deceased person or creature, spirit of a feature of nature
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: THEN
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-25a.3
+  pos: 5
+  bucket: body
+  offset: 575
+  translation:
+    text: '"To sacrifice to other than the right kind of ghost'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 而
+    pron: ér
+  sense:
+    id: uuid-a98f0e67-f39b-4ca8-8cc0-5818647f20bc
+    pos: P
+    syn_func: padV1.postV2
+    sem_feat: temporal
+    usage:
+      warring-states-currency: '4'
+    def: at that point in time, then
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: SACRIFICE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-25a.3
+  pos: 6
+  bucket: body
+  offset: 576
+  translation:
+    text: '"To sacrifice to other than the right kind of ghost'
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 祭
+    pron: jì
+  sense:
+    id: uuid-38e50e30-6346-49cc-b48b-5e3fdcf9ed56
+    pos: V
+    syn_func: vtoN
+    sem_feat: object=deity
+    usage:
+      warring-states-currency: '5'
+    def: 'sacrifice to (specifically to the spirits of the Earth) with wine, grain, and meat[also: sacrifice (something)][CA]'
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: FLATTER
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-25a.4
+  pos: 1
+  bucket: body
+  offset: 582
+  translation:
+    text: To see what is right but not to do it
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 諂
+    pron: chǎn
+  sense:
+    id: uuid-57b98254-19dc-4666-be24-c8f33dc6a6b6
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '4'
+    def: sycophancy through words or action
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: JUSTICE
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-25a.4
+  pos: 5
+  bucket: body
+  offset: 586
+  translation:
+    text: To see what is right but not to do it
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 義
+    pron: yì
+  sense:
+    id: uuid-4f56a560-7849-4af6-bb23-abe538ab91b5
+    pos: 'N'
+    syn_func: nab
+    sem_feat: act
+    usage:
+      warring-states-currency: '3'
+    def: what is right, that which it is proper to do; duty
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'
+- id: ''
+  concept: ACT
+  concept_id: ''
+  seg_id: KR1h0004_tls_002-25a.4
+  pos: 7
+  bucket: body
+  offset: 588
+  translation:
+    text: To see what is right but not to do it
+    title: 論語 (en)
+    src: C. Harbsmeier
+  form:
+    orth: 為
+    pron: wéi
+  sense:
+    id: uuid-e0b0a5d1-6d70-419c-88f8-2f06fedebf58
+    pos: V
+    syn_func: vtoNab
+    usage:
+      warring-states-currency: '3'
+    def: undertake; do deliberately (something right or something wrong), commit (a crime etc); act out (a virtue); conduct (government); engage in (thievery); set out to do
+  metadata:
+    resp: CH
+    created: '2019-03-26T13:08:54.554+09:00'

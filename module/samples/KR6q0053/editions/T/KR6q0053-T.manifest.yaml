@@ -5,37 +5,43 @@ canonical_set:
   hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
 assets:
   parts:
-  - seq: 1
-    filename: KR6q0053_001-T.yaml
-    hash: sha256:0dd7a674abd41b8fd210abf748b10e5121896611ea76f9fc41e98d2a98490147
+  - {seq: 1, filename: KR6q0053_001-T.yaml, hash: 'sha256:700d5a4b3bff54c8b77b05feedfdeb15463635baa38643933223f6161c8338da'}
 table_of_contents:
 - ref: {seq: 1, marker_id: KR6q0053_T_001-0495a.4-h, span: [front, 0, 295]}
   label: 臨濟慧照玄公大宗師語錄序
   level: 1
-- ref: {seq: 1, marker_id: KR6q0053_T_001-0495a.51-h, span: [front, 296, 926]}
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0495a.51-h, span: [front, 295, 925]}
   label: 臨濟慧照玄公大宗師語錄序
   level: 1
-- ref: {seq: 1, marker_id: KR6q0053_T_001-0495c.12-h, span: [front, 927, 1507]}
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0495c.12-h, span: [front, 925, 1506]}
   label: 臨濟慧照玄公大宗師語錄序
   level: 1
-- ref: {seq: 1, marker_id: KR6q0053_T_001-0495c.12-h, span: [front, 1507, 1794]}
-  label: 臨濟慧照玄公大宗師語錄序
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0496a.44-h, span: [front, 1506, 1793]}
+  label: 鎮州臨濟慧照禪師語錄序
   level: 1
-- ref: {seq: 1, marker_id: KR6q0053_T_001-0496b.32-h, span: [body, 0, 1794]}
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0496b.32-h, span: [body, 0, 9661]}
   label: 鎮州臨濟慧照禪師語錄
   level: 1
-- ref: {seq: 1, marker_id: KR6q0053_T_001-0503a.45-h, span: [body, 0, 0]}
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0503a.45-h, span: [body, 9661, 11612]}
   label: 勘辨
   level: 1
-- ref: {seq: 1, marker_id: KR6q0053_T_001-0504b.82-h, span: [body, 0:0]}
+- ref: {seq: 1, marker_id: KR6q0053_T_001-0504b.82-h, span: [body, 11612, 14560]}
   label: 行錄
   level: 1
-  
 metadata:
   title: 臨濟錄
-  edition:
-    short: T
+  identifiers:
+    krp: KR6q0053
+  tags:
+    kr-categories: KR6q
+    tls-internal:
+    - core
+    - swl
+    - tr-en
+    tls-dates: dat04100
   source:
     repository: tls-texts
     path: data/tls/KR6q0053.xml
-hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  edition:
+    short: T
+hash: sha256:f43752ac95e64d3d3b2865da7bebab9690f73b6f0b2223798bc6a65207747ba6

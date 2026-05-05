@@ -1,0 +1,78 @@
+canonical_identifier: bkk:krp/KR3a0011/master/v1/juan/6
+seq: 6
+front:
+  text: ''
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  markers: []
+body:
+  text: 䟦申鍳注後右荀悅申鍳五卷乃吳郡黄文學勉之所注也漢史載悅為獻帝黄門侍郎是時政移曹操故申漢故事以為帝鍳及泄所藴負共五篇以上一曰政體二曰時事三曰俗嫌四曰雜言上五曰雜言下皆深切時弊關治化人君所當遵行者悅之用心可謂勤矣勉之感其所遭而先帝之時適有姧臣心迹如操者竊弄威柄遂憤激為注此書共得萬四千餘言中所引據又皆漢事尤為博洽少傅守谿王公謂其有感而為者誠然㢤昔揚雄自言所著太玄經後世必有知子雲者今觀勉之之注殆亦深知荀悅者與正德􅉝巳冬十一月望白巗山人喬宇識
+  hash: sha256:9990f28f0ed81526060ca8896fe54c62ff39cdf57c369fbb772933b3c2719c85
+  markers:
+  - {type: page-break, offset: 0, content: '', id: KR3a0011_SBCK_006-1a}
+  - {type: line-break, offset: 0, content: '', id: KR3a0011_SBCK_006-1a01}
+  - {type: variant, offset: 0, length: 1, content: 䟦, WYG: 命也吉凶是也吉凶貧富貴賤壽夭禍福之類此亦以氣言命夫生我之制性命存焉爾君子循其性以輔其命休斯承否斯守休吉否凶無務焉無怨焉富貴無務貧賤無怨好寵者乘天命以驕好寵者為勢位所溺故乘富貴之命而驕則踰節陵分之事興矣好惡者違天命以濫好惡者為饑寒所逼故違貧賤之命而濫則苟且邪僻之行作矣故驕則奉奉當作承之不成不成承休濫則守之不終不終守否好以取怠惡以取甚務以取福惡惡當作怨以成禍怨則不守不守則濫故曰成禍斯惑矣或問天命人事曰有三品焉上下不移其中則人事存焉爾命相近也事相逺也則吉凶殊矣孔子曰性相近也今既曰命命無不善不當云相近矣故曰窮理盡性以至於命易繫辭文孟子稱性善荀卿稱性惡荀子有性惡篇大抵言人之性本惡其善者偽也公孫子曰性無善惡揚雄曰人之性善惡渾揚子修身篇曰人之性也善惡混修其善則為善人修其惡則為惡人氣也者所適善惡之焉與劉向曰性情相應性不獨善情不獨惡向之意以性善者情亦善情惡者性必惡故曰相應曰問其理曰性善則無四凶四凶共工驩兠三苗鯀也性惡則無三仁孔子曰殷有三仁焉謂微子箕子比干也人無善惡文王之教一也則無周公管蔡周公旦管叔鮮蔡叔度皆武王同母兄弟性善情惡是桀紂無性而堯舜無情也性善惡皆渾是上智懷惠惠當作惡而下愚挾善也理也未究矣惟向言為然韓子三品之説有類於此或曰仁義性也好惡情也仁義常善而好惡或有惡故有情惡也曰不然好惡者性之取舍也實見於外故謂之情爾必本乎性矣仁義者善之誠者也何嫌其常善好惡者善惡未有所分也何恠其有惡凡言神者莫近於氣有氣斯有形有神斯有好惡喜怒之情矣故人人當作神有情由氣之有形也氣有白黑神有善惡形與白黑偕形之白黒隨氣而有情與善惡偕情之善惡隨神而彰即劉向性情相應之説故氣黒非形之咎情情當作神惡非情之罪也悦言形之黒本於氣情之惡本於性也或曰人之於利見而好之能以仁義為節者是性割其情也性少情多性不能割其情則情獨行為惡矣曰不然是善惡有多少也非情也有人於此嗜酒嗜肉肉勝則食焉酒勝則飲焉此二者相與爭勝者行矣行謂食飲非情欲得酒性欲得肉也有人於此好利好義義勝則義取焉利勝則利取焉此二者相與争勝者行矣行謂取義取利非情欲得利性欲得義也其可兼者則兼取之其不可兼者則隻取重焉若苟隻好而已雖可兼取當有闕文矣若二好鈞平無分輕重則一俯一仰乍進乍退相持不定或曰請折於經曰易稱乾道變化各正性命是言萬物各有性也乾彖曰乾道變化各正性命保合太和乃利貞觀其所感而天地萬物之情可見矣是言情者應感而動者也咸彖曰天地感而萬物化生聖人感人心而天下和平觀其所感而天地萬物之情可見矣昆蟲草木皆有性焉不盡善也此復}
+  - {type: page-break, offset: 0, content: '', id: KR3a0011_WYG_005-4b, image: WYG0696/WYG0696-0461b.png}
+  - {type: page-break, offset: 0, content: '', id: KR3a0011_WYG_005-5a, image: WYG0696/WYG0696-0461c.png}
+  - {type: page-break, offset: 0, content: '', id: KR3a0011_WYG_005-5b, image: WYG0696/WYG0696-0461d.png}
+  - {type: page-break, offset: 0, content: '', id: KR3a0011_WYG_005-6a, image: WYG0696/WYG0696-0462a.png}
+  - {type: page-break, offset: 0, content: '', id: KR3a0011_WYG_005-6b, image: WYG0696/WYG0696-0462b.png}
+  - {type: variant, offset: 2, length: 2, content: 鍳注, WYG: 情不獨惡之説天地聖人皆稱情焉不主惡也此復申性不獨善之説又曰爻彖以情言亦如之易繫辭曰八卦以象告爻彖以情言凡情意心志者皆性動之别名也情見乎辭是稱情也易繫辭曰聖人之情見乎辭言不盡意是稱意也易繫辭曰書不盡言言不盡意中心好之是稱心也詩彤弓曰我有嘉賔中心好之以制其志是稱志也惟所宜各稱其名而已情何主惡之有故曰必也正名或曰善惡皆性也則法教何施曰性雖善待教而成性雖惡待法而消唯上智下愚不移論語文其次善惡交爭於是教扶其善法抑其惡得施之九品從教者半畏刑者四分之三其不移大數九分之一也一分之中又有㣲移者矣然則法教之於化民也幾盡之矣及法教之失也其為亂亦如之或曰法教得則治法教失則亂若無得無失縱民之情則治亂其中乎曰凡陽性升隂性降升難而降易善陽也惡隂也故善難而惡易縱民之情使自由之則降於下者多矣若無法教則為惡者易故多曰中焉在曰法教不純有得有失則治亂其中矣純徳無慝其上善也伏而不動其次也動而不行行而不逺逺而能復又其次也動謂惡之萌動行則見之於外逺則行而不返其下者逺而不近也凡此皆人性也制之者則心也動而抑之遏於隱㣲行而止之禁於履踐與上同性也行而弗止逺而弗近與下同終也君子嘉仁而不責惠尊禮而不責意貴徳而不責怨其責也先已而行也先人淫惠曲意私怨此三者實枉貞道亂大徳然成敗得失莫匪由之救病不給其竟奚暇於道徳哉此之謂末俗故君子有常交曰義也有常誓曰信也交而}
+  - {type: page-break, offset: 2, content: '', id: KR3a0011_WYG_005-7a, image: WYG0696/WYG0696-0462c.png}
+  - {type: page-break, offset: 2, content: '', id: KR3a0011_WYG_005-7b, image: WYG0696/WYG0696-0462d.png}
+  - {type: page-break, offset: 2, content: '', id: KR3a0011_WYG_005-8a, image: WYG0696/WYG0696-0463a.png}
+  - {type: line-break, offset: 5, content: '', id: KR3a0011_SBCK_006-1a02}
+  - {type: variant, offset: 5, length: 14, content: 右荀悅申鍳五卷乃吳郡黄文學勉, WYG: 親誓而後故狹矣太上不異古今其次不異海内同天下}
+  - {type: page-break, offset: 5, content: '', id: KR3a0011_WYG_005-8b, image: WYG0696/WYG0696-0463b.png}
+  - {type: variant, offset: 20, length: 2, content: 所注, WYG: 志者其盛徳乎大人之志不可見}
+  - {type: line-break, offset: 22, content: '', id: KR3a0011_SBCK_006-1a03}
+  - {type: variant, offset: 23, length: 17, content: 漢史載悅為獻帝黄門侍郎是時政移曹操, WYG: 浩然而同於道大人之志渾合造化}
+  - {type: line-break, offset: 39, content: '', id: KR3a0011_SBCK_006-1a04}
+  - {type: variant, offset: 41, length: 2, content: 申漢, WYG: 不可窺量衆人之志不可掩也察然而流於俗衆庶之志流順世俗}
+  - {type: variant, offset: 44, length: 16, content: 事以為帝鍳及泄所藴負共五篇以上一, WYG: 易於昭鹽同於道故不與俗浮沉言大人合道故超俗或}
+  - {type: variant, offset: 51, length: 1, content: 所, SBCK: 𫠦}
+  - {type: line-break, offset: 56, content: '', id: KR3a0011_SBCK_006-1a05}
+  - {type: variant, offset: 61, length: 33, content: 政體二曰時事三曰俗嫌四曰雜言上五曰雜言下皆深切時弊關治化人君所當遵, WYG: 脩}
+  - {type: line-break, offset: 73, content: '', id: KR3a0011_SBCK_006-1a06}
+  - {type: line-break, offset: 90, content: '', id: KR3a0011_SBCK_006-1a07}
+  - {type: variant, offset: 91, length: 1, content: 所, SBCK: 𫠦}
+  - {type: variant, offset: 96, length: 1, content: 悅, WYG: 不為人耻諸神明其至也乎曰未也自耻者本也耻諸神明其次也耻諸人外矣夫唯外則慝積於内矣故君子審乎自耻能自愧耻則必能脩行而幽明無怍矣或曰耻者其志者乎曰未也夫志者自然由人何耻}
+  - {type: variant, offset: 98, length: 1, content: 用, WYG: 有赴谷必墜失水必溺人見之也赴穽必陷失道必沈人不見之也不察之故君子慎乎所不察不聞大論則志不𢎞不聴至言則}
+  - {type: page-break, offset: 98, content: '', id: KR3a0011_WYG_005-9a, image: WYG0696/WYG0696-0463c.png}
+  - {type: variant, offset: 100, length: 0, content: '', WYG: 不固思唐虞於上世瞻仲尼於中古而知夫小道者之足羞也想伯夷於首陽省四皓於商山而知夫穢志者之足耻也存張騫於西極張騫漢中人建元中為郎應募使月氐與堂邑氏奴甘父俱出隴西徑匈奴匈奴得之傳詣單于留騫十餘嵗騫亡至大宛為發譯道抵康居康居傳致大月氐至大夏留嵗餘還並南山欲從羌中歸復為匈奴所得留嵗餘單于死國中亂騫與胡妻及堂邑父俱亡歸漢拜騫大中大夫初騫行時百餘人去十三嵗惟二人得還念蘇武於朔埀朔北方也而知懷閭室者之足鄙也推斯類也無所不至矣德比於上上謂聖賢欲比於下下謂貧賤徳比於上故知耻欲比於下故知足耻而知之則聖賢其}
+  - {type: page-break, offset: 100, content: '', id: KR3a0011_WYG_005-9b, image: WYG0696/WYG0696-0463d.png}
+  - {type: variant, offset: 101, length: 0, content: '', WYG: 幾知足而已則固陋其可安也聖賢斯幾况其為慝乎必無邪慝固陋斯安况其為侈乎必無放侈是}
+  - {type: variant, offset: 102, length: 1, content: 勤, WYG: 有檢純乎純哉其上也其次得概而已}
+  - {type: variant, offset: 104, length: 3, content: 勉之感, WYG: 莫匪概也得}
+  - {type: line-break, offset: 107, content: '', id: KR3a0011_SBCK_006-1a08}
+  - {type: variant, offset: 108, length: 1, content: 所, SBCK: 𫠦}
+  - {type: variant, offset: 108, length: 30, content: 所遭而先帝之時適有姧臣心迹如操者竊弄威柄遂憤激為注此書共得萬, WYG: 概苟無邪斯可矣君子}
+  - {type: line-break, offset: 111, content: '', id: KR3a0011_SBCK_006-1a09}
+  - {type: variant, offset: 124, length: 1, content: 竊, SBCK: 􅀼}
+  - {type: page-break, offset: 128, content: '', id: KR3a0011_SBCK_006-1b}
+  - {type: line-break, offset: 128, content: '', id: KR3a0011_SBCK_006-1b01}
+  - {type: variant, offset: 139, length: 22, content: 千餘言中所引據又皆漢事尤為博洽少傅守谿王公謂, WYG: 省}
+  - {type: variant, offset: 143, length: 1, content: 所, SBCK: 𫠦}
+  - {type: line-break, offset: 145, content: '', id: KR3a0011_SBCK_006-1b02}
+  - {type: line-break, offset: 162, content: '', id: KR3a0011_SBCK_006-1b03}
+  - {type: variant, offset: 162, length: 41, content: 有感而為者誠然㢤昔揚雄自言所著太玄經後世必有知子雲者今觀勉之之注殆亦深知荀悅者與正, WYG: 身怒不亂}
+  - {type: variant, offset: 175, length: 1, content: 所, SBCK: 𫠦}
+  - {type: line-break, offset: 179, content: '', id: KR3a0011_SBCK_006-1b04}
+  - {type: line-break, offset: 196, content: '', id: KR3a0011_SBCK_006-1b05}
+  - {type: line-break, offset: 202, content: '', id: KR3a0011_SBCK_006-1b06}
+  - {type: variant, offset: 204, length: 4, content: 􅉝巳冬十, WYG: 喜不缺}
+  - {type: variant, offset: 209, length: 9, content: 月望白巗山人喬宇識, WYG: 字義也申鑒卷五}
+  - {type: page-break, offset: 218, content: '', id: KR3a0011_SBCK_006-2a}
+  - {type: variant, offset: 218, length: 0, content: '', SBCK: '# SB1_0336-144.png'}
+metadata:
+  title: 申鑒
+  edition:
+    short: master
+  base_edition: SBCK
+  date: '2015-09-11 03:50:43.078458'
+  juan_title: '6'
+  source:
+    repository: kanripo
+    path: KR3a0011/KR3a0011_006.txt
+  image_base_urls:
+    wyg: http://img.kanripo.org/general/skqs/wyg/
+hash: sha256:dfedca63b5b466a9f4dc83bb49561b3d051339fbffa56e067495b74e4ae2b703

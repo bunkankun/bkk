@@ -1,0 +1,1262 @@
+canonical_identifier: bkk:krp/KR1h0004/tls/v1/juan/11
+seq: 11
+front:
+  text: ''
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  markers: []
+body:
+  text: 《先進篇第十一》子曰先進於禮樂野人也後進於禮樂君子也如用之則吾從先進子曰從我於陳蔡者皆不及門也德行顏淵閔子騫冉伯牛仲弓言語宰我子貢政事冉有季路文學子游子夏子曰回也非助我者也於吾言無所不說子曰孝哉閔子騫人不間於其父母昆弟之言南容三復白圭孔子以其兄之子妻之季康子問弟子孰為好學孔子對曰有顏回者好學不幸短命死矣今也則亡顏淵死顏路請子之車以為之椁子曰才不才亦各言其子也鯉也死有棺而無椁吾不徒行以為之椁以吾從大夫之後不可徒行也顏淵死子曰噫天喪予天喪予顏淵死子哭之慟從者曰子慟矣曰有慟乎非夫人之為慟而誰為顏淵死門人欲厚葬之子曰不可門人厚葬之子曰回也視予猶父也予不得視猶子也非我也夫二三子也季路問事鬼神子曰未能事人焉能事鬼曰敢問死曰未知生焉知死閔子侍側誾誾如也子路行行如也冉有子貢侃侃如也子樂若由也不得其死然魯人為長府閔子騫曰仍舊貫如之何何必改作子曰夫人不言言必有中子曰由之瑟奚為於丘之門門人不敬子路子曰由也升堂矣未入於室也子貢問師與商也孰賢子曰師也過商也不及曰然則師愈與子曰過猶不及季氏富於周公而求也為之聚斂而附益之子曰非吾徒也小子鳴鼓而攻之可也柴也愚參也魯師也辟由也喭子曰回也其庶乎屢空賜不受命而貨殖焉億則屢中子張問善人之道子曰不踐迹亦不入於室子曰論篤是與君子者乎色莊者乎子路問聞斯行諸子曰有父兄在如之何其聞斯行之冉有問聞斯行諸子曰聞斯行之公西華曰由也問聞斯行諸子曰有父兄在求也問聞斯行諸子曰聞斯行之赤也惑敢問子曰求也退故進之由也兼人故退之子畏於匡顏淵後子曰吾以女為死矣曰子在回何敢死季子然問仲由冉求可謂大臣與子曰吾以子為異之問曾由與求之問所謂大臣者以道事君不可則止今由與求也可謂具臣矣曰然則從之者與子曰弒父與君亦不從也子路使子羔為費宰子曰賊夫人之子子路曰有民人焉有社稷焉何必讀書然後為學子曰是故惡夫佞者子路曾晳冉有公西華侍坐子曰以吾一日長乎爾毋吾以也居則曰不吾知也如或知爾則何以哉子路率爾而對曰千乘之國攝乎大國之間加之以師旅因之以饑饉由也為之比及三年可使有勇且知方也夫子哂之求爾何如對曰方六七十如五六十求也為之比及三年可使足民如其禮樂以俟君子赤爾何如對曰非曰能之願學焉宗廟之事如會同端章甫願為小相焉點爾何如鼓瑟希鏗爾舍瑟而作對曰異乎三子者之撰子曰何傷乎亦各言其志也曰莫春者春服既成冠者五六人童子六七人浴乎沂風乎舞雩詠而歸夫子喟然歎曰吾與點也三子者出曾晳後曾晳曰夫三子者之言何如子曰亦各言其志也已矣曰夫子何哂由也曰為國以禮其言不讓是故哂之唯求則非邦也與安見方六七十如五六十而非邦也者唯赤則非邦也與宗廟會同非諸侯而何赤也為之小孰能為之大
+  hash: sha256:d9802777aa3eeb58ed387e831c0ed68e3a138b3ce7a9edc63c528df4677c5c40
+  markers:
+  - {type: punctuation, offset: 0, content: 。, id: ''}
+  - {type: paragraph-break, offset: 0, content: '', id: ''}
+  - {type: paragraph-break, offset: 0, content: '', id: ''}
+  - {type: 'tls:seg', offset: 0, content: '', id: KR1h0004_tls_011-1a.1}
+  - {type: paragraph-break, offset: 0, content: '', id: ''}
+  - {type: 'tls:head', offset: 0, content: '', id: KR1h0004_tls_011-1a.3-h}
+  - {type: paragraph-break, offset: 8, content: '', id: ''}
+  - {type: paragraph-break, offset: 8, content: '', id: ''}
+  - {type: paragraph-break, offset: 8, content: '', id: ''}
+  - {type: 'tls:seg', offset: 8, content: '', id: KR1h0004_tls_011-1a.3}
+  - {type: punctuation, offset: 10, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 10, content: '', id: KR1h0004_tls_011-1a.4}
+  - {type: punctuation, offset: 10, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 11, content: 先 vadV, id: ''}
+  - {type: 'tls:ann', offset: 12, content: 進 vt+prep+N, id: ''}
+  - {type: 'tls:ann', offset: 12, content: '於 vt[0]oN.postadV', id: uuid-e1c3d223-d09b-48b2-83d2-23d09b88b29f}
+  - {type: 'tls:ann', offset: 14, content: '禮樂 NP{N1&N2}', id: ''}
+  - {type: punctuation, offset: 15, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 15, content: '', id: KR1h0004_tls_011-1a.5}
+  - {type: 'tls:ann', offset: 15, content: 野 vadN, id: ''}
+  - {type: 'tls:ann', offset: 15, content: '野人 NP{PRED}', id: ''}
+  - {type: punctuation, offset: 18, content: ；, id: ''}
+  - {type: 'tls:seg', offset: 18, content: '', id: KR1h0004_tls_011-1a.6}
+  - {type: 'tls:ann', offset: 18, content: 後 vadV, id: ''}
+  - {type: 'tls:ann', offset: 19, content: '於 vt[0]oN.postadV', id: uuid-08e43f52-b9d8-46f4-a43f-52b9d8a6f439}
+  - {type: 'tls:ann', offset: 21, content: '禮樂 NP{N1&N2}', id: ''}
+  - {type: punctuation, offset: 23, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 23, content: '', id: KR1h0004_tls_011-1a.7}
+  - {type: 'tls:ann', offset: 23, content: '君子 NP{PRED}', id: ''}
+  - {type: punctuation, offset: 26, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 26, content: '', id: KR1h0004_tls_011-1a.8}
+  - {type: 'tls:ann', offset: 26, content: 如 padS1.adS2, id: ''}
+  - {type: 'tls:ann', offset: 27, content: 用 vtoN, id: ''}
+  - {type: punctuation, offset: 29, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 29, content: '', id: KR1h0004_tls_011-2a.1}
+  - {type: 'tls:ann', offset: 31, content: 從 vtoN, id: ''}
+  - {type: punctuation, offset: 34, content: 。, id: ''}
+  - {type: punctuation, offset: 34, content: 」, id: ''}
+  - {type: paragraph-break, offset: 34, content: '', id: ''}
+  - {type: paragraph-break, offset: 34, content: '', id: ''}
+  - {type: 'tls:seg', offset: 34, content: '', id: KR1h0004_tls_011-2a.2}
+  - {type: punctuation, offset: 36, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 36, content: '', id: KR1h0004_tls_011-2a.3}
+  - {type: punctuation, offset: 36, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 37, content: 從 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 38, content: '於 vt[0]oN.postadV', id: uuid-3d2593b5-159e-422d-a593-b5159e922d9b}
+  - {type: punctuation, offset: 40, content: 、, id: ''}
+  - {type: punctuation, offset: 42, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 42, content: '', id: KR1h0004_tls_011-3a.1}
+  - {type: 'tls:ann', offset: 43, content: 者 npro.post-V, id: ''}
+  - {type: 'tls:ann', offset: 44, content: 及 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 46, content: 也 ppostadS, id: uuid-b4684e26-29a7-4de7-a84e-2629a7dde728}
+  - {type: punctuation, offset: 47, content: 。, id: ''}
+  - {type: punctuation, offset: 47, content: 」, id: ''}
+  - {type: paragraph-break, offset: 47, content: '', id: ''}
+  - {type: paragraph-break, offset: 47, content: '', id: ''}
+  - {type: 'tls:seg', offset: 47, content: '', id: KR1h0004_tls_011-3a.2}
+  - {type: punctuation, offset: 49, content: ：, id: ''}
+  - {type: punctuation, offset: 51, content: 、, id: ''}
+  - {type: 'tls:ann', offset: 51, content: 德 nadN, id: ''}
+  - {type: 'tls:ann', offset: 52, content: 行 nab, id: ''}
+  - {type: punctuation, offset: 54, content: 、, id: ''}
+  - {type: punctuation, offset: 57, content: 、, id: ''}
+  - {type: punctuation, offset: 59, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 59, content: '', id: KR1h0004_tls_011-3a.3}
+  - {type: 'tls:ann', offset: 59, content: '言語 NPab{N1=N2}', id: ''}
+  - {type: punctuation, offset: 61, content: ：, id: ''}
+  - {type: punctuation, offset: 63, content: 、, id: ''}
+  - {type: punctuation, offset: 65, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 65, content: '', id: KR1h0004_tls_011-3a.4}
+  - {type: 'tls:ann', offset: 65, content: 政 nadN, id: ''}
+  - {type: 'tls:ann', offset: 66, content: '事 nab.post-V{NUM}', id: ''}
+  - {type: punctuation, offset: 67, content: ：, id: ''}
+  - {type: punctuation, offset: 69, content: 、, id: ''}
+  - {type: punctuation, offset: 71, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 71, content: '', id: KR1h0004_tls_011-3a.5}
+  - {type: 'tls:ann', offset: 71, content: '文學 NPab{N1adN2}', id: ''}
+  - {type: punctuation, offset: 73, content: ：, id: ''}
+  - {type: punctuation, offset: 75, content: 、, id: ''}
+  - {type: punctuation, offset: 77, content: 。, id: ''}
+  - {type: paragraph-break, offset: 77, content: '', id: ''}
+  - {type: paragraph-break, offset: 77, content: '', id: ''}
+  - {type: 'tls:seg', offset: 77, content: '', id: KR1h0004_tls_011-4a.1}
+  - {type: 'tls:seg', offset: 77, content: '', id: KR1h0004_tls_011-4a.2}
+  - {type: punctuation, offset: 79, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 79, content: '', id: KR1h0004_tls_011-4a.3}
+  - {type: punctuation, offset: 79, content: 「, id: ''}
+  - {type: 'tls:seg', offset: 81, content: '', id: KR1h0004_tls_011-4a.4}
+  - {type: 'tls:ann', offset: 81, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 81, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: uuid-8666165d-01ea-4c0d-a616-5d01eafc0d07}
+  - {type: 'tls:ann', offset: 82, content: 助 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 84, content: 者 npro.post-V, id: ''}
+  - {type: 'tls:ann', offset: 85, content: '也 ppostadN{PRED}', id: uuid-0f42145d-a72d-4ac9-8214-5da72d7ac986}
+  - {type: punctuation, offset: 86, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 86, content: '', id: KR1h0004_tls_011-5a.1}
+  - {type: 'tls:ann', offset: 86, content: 於 vtoN.adV, id: ''}
+  - {type: 'tls:ann', offset: 86, content: 悅 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 87, content: 吾 npro.adN, id: ''}
+  - {type: 'tls:ann', offset: 88, content: 言 nab, id: ''}
+  - {type: 'tls:ann', offset: 90, content: '所 npro{OBJ}+Vt', id: ''}
+  - {type: punctuation, offset: 93, content: 。, id: ''}
+  - {type: punctuation, offset: 93, content: 」, id: ''}
+  - {type: paragraph-break, offset: 93, content: '', id: ''}
+  - {type: paragraph-break, offset: 93, content: '', id: ''}
+  - {type: 'tls:seg', offset: 93, content: '', id: KR1h0004_tls_011-5a.2}
+  - {type: punctuation, offset: 95, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 95, content: '', id: KR1h0004_tls_011-5a.3}
+  - {type: punctuation, offset: 95, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 96, content: 孝 vi, id: ''}
+  - {type: 'tls:ann', offset: 97, content: '哉 ppostadV.+N{SUBJ}', id: ''}
+  - {type: punctuation, offset: 100, content: ！, id: ''}
+  - {type: 'tls:seg', offset: 100, content: '', id: KR1h0004_tls_011-6a.1}
+  - {type: 'tls:ann', offset: 100, content: 人 npostVt, id: ''}
+  - {type: 'tls:ann', offset: 102, content: 間 vt+prep+N, id: ''}
+  - {type: 'tls:ann', offset: 102, content: '於 vt[0]oN.postadV', id: uuid-dff698f1-2b85-4528-b698-f12b85e528cd}
+  - {type: 'tls:ann', offset: 104, content: 其 npro.adN, id: uuid-f0434900-0211-4e50-8349-0002115e5046}
+  - {type: 'tls:ann', offset: 104, content: 其 npro.adN, id: uuid-f7ff30f0-cdc7-42e1-bf30-f0cdc7e2e12b}
+  - {type: 'tls:ann', offset: 105, content: '父母 NP{N1&N2}', id: ''}
+  - {type: punctuation, offset: 107, content: 、, id: ''}
+  - {type: 'tls:ann', offset: 108, content: 昆弟 NP, id: ''}
+  - {type: 'tls:ann', offset: 108, content: 昆弟 NP, id: ''}
+  - {type: punctuation, offset: 111, content: 。, id: ''}
+  - {type: punctuation, offset: 111, content: 」, id: ''}
+  - {type: paragraph-break, offset: 111, content: '', id: ''}
+  - {type: paragraph-break, offset: 111, content: '', id: ''}
+  - {type: 'tls:seg', offset: 111, content: '', id: KR1h0004_tls_011-6a.2}
+  - {type: 'tls:ann', offset: 111, content: 言 nab, id: ''}
+  - {type: punctuation, offset: 117, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 117, content: '', id: KR1h0004_tls_011-6a.3}
+  - {type: 'tls:ann', offset: 118, content: 復 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 119, content: 以 vtoN.adVt, id: ''}
+  - {type: 'tls:ann', offset: 120, content: 圭 n, id: ''}
+  - {type: 'tls:ann', offset: 121, content: '兄 n[post-N]', id: ''}
+  - {type: 'tls:ann', offset: 124, content: '妻 vttoN1:postvtoN2', id: ''}
+  - {type: punctuation, offset: 126, content: 。, id: ''}
+  - {type: paragraph-break, offset: 126, content: '', id: ''}
+  - {type: paragraph-break, offset: 126, content: '', id: ''}
+  - {type: 'tls:seg', offset: 126, content: '', id: KR1h0004_tls_011-7a.1}
+  - {type: 'tls:seg', offset: 126, content: '', id: KR1h0004_tls_011-7a.2}
+  - {type: 'tls:seg', offset: 130, content: '', id: KR1h0004_tls_011-7a.3}
+  - {type: punctuation, offset: 130, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 131, content: 弟子 NP(post-N), id: ''}
+  - {type: 'tls:ann', offset: 133, content: 問 vtoS, id: ''}
+  - {type: 'tls:ann', offset: 133, content: 孰 npro, id: ''}
+  - {type: 'tls:ann', offset: 133, content: 孰為 PP+V, id: uuid-23452732-a1cb-4a5e-8527-32a1cbda5edd}
+  - {type: 'tls:ann', offset: 134, content: '為 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 135, content: '好 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 135, content: 好學 VPi, id: ''}
+  - {type: punctuation, offset: 136, content: 。, id: ''}
+  - {type: punctuation, offset: 136, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 136, content: '', id: KR1h0004_tls_011-7a.4}
+  - {type: 'tls:ann', offset: 138, content: 對 vt(oN.)+V, id: ''}
+  - {type: punctuation, offset: 140, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 140, content: '', id: KR1h0004_tls_011-7a.5}
+  - {type: punctuation, offset: 140, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 144, content: '者 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 144, content: '者 npro.post-N{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 145, content: 好學 VPi, id: ''}
+  - {type: punctuation, offset: 146, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 146, content: '', id: KR1h0004_tls_011-7a.6}
+  - {type: 'tls:ann', offset: 146, content: 不幸 VPadV, id: ''}
+  - {type: 'tls:ann', offset: 148, content: 短 vadN, id: ''}
+  - {type: 'tls:ann', offset: 149, content: 命 nab, id: ''}
+  - {type: punctuation, offset: 152, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 152, content: '', id: KR1h0004_tls_011-8a.1}
+  - {type: 'tls:ann', offset: 152, content: 今 nadS, id: ''}
+  - {type: 'tls:ann', offset: 152, content: 無 vi, id: ''}
+  - {type: punctuation, offset: 156, content: 。, id: ''}
+  - {type: punctuation, offset: 156, content: 」, id: ''}
+  - {type: paragraph-break, offset: 156, content: '', id: ''}
+  - {type: paragraph-break, offset: 156, content: '', id: ''}
+  - {type: 'tls:seg', offset: 156, content: '', id: KR1h0004_tls_011-8a.2}
+  - {type: punctuation, offset: 159, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 159, content: '', id: KR1h0004_tls_011-8a.3}
+  - {type: 'tls:ann', offset: 161, content: 請 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 164, content: 車 n, id: ''}
+  - {type: 'tls:seg', offset: 165, content: '', id: KR1h0004_tls_011-8a.4}
+  - {type: punctuation, offset: 169, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 169, content: '', id: KR1h0004_tls_011-8a.5}
+  - {type: punctuation, offset: 171, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 171, content: '', id: KR1h0004_tls_011-8a.6}
+  - {type: punctuation, offset: 171, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 171, content: 才 vi, id: ''}
+  - {type: 'tls:ann', offset: 173, content: 不才 VPi, id: ''}
+  - {type: punctuation, offset: 174, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 174, content: '', id: KR1h0004_tls_011-8a.7}
+  - {type: 'tls:ann', offset: 174, content: 亦 padV.post-S, id: ''}
+  - {type: 'tls:ann', offset: 175, content: '各 npro+V(.postN{TOP})', id: ''}
+  - {type: 'tls:ann', offset: 176, content: 言 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 178, content: 子 npost-N, id: ''}
+  - {type: 'tls:ann', offset: 179, content: 也 ppostadS, id: uuid-f721e5d7-8967-438f-a1e5-d78967a38f38}
+  - {type: punctuation, offset: 180, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 180, content: '', id: KR1h0004_tls_011-8a.8}
+  - {type: 'tls:ann', offset: 181, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 181, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: uuid-fc10fb17-e8ef-47bc-90fb-17e8ef47bc50}
+  - {type: punctuation, offset: 183, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 183, content: '', id: KR1h0004_tls_011-8a.9}
+  - {type: 'tls:ann', offset: 183, content: 槨 n, id: ''}
+  - {type: 'tls:ann', offset: 184, content: 棺 n, id: ''}
+  - {type: 'tls:ann', offset: 185, content: 而 padV1.postV2, id: ''}
+  - {type: punctuation, offset: 188, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 188, content: '', id: KR1h0004_tls_011-8a.10}
+  - {type: 'tls:ann', offset: 190, content: 徒 vadV, id: ''}
+  - {type: 'tls:ann', offset: 193, content: 為 vttoN1.+N2, id: ''}
+  - {type: punctuation, offset: 196, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 196, content: '', id: KR1h0004_tls_011-8a.11}
+  - {type: punctuation, offset: 203, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 203, content: '', id: KR1h0004_tls_011-9a.1}
+  - {type: 'tls:ann', offset: 207, content: 也 ppostadS, id: uuid-0b59dcc2-13d6-4261-99dc-c213d69261f2}
+  - {type: punctuation, offset: 208, content: 。, id: ''}
+  - {type: punctuation, offset: 208, content: 」, id: ''}
+  - {type: paragraph-break, offset: 208, content: '', id: ''}
+  - {type: paragraph-break, offset: 208, content: '', id: ''}
+  - {type: 'tls:seg', offset: 208, content: '', id: KR1h0004_tls_011-9a.2}
+  - {type: punctuation, offset: 211, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 211, content: '', id: KR1h0004_tls_011-9a.3}
+  - {type: punctuation, offset: 213, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 213, content: '', id: KR1h0004_tls_011-9a.4}
+  - {type: punctuation, offset: 213, content: 「, id: ''}
+  - {type: punctuation, offset: 214, content: ！, id: ''}
+  - {type: 'tls:seg', offset: 214, content: '', id: KR1h0004_tls_011-9a.5}
+  - {type: 'tls:ann', offset: 214, content: 噫 vi0, id: ''}
+  - {type: 'tls:ann', offset: 214, content: 天 nab, id: ''}
+  - {type: 'tls:ann', offset: 215, content: 喪 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 216, content: 予 npro.postVt, id: ''}
+  - {type: punctuation, offset: 217, content: ！, id: ''}
+  - {type: 'tls:seg', offset: 217, content: '', id: KR1h0004_tls_011-10a.1}
+  - {type: punctuation, offset: 220, content: ！, id: ''}
+  - {type: punctuation, offset: 220, content: 」, id: ''}
+  - {type: paragraph-break, offset: 220, content: '', id: ''}
+  - {type: paragraph-break, offset: 220, content: '', id: ''}
+  - {type: 'tls:seg', offset: 220, content: '', id: KR1h0004_tls_011-10a.2}
+  - {type: punctuation, offset: 223, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 223, content: '', id: KR1h0004_tls_011-10a.3}
+  - {type: 'tls:ann', offset: 224, content: 哭 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 226, content: 慟 vi, id: uuid-525d3c3b-0032-4617-9d3c-3b00324617e8}
+  - {type: punctuation, offset: 227, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 227, content: '', id: KR1h0004_tls_011-10a.4}
+  - {type: 'tls:ann', offset: 227, content: '從者 NP{vad.npro}', id: ''}
+  - {type: 'tls:ann', offset: 228, content: 者 npro.post-V, id: ''}
+  - {type: punctuation, offset: 230, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 230, content: '', id: KR1h0004_tls_011-10a.5}
+  - {type: punctuation, offset: 230, content: 「, id: ''}
+  - {type: punctuation, offset: 233, content: ！, id: ''}
+  - {type: punctuation, offset: 233, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 233, content: '', id: KR1h0004_tls_011-10a.6}
+  - {type: 'tls:ann', offset: 233, content: 矣 ppostadS, id: uuid-fbadcad8-20a4-433c-adca-d820a4133ca6}
+  - {type: 'tls:ann', offset: 233, content: 矣 ppostadS, id: uuid-7cb0f565-34ea-458e-b0f5-6534eaf58e86}
+  - {type: punctuation, offset: 234, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 234, content: '', id: KR1h0004_tls_011-10a.7}
+  - {type: punctuation, offset: 234, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 235, content: 有 vadV, id: ''}
+  - {type: 'tls:ann', offset: 236, content: 慟 vi, id: ''}
+  - {type: punctuation, offset: 237, content: ？, id: ''}
+  - {type: 'tls:seg', offset: 237, content: '', id: KR1h0004_tls_011-11a.1}
+  - {type: 'tls:ann', offset: 237, content: 乎 ppostadS, id: uuid-3cf8d984-3c1e-4ab7-b8d9-843c1e6ab713}
+  - {type: 'tls:ann', offset: 238, content: 夫 npro.adN, id: ''}
+  - {type: 'tls:ann', offset: 242, content: 慟 vi, id: ''}
+  - {type: 'tls:ann', offset: 243, content: 而 padV.post-S, id: ''}
+  - {type: 'tls:ann', offset: 244, content: '誰 npro{OBJ}+Vt', id: ''}
+  - {type: punctuation, offset: 246, content: ？, id: ''}
+  - {type: punctuation, offset: 246, content: 」, id: ''}
+  - {type: paragraph-break, offset: 246, content: '', id: ''}
+  - {type: paragraph-break, offset: 246, content: '', id: ''}
+  - {type: 'tls:seg', offset: 246, content: '', id: KR1h0004_tls_011-11a.2}
+  - {type: punctuation, offset: 249, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 249, content: '', id: KR1h0004_tls_011-11a.3}
+  - {type: 'tls:ann', offset: 249, content: 門人 NP(.post-N), id: uuid-b786de41-dd67-4d0b-86de-41dd674d0bc0}
+  - {type: 'tls:ann', offset: 251, content: '欲 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 252, content: 厚 vadV, id: ''}
+  - {type: 'tls:ann', offset: 253, content: 葬 vtoN, id: ''}
+  - {type: punctuation, offset: 255, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 255, content: '', id: KR1h0004_tls_011-11a.4}
+  - {type: punctuation, offset: 257, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 257, content: '', id: KR1h0004_tls_011-12a.1}
+  - {type: punctuation, offset: 257, content: 「, id: ''}
+  - {type: punctuation, offset: 259, content: 。, id: ''}
+  - {type: punctuation, offset: 259, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 259, content: '', id: KR1h0004_tls_011-12a.2}
+  - {type: 'tls:ann', offset: 259, content: 可 vi, id: ''}
+  - {type: 'tls:ann', offset: 259, content: 門人 NPpost-N, id: ''}
+  - {type: punctuation, offset: 264, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 264, content: '', id: KR1h0004_tls_011-12a.3}
+  - {type: punctuation, offset: 266, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 266, content: '', id: KR1h0004_tls_011-12a.4}
+  - {type: punctuation, offset: 266, content: 「, id: ''}
+  - {type: 'tls:seg', offset: 268, content: '', id: KR1h0004_tls_011-12a.5}
+  - {type: 'tls:ann', offset: 268, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 268, content: 視 vttoN1+.vtoN2, id: ''}
+  - {type: 'tls:ann', offset: 269, content: 予 npro.postVt, id: ''}
+  - {type: 'tls:ann', offset: 272, content: 也 ppostadS, id: uuid-f17e56eb-bba4-4079-be56-ebbba49079e1}
+  - {type: punctuation, offset: 273, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 273, content: '', id: KR1h0004_tls_011-12a.6}
+  - {type: 'tls:ann', offset: 273, content: '予 npro+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 276, content: 視 vttoN1.+prep+N2, id: ''}
+  - {type: 'tls:ann', offset: 279, content: 也 ppostadS, id: uuid-80de4fd4-4f0d-4069-9e4f-d44f0dc069a2}
+  - {type: punctuation, offset: 280, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 280, content: '', id: KR1h0004_tls_011-12a.7}
+  - {type: 'tls:ann', offset: 282, content: '也 ppostadN{PRED}', id: uuid-3be9e1dc-5a40-4a7a-a9e1-dc5a401a7a8e}
+  - {type: 'tls:ann', offset: 282, content: '也 ppostad.npro{PRED}', id: uuid-257791f9-fc23-4884-b791-f9fc23788488}
+  - {type: punctuation, offset: 283, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 283, content: '', id: KR1h0004_tls_011-13a.1}
+  - {type: 'tls:ann', offset: 283, content: 夫 npro.adN, id: ''}
+  - {type: 'tls:ann', offset: 284, content: 二三子 NP, id: ''}
+  - {type: 'tls:ann', offset: 287, content: '也 ppostadN{PRED}', id: uuid-65c16e00-350d-453c-816e-00350d653c0a}
+  - {type: 'tls:ann', offset: 287, content: '也 ppostadN{PRED}', id: uuid-efab6b7f-b067-4c0a-ab6b-7fb0678c0a52}
+  - {type: punctuation, offset: 288, content: 。, id: ''}
+  - {type: punctuation, offset: 288, content: 」, id: ''}
+  - {type: paragraph-break, offset: 288, content: '', id: ''}
+  - {type: paragraph-break, offset: 288, content: '', id: ''}
+  - {type: 'tls:seg', offset: 288, content: '', id: KR1h0004_tls_011-13a.2}
+  - {type: punctuation, offset: 294, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 294, content: '', id: KR1h0004_tls_011-13a.3}
+  - {type: 'tls:ann', offset: 295, content: 問 vtoN, id: ''}
+  - {type: punctuation, offset: 296, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 296, content: '', id: KR1h0004_tls_011-13a.4}
+  - {type: punctuation, offset: 296, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 296, content: 事 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 297, content: '鬼神 NP{N1&N2}', id: ''}
+  - {type: 'tls:ann', offset: 297, content: 未 padV, id: ''}
+  - {type: 'tls:ann', offset: 298, content: '能 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 299, content: 事 vtoN, id: ''}
+  - {type: punctuation, offset: 300, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 300, content: '', id: KR1h0004_tls_011-14a.1}
+  - {type: 'tls:ann', offset: 300, content: 焉 padV, id: ''}
+  - {type: 'tls:ann', offset: 303, content: 鬼 n, id: ''}
+  - {type: punctuation, offset: 304, content: ？, id: ''}
+  - {type: punctuation, offset: 304, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 304, content: '', id: KR1h0004_tls_011-14a.2}
+  - {type: punctuation, offset: 305, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 305, content: '', id: KR1h0004_tls_011-14a.3}
+  - {type: punctuation, offset: 305, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 306, content: '敢 vt+V[0]', id: ''}
+  - {type: punctuation, offset: 308, content: 。, id: ''}
+  - {type: punctuation, offset: 308, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 308, content: '', id: KR1h0004_tls_011-14a.4}
+  - {type: 'tls:ann', offset: 308, content: '死 v[adN]', id: ''}
+  - {type: punctuation, offset: 309, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 309, content: '', id: KR1h0004_tls_011-14a.5}
+  - {type: punctuation, offset: 309, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 311, content: 知 vtoN, id: ''}
+  - {type: punctuation, offset: 312, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 312, content: '', id: KR1h0004_tls_011-15a.1}
+  - {type: 'tls:ann', offset: 312, content: '生 v[adN]', id: ''}
+  - {type: 'tls:ann', offset: 312, content: 焉 padV, id: ''}
+  - {type: punctuation, offset: 315, content: ？, id: ''}
+  - {type: punctuation, offset: 315, content: 」, id: ''}
+  - {type: paragraph-break, offset: 315, content: '', id: ''}
+  - {type: paragraph-break, offset: 315, content: '', id: ''}
+  - {type: 'tls:seg', offset: 315, content: '', id: KR1h0004_tls_011-15a.2}
+  - {type: punctuation, offset: 319, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 319, content: '', id: KR1h0004_tls_011-15a.3}
+  - {type: 'tls:ann', offset: 319, content: 誾誾 VPi, id: ''}
+  - {type: 'tls:ann', offset: 322, content: 侍 vi, id: ''}
+  - {type: 'tls:ann', offset: 322, content: 也 ppostadS, id: uuid-cdfc076e-9e41-4cf7-bc07-6e9e410cf72d}
+  - {type: punctuation, offset: 323, content: ；, id: ''}
+  - {type: 'tls:seg', offset: 323, content: '', id: KR1h0004_tls_011-15a.4}
+  - {type: 'tls:ann', offset: 323, content: 側 npost-N, id: ''}
+  - {type: punctuation, offset: 325, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 325, content: '', id: KR1h0004_tls_011-15a.5}
+  - {type: 'tls:ann', offset: 325, content: 行 vi.red, id: ''}
+  - {type: 'tls:ann', offset: 328, content: 也 ppostadS, id: uuid-fa5acf42-ca27-4d3b-9acf-42ca27cd3b4a}
+  - {type: 'tls:ann', offset: 328, content: 也 ppostadS, id: uuid-610770b6-ffc7-4e50-8770-b6ffc71e50df}
+  - {type: punctuation, offset: 329, content: ；, id: ''}
+  - {type: 'tls:seg', offset: 329, content: '', id: KR1h0004_tls_011-15a.6}
+  - {type: punctuation, offset: 331, content: 、, id: ''}
+  - {type: punctuation, offset: 333, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 333, content: '', id: KR1h0004_tls_011-15a.7}
+  - {type: 'tls:ann', offset: 333, content: 侃侃 VPi, id: ''}
+  - {type: 'tls:ann', offset: 335, content: '如 vpostad:vi.red', id: ''}
+  - {type: punctuation, offset: 337, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 337, content: '', id: KR1h0004_tls_011-15a.8}
+  - {type: 'tls:ann', offset: 338, content: 樂 vi, id: ''}
+  - {type: punctuation, offset: 339, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 339, content: '', id: KR1h0004_tls_011-15a.9}
+  - {type: punctuation, offset: 339, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 340, content: 若 npro.adN, id: ''}
+  - {type: punctuation, offset: 342, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 342, content: '', id: KR1h0004_tls_011-16a.1}
+  - {type: 'tls:ann', offset: 342, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 342, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: uuid-fbff6322-8462-483c-bf63-228462483c16}
+  - {type: 'tls:ann', offset: 343, content: 得 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 344, content: 其 npro.adN, id: ''}
+  - {type: 'tls:ann', offset: 345, content: 死 nab, id: ''}
+  - {type: punctuation, offset: 347, content: 。, id: ''}
+  - {type: punctuation, offset: 347, content: 」, id: ''}
+  - {type: paragraph-break, offset: 347, content: '', id: ''}
+  - {type: paragraph-break, offset: 347, content: '', id: ''}
+  - {type: 'tls:seg', offset: 347, content: '', id: KR1h0004_tls_011-16a.2}
+  - {type: punctuation, offset: 352, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 352, content: '', id: KR1h0004_tls_011-16a.3}
+  - {type: 'tls:ann', offset: 354, content: 為 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 355, content: 長府 NPpr, id: ''}
+  - {type: punctuation, offset: 356, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 356, content: '', id: KR1h0004_tls_011-16a.4}
+  - {type: punctuation, offset: 356, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 356, content: 府 n, id: ''}
+  - {type: 'tls:ann', offset: 357, content: 仍 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 358, content: 舊 vadN, id: ''}
+  - {type: punctuation, offset: 359, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 359, content: '', id: KR1h0004_tls_011-16a.5}
+  - {type: 'tls:ann', offset: 359, content: 貫 nab, id: ''}
+  - {type: 'tls:ann', offset: 359, content: 如之何 VPi0, id: ''}
+  - {type: punctuation, offset: 362, content: ？, id: ''}
+  - {type: 'tls:seg', offset: 362, content: '', id: KR1h0004_tls_011-16a.6}
+  - {type: 'tls:ann', offset: 362, content: 何 npro.adV, id: ''}
+  - {type: 'tls:ann', offset: 362, content: '何必 VPt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 362, content: 何 npro.postV, id: ''}
+  - {type: 'tls:ann', offset: 363, content: '必 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 364, content: 改 vadV, id: ''}
+  - {type: punctuation, offset: 366, content: ？, id: ''}
+  - {type: punctuation, offset: 366, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 366, content: '', id: KR1h0004_tls_011-16a.7}
+  - {type: punctuation, offset: 368, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 368, content: '', id: KR1h0004_tls_011-16a.8}
+  - {type: punctuation, offset: 368, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 369, content: 夫 npro.adN, id: ''}
+  - {type: punctuation, offset: 372, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 372, content: '', id: KR1h0004_tls_011-17a.1}
+  - {type: 'tls:ann', offset: 372, content: '言 vt[oN]', id: ''}
+  - {type: 'tls:ann', offset: 373, content: 必 vadS1.post-S2, id: ''}
+  - {type: 'tls:ann', offset: 374, content: 有 vadV, id: ''}
+  - {type: 'tls:ann', offset: 375, content: 中 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 375, content: 中 vi, id: ''}
+  - {type: punctuation, offset: 376, content: 。, id: ''}
+  - {type: punctuation, offset: 376, content: 」, id: ''}
+  - {type: paragraph-break, offset: 376, content: '', id: ''}
+  - {type: paragraph-break, offset: 376, content: '', id: ''}
+  - {type: 'tls:seg', offset: 376, content: '', id: KR1h0004_tls_011-17a.2}
+  - {type: punctuation, offset: 378, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 378, content: '', id: KR1h0004_tls_011-17a.3}
+  - {type: punctuation, offset: 378, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 381, content: 瑟 n, id: ''}
+  - {type: 'tls:ann', offset: 382, content: 奚為 VPadV, id: ''}
+  - {type: 'tls:ann', offset: 384, content: 於 vtoN, id: ''}
+  - {type: punctuation, offset: 387, content: ？, id: ''}
+  - {type: punctuation, offset: 387, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 387, content: '', id: KR1h0004_tls_011-17a.4}
+  - {type: 'tls:ann', offset: 387, content: 門人 NPpost-N, id: ''}
+  - {type: 'tls:ann', offset: 389, content: 不敬 VPtoN, id: ''}
+  - {type: punctuation, offset: 393, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 393, content: '', id: KR1h0004_tls_011-17a.5}
+  - {type: punctuation, offset: 395, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 395, content: '', id: KR1h0004_tls_011-17a.6}
+  - {type: punctuation, offset: 395, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 397, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 397, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: uuid-ab9278aa-77a4-483f-9278-aa77a4483f5a}
+  - {type: 'tls:ann', offset: 398, content: 升 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 399, content: 堂 n, id: ''}
+  - {type: punctuation, offset: 400, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 400, content: '', id: KR1h0004_tls_011-18a.1}
+  - {type: 'tls:ann', offset: 401, content: 入 vt+prep+N, id: ''}
+  - {type: 'tls:ann', offset: 401, content: '於 vt[0]oN.postadV', id: uuid-113bfef8-0a41-41bc-bbfe-f80a41d1bc22}
+  - {type: 'tls:ann', offset: 403, content: 室 n, id: ''}
+  - {type: 'tls:ann', offset: 404, content: 也 ppostadS1.postS2, id: uuid-f41cff6a-e544-4425-9cff-6ae544f425dd}
+  - {type: punctuation, offset: 405, content: 。, id: ''}
+  - {type: punctuation, offset: 405, content: 」, id: ''}
+  - {type: paragraph-break, offset: 405, content: '', id: ''}
+  - {type: paragraph-break, offset: 405, content: '', id: ''}
+  - {type: 'tls:seg', offset: 405, content: '', id: KR1h0004_tls_011-18a.2}
+  - {type: punctuation, offset: 408, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 408, content: '', id: KR1h0004_tls_011-18a.3}
+  - {type: punctuation, offset: 408, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 410, content: '與 vtoN1.postN2:+S', id: ''}
+  - {type: 'tls:ann', offset: 412, content: 問 vtoS, id: ''}
+  - {type: 'tls:ann', offset: 412, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 413, content: 孰 npro, id: ''}
+  - {type: punctuation, offset: 414, content: ？, id: ''}
+  - {type: punctuation, offset: 414, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 414, content: '', id: KR1h0004_tls_011-18a.4}
+  - {type: 'tls:ann', offset: 414, content: 賢 vt+prep+N, id: ''}
+  - {type: punctuation, offset: 416, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 416, content: '', id: KR1h0004_tls_011-18a.5}
+  - {type: punctuation, offset: 416, content: 「, id: ''}
+  - {type: punctuation, offset: 419, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 419, content: '', id: KR1h0004_tls_011-19a.1}
+  - {type: 'tls:ann', offset: 419, content: 過 vi, id: ''}
+  - {type: 'tls:ann', offset: 420, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 422, content: 及 vi, id: ''}
+  - {type: punctuation, offset: 423, content: 。, id: ''}
+  - {type: punctuation, offset: 423, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 423, content: '', id: KR1h0004_tls_011-19a.2}
+  - {type: punctuation, offset: 424, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 424, content: '', id: KR1h0004_tls_011-19a.3}
+  - {type: punctuation, offset: 424, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 424, content: 歟 ppostadS, id: uuid-acba057a-a4fa-4820-890c-bb9162f58c3a}
+  - {type: 'tls:ann', offset: 428, content: 愈 vi, id: ''}
+  - {type: punctuation, offset: 429, content: ？, id: ''}
+  - {type: punctuation, offset: 429, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 429, content: '', id: KR1h0004_tls_011-19a.4}
+  - {type: punctuation, offset: 431, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 431, content: '', id: KR1h0004_tls_011-20a.1}
+  - {type: punctuation, offset: 431, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 432, content: 過 vi, id: ''}
+  - {type: 'tls:ann', offset: 433, content: 猶 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 434, content: 不及 VPi, id: ''}
+  - {type: punctuation, offset: 435, content: 。, id: ''}
+  - {type: punctuation, offset: 435, content: 」, id: ''}
+  - {type: paragraph-break, offset: 435, content: '', id: ''}
+  - {type: paragraph-break, offset: 435, content: '', id: ''}
+  - {type: 'tls:seg', offset: 435, content: '', id: KR1h0004_tls_011-20a.2}
+  - {type: punctuation, offset: 441, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 441, content: '', id: KR1h0004_tls_011-20a.3}
+  - {type: 'tls:ann', offset: 441, content: 而 padV1.postV2, id: ''}
+  - {type: 'tls:ann', offset: 442, content: 富 vt+prep+N, id: ''}
+  - {type: 'tls:ann', offset: 443, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 444, content: 為 vtoN.adV, id: ''}
+  - {type: 'tls:ann', offset: 446, content: 聚斂 VPi, id: ''}
+  - {type: 'tls:ann', offset: 449, content: 附 vadV, id: ''}
+  - {type: 'tls:ann', offset: 450, content: 益 vtoN, id: ''}
+  - {type: punctuation, offset: 452, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 452, content: '', id: KR1h0004_tls_011-20a.4}
+  - {type: punctuation, offset: 454, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 454, content: '', id: KR1h0004_tls_011-20a.5}
+  - {type: punctuation, offset: 454, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 457, content: 徒 npost-N, id: ''}
+  - {type: punctuation, offset: 458, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 458, content: '', id: KR1h0004_tls_011-20a.6}
+  - {type: 'tls:ann', offset: 458, content: '小子 NP{vadN}', id: ''}
+  - {type: 'tls:ann', offset: 460, content: 鳴 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 460, content: 鳴鼓 VPi, id: ''}
+  - {type: 'tls:ann', offset: 461, content: 鼓 n, id: ''}
+  - {type: 'tls:ann', offset: 462, content: 而 padV1.postV2, id: ''}
+  - {type: 'tls:ann', offset: 463, content: 攻 vtoN, id: ''}
+  - {type: punctuation, offset: 465, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 465, content: '', id: KR1h0004_tls_011-21a.1}
+  - {type: 'tls:ann', offset: 465, content: 可 vi, id: ''}
+  - {type: 'tls:ann', offset: 466, content: 也 ppostadS, id: ''}
+  - {type: 'tls:ann', offset: 466, content: 也 ppostadS, id: uuid-97a962b9-bf0b-418a-a962-b9bf0b618a74}
+  - {type: punctuation, offset: 467, content: 。, id: ''}
+  - {type: punctuation, offset: 467, content: 」, id: ''}
+  - {type: paragraph-break, offset: 467, content: '', id: ''}
+  - {type: paragraph-break, offset: 467, content: '', id: ''}
+  - {type: 'tls:seg', offset: 467, content: '', id: KR1h0004_tls_011-21a.2}
+  - {type: punctuation, offset: 470, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 470, content: '', id: KR1h0004_tls_011-21a.3}
+  - {type: 'tls:ann', offset: 471, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 471, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: uuid-e1a255d8-7f37-4606-a255-d87f37660628}
+  - {type: 'tls:ann', offset: 472, content: 魯 vi, id: ''}
+  - {type: punctuation, offset: 473, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 473, content: '', id: KR1h0004_tls_011-21a.4}
+  - {type: 'tls:ann', offset: 473, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 473, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: uuid-6e758024-efca-4832-b580-24efca883221}
+  - {type: 'tls:ann', offset: 474, content: 愚 vi, id: ''}
+  - {type: 'tls:ann', offset: 474, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 474, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: uuid-a0233313-9f32-47db-a333-139f3217dbd5}
+  - {type: 'tls:ann', offset: 475, content: 僻 vi, id: uuid-cf5e8a81-a3c3-4308-9e8a-81a3c35308e7}
+  - {type: punctuation, offset: 476, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 476, content: '', id: KR1h0004_tls_011-21a.5}
+  - {type: 'tls:ann', offset: 476, content: 唁 vi, id: ''}
+  - {type: 'tls:ann', offset: 477, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: punctuation, offset: 479, content: 。, id: ''}
+  - {type: paragraph-break, offset: 479, content: '', id: ''}
+  - {type: paragraph-break, offset: 479, content: '', id: ''}
+  - {type: 'tls:seg', offset: 479, content: '', id: KR1h0004_tls_011-22a.1}
+  - {type: 'tls:seg', offset: 479, content: '', id: KR1h0004_tls_011-22a.2}
+  - {type: punctuation, offset: 481, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 481, content: '', id: KR1h0004_tls_011-22a.3}
+  - {type: punctuation, offset: 481, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 483, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 483, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: uuid-9660be79-2925-4c79-a0be-792925ec795d}
+  - {type: 'tls:ann', offset: 484, content: 其 padV, id: ''}
+  - {type: 'tls:ann', offset: 485, content: 庶 vi, id: ''}
+  - {type: punctuation, offset: 486, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 486, content: '', id: KR1h0004_tls_011-22a.4}
+  - {type: 'tls:ann', offset: 486, content: 乎 ppostadS, id: ''}
+  - {type: 'tls:ann', offset: 486, content: 屢 vadV, id: ''}
+  - {type: 'tls:ann', offset: 486, content: 乎 ppostadS, id: uuid-c101f151-3331-4e4f-81f1-5133311e4f27}
+  - {type: 'tls:ann', offset: 487, content: 空 vi, id: ''}
+  - {type: punctuation, offset: 488, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 488, content: '', id: KR1h0004_tls_011-22a.5}
+  - {type: 'tls:ann', offset: 490, content: 受 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 491, content: 命 nab, id: ''}
+  - {type: punctuation, offset: 492, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 492, content: '', id: KR1h0004_tls_011-22a.6}
+  - {type: 'tls:ann', offset: 492, content: 而 padV1.postV2, id: ''}
+  - {type: 'tls:ann', offset: 493, content: 貨 nm, id: ''}
+  - {type: 'tls:ann', offset: 494, content: 殖 vi, id: ''}
+  - {type: punctuation, offset: 496, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 496, content: '', id: KR1h0004_tls_011-23a.1}
+  - {type: 'tls:ann', offset: 496, content: 億 vi, id: ''}
+  - {type: 'tls:ann', offset: 498, content: 屢 vadV, id: ''}
+  - {type: 'tls:ann', offset: 499, content: 中 vi, id: ''}
+  - {type: punctuation, offset: 500, content: 。, id: ''}
+  - {type: punctuation, offset: 500, content: 」, id: ''}
+  - {type: paragraph-break, offset: 500, content: '', id: ''}
+  - {type: paragraph-break, offset: 500, content: '', id: ''}
+  - {type: 'tls:seg', offset: 500, content: '', id: KR1h0004_tls_011-23a.2}
+  - {type: punctuation, offset: 507, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 507, content: '', id: KR1h0004_tls_011-23a.3}
+  - {type: 'tls:ann', offset: 507, content: 問 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 508, content: 善 vadN, id: ''}
+  - {type: punctuation, offset: 509, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 509, content: '', id: KR1h0004_tls_011-23a.4}
+  - {type: punctuation, offset: 509, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 509, content: 跡 npost-N, id: ''}
+  - {type: 'tls:ann', offset: 511, content: 踐 vtoN, id: ''}
+  - {type: punctuation, offset: 512, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 512, content: '', id: KR1h0004_tls_011-24a.1}
+  - {type: 'tls:ann', offset: 512, content: 亦 padV, id: ''}
+  - {type: 'tls:ann', offset: 514, content: 入 vt+prep+N, id: ''}
+  - {type: 'tls:ann', offset: 514, content: '於 vt[0]oN.postadV', id: uuid-e20ffd97-1b0d-4888-8ffd-971b0da888ac}
+  - {type: 'tls:ann', offset: 516, content: 室 n, id: ''}
+  - {type: punctuation, offset: 517, content: 。, id: ''}
+  - {type: punctuation, offset: 517, content: 」, id: ''}
+  - {type: paragraph-break, offset: 517, content: '', id: ''}
+  - {type: paragraph-break, offset: 517, content: '', id: ''}
+  - {type: 'tls:seg', offset: 517, content: '', id: KR1h0004_tls_011-24a.2}
+  - {type: punctuation, offset: 519, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 519, content: '', id: KR1h0004_tls_011-24a.3}
+  - {type: punctuation, offset: 519, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 520, content: 論 nab, id: ''}
+  - {type: 'tls:ann', offset: 521, content: 篤 vi, id: ''}
+  - {type: 'tls:ann', offset: 522, content: 是 vi, id: ''}
+  - {type: punctuation, offset: 523, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 523, content: '', id: KR1h0004_tls_011-24a.4}
+  - {type: 'tls:ann', offset: 523, content: 君子 VPi, id: ''}
+  - {type: 'tls:ann', offset: 525, content: '者 npro.post-N{PRED}', id: uuid-ed036a82-7f50-4342-814f-97ee77385fc0}
+  - {type: 'tls:ann', offset: 526, content: '乎 ppostadN{PRED}', id: uuid-a532deb8-7d82-4243-b2de-b87d82e24319}
+  - {type: punctuation, offset: 527, content: ？, id: ''}
+  - {type: 'tls:seg', offset: 527, content: '', id: KR1h0004_tls_011-25a.1}
+  - {type: 'tls:ann', offset: 527, content: 色 nab, id: ''}
+  - {type: 'tls:ann', offset: 528, content: 莊 vi, id: ''}
+  - {type: 'tls:ann', offset: 529, content: '者 npro.post-N{PRED}', id: uuid-97fce603-bc92-44fc-9dcf-28c188262e5a}
+  - {type: 'tls:ann', offset: 530, content: '乎 ppostadN{PRED}', id: uuid-b5f44331-ab31-4c81-b443-31ab314c8189}
+  - {type: punctuation, offset: 531, content: ？, id: ''}
+  - {type: punctuation, offset: 531, content: 」, id: ''}
+  - {type: paragraph-break, offset: 531, content: '', id: ''}
+  - {type: paragraph-break, offset: 531, content: '', id: ''}
+  - {type: 'tls:seg', offset: 531, content: '', id: KR1h0004_tls_011-25a.2}
+  - {type: punctuation, offset: 534, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 534, content: '', id: KR1h0004_tls_011-25a.3}
+  - {type: punctuation, offset: 534, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 536, content: '斯 npro.adS1:postS2', id: ''}
+  - {type: punctuation, offset: 538, content: ？, id: ''}
+  - {type: punctuation, offset: 538, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 538, content: '', id: KR1h0004_tls_011-25a.4}
+  - {type: 'tls:ann', offset: 538, content: 問 vtoS, id: ''}
+  - {type: 'tls:ann', offset: 538, content: 諸 ppostadS, id: uuid-ccbd917c-52cc-4591-bd91-7c52cc1591c7}
+  - {type: punctuation, offset: 540, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 540, content: '', id: KR1h0004_tls_011-25a.5}
+  - {type: punctuation, offset: 540, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 542, content: 父兄 NP, id: ''}
+  - {type: 'tls:ann', offset: 543, content: '兄 n[post-N]', id: ''}
+  - {type: punctuation, offset: 544, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 544, content: '', id: KR1h0004_tls_011-26a.1}
+  - {type: 'tls:ann', offset: 544, content: 在 vi, id: ''}
+  - {type: 'tls:ann', offset: 546, content: 何 npro.postV, id: ''}
+  - {type: 'tls:ann', offset: 548, content: 聞 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 549, content: '斯 npro.adS1:postS2', id: ''}
+  - {type: 'tls:ann', offset: 550, content: 行 vtoN, id: ''}
+  - {type: punctuation, offset: 552, content: ？, id: ''}
+  - {type: punctuation, offset: 552, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 552, content: '', id: KR1h0004_tls_011-26a.2}
+  - {type: punctuation, offset: 555, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 555, content: '', id: KR1h0004_tls_011-26a.3}
+  - {type: punctuation, offset: 555, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 557, content: '斯 npro.adS1:postS2', id: ''}
+  - {type: punctuation, offset: 559, content: ？, id: ''}
+  - {type: punctuation, offset: 559, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 559, content: '', id: KR1h0004_tls_011-26a.4}
+  - {type: punctuation, offset: 561, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 561, content: '', id: KR1h0004_tls_011-27a.1}
+  - {type: punctuation, offset: 561, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 563, content: '斯 npro.adS1:postS2', id: ''}
+  - {type: punctuation, offset: 565, content: 。, id: ''}
+  - {type: punctuation, offset: 565, content: 」, id: ''}
+  - {type: paragraph-break, offset: 565, content: '', id: ''}
+  - {type: paragraph-break, offset: 565, content: '', id: ''}
+  - {type: 'tls:seg', offset: 565, content: '', id: KR1h0004_tls_011-27a.2}
+  - {type: punctuation, offset: 569, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 569, content: '', id: KR1h0004_tls_011-27a.3}
+  - {type: punctuation, offset: 569, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 571, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:seg', offset: 572, content: '', id: KR1h0004_tls_011-27a.4}
+  - {type: punctuation, offset: 572, content: 『, id: ''}
+  - {type: 'tls:ann', offset: 572, content: 問 vtoS, id: ''}
+  - {type: 'tls:ann', offset: 574, content: '斯 npro.adS1:postS2', id: ''}
+  - {type: punctuation, offset: 576, content: 』, id: ''}
+  - {type: punctuation, offset: 576, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 576, content: '', id: KR1h0004_tls_011-27a.5}
+  - {type: punctuation, offset: 578, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 578, content: '', id: KR1h0004_tls_011-27a.6}
+  - {type: punctuation, offset: 578, content: 『, id: ''}
+  - {type: 'tls:ann', offset: 580, content: 父兄 NP, id: ''}
+  - {type: 'tls:ann', offset: 581, content: '兄 n[post-N]', id: ''}
+  - {type: punctuation, offset: 582, content: 』, id: ''}
+  - {type: punctuation, offset: 582, content: ；, id: ''}
+  - {type: 'tls:seg', offset: 582, content: '', id: KR1h0004_tls_011-27a.7}
+  - {type: 'tls:ann', offset: 582, content: 在 vi, id: ''}
+  - {type: 'tls:ann', offset: 583, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 584, content: 問 vt(oS), id: ''}
+  - {type: 'tls:seg', offset: 585, content: '', id: KR1h0004_tls_011-27a.8}
+  - {type: punctuation, offset: 585, content: 『, id: ''}
+  - {type: 'tls:ann', offset: 587, content: '斯 npro.adS1:postS2', id: ''}
+  - {type: punctuation, offset: 589, content: 』, id: ''}
+  - {type: punctuation, offset: 589, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 589, content: '', id: KR1h0004_tls_011-27a.9}
+  - {type: punctuation, offset: 591, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 591, content: '', id: KR1h0004_tls_011-27a.10}
+  - {type: punctuation, offset: 591, content: 『, id: ''}
+  - {type: 'tls:ann', offset: 593, content: '斯 npro.adS1:postS2', id: ''}
+  - {type: punctuation, offset: 595, content: 』, id: ''}
+  - {type: punctuation, offset: 595, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 595, content: '', id: KR1h0004_tls_011-27a.11}
+  - {type: punctuation, offset: 598, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 598, content: '', id: KR1h0004_tls_011-27a.12}
+  - {type: 'tls:ann', offset: 598, content: '敢 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 599, content: 問 vt(oS), id: ''}
+  - {type: punctuation, offset: 600, content: 。, id: ''}
+  - {type: punctuation, offset: 600, content: 」, id: ''}
+  - {type: paragraph-break, offset: 600, content: '', id: ''}
+  - {type: paragraph-break, offset: 600, content: '', id: ''}
+  - {type: 'tls:seg', offset: 600, content: '', id: KR1h0004_tls_011-27a.13}
+  - {type: punctuation, offset: 602, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 602, content: '', id: KR1h0004_tls_011-27a.14}
+  - {type: punctuation, offset: 602, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 604, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: punctuation, offset: 605, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 605, content: '', id: KR1h0004_tls_011-27a.15}
+  - {type: 'tls:ann', offset: 605, content: 退 vi, id: ''}
+  - {type: 'tls:ann', offset: 606, content: 進 vtoN, id: ''}
+  - {type: punctuation, offset: 608, content: ；, id: ''}
+  - {type: 'tls:seg', offset: 608, content: '', id: KR1h0004_tls_011-27a.16}
+  - {type: punctuation, offset: 612, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 612, content: '', id: KR1h0004_tls_011-28a.1}
+  - {type: 'tls:ann', offset: 613, content: 退 vtoN, id: ''}
+  - {type: punctuation, offset: 615, content: 。, id: ''}
+  - {type: punctuation, offset: 615, content: 」, id: ''}
+  - {type: paragraph-break, offset: 615, content: '', id: ''}
+  - {type: paragraph-break, offset: 615, content: '', id: ''}
+  - {type: 'tls:seg', offset: 615, content: '', id: KR1h0004_tls_011-28a.2}
+  - {type: 'tls:ann', offset: 616, content: '於 vt[0]oN.postadV', id: uuid-b95aec8c-0bf0-4938-9aec-8c0bf079383b}
+  - {type: punctuation, offset: 619, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 619, content: '', id: KR1h0004_tls_011-28a.3}
+  - {type: 'tls:ann', offset: 621, content: 畏 vi, id: ''}
+  - {type: 'tls:ann', offset: 621, content: 後 vi, id: ''}
+  - {type: punctuation, offset: 622, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 622, content: '', id: KR1h0004_tls_011-28a.4}
+  - {type: punctuation, offset: 624, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 624, content: '', id: KR1h0004_tls_011-28a.5}
+  - {type: punctuation, offset: 624, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 624, content: 汝 npro, id: ''}
+  - {type: 'tls:ann', offset: 629, content: 死 vi, id: ''}
+  - {type: punctuation, offset: 630, content: 。, id: ''}
+  - {type: punctuation, offset: 630, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 630, content: '', id: KR1h0004_tls_011-28a.6}
+  - {type: 'tls:ann', offset: 630, content: 矣 ppostadS, id: uuid-fb4364b5-9816-462f-8364-b59816d62fce}
+  - {type: punctuation, offset: 631, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 631, content: '', id: KR1h0004_tls_011-28a.7}
+  - {type: punctuation, offset: 631, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 632, content: 子 npro, id: ''}
+  - {type: punctuation, offset: 633, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 633, content: '', id: KR1h0004_tls_011-29a.1}
+  - {type: 'tls:ann', offset: 633, content: 在 vi, id: ''}
+  - {type: 'tls:ann', offset: 634, content: 何 npro.adV, id: ''}
+  - {type: 'tls:ann', offset: 635, content: '敢 vt+V[0]', id: ''}
+  - {type: punctuation, offset: 637, content: ？, id: ''}
+  - {type: punctuation, offset: 637, content: 」, id: ''}
+  - {type: paragraph-break, offset: 637, content: '', id: ''}
+  - {type: paragraph-break, offset: 637, content: '', id: ''}
+  - {type: 'tls:seg', offset: 637, content: '', id: KR1h0004_tls_011-29a.2}
+  - {type: punctuation, offset: 641, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 641, content: '', id: KR1h0004_tls_011-29a.3}
+  - {type: punctuation, offset: 641, content: 「, id: ''}
+  - {type: punctuation, offset: 643, content: 、, id: ''}
+  - {type: 'tls:ann', offset: 645, content: 問 vtoS, id: ''}
+  - {type: 'tls:ann', offset: 648, content: '謂 vt[0].+V[0]', id: ''}
+  - {type: punctuation, offset: 650, content: ？, id: ''}
+  - {type: punctuation, offset: 650, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 650, content: '', id: KR1h0004_tls_011-29a.4}
+  - {type: 'tls:ann', offset: 651, content: 與 ppostadS, id: uuid-3801048f-4632-40a5-8104-8f463200a58c}
+  - {type: punctuation, offset: 652, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 652, content: '', id: KR1h0004_tls_011-29a.5}
+  - {type: punctuation, offset: 652, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 654, content: 以 vtoN.adV, id: ''}
+  - {type: 'tls:ann', offset: 655, content: 子 npro, id: uuid-a0870e83-a332-41a0-870e-83a33291a08f}
+  - {type: 'tls:ann', offset: 657, content: 異 n, id: ''}
+  - {type: punctuation, offset: 659, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 659, content: '', id: KR1h0004_tls_011-29a.6}
+  - {type: 'tls:ann', offset: 659, content: 問 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 661, content: '與 vtoN1.postN2:+S', id: ''}
+  - {type: punctuation, offset: 665, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 665, content: '', id: KR1h0004_tls_011-29a.7}
+  - {type: punctuation, offset: 670, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 670, content: '', id: KR1h0004_tls_011-29a.8}
+  - {type: 'tls:ann', offset: 670, content: 以 vtoN.adV, id: ''}
+  - {type: 'tls:ann', offset: 672, content: 事 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 673, content: '君 n[post-N]', id: ''}
+  - {type: punctuation, offset: 674, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 674, content: '', id: KR1h0004_tls_011-29a.9}
+  - {type: 'tls:ann', offset: 675, content: 可 vi, id: ''}
+  - {type: 'tls:ann', offset: 677, content: 止 vi, id: ''}
+  - {type: punctuation, offset: 678, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 678, content: '', id: KR1h0004_tls_011-29a.10}
+  - {type: 'tls:ann', offset: 678, content: 今 nadSS, id: ''}
+  - {type: 'tls:ann', offset: 680, content: '與 vtoN1.postN2:+S', id: ''}
+  - {type: 'tls:ann', offset: 682, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: uuid-f212d95a-a651-4917-92d9-5aa651b9170c}
+  - {type: punctuation, offset: 683, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 683, content: '', id: KR1h0004_tls_011-30a.1}
+  - {type: 'tls:ann', offset: 687, content: 矣 ppostadS, id: uuid-cfa48c87-df12-47aa-a48c-87df1277aa62}
+  - {type: punctuation, offset: 688, content: 。, id: ''}
+  - {type: punctuation, offset: 688, content: 」, id: ''}
+  - {type: paragraph-break, offset: 688, content: '', id: ''}
+  - {type: paragraph-break, offset: 688, content: '', id: ''}
+  - {type: 'tls:seg', offset: 688, content: '', id: KR1h0004_tls_011-30a.2}
+  - {type: punctuation, offset: 689, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 689, content: '', id: KR1h0004_tls_011-30a.3}
+  - {type: punctuation, offset: 689, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 690, content: 然則 PPadS1.postS2, id: ''}
+  - {type: 'tls:ann', offset: 692, content: 從 vtoNab, id: ''}
+  - {type: 'tls:ann', offset: 694, content: 者 npro.post-V, id: ''}
+  - {type: punctuation, offset: 695, content: ？, id: ''}
+  - {type: punctuation, offset: 695, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 695, content: '', id: KR1h0004_tls_011-30a.4}
+  - {type: 'tls:ann', offset: 695, content: '與 ppostadN{PRED}', id: uuid-83deafa1-4029-4ff6-9eaf-a140294ff6e7}
+  - {type: punctuation, offset: 697, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 697, content: '', id: KR1h0004_tls_011-30a.5}
+  - {type: punctuation, offset: 697, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 698, content: 弒 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 699, content: '父 n[post-N]', id: ''}
+  - {type: 'tls:ann', offset: 700, content: 與 vtoN1.postN2, id: ''}
+  - {type: punctuation, offset: 701, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 701, content: '', id: KR1h0004_tls_011-31a.1}
+  - {type: 'tls:ann', offset: 701, content: '君 n[post-N]', id: ''}
+  - {type: 'tls:ann', offset: 701, content: 亦 padV, id: ''}
+  - {type: 'tls:ann', offset: 704, content: 也 ppostadS1.post-S2, id: uuid-7d61b1c4-0e07-4e40-a1b1-c40e07ee40a4}
+  - {type: punctuation, offset: 705, content: 。, id: ''}
+  - {type: punctuation, offset: 705, content: 」, id: ''}
+  - {type: paragraph-break, offset: 705, content: '', id: ''}
+  - {type: paragraph-break, offset: 705, content: '', id: ''}
+  - {type: 'tls:seg', offset: 705, content: '', id: KR1h0004_tls_011-31a.2}
+  - {type: 'tls:ann', offset: 712, content: '使 vttoN.+V[0]', id: ''}
+  - {type: punctuation, offset: 713, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 713, content: '', id: KR1h0004_tls_011-31a.3}
+  - {type: punctuation, offset: 715, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 715, content: '', id: KR1h0004_tls_011-32a.1}
+  - {type: punctuation, offset: 715, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 715, content: 為 vt+N, id: ''}
+  - {type: 'tls:ann', offset: 716, content: 賊 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 717, content: 夫 npro.adN, id: ''}
+  - {type: 'tls:ann', offset: 718, content: 人 npostVt, id: ''}
+  - {type: punctuation, offset: 720, content: 。, id: ''}
+  - {type: punctuation, offset: 720, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 720, content: '', id: KR1h0004_tls_011-32a.2}
+  - {type: punctuation, offset: 723, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 723, content: '', id: KR1h0004_tls_011-32a.3}
+  - {type: punctuation, offset: 723, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 724, content: 民人 NPm, id: uuid-9ee81acc-09fd-4c10-a81a-cc09fd2c108a}
+  - {type: 'tls:ann', offset: 725, content: '民人 NP{N1adN2}', id: ''}
+  - {type: punctuation, offset: 727, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 727, content: '', id: KR1h0004_tls_011-32a.4}
+  - {type: 'tls:ann', offset: 728, content: '社稷 NP[post-N]', id: ''}
+  - {type: 'tls:ann', offset: 729, content: 稷 n, id: ''}
+  - {type: punctuation, offset: 731, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 731, content: '', id: KR1h0004_tls_011-32a.5}
+  - {type: 'tls:ann', offset: 731, content: 何 npro.adV, id: ''}
+  - {type: 'tls:ann', offset: 731, content: '何必 VPt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 732, content: '必 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 733, content: 讀 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 733, content: 讀書 VPi, id: ''}
+  - {type: punctuation, offset: 735, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 735, content: '', id: KR1h0004_tls_011-33a.1}
+  - {type: 'tls:ann', offset: 735, content: 然後 PPadS1.postS2, id: ''}
+  - {type: 'tls:ann', offset: 737, content: '為 vt+V[0]', id: ''}
+  - {type: punctuation, offset: 739, content: ？, id: ''}
+  - {type: punctuation, offset: 739, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 739, content: '', id: KR1h0004_tls_011-33a.2}
+  - {type: punctuation, offset: 741, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 741, content: '', id: KR1h0004_tls_011-34a.1}
+  - {type: punctuation, offset: 741, content: 「, id: ''}
+  - {type: punctuation, offset: 747, content: 。, id: ''}
+  - {type: punctuation, offset: 747, content: 」, id: ''}
+  - {type: paragraph-break, offset: 747, content: '', id: ''}
+  - {type: paragraph-break, offset: 747, content: '', id: ''}
+  - {type: 'tls:seg', offset: 747, content: '', id: KR1h0004_tls_011-34a.2}
+  - {type: punctuation, offset: 749, content: 、, id: ''}
+  - {type: punctuation, offset: 751, content: 、, id: ''}
+  - {type: punctuation, offset: 753, content: 、, id: ''}
+  - {type: punctuation, offset: 758, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 758, content: '', id: KR1h0004_tls_011-35a.1}
+  - {type: 'tls:seg', offset: 758, content: '', id: KR1h0004_tls_011-35a.2}
+  - {type: punctuation, offset: 760, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 760, content: '', id: KR1h0004_tls_011-35a.3}
+  - {type: punctuation, offset: 760, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 761, content: 以 vtoN.adV, id: ''}
+  - {type: 'tls:ann', offset: 762, content: 吾 npro, id: ''}
+  - {type: 'tls:ann', offset: 764, content: 侍 vadV, id: ''}
+  - {type: 'tls:ann', offset: 765, content: 坐 vi, id: ''}
+  - {type: 'tls:ann', offset: 765, content: 長 vt+prep+N, id: ''}
+  - {type: punctuation, offset: 767, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 767, content: '', id: KR1h0004_tls_011-35a.4}
+  - {type: 'tls:ann', offset: 767, content: 爾 npro.postVt, id: ''}
+  - {type: 'tls:ann', offset: 767, content: '毋 vt+V[0]', id: ''}
+  - {type: punctuation, offset: 771, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 771, content: '', id: KR1h0004_tls_011-35a.5}
+  - {type: 'tls:ann', offset: 771, content: 居 vi0adS, id: ''}
+  - {type: punctuation, offset: 774, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 774, content: '', id: KR1h0004_tls_011-35a.6}
+  - {type: punctuation, offset: 774, content: 『, id: ''}
+  - {type: 'tls:ann', offset: 776, content: 吾 npro, id: ''}
+  - {type: 'tls:ann', offset: 777, content: 知 vtoN, id: ''}
+  - {type: punctuation, offset: 778, content: ！, id: ''}
+  - {type: punctuation, offset: 778, content: 』, id: ''}
+  - {type: 'tls:seg', offset: 778, content: '', id: KR1h0004_tls_011-35a.7}
+  - {type: 'tls:ann', offset: 778, content: 如 padS1.adS2, id: ''}
+  - {type: 'tls:ann', offset: 778, content: 也 ppostadS, id: uuid-cc8333a5-5af9-4018-8333-a55af9d0188a}
+  - {type: 'tls:ann', offset: 779, content: 或 npro, id: ''}
+  - {type: 'tls:ann', offset: 780, content: 知 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 781, content: 爾 npro.postVt, id: ''}
+  - {type: punctuation, offset: 782, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 782, content: '', id: KR1h0004_tls_011-36a.1}
+  - {type: 'tls:ann', offset: 783, content: 何 npro.adV, id: ''}
+  - {type: 'tls:ann', offset: 784, content: 以 DELETE, id: ''}
+  - {type: 'tls:ann', offset: 784, content: 以 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 785, content: 哉 ppostadS, id: uuid-29964576-6c5b-4baa-8a85-91b3239eaa15}
+  - {type: 'tls:ann', offset: 785, content: 哉 ppostadS, id: uuid-02ec406e-b0f2-4fcc-ac40-6eb0f23fcc02}
+  - {type: punctuation, offset: 786, content: ？, id: ''}
+  - {type: punctuation, offset: 786, content: 」, id: ''}
+  - {type: paragraph-break, offset: 786, content: '', id: ''}
+  - {type: paragraph-break, offset: 786, content: '', id: ''}
+  - {type: 'tls:seg', offset: 786, content: '', id: KR1h0004_tls_011-36a.2}
+  - {type: 'tls:ann', offset: 788, content: 率爾 VPi, id: ''}
+  - {type: 'tls:ann', offset: 790, content: 而 padV1.postV2, id: uuid-5fd27be3-aada-461b-98df-d6463a2997f7}
+  - {type: 'tls:ann', offset: 791, content: 對 vt(oN.)+V, id: ''}
+  - {type: punctuation, offset: 793, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 793, content: '', id: KR1h0004_tls_011-36a.3}
+  - {type: punctuation, offset: 793, content: 「, id: ''}
+  - {type: punctuation, offset: 797, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 797, content: '', id: KR1h0004_tls_011-36a.4}
+  - {type: 'tls:ann', offset: 797, content: 攝 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 798, content: '乎 vt[0]oN.postadV', id: ''}
+  - {type: 'tls:ann', offset: 802, content: 間 npost-N, id: ''}
+  - {type: punctuation, offset: 803, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 803, content: '', id: KR1h0004_tls_011-36a.5}
+  - {type: 'tls:ann', offset: 806, content: '師旅 NP{N1=N2}', id: ''}
+  - {type: punctuation, offset: 808, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 808, content: '', id: KR1h0004_tls_011-36a.6}
+  - {type: 'tls:ann', offset: 811, content: '饑饉 NP{N1=N2}', id: ''}
+  - {type: 'tls:ann', offset: 811, content: 饑 nab, id: ''}
+  - {type: 'tls:ann', offset: 812, content: 饉 nab, id: ''}
+  - {type: punctuation, offset: 813, content: ；, id: ''}
+  - {type: 'tls:seg', offset: 813, content: '', id: KR1h0004_tls_011-36a.7}
+  - {type: 'tls:ann', offset: 814, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 815, content: 為 vtoN, id: ''}
+  - {type: punctuation, offset: 817, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 817, content: '', id: KR1h0004_tls_011-36a.8}
+  - {type: 'tls:ann', offset: 817, content: 比 vt0oS1.adS2, id: ''}
+  - {type: 'tls:ann', offset: 817, content: 比及 VPt0oS1.adS2, id: ''}
+  - {type: 'tls:ann', offset: 818, content: 及 vt0oN.adS, id: ''}
+  - {type: punctuation, offset: 821, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 821, content: '', id: KR1h0004_tls_011-37a.1}
+  - {type: 'tls:ann', offset: 824, content: 勇 nab, id: ''}
+  - {type: punctuation, offset: 825, content: ，, id: ''}
+  - {type: 'tls:ann', offset: 826, content: 且 padV1.postV2, id: ''}
+  - {type: 'tls:ann', offset: 827, content: 知 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 828, content: 方 nab, id: ''}
+  - {type: punctuation, offset: 829, content: 。, id: ''}
+  - {type: punctuation, offset: 829, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 829, content: '', id: KR1h0004_tls_011-37a.2}
+  - {type: 'tls:ann', offset: 829, content: '夫子 NP[post-N]', id: ''}
+  - {type: 'tls:ann', offset: 829, content: 也 ppostadS, id: uuid-c41207a5-0a2f-4779-9207-a50a2f8779c5}
+  - {type: 'tls:ann', offset: 831, content: 哂 vtoN, id: ''}
+  - {type: punctuation, offset: 833, content: 。, id: ''}
+  - {type: paragraph-break, offset: 833, content: '', id: ''}
+  - {type: paragraph-break, offset: 833, content: '', id: ''}
+  - {type: 'tls:seg', offset: 833, content: '', id: KR1h0004_tls_011-38a.1}
+  - {type: 'tls:seg', offset: 833, content: '', id: KR1h0004_tls_011-38a.2}
+  - {type: punctuation, offset: 833, content: 「, id: ''}
+  - {type: punctuation, offset: 834, content: ！, id: ''}
+  - {type: 'tls:seg', offset: 834, content: '', id: KR1h0004_tls_011-39a.1}
+  - {type: 'tls:ann', offset: 834, content: 爾 npro, id: ''}
+  - {type: 'tls:ann', offset: 835, content: '何 npro{OBJ}+Vt', id: ''}
+  - {type: punctuation, offset: 837, content: ？, id: ''}
+  - {type: punctuation, offset: 837, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 837, content: '', id: KR1h0004_tls_011-39a.2}
+  - {type: punctuation, offset: 839, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 839, content: '', id: KR1h0004_tls_011-39a.3}
+  - {type: punctuation, offset: 839, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 840, content: 方 vadN, id: ''}
+  - {type: punctuation, offset: 843, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 843, content: '', id: KR1h0004_tls_011-39a.4}
+  - {type: 'tls:ann', offset: 843, content: 如 padN1.postN2, id: ''}
+  - {type: punctuation, offset: 847, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 847, content: '', id: KR1h0004_tls_011-39a.5}
+  - {type: 'tls:ann', offset: 848, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 849, content: 為 vtoN, id: ''}
+  - {type: punctuation, offset: 851, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 851, content: '', id: KR1h0004_tls_011-39a.6}
+  - {type: 'tls:ann', offset: 851, content: 比及 VPt0oS1.adS2, id: ''}
+  - {type: punctuation, offset: 855, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 855, content: '', id: KR1h0004_tls_011-39a.7}
+  - {type: 'tls:ann', offset: 856, content: '使 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 857, content: 足 vt+prep+N, id: ''}
+  - {type: 'tls:ann', offset: 858, content: '民 nm[post-N]', id: ''}
+  - {type: punctuation, offset: 859, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 859, content: '', id: KR1h0004_tls_011-39a.8}
+  - {type: 'tls:ann', offset: 859, content: '如其 VPadN{TOP}.+S', id: ''}
+  - {type: 'tls:ann', offset: 861, content: '禮樂 NP{N1&N2}', id: ''}
+  - {type: punctuation, offset: 863, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 863, content: '', id: KR1h0004_tls_011-40a.1}
+  - {type: punctuation, offset: 867, content: 。, id: ''}
+  - {type: punctuation, offset: 867, content: 」, id: ''}
+  - {type: paragraph-break, offset: 867, content: '', id: ''}
+  - {type: paragraph-break, offset: 867, content: '', id: ''}
+  - {type: 'tls:seg', offset: 867, content: '', id: KR1h0004_tls_011-40a.2}
+  - {type: punctuation, offset: 867, content: 「, id: ''}
+  - {type: punctuation, offset: 868, content: ！, id: ''}
+  - {type: 'tls:seg', offset: 868, content: '', id: KR1h0004_tls_011-41a.1}
+  - {type: 'tls:ann', offset: 868, content: 爾 npro, id: ''}
+  - {type: 'tls:ann', offset: 869, content: '何 npro{OBJ}+Vt', id: ''}
+  - {type: punctuation, offset: 871, content: ？, id: ''}
+  - {type: punctuation, offset: 871, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 871, content: '', id: KR1h0004_tls_011-41a.2}
+  - {type: punctuation, offset: 873, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 873, content: '', id: KR1h0004_tls_011-41a.3}
+  - {type: punctuation, offset: 873, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 874, content: '非 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 876, content: 能 vtoNab, id: ''}
+  - {type: punctuation, offset: 877, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 877, content: '', id: KR1h0004_tls_011-41a.4}
+  - {type: 'tls:ann', offset: 877, content: '願 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 878, content: 學 vtoN, id: ''}
+  - {type: punctuation, offset: 880, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 880, content: '', id: KR1h0004_tls_011-41a.5}
+  - {type: 'tls:ann', offset: 880, content: 宗廟 NP, id: ''}
+  - {type: 'tls:ann', offset: 883, content: 事 nab, id: ''}
+  - {type: punctuation, offset: 884, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 884, content: '', id: KR1h0004_tls_011-41a.6}
+  - {type: 'tls:ann', offset: 884, content: 如 padN1.postN2, id: ''}
+  - {type: 'tls:ann', offset: 885, content: 會 nab, id: ''}
+  - {type: 'tls:ann', offset: 885, content: '會同 NP{N1=N2}', id: ''}
+  - {type: punctuation, offset: 887, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 887, content: '', id: KR1h0004_tls_011-41a.7}
+  - {type: 'tls:ann', offset: 887, content: 端 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 888, content: 章甫 VPi, id: ''}
+  - {type: 'tls:ann', offset: 888, content: 章 nadN, id: ''}
+  - {type: 'tls:ann', offset: 889, content: 甫 n, id: ''}
+  - {type: punctuation, offset: 890, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 890, content: '', id: KR1h0004_tls_011-42a.1}
+  - {type: 'tls:ann', offset: 890, content: '願 vt+V[0]', id: ''}
+  - {type: 'tls:ann', offset: 891, content: 為 vt+N, id: ''}
+  - {type: 'tls:ann', offset: 892, content: 小 vadN, id: ''}
+  - {type: 'tls:ann', offset: 892, content: 小相 NP, id: ''}
+  - {type: 'tls:ann', offset: 893, content: 相 n, id: ''}
+  - {type: punctuation, offset: 895, content: 。, id: ''}
+  - {type: punctuation, offset: 895, content: 」, id: ''}
+  - {type: paragraph-break, offset: 895, content: '', id: ''}
+  - {type: paragraph-break, offset: 895, content: '', id: ''}
+  - {type: 'tls:seg', offset: 895, content: '', id: KR1h0004_tls_011-42a.2}
+  - {type: punctuation, offset: 895, content: 「, id: ''}
+  - {type: punctuation, offset: 896, content: ！, id: ''}
+  - {type: 'tls:seg', offset: 896, content: '', id: KR1h0004_tls_011-43a.1}
+  - {type: 'tls:ann', offset: 896, content: 爾 npro, id: ''}
+  - {type: 'tls:ann', offset: 897, content: '何 npro{OBJ}+Vt', id: ''}
+  - {type: punctuation, offset: 899, content: ？, id: ''}
+  - {type: punctuation, offset: 899, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 899, content: '', id: KR1h0004_tls_011-43a.2}
+  - {type: 'tls:ann', offset: 899, content: 鼓 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 900, content: 瑟 n, id: ''}
+  - {type: 'tls:ann', offset: 901, content: 希 vpostadV, id: ''}
+  - {type: punctuation, offset: 902, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 902, content: '', id: KR1h0004_tls_011-43a.3}
+  - {type: 'tls:ann', offset: 902, content: 鏗 vi, id: ''}
+  - {type: 'tls:ann', offset: 903, content: 爾 ppostadV, id: ''}
+  - {type: punctuation, offset: 904, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 904, content: '', id: KR1h0004_tls_011-43a.4}
+  - {type: 'tls:ann', offset: 904, content: 捨 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 906, content: 而 padV1.postV2, id: ''}
+  - {type: 'tls:ann', offset: 907, content: 作 vi, id: ''}
+  - {type: punctuation, offset: 908, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 908, content: '', id: KR1h0004_tls_011-43a.5}
+  - {type: punctuation, offset: 910, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 910, content: '', id: KR1h0004_tls_011-44a.1}
+  - {type: punctuation, offset: 910, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 911, content: 異 vt+prep+N, id: ''}
+  - {type: 'tls:ann', offset: 912, content: '乎 vt[0]oN.postadV', id: uuid-1c86f874-dd74-424b-86f8-74dd74324b2b}
+  - {type: 'tls:ann', offset: 914, content: '子 n[post-N]', id: ''}
+  - {type: 'tls:ann', offset: 915, content: '者 npro:post.Npost-V{NUM}', id: uuid-ed2c3630-ada1-463a-94c1-d406b9afd8d7}
+  - {type: 'tls:ann', offset: 915, content: 者 npost-N, id: ''}
+  - {type: punctuation, offset: 917, content: 。, id: ''}
+  - {type: punctuation, offset: 917, content: 」, id: ''}
+  - {type: paragraph-break, offset: 917, content: '', id: ''}
+  - {type: paragraph-break, offset: 917, content: '', id: ''}
+  - {type: 'tls:seg', offset: 917, content: '', id: KR1h0004_tls_011-44a.2}
+  - {type: 'tls:ann', offset: 917, content: 撰 nab, id: ''}
+  - {type: punctuation, offset: 919, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 919, content: '', id: KR1h0004_tls_011-44a.3}
+  - {type: punctuation, offset: 919, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 920, content: '何 npro{OBJ}+Vt', id: ''}
+  - {type: 'tls:ann', offset: 921, content: 傷 vtoN, id: ''}
+  - {type: punctuation, offset: 922, content: ？, id: ''}
+  - {type: 'tls:seg', offset: 922, content: '', id: KR1h0004_tls_011-45a.1}
+  - {type: 'tls:ann', offset: 922, content: 亦 padV, id: ''}
+  - {type: 'tls:ann', offset: 922, content: 乎 ppostadS, id: uuid-04b53013-2b37-4367-b530-132b37c367cf}
+  - {type: 'tls:ann', offset: 923, content: '各 npro+V(.postN{TOP})', id: ''}
+  - {type: 'tls:ann', offset: 924, content: 言 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 926, content: 志 nab, id: ''}
+  - {type: 'tls:ann', offset: 927, content: 也 ppostadS, id: ''}
+  - {type: 'tls:ann', offset: 927, content: 也 ppostadS, id: uuid-d39923a0-471a-4c0b-9923-a0471acc0b7d}
+  - {type: punctuation, offset: 928, content: 。, id: ''}
+  - {type: punctuation, offset: 928, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 928, content: '', id: KR1h0004_tls_011-45a.2}
+  - {type: punctuation, offset: 929, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 929, content: '', id: KR1h0004_tls_011-45a.3}
+  - {type: punctuation, offset: 929, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 931, content: 春 NPab, id: ''}
+  - {type: punctuation, offset: 932, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 932, content: '', id: KR1h0004_tls_011-45a.4}
+  - {type: 'tls:ann', offset: 932, content: '者 npro.post-N{PRED}', id: uuid-979ee5aa-aec8-4e72-8bdb-333b97fe3be6}
+  - {type: 'tls:ann', offset: 932, content: '者 npro.post-N:adS', id: uuid-42a86408-7d2a-4207-9b0d-787894f6b023}
+  - {type: 'tls:ann', offset: 932, content: 春 nadN, id: ''}
+  - {type: 'tls:ann', offset: 933, content: 服 n, id: ''}
+  - {type: 'tls:ann', offset: 934, content: 既 vadV, id: ''}
+  - {type: 'tls:ann', offset: 935, content: 成 vtoN, id: ''}
+  - {type: punctuation, offset: 936, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 936, content: '', id: KR1h0004_tls_011-45a.5}
+  - {type: 'tls:ann', offset: 936, content: 冠 vi, id: ''}
+  - {type: 'tls:ann', offset: 936, content: 冠者 NPc, id: ''}
+  - {type: 'tls:ann', offset: 937, content: '者 npro.post-N:adS', id: uuid-5fb0a84f-4b67-4291-ac2d-a95e8d61161f}
+  - {type: punctuation, offset: 941, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 941, content: '', id: KR1h0004_tls_011-45a.6}
+  - {type: 'tls:ann', offset: 941, content: 童子 NP, id: ''}
+  - {type: punctuation, offset: 946, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 946, content: '', id: KR1h0004_tls_011-45a.7}
+  - {type: 'tls:ann', offset: 946, content: 浴 vi, id: ''}
+  - {type: 'tls:ann', offset: 946, content: '乎 vt[0]oN.postadV', id: uuid-6906d731-bc47-4efc-86d7-31bc472efc3b}
+  - {type: punctuation, offset: 949, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 949, content: '', id: KR1h0004_tls_011-45a.8}
+  - {type: 'tls:ann', offset: 949, content: '乎 vt[0]oN.postadV', id: uuid-78bf5b22-a378-40d7-bf5b-22a378f0d7ff}
+  - {type: punctuation, offset: 953, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 953, content: '', id: KR1h0004_tls_011-46a.1}
+  - {type: 'tls:ann', offset: 953, content: 詠 vi, id: ''}
+  - {type: 'tls:ann', offset: 954, content: 而 padV1.postV2, id: ''}
+  - {type: 'tls:ann', offset: 955, content: '歸 vt[oN]', id: ''}
+  - {type: punctuation, offset: 956, content: 。, id: ''}
+  - {type: punctuation, offset: 956, content: 」, id: ''}
+  - {type: paragraph-break, offset: 956, content: '', id: ''}
+  - {type: paragraph-break, offset: 956, content: '', id: ''}
+  - {type: 'tls:seg', offset: 956, content: '', id: KR1h0004_tls_011-46a.2}
+  - {type: 'tls:ann', offset: 956, content: '夫子 NP[post-N]', id: ''}
+  - {type: 'tls:ann', offset: 958, content: '喟 vi-V{SUFF}.adV', id: ''}
+  - {type: 'tls:ann', offset: 958, content: 喟然 VPadS, id: ''}
+  - {type: 'tls:ann', offset: 960, content: 歎 vi, id: ''}
+  - {type: punctuation, offset: 962, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 962, content: '', id: KR1h0004_tls_011-46a.3}
+  - {type: punctuation, offset: 962, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 964, content: 與 vtoN, id: ''}
+  - {type: punctuation, offset: 966, content: ！, id: ''}
+  - {type: punctuation, offset: 966, content: 」, id: ''}
+  - {type: paragraph-break, offset: 966, content: '', id: ''}
+  - {type: paragraph-break, offset: 966, content: '', id: ''}
+  - {type: 'tls:seg', offset: 966, content: '', id: KR1h0004_tls_011-46a.4}
+  - {type: 'tls:ann', offset: 966, content: 也 ppostadS, id: uuid-40a2b75b-41ca-4dda-a2b7-5b41ca9dda1e}
+  - {type: 'tls:ann', offset: 967, content: '子 n[post-N]', id: ''}
+  - {type: 'tls:ann', offset: 969, content: '出 vt[oN]', id: ''}
+  - {type: punctuation, offset: 970, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 970, content: '', id: KR1h0004_tls_011-46a.5}
+  - {type: 'tls:ann', offset: 972, content: 後 vi, id: ''}
+  - {type: punctuation, offset: 973, content: 。, id: ''}
+  - {type: 'tls:seg', offset: 973, content: '', id: KR1h0004_tls_011-46a.6}
+  - {type: punctuation, offset: 976, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 976, content: '', id: KR1h0004_tls_011-47a.1}
+  - {type: punctuation, offset: 976, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 977, content: 夫 npro.adN, id: ''}
+  - {type: 'tls:ann', offset: 979, content: '子 n[post-N]', id: ''}
+  - {type: 'tls:ann', offset: 980, content: '者 npro:post.Npost-V{NUM}', id: uuid-c6d914ee-a02b-44b2-8eaa-5f3f7a54e49b}
+  - {type: 'tls:ann', offset: 982, content: 言 nab, id: ''}
+  - {type: 'tls:ann', offset: 983, content: '何 npro{OBJ}+Vt', id: ''}
+  - {type: 'tls:ann', offset: 983, content: 何如 VPi(0), id: ''}
+  - {type: punctuation, offset: 984, content: ？, id: ''}
+  - {type: punctuation, offset: 984, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 984, content: '', id: KR1h0004_tls_011-47a.2}
+  - {type: punctuation, offset: 986, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 986, content: '', id: KR1h0004_tls_011-48a.1}
+  - {type: punctuation, offset: 986, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 987, content: 亦 padV, id: ''}
+  - {type: 'tls:ann', offset: 988, content: '各 npro+V(.postN{TOP})', id: ''}
+  - {type: 'tls:ann', offset: 989, content: 言 vtoN, id: ''}
+  - {type: 'tls:ann', offset: 991, content: 志 nab, id: ''}
+  - {type: 'tls:ann', offset: 992, content: 也已矣 PPpostadS, id: uuid-4d21c9ff-f9c7-46a8-a1c9-fff9c776a840}
+  - {type: punctuation, offset: 994, content: 。, id: ''}
+  - {type: punctuation, offset: 994, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 994, content: '', id: KR1h0004_tls_011-48a.2}
+  - {type: punctuation, offset: 995, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 995, content: '', id: KR1h0004_tls_011-49a.1}
+  - {type: punctuation, offset: 995, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 996, content: '夫子 NP[post-npro_1.][post=npro_2]', id: ''}
+  - {type: 'tls:ann', offset: 998, content: 何 padV, id: ''}
+  - {type: 'tls:ann', offset: 999, content: 哂 vtoN, id: ''}
+  - {type: punctuation, offset: 1001, content: ？, id: ''}
+  - {type: punctuation, offset: 1001, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 1001, content: '', id: KR1h0004_tls_011-49a.2}
+  - {type: 'tls:ann', offset: 1001, content: 也 ppostadS, id: uuid-7dd5e1e6-21c9-4486-95e1-e621c9548639}
+  - {type: punctuation, offset: 1002, content: ：, id: ''}
+  - {type: 'tls:seg', offset: 1002, content: '', id: KR1h0004_tls_011-49a.3}
+  - {type: punctuation, offset: 1002, content: 「, id: ''}
+  - {type: punctuation, offset: 1006, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 1006, content: '', id: KR1h0004_tls_011-49a.4}
+  - {type: 'tls:ann', offset: 1007, content: 言 nab, id: ''}
+  - {type: 'tls:ann', offset: 1009, content: 讓 vi, id: ''}
+  - {type: 'tls:ann', offset: 1009, content: 讓 vi, id: ''}
+  - {type: punctuation, offset: 1010, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 1010, content: '', id: KR1h0004_tls_011-50a.1}
+  - {type: 'tls:ann', offset: 1010, content: 是故 PPadS1.postS2, id: ''}
+  - {type: 'tls:ann', offset: 1012, content: 哂 vtoN, id: ''}
+  - {type: punctuation, offset: 1014, content: 。, id: ''}
+  - {type: punctuation, offset: 1014, content: 」, id: ''}
+  - {type: paragraph-break, offset: 1014, content: '', id: ''}
+  - {type: paragraph-break, offset: 1014, content: '', id: ''}
+  - {type: 'tls:seg', offset: 1014, content: '', id: KR1h0004_tls_011-51a.1}
+  - {type: punctuation, offset: 1014, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 1019, content: 邦 n, id: ''}
+  - {type: punctuation, offset: 1021, content: ？, id: ''}
+  - {type: punctuation, offset: 1021, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 1021, content: '', id: KR1h0004_tls_011-51a.2}
+  - {type: punctuation, offset: 1021, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 1022, content: 安 padV, id: ''}
+  - {type: 'tls:seg', offset: 1027, content: '', id: KR1h0004_tls_011-52a.1}
+  - {type: 'tls:ann', offset: 1027, content: 如 padN1.postN2, id: ''}
+  - {type: punctuation, offset: 1036, content: ？, id: ''}
+  - {type: punctuation, offset: 1036, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 1036, content: '', id: KR1h0004_tls_011-53a.1}
+  - {type: punctuation, offset: 1036, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 1042, content: 也與 PPpostadS, id: uuid-67af8449-e41d-4295-af84-49e41dc295a2}
+  - {type: punctuation, offset: 1043, content: ？, id: ''}
+  - {type: punctuation, offset: 1043, content: 」, id: ''}
+  - {type: 'tls:seg', offset: 1043, content: '', id: KR1h0004_tls_011-53a.2}
+  - {type: punctuation, offset: 1043, content: 「, id: ''}
+  - {type: 'tls:ann', offset: 1044, content: 宗廟 NP, id: ''}
+  - {type: 'tls:ann', offset: 1046, content: '會同 NP{N1=N2}', id: ''}
+  - {type: punctuation, offset: 1047, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 1047, content: '', id: KR1h0004_tls_011-53a.3}
+  - {type: 'tls:ann', offset: 1048, content: '諸侯 NP{PadN}', id: ''}
+  - {type: 'tls:ann', offset: 1051, content: '何 npro{PRED}', id: ''}
+  - {type: punctuation, offset: 1052, content: ？, id: ''}
+  - {type: 'tls:seg', offset: 1052, content: '', id: KR1h0004_tls_011-53a.4}
+  - {type: 'tls:ann', offset: 1053, content: '也 ppostNpr{SUBJ}.+V{PRED}', id: ''}
+  - {type: 'tls:ann', offset: 1056, content: 小 vi, id: ''}
+  - {type: punctuation, offset: 1057, content: ，, id: ''}
+  - {type: 'tls:seg', offset: 1057, content: '', id: KR1h0004_tls_011-53a.5}
+  - {type: 'tls:ann', offset: 1057, content: 孰 npro, id: ''}
+  - {type: 'tls:ann', offset: 1057, content: '孰 npro{OBJ}+Vt', id: ''}
+  - {type: 'tls:ann', offset: 1061, content: 大 vi, id: ''}
+metadata:
+  title: 論語
+  edition:
+    short: tls
+  source:
+    repository: tls-texts
+    path: data/tls/KR1h0004.xml
+hash: sha256:9972a8cb6f6e1c30863159b63e3f2c06cca69b41326ffa80044f22ea8a891299

@@ -1,0 +1,44 @@
+canonical_identifier: bkk:krp/KR3a0011/SBCK/v1
+canonical_location: https://kanripo.org/bkk/KR3a0011/SBCK/v1
+canonical_set:
+  identifier: bkk:charset/cjk-v1
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+entity_encoding:
+  identifier: bkk:encoding/kanripo-pua-v1
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+assets:
+  parts:
+  - {seq: 0, filename: KR3a0011_000-SBCK.yaml, hash: 'sha256:22cce4a846b62f8d2b9768d11c1300635f4ab175260349ce99cefcf21553acd2'}
+  - {seq: 1, filename: KR3a0011_001-SBCK.yaml, hash: 'sha256:98d3a75f40a0303bffa211c5e59737010e7292882d03aee5b94e570c5b800e9c'}
+  - {seq: 2, filename: KR3a0011_002-SBCK.yaml, hash: 'sha256:b4965ad4d65f54b2b2f16821a73bd9cf39088253aae3f71bc8a76f1f5d4251cf'}
+  - {seq: 3, filename: KR3a0011_003-SBCK.yaml, hash: 'sha256:d19115f34a7d5c7b0caa4858534b9259a6dfa51780e4be8808fbd17f9edcbc6c'}
+  - {seq: 4, filename: KR3a0011_004-SBCK.yaml, hash: 'sha256:0b1c2079ebbb6971e2919687f2a6b96c216fd8641345d2323aad53072d33e6af'}
+  - {seq: 5, filename: KR3a0011_005-SBCK.yaml, hash: 'sha256:70317529a386d99df3cbd2953bf26e1b8c01b103c95459a6e2744ca5e38724d9'}
+  - {seq: 6, filename: KR3a0011_006-SBCK.yaml, hash: 'sha256:46ba60d6c8c0d0059bebb53bfe176b5221fa0224ed0bb053d1b600782673a2f5'}
+table_of_contents:
+- ref: {seq: 0, marker_id: KR3a0011_SBCK_000-1a, span: [body, 0, 1183]}
+  label: '0'
+- ref: {seq: 1, marker_id: KR3a0011_SBCK_001-1a, span: [body, 0, 5580]}
+  label: '1'
+- ref: {seq: 2, marker_id: KR3a0011_SBCK_002-1a, span: [body, 0, 6694]}
+  label: '2'
+- ref: {seq: 3, marker_id: KR3a0011_SBCK_003-1a, span: [body, 0, 3072]}
+  label: '3'
+- ref: {seq: 4, marker_id: KR3a0011_SBCK_004-1a, span: [body, 0, 5854]}
+  label: '4'
+- ref: {seq: 5, marker_id: KR3a0011_SBCK_005-1a, span: [body, 0, 3198]}
+  label: '5'
+- ref: {seq: 6, marker_id: KR3a0011_SBCK_006-1a, span: [body, 0, 236]}
+  label: '6'
+metadata:
+  title: 申鑒
+  date: '2015-09-11 03:50:43.078458'
+  source:
+    repository: kanripo
+    path: KR3a0011
+  image_base_urls:
+    wyg: http://img.kanripo.org/general/skqs/wyg/
+  edition:
+    short: SBCK
+    label: 【四部叢刊】
+hash: sha256:f0b4f0c8ef2459e2232facb9ec314d8dffa58dabdae8dbe8adb2f8a72564d3b3
