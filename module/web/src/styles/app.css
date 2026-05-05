@@ -114,6 +114,66 @@ button {
 .mb-spacer {
   flex: 1;
 }
+
+/* search bar in menubar */
+.mb-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+}
+.mb-search-input {
+  height: 24px;
+  width: 200px;
+  padding: 0 8px;
+  border: 1px solid var(--bdr);
+  background: var(--bg);
+  color: var(--t1);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.mb-search-input::placeholder {
+  color: var(--t3);
+}
+.mb-search-input:focus {
+  border-color: var(--amb);
+}
+.mb-select {
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--bdr);
+  background: var(--bg);
+  color: var(--t2);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+}
+.mb-select:focus {
+  border-color: var(--amb);
+}
+.mb-search-go {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--amb);
+  background: transparent;
+  color: var(--amb);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.mb-search-go:hover:not(:disabled) {
+  background: var(--amb-d);
+}
+.mb-search-go:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .mb-login {
   padding: 4px 13px;
   border-radius: 5px;
@@ -571,6 +631,187 @@ button {
 .sdb.on {
   color: #fff;
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* catalog filter ------------------------------------------------- */
+.cat-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bdr-l);
+  position: sticky;
+  top: 0;
+  background: var(--bg-pan);
+  z-index: 1;
+}
+.cat-filter input {
+  flex: 1;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--bdr);
+  background: var(--bg);
+  color: var(--t1);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.cat-filter input::placeholder {
+  color: var(--t3);
+}
+.cat-filter input:focus {
+  border-color: var(--amb);
+}
+.cat-filter-clear {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--t3);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 3px;
+}
+.cat-filter-clear:hover {
+  background: var(--hov);
+  color: var(--t1);
+}
+
+/* search results (KWIC) ----------------------------------------- */
+.kwic-list {
+  padding: 0;
+}
+.kwic-summary {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bdr-l);
+  font-size: 11px;
+  color: var(--t3);
+  font-family: var(--fm);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.kwic-sort {
+  color: var(--amb);
+}
+.kwic-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--t1);
+  cursor: pointer;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bdr-l);
+  font: inherit;
+  transition: background 0.1s;
+}
+.kwic-row:hover {
+  background: var(--hov);
+}
+.kwic-meta {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 10px;
+  color: var(--t3);
+  margin-bottom: 4px;
+  font-family: var(--fm);
+}
+.kwic-label {
+  color: var(--t2);
+}
+.kwic-textid {
+  color: var(--t3);
+}
+.kwic-juan {
+  color: var(--t3);
+}
+.kwic-chip {
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--amb-d);
+  color: var(--amb);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.kwic-line {
+  font-family: var(--fc);
+  font-size: 14px;
+  line-height: 1.6;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: baseline;
+  gap: 2px;
+  word-break: keep-all;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.kwic-left {
+  text-align: right;
+  direction: rtl;
+  unicode-bidi: plaintext;
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kwic-match {
+  background: var(--amb-b);
+  color: var(--amb);
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+.kwic-right {
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kwic-pager {
+  display: flex;
+  gap: 6px;
+  padding: 10px;
+  border-top: 1px solid var(--bdr-l);
+}
+.kwic-pager button {
+  flex: 1;
+  height: 26px;
+  border: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--t2);
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  transition: 0.1s;
+}
+.kwic-pager button:hover:not(:disabled) {
+  background: var(--hov);
+  color: var(--t1);
+}
+.kwic-pager button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* match flash applied via TextViewer's pendingHighlight ----------- */
+@keyframes kwic-flash-fade {
+  0% {
+    background: var(--amb);
+    color: var(--bg-ed);
+  }
+  100% {
+    background: transparent;
+    color: inherit;
+  }
+}
+.ch.kwic-flash {
+  animation: kwic-flash-fade 1.2s ease-out;
 }
 
 /* selection summary block in annotations panel */

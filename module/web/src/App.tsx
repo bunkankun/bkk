@@ -6,6 +6,7 @@ import { Toc } from "./components/LeftPanel/Toc";
 import { Menubar } from "./components/Menubar";
 import { AnnotationsTab } from "./components/RightPanel/AnnotationsTab";
 import { ChatTab } from "./components/RightPanel/ChatTab";
+import { SearchTab } from "./components/RightPanel/SearchTab";
 import { StatusBar } from "./components/StatusBar";
 import { PaneTree } from "./components/Workspace/PaneTree";
 import { useWorkspace, workspace } from "./state/useWorkspace";
@@ -26,6 +27,7 @@ function LeftPanel() {
 
 function RightPanel() {
   const tab = useWorkspace((s) => s.rightTab);
+  const searchActive = useWorkspace((s) => s.search.status !== "idle");
   return (
     <div className="rp">
       <div className="rt-bar">
@@ -41,8 +43,22 @@ function RightPanel() {
         >
           Chat
         </button>
+        {searchActive && (
+          <button
+            className={`rt${tab === "search" ? " on" : ""}`}
+            onClick={() => workspace.setRightTab("search")}
+          >
+            Search
+          </button>
+        )}
       </div>
-      {tab === "annotations" ? <AnnotationsTab /> : <ChatTab />}
+      {tab === "search" ? (
+        <SearchTab />
+      ) : tab === "chat" ? (
+        <ChatTab />
+      ) : (
+        <AnnotationsTab />
+      )}
     </div>
   );
 }

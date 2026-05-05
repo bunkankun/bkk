@@ -4,10 +4,29 @@
 // shape to grow into a pane tree later.
 
 import { useSyncExternalStore } from "react";
+import { searchCorpus } from "../api/client";
+import type { SearchHit, SearchResponse, SearchSort } from "../api/types";
 
 export type Activity = "texts" | "catalog";
-export type RightTab = "annotations" | "chat";
+export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
+export type SearchTarget = "fulltext" | "dictionary" | "translations";
+
+export interface SearchState {
+  query: string;
+  target: SearchTarget;
+  sort: SearchSort;
+  status: "idle" | "loading" | "ok" | "error";
+  error: string | null;
+  response: SearchResponse | null;
+}
+
+export interface PendingHighlight {
+  textid: string;
+  seq: number;
+  offset: number;
+  length: number;
+}
 
 export interface SelectionRange {
   textid: string;
@@ -45,6 +64,10 @@ export interface WorkspaceState {
   serverInfo: { upstream_repo?: string | null; version?: string } | null;
   // v1 has a single leaf; kept so PaneTree.tsx can later host splits.
   pane: PaneLeaf;
+  // search slice; ephemeral (no URL persistence in v1).
+  search: SearchState;
+  // a search-result span the TextViewer should scroll to + flash, then clear.
+  pendingHighlight: PendingHighlight | null;
 }
 
 let state: WorkspaceState = {
@@ -63,7 +86,52 @@ let state: WorkspaceState = {
     tabs: [],
     activeTabId: null,
   },
+  search: {
+    query: "",
+    target: "fulltext",
+    sort: "match",
+    status: "idle",
+    error: null,
+    response: null,
+  },
+  pendingHighlight: null,
 };
+
+// monotonically increasing run id so an in-flight stale request can't clobber
+// a newer one when the user submits twice quickly.
+let searchRunId = 0;
+
+async function runSearchInternal(offset: number): Promise<void> {
+  const { query, target, sort } = state.search;
+  if (!query.trim() || target !== "fulltext") return;
+  const runId = ++searchRunId;
+  state = {
+    ...state,
+    search: { ...state.search, status: "loading", error: null },
+    rightTab: "search",
+  };
+  notify();
+  try {
+    const response = await searchCorpus({ q: query, sort, offset });
+    if (runId !== searchRunId) return;
+    state = {
+      ...state,
+      search: { ...state.search, status: "ok", error: null, response },
+    };
+    notify();
+  } catch (e) {
+    if (runId !== searchRunId) return;
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+      },
+    };
+    notify();
+  }
+}
 
 const listeners = new Set<() => void>();
 
@@ -157,6 +225,69 @@ export const workspace = {
   },
   setServerInfo(info: WorkspaceState["serverInfo"]) {
     state = { ...state, serverInfo: info };
+    notify();
+  },
+  setSearchQuery(query: string) {
+    state = { ...state, search: { ...state.search, query } };
+    notify();
+  },
+  setSearchTarget(target: SearchTarget) {
+    state = { ...state, search: { ...state.search, target } };
+    notify();
+  },
+  setSearchSort(sort: SearchSort) {
+    state = { ...state, search: { ...state.search, sort } };
+    notify();
+  },
+  runSearch() {
+    return runSearchInternal(0);
+  },
+  runSearchAt(offset: number) {
+    return runSearchInternal(offset);
+  },
+  clearSearch() {
+    searchRunId++;
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        query: "",
+        status: "idle",
+        error: null,
+        response: null,
+      },
+    };
+    notify();
+  },
+  openHit(hit: SearchHit) {
+    const tabId = `${hit.textid}:${hit.juan_seq}`;
+    const tabs = [
+      { id: tabId, type: "text" as const, textid: hit.textid, seq: hit.juan_seq },
+    ];
+    const pane: PaneLeaf = {
+      kind: "leaf",
+      id: state.pane.id,
+      tabs,
+      activeTabId: tabId,
+    };
+    state = {
+      ...state,
+      activeTextid: hit.textid,
+      activeSeq: hit.juan_seq,
+      selection: null,
+      pane,
+      pendingHighlight: {
+        textid: hit.textid,
+        seq: hit.juan_seq,
+        offset: hit.master_offset,
+        length: hit.master_length,
+      },
+    };
+    notify();
+  },
+  consumeHighlight() {
+    if (state.pendingHighlight == null) return;
+    state = { ...state, pendingHighlight: null };
     notify();
   },
 };

@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from bkk.serve import create_app
+from bkk.serve.config import ServeConfig
+
+from .conftest import write_bundle
+
 
 def test_search_master_hit(client):
     r = client.get("/search", params={"q": "丙丁"})
@@ -67,3 +77,118 @@ def test_search_pagination(client):
     assert body["limit"] == 1
     assert body["offset"] == 0
     assert len(body["hits"]) <= 1
+
+
+# ---------------------------------------------------------------- sort modes
+
+
+@pytest.fixture
+def sort_client(tmp_path: Path) -> TestClient:
+    """Three single-juan bundles with controllable text + dates for sort tests.
+
+    The shared query "甲" appears in all three. The contexts are crafted so:
+    - SORT_A and SORT_B share many KWIC chars (closeness keeps them adjacent)
+    - SORT_C has a disjoint KWIC (closeness pushes it to the end)
+    - composition_period values give a unique date ordering
+    """
+    write_bundle(
+        tmp_path,
+        "SORTC",
+        "禾稻黍稷甲麥麻菽豆",  # KWIC chars: 禾稻黍稷 麥麻菽豆 (no overlap with A/B)
+        title="C-bundle",
+        extra_metadata={"composition_period": "1900"},
+    )
+    write_bundle(
+        tmp_path,
+        "SORTA",
+        "天日月星甲山川風雨",  # KWIC chars share 天日月星 / 山川風雨 with B
+        title="A-bundle",
+        extra_metadata={"composition_period": "前500"},
+    )
+    write_bundle(
+        tmp_path,
+        "SORTB",
+        "日月星天甲川山雨風",  # same chars as A, different positions
+        title="B-bundle",
+        extra_metadata={"composition_period": "1000"},
+    )
+    config = ServeConfig(corpus_root=tmp_path, index_path=tmp_path / "_corpus.bkkx")
+    app = create_app(config)
+    return TestClient(app)
+
+
+def test_search_default_sort_is_match(sort_client):
+    r = sort_client.get("/search", params={"q": "甲"})
+    assert r.status_code == 200
+    assert r.json()["sort"] == "match"
+
+
+def test_search_sort_textid(sort_client):
+    r = sort_client.get("/search", params={"q": "甲", "sort": "textid"})
+    body = r.json()
+    assert body["sort"] == "textid"
+    textids = [h["textid"] for h in body["hits"]]
+    assert textids == sorted(textids)
+    assert textids == ["SORTA", "SORTB", "SORTC"]
+
+
+def test_search_sort_match(sort_client):
+    """Sort by (match + right) — 甲 + first right-context char ascending."""
+    r = sort_client.get("/search", params={"q": "甲", "sort": "match"})
+    body = r.json()
+    assert body["sort"] == "match"
+    # match is identical for all three (甲); tiebreak on right context.
+    # Right contexts start with: A=山, B=川, C=麥
+    # NFC sort order of those leading chars determines ordering.
+    rights = [h["right"][:1] for h in body["hits"]]
+    assert rights == sorted(rights)
+
+
+def test_search_sort_reverse_prematch(sort_client):
+    """Sort by reversed left context — last char before match ascending."""
+    r = sort_client.get(
+        "/search", params={"q": "甲", "sort": "reverse_prematch"}
+    )
+    body = r.json()
+    assert body["sort"] == "reverse_prematch"
+    # Left contexts end with: A=星, B=天, C=稷 -> reversed first chars 星/天/稷
+    last_left = [h["left"][-1:] for h in body["hits"]]
+    assert last_left == sorted(last_left)
+
+
+def test_search_sort_date(sort_client):
+    """前500 (BCE -500) < 1000 < 1900."""
+    r = sort_client.get("/search", params={"q": "甲", "sort": "date"})
+    body = r.json()
+    assert body["sort"] == "date"
+    textids = [h["textid"] for h in body["hits"]]
+    assert textids == ["SORTA", "SORTB", "SORTC"]
+
+
+def test_search_sort_date_missing_period_falls_to_end(tmp_path: Path):
+    write_bundle(tmp_path, "DATED", "甲乙", title="d", extra_metadata={"composition_period": "1500"})
+    write_bundle(tmp_path, "UNDATED", "丙甲丁", title="u")  # no composition_period
+    config = ServeConfig(corpus_root=tmp_path, index_path=tmp_path / "_corpus.bkkx")
+    client = TestClient(create_app(config))
+    r = client.get("/search", params={"q": "甲", "sort": "date"})
+    body = r.json()
+    assert [h["textid"] for h in body["hits"]] == ["DATED", "UNDATED"]
+
+
+def test_search_sort_closeness(sort_client):
+    """A and B share KWIC chars (天日月星 / 山川風雨); C shares none.
+
+    Greedy chain should place A and B adjacent, then C at the end.
+    """
+    r = sort_client.get("/search", params={"q": "甲", "sort": "closeness"})
+    body = r.json()
+    assert body["sort"] == "closeness"
+    textids = [h["textid"] for h in body["hits"]]
+    # The first two slots are A and B (in either order); C is last.
+    assert set(textids[:2]) == {"SORTA", "SORTB"}
+    assert textids[2] == "SORTC"
+
+
+def test_search_sort_invalid_returns_422(sort_client):
+    r = sort_client.get("/search", params={"q": "甲", "sort": "lolnope"})
+    assert r.status_code == 422

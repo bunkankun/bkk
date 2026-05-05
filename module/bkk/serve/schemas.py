@@ -70,6 +70,7 @@ class SearchResponse(BaseModel):
     total: int
     offset: int
     limit: int
+    sort: str
     hits: list[HitOut]
 
 

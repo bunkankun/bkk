@@ -13,6 +13,8 @@ import type {
   Juan,
   Manifest,
   ManifestPart,
+  SearchResponse,
+  SearchSort,
   ServerInfo,
 } from "./types";
 
@@ -93,4 +95,24 @@ export async function getAnnotations(
   return fetchJson<Annotation[]>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/annotations`,
   );
+}
+
+export async function searchCorpus(params: {
+  q: string;
+  sort: SearchSort;
+  textid?: string;
+  witness?: string[];
+  context?: number;
+  limit?: number;
+  offset?: number;
+}): Promise<SearchResponse> {
+  const q = new URLSearchParams();
+  q.set("q", params.q);
+  q.set("sort", params.sort);
+  if (params.textid) q.set("textid", params.textid);
+  if (params.witness) for (const w of params.witness) q.append("witness", w);
+  if (params.context != null) q.set("context", String(params.context));
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.offset != null) q.set("offset", String(params.offset));
+  return fetchJson<SearchResponse>(`${apiBase}/search?${q.toString()}`);
 }

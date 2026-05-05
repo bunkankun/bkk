@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getAnnotations, getJuan, getManifest } from "../../api/client";
 import type { Annotation, Juan, Manifest } from "../../api/types";
 import { decodeKrRefs } from "../../lib/pua";
-import { workspace } from "../../state/useWorkspace";
+import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
 
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
@@ -30,6 +30,10 @@ export function TextViewer({ textid, seq }: Props) {
   const [annotations, setAnnotations] = useState<Annotation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const pending = useWorkspace((s) => s.pendingHighlight);
+  const [flashOffsets, setFlashOffsets] = useState<{ start: number; end: number } | null>(
+    null,
+  );
 
   // Load juan + annotations + manifest in parallel; reset on key change.
   useEffect(() => {
@@ -68,6 +72,30 @@ export function TextViewer({ textid, seq }: Props) {
     () => buildAnnotationIndex(annotations ?? []),
     [annotations],
   );
+
+  // Consume pendingHighlight from a search-result click: scroll the
+  // master-offset span into view and apply a temporary amber flash.
+  useEffect(() => {
+    if (
+      pending == null ||
+      pending.textid !== textid ||
+      pending.seq !== seq ||
+      juan == null ||
+      containerRef.current == null
+    ) {
+      return;
+    }
+    const start = pending.offset;
+    const end = pending.offset + Math.max(1, pending.length);
+    const target = containerRef.current.querySelector<HTMLElement>(
+      `span[data-offset="${start}"]`,
+    );
+    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    setFlashOffsets({ start, end });
+    workspace.consumeHighlight();
+    const timer = window.setTimeout(() => setFlashOffsets(null), 1200);
+    return () => window.clearTimeout(timer);
+  }, [pending, textid, seq, juan]);
 
   const handleMouseUp = useCallback(() => {
     const sel = window.getSelection();
@@ -149,7 +177,9 @@ export function TextViewer({ textid, seq }: Props) {
           if (ch === "\n") return <br key={i} />;
           const anns = annIndex.byOffset.get(i);
           const has = anns && anns.length > 0;
-          const cls = has ? "ch has-ann" : "ch";
+          const flashing =
+            flashOffsets != null && i >= flashOffsets.start && i < flashOffsets.end;
+          const cls = `${has ? "ch has-ann" : "ch"}${flashing ? " kwic-flash" : ""}`;
           const title = has ? anns!.map(annTooltip).join(" / ") : undefined;
           return (
             <span

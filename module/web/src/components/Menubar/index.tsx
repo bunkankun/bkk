@@ -1,4 +1,5 @@
-import { useWorkspace } from "../state/useWorkspace";
+import { useWorkspace } from "../../state/useWorkspace";
+import { SearchBar } from "./SearchBar";
 
 export function Menubar() {
   const upstream = useWorkspace((s) => s.serverInfo?.upstream_repo);
@@ -23,6 +24,7 @@ export function Menubar() {
       <button className="mb-btn" disabled title="v2">
         Help
       </button>
+      <SearchBar />
       <div className="mb-spacer" />
       <button className="mb-login" disabled title="v2">
         Login

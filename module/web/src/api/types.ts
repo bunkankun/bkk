@@ -152,6 +152,47 @@ export interface Annotation {
   metadata?: Record<string, unknown>;
 }
 
+// Search
+export type SearchSort =
+  | "match"
+  | "textid"
+  | "reverse_prematch"
+  | "date"
+  | "closeness";
+
+export interface VariantOverlay {
+  master_offset: number;
+  length: number;
+  content: string;
+  witness: string;
+  witness_form: string;
+}
+
+export interface SearchHit {
+  textid: string;
+  juan_seq: number;
+  bucket: string;
+  master_offset: number;
+  master_length: number;
+  matched_via: string;
+  matched_text: string;
+  left: string;
+  match: string;
+  right: string;
+  overlays: VariantOverlay[];
+  toc_label?: string | null;
+  recipe: Record<string, unknown>;
+}
+
+export interface SearchResponse {
+  query: string;
+  total: number;
+  offset: number;
+  limit: number;
+  sort: SearchSort;
+  hits: SearchHit[];
+}
+
 // Server identity
 export interface ServerInfo {
   service?: string;
