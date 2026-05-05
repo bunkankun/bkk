@@ -31,5 +31,8 @@ bkk-serve = "bkk.serve.cli:main"
 [tool.setuptools.packages.find]
 include = ["bkk*"]
 
+[tool.setuptools.package-data]
+"bkk.data" = ["*.yaml", "*.json", "*.txt", "*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

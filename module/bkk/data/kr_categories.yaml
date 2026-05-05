@@ -1,0 +1,109 @@
+_provenance:
+  source: "Kanripo project (https://www.kanripo.org/) classification scheme"
+  retrieved: "2026-05-05"
+  note: |
+    Top-level 部 (KR1–KR6) plus the standard subcategories used by Kanripo.
+    English labels are sinological conventions, not translations of the
+    Chinese term-for-term — adjust where a different rendering is preferred.
+
+# 經部 — Classics
+KR1:  {label: "Classics",                                 zh: "經部"}
+KR1a: {label: "Book of Changes",                          zh: "易類"}
+KR1b: {label: "Book of Documents",                        zh: "書類"}
+KR1c: {label: "Book of Odes",                             zh: "詩類"}
+KR1d: {label: "Rites",                                    zh: "禮類"}
+KR1e: {label: "Spring and Autumn Annals",                 zh: "春秋類"}
+KR1f: {label: "Classic of Filial Piety",                  zh: "孝經類"}
+KR1g: {label: "General Works on the Five Classics",       zh: "五經總義類"}
+KR1h: {label: "Four Books",                               zh: "四書類"}
+KR1i: {label: "Music",                                    zh: "樂類"}
+KR1j: {label: "Philology",                                zh: "小學類"}
+
+# 史部 — Histories
+KR2:  {label: "Histories",                                zh: "史部"}
+KR2a: {label: "Standard Histories",                       zh: "正史類"}
+KR2b: {label: "Annals",                                   zh: "編年類"}
+KR2c: {label: "Topical Histories",                        zh: "紀事本末類"}
+KR2d: {label: "Separate Histories",                       zh: "別史類"}
+KR2e: {label: "Miscellaneous Histories",                  zh: "雜史類"}
+KR2f: {label: "Edicts and Memorials",                     zh: "詔令奏議類"}
+KR2g: {label: "Biographies",                              zh: "傳記類"}
+KR2h: {label: "Historical Excerpts",                      zh: "史鈔類"}
+KR2i: {label: "Records of Regional Regimes",              zh: "載記類"}
+KR2j: {label: "Almanacs",                                 zh: "時令類"}
+KR2k: {label: "Geography",                                zh: "地理類"}
+KR2l: {label: "Government Offices",                       zh: "職官類"}
+KR2m: {label: "Institutional Compendia",                  zh: "政書類"}
+KR2n: {label: "Bibliographies",                           zh: "目錄類"}
+KR2o: {label: "Historical Criticism",                     zh: "史評類"}
+KR2p: {label: "Bamboo, Silk, and Epigraphy",              zh: "簡帛金石類"}
+
+# 子部 — Masters
+KR3:  {label: "Masters",                                  zh: "子部"}
+KR3a: {label: "Confucians",                               zh: "儒家類"}
+KR3b: {label: "Military Strategists",                     zh: "兵家類"}
+KR3c: {label: "Legalists",                                zh: "法家類"}
+KR3d: {label: "Agriculturalists",                         zh: "農家類"}
+KR3e: {label: "Medicine",                                 zh: "醫家類"}
+KR3f: {label: "Astronomy and Mathematics",                zh: "天文算法類"}
+KR3fa: {label: "Astronomy",                               zh: "天文"}
+KR3fb: {label: "Calendrical Sciences",                    zh: "曆法"}
+KR3fc: {label: "Mathematics",                             zh: "算法"}
+KR3g: {label: "Divinatory Arts",                          zh: "術數類"}
+KR3h: {label: "Arts",                                     zh: "藝術類"}
+KR3i: {label: "Reference Manuals",                        zh: "譜錄類"}
+KR3j: {label: "Miscellaneous Schools",                    zh: "雜家類"}
+KR3k: {label: "Encyclopedias",                            zh: "類書類"}
+KR3l: {label: "Fiction Writers",                          zh: "小說家類"}
+
+# 集部 — Belles-lettres
+KR4:  {label: "Belles-lettres",                           zh: "集部"}
+KR4a: {label: "Songs of Chu",                             zh: "楚辭類"}
+KR4b: {label: "Individual Collections, Han–Six Dynasties", zh: "別集類-漢六朝-"}
+KR4c: {label: "Individual Collections, Tang",             zh: "別集類-唐-"}
+KR4d: {label: "Individual Collections, Song",             zh: "別集類-宋-"}
+KR4e: {label: "Individual Collections, Ming",             zh: "別集類-明-"}
+KR4f: {label: "Individual Collections, Qing",             zh: "別集類-清-"}
+KR4g: {label: "Individual Collections, Modern",           zh: "別集類-近-"}
+KR4h: {label: "General Anthologies",                      zh: "總集類"}
+KR4i: {label: "Literary Criticism",                       zh: "詩文評類"}
+KR4j: {label: "Ci and Qu Lyrics",                         zh: "詞曲類"}
+KR4k: {label: "Fiction",                                  zh: "小説類"}
+
+# 道部 — Daoist canon
+KR5:  {label: "Daoist Canon",                             zh: "道部"}
+KR5a: {label: "Cavern of Perfection",                     zh: "洞真部"}
+KR5b: {label: "Cavern of Mystery",                        zh: "洞玄部"}
+KR5c: {label: "Cavern of Spirit",                         zh: "洞神部"}
+KR5d: {label: "Great Mystery",                            zh: "太玄部"}
+KR5e: {label: "Great Peace",                              zh: "太平部"}
+KR5f: {label: "Great Purity",                             zh: "太清部"}
+KR5g: {label: "Orthodox Unity",                           zh: "正一部"}
+KR5h: {label: "Supplementary Daozang",                    zh: "續道藏"}
+KR5i: {label: "Qing-Dynasty Daoist Texts",                zh: "清代道教文獻"}
+KR5j: {label: "Dunhuang Daoist Manuscripts",              zh: "敦煌道教文獻"}
+
+# 佛部 — Buddhist canon
+KR6:  {label: "Buddhist Canon",                           zh: "佛部"}
+KR6a: {label: "Āgamas",                                   zh: "阿含部類"}
+KR6b: {label: "Jātakas",                                  zh: "本緣部類"}
+KR6c: {label: "Prajñāpāramitā",                           zh: "般若部類"}
+KR6d: {label: "Lotus Sūtra",                              zh: "法華部類"}
+KR6e: {label: "Avataṃsaka",                               zh: "華嚴部類"}
+KR6f: {label: "Ratnakūṭa",                                zh: "寶積部類"}
+KR6g: {label: "Nirvāṇa",                                  zh: "涅槃部類"}
+KR6h: {label: "Mahāsaṃnipāta",                            zh: "大集部類"}
+KR6i: {label: "Sūtra Collections",                        zh: "經集部類"}
+KR6j: {label: "Esoteric Buddhism",                        zh: "密教部類"}
+KR6k: {label: "Vinaya",                                   zh: "律部類"}
+KR6l: {label: "Abhidharma",                               zh: "毘曇部類"}
+KR6m: {label: "Madhyamaka",                               zh: "中觀部類"}
+KR6n: {label: "Yogācāra",                                 zh: "瑜伽部類"}
+KR6o: {label: "Treatises",                                zh: "論集部類"}
+KR6p: {label: "Pure Land School",                         zh: "淨土宗部類"}
+KR6q: {label: "Chan School",                              zh: "禪宗部類"}
+KR6r: {label: "Histories and Biographies",                zh: "史傳部類"}
+KR6s: {label: "Encyclopedic Compilations",                zh: "事彙部類"}
+KR6t: {label: "Japanese Sectarian Supplement",            zh: "續諸宗(日本)"}
+KR6u: {label: "Dunhuang Manuscripts",                     zh: "敦煌寫本部類"}
+KR6v: {label: "Newly Compiled",                           zh: "新編部類"}
