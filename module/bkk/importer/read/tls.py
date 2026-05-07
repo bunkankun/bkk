@@ -20,6 +20,7 @@ that is *not* part of the bundle hash chain — see write/bundle.py.
 from __future__ import annotations
 
 import re
+import sys
 import unicodedata
 from pathlib import Path
 
@@ -51,6 +52,25 @@ def _q(local: str, ns: str = TEI_NS) -> str:
 
 def _xmlid(el) -> str:
     return el.get(_q("id", XML_NS), "")
+
+
+def _dedup_id(mid: str, seen_ids: dict[str, int]) -> tuple[str, dict]:
+    """Return (canonical_id, extras) for a marker.
+
+    First occurrence of ``mid`` is returned unchanged with empty extras.
+    Subsequent occurrences get a ``_dup{n}`` suffix and an extras entry
+    flagging the problem so the output YAML records the source defect.
+    """
+    if not mid:
+        return mid, {}
+    if mid not in seen_ids:
+        seen_ids[mid] = 1
+        return mid, {}
+    seen_ids[mid] += 1
+    return f"{mid}_dup{seen_ids[mid]}", {
+        "_xml_error": "duplicate-id",
+        "_xml_original_id": mid,
+    }
 
 
 def _is_cjk(ch: str) -> bool:
@@ -140,17 +160,26 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
     component of the marker ids, which follow ``<text-id>_<edition>_<location>``
     in both the Kanripo and TLS corpora.
     """
-    sections, divs_info, markers_info, tei_info = _parse_text(text_xml)
+    sections, divs_info, markers_info, tei_info, parse_errors = _parse_text(text_xml)
+    if parse_errors:
+        print(f"warning: {text_id}: {len(parse_errors)} XML error(s) in "
+              f"{text_xml.name}; continuing with recovery",
+              file=sys.stderr)
 
     annotations: list[Annotation] = []
     annotations_info: dict = {}
     ann_files_info: dict = {}
     for path, role in ((swl_ann, "swl"), (doc_ann, "doc")):
-        if path is not None and path.exists():
+        if path is None or not path.exists():
+            continue
+        try:
             anns, ann_info, envelope = _parse_annotations(path, role)
             annotations.extend(anns)
             annotations_info.update(ann_info)
             ann_files_info[role] = envelope
+        except Exception as exc:  # noqa: BLE001
+            print(f"warning: {text_id}: skipping {role} ann ({path.name}): {exc}",
+                  file=sys.stderr)
 
     # Normalize short juan labels in marker ids to JUAN_LABEL_WIDTH digits so
     # downstream identifiers conform to spec. No-op when source labels are
@@ -166,7 +195,7 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
     metadata = _parse_metadata(text_xml, text_id)
     edition_short = _derive_edition_short(sections, text_id)
 
-    source_info = {
+    source_info: dict = {
         "text_id": text_id,
         "format": "tls",
         "format_version": 1,
@@ -177,6 +206,8 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
         "ann_files": ann_files_info,
         "annotations": annotations_info,
     }
+    if parse_errors:
+        source_info["parse_errors"] = parse_errors
 
     juans = _build_juans(sections, annotations, text_id)
     source = {"repository": "tls-texts", "path": f"data/tls/{text_id}.xml"}
@@ -446,10 +477,10 @@ def _derive_edition_short(sections: list, text_id: str) -> str:
     return "T"
 
 
-def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict]:
+def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict, list[dict]]:
     """Parse the text XML.
 
-    Returns ``(sections, divs_info, markers_info, tei_info)``:
+    Returns ``(sections, divs_info, markers_info, tei_info, parse_errors)``:
     - ``sections``: ordered list of Sections used by the bundle pipeline.
     - ``divs_info``: source attrs per top-level div, keyed by head_marker_id.
     - ``markers_info``: source attrs per id-bearing marker (pb, head outer,
@@ -458,19 +489,28 @@ def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict]:
       to be carried for them.
     - ``tei_info``: ``{root_attrs, header}`` capturing the ``<TEI>`` element's
       attributes and the full ``<teiHeader>`` tree.
+    - ``parse_errors``: list of ``{level, message, line}`` dicts from the
+      parser's error log (non-empty only when the source had XML defects
+      such as empty ``xml:id`` values or duplicate ids).
     """
-    tree = etree.parse(str(path))
+    parser = etree.XMLParser(recover=True)
+    tree = etree.parse(str(path), parser)
+    parse_errors = [
+        {"level": e.level_name, "message": e.message, "line": e.line}
+        for e in parser.error_log
+    ]
     root = tree.getroot()
     body = tree.find(f".//{_q('body')}")
     if body is None:
         raise ValueError(f"no <body> element in {path}")
 
+    seen_ids: dict[str, int] = {}
     sections: list[Section] = []
     divs_info: dict = {}
     markers_info: dict = {}
     for div in body.iterfind(_q("div")):
         section, juan_entry, marker_entries, nested_div_entries = (
-            _section_from_div(div)
+            _section_from_div(div, seen_ids)
         )
         sections.append(section)
         if section.head_marker_id:
@@ -492,10 +532,10 @@ def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict]:
     if header_el is not None:
         tei_info["header"] = _to_tree(header_el)
 
-    return sections, divs_info, markers_info, tei_info
+    return sections, divs_info, markers_info, tei_info, parse_errors
 
 
-def _section_from_div(div) -> tuple[Section, dict, dict, dict]:
+def _section_from_div(div, seen_ids: dict[str, int] | None = None) -> tuple[Section, dict, dict, dict]:
     """Walk a top-level <div>, producing a Section with section-local offsets,
     plus a juan_div_entry, markers_info, and nested_divs_info for round-trip.
 
@@ -506,6 +546,8 @@ def _section_from_div(div) -> tuple[Section, dict, dict, dict]:
     is the nested div's head xml:id, which is also the key under which the
     nested div's attrs land in ``nested_divs_info``.
     """
+    if seen_ids is None:
+        seen_ids = {}
     text_buf: list[str] = []
     markers: list[Marker] = []
     markers_info: dict = {}
@@ -523,7 +565,7 @@ def _section_from_div(div) -> tuple[Section, dict, dict, dict]:
 
     _walk_div_children(
         div, text_buf, markers, markers_info, nested_divs_info,
-        offset, juan_div_entry, head_state, is_outermost=True,
+        offset, juan_div_entry, head_state, seen_ids, is_outermost=True,
     )
 
     section = Section(
@@ -538,27 +580,31 @@ def _section_from_div(div) -> tuple[Section, dict, dict, dict]:
 def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                        markers_info: dict, nested_divs_info: dict,
                        offset, div_entry: dict, head_state: dict,
-                       is_outermost: bool):
+                       seen_ids: dict[str, int], is_outermost: bool):
     """Walk one ``<div>``'s children, appending text and markers in document
     order. ``div_entry`` collects attrs (head_attrs / head_inner_seg_attrs /
     p_attrs) for *this* div. ``head_state`` tracks the section-level head
     fields, set only by the outermost div's first ``<head>``.
     """
     for child in div.iterchildren():
+        if not isinstance(child.tag, str):  # skip comments / PIs
+            continue
         tag = etree.QName(child).localname
         if tag == "pb":
-            mid = _xmlid(child)
+            raw_id = _xmlid(child)
+            mid, id_extras = _dedup_id(raw_id, seen_ids)
             markers.append(Marker(type="page-break", offset=offset(),
-                                  content="", id=mid))
-            extras = _attrs_minus(child, ("xml:id",))
-            if mid and extras:
-                markers_info[mid] = {"type": "page-break", "attrs": extras}
+                                  content="", id=mid, extras=id_extras))
+            attrs = _attrs_minus(child, ("xml:id",))
+            if mid and attrs:
+                markers_info[mid] = {"type": "page-break", "attrs": attrs}
         elif tag == "head":
             inner_seg = child.find(_q("seg"))
             seg_text = unicodedata.normalize("NFC", _seg_text(inner_seg))
-            seg_id = _xmlid(inner_seg) if inner_seg is not None else _xmlid(child)
+            raw_id = _xmlid(inner_seg) if inner_seg is not None else _xmlid(child)
+            seg_id, id_extras = _dedup_id(raw_id, seen_ids)
             markers.append(Marker(type="tls:head", offset=offset(),
-                                  content="", id=seg_id))
+                                  content="", id=seg_id, extras=id_extras))
             text_buf.append(seg_text)
             if "head_attrs" not in div_entry:
                 head_attrs = _attrs_to_dict(child.attrib)
@@ -578,16 +624,20 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
             if p_attrs:
                 div_entry.setdefault("p_attrs", []).append(p_attrs)
             for seg in child.iterchildren():
+                if not isinstance(seg.tag, str):
+                    continue
                 seg_tag = etree.QName(seg).localname
                 if seg_tag == "seg":
-                    _emit_seg(seg, text_buf, markers, offset, markers_info)
+                    _emit_seg(seg, text_buf, markers, offset, markers_info,
+                              seen_ids)
                 elif seg_tag == "pb":
-                    mid = _xmlid(seg)
+                    raw_id = _xmlid(seg)
+                    mid, id_extras = _dedup_id(raw_id, seen_ids)
                     markers.append(Marker(type="page-break", offset=offset(),
-                                          content="", id=mid))
-                    extras = _attrs_minus(seg, ("xml:id",))
-                    if mid and extras:
-                        markers_info[mid] = {"type": "page-break", "attrs": extras}
+                                          content="", id=mid, extras=id_extras))
+                    attrs = _attrs_minus(seg, ("xml:id",))
+                    if mid and attrs:
+                        markers_info[mid] = {"type": "page-break", "attrs": attrs}
                 # other inline tags ignored for now
             markers.append(Marker(type="paragraph-break", offset=offset(),
                                   content="", id=""))
@@ -601,7 +651,7 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                                   content="", id=nested_head_id))
             _walk_div_children(
                 child, text_buf, markers, markers_info, nested_divs_info,
-                offset, nested_entry, head_state, is_outermost=False,
+                offset, nested_entry, head_state, seen_ids, is_outermost=False,
             )
             markers.append(Marker(type="tls:div-end", offset=offset(),
                                   content="", id=nested_head_id))
@@ -639,30 +689,34 @@ def _attrs_minus(elem, drop: tuple[str, ...]) -> dict:
 
 
 def _emit_seg(seg, text_buf: list[str], markers: list[Marker], offset_fn,
-              markers_info: dict):
-    seg_id = _xmlid(seg)
+              markers_info: dict, seen_ids: dict[str, int]):
+    raw_id = _xmlid(seg)
+    seg_id, id_extras = _dedup_id(raw_id, seen_ids)
     markers.append(Marker(type="tls:seg", offset=offset_fn(),
-                          content="", id=seg_id))
-    extras = _attrs_minus(seg, ("xml:id",))
-    if seg_id and extras:
-        markers_info[seg_id] = {"type": "tls:seg", "attrs": extras}
+                          content="", id=seg_id, extras=id_extras))
+    attrs = _attrs_minus(seg, ("xml:id",))
+    if seg_id and attrs:
+        markers_info[seg_id] = {"type": "tls:seg", "attrs": attrs}
     # Walk the seg in mixed-content order. seg.text is the leading text;
     # each child's .text is its content, .tail is the text following it.
     # Whitespace-only seg.text (formatting between <seg>...<c/>) is dropped.
     if seg.text and seg.text.strip():
         text_buf.append(unicodedata.normalize("NFC", seg.text))
     for child in seg.iterchildren():
+        if not isinstance(child.tag, str):
+            continue
         tag = etree.QName(child).localname
         if tag == "c":
             markers.append(Marker(type="punctuation", offset=offset_fn(),
                                   content=child.get("n", ""), id=""))
         elif tag == "pb":
-            mid = _xmlid(child)
+            raw_pb_id = _xmlid(child)
+            mid, pb_id_extras = _dedup_id(raw_pb_id, seen_ids)
             markers.append(Marker(type="page-break", offset=offset_fn(),
-                                  content="", id=mid))
-            pb_extras = _attrs_minus(child, ("xml:id",))
-            if mid and pb_extras:
-                markers_info[mid] = {"type": "page-break", "attrs": pb_extras}
+                                  content="", id=mid, extras=pb_id_extras))
+            pb_attrs = _attrs_minus(child, ("xml:id",))
+            if mid and pb_attrs:
+                markers_info[mid] = {"type": "page-break", "attrs": pb_attrs}
         # else: skip unknown inline elements but keep their text content
         if child.tail:
             tail = child.tail
@@ -706,7 +760,8 @@ def _parse_annotations(path: Path,
     ``p_attrs`` (the wrapper ``<p>``'s attributes), and ``seg_lines`` (the
     text of each ``<line>`` element wrapping a seg's annotations).
     """
-    tree = etree.parse(str(path))
+    ann_parser = etree.XMLParser(recover=True)
+    tree = etree.parse(str(path), ann_parser)
     out: list[Annotation] = []
     info: dict = {}
     envelope: dict = {}
@@ -861,7 +916,7 @@ _CATREF_RE = re.compile(r"#([\w-]+)")
 
 
 def _parse_metadata(text_xml: Path, text_id: str) -> dict:
-    tree = etree.parse(str(text_xml))
+    tree = etree.parse(str(text_xml), etree.XMLParser(recover=True))
     md: dict = {}
 
     title_el = tree.find(f".//{_q('teiHeader')}//{_q('titleStmt')}/{_q('title')}")
