@@ -26,6 +26,7 @@ from pathlib import Path
 
 from lxml import etree
 
+from ..charset import is_allowed_body_char
 from ..classify import _split_section_at
 from ..ir import Annotation, Bundle, Juan, Marker, Section
 
@@ -851,6 +852,7 @@ def _walk_cbeta_div_children(
     markers_info: dict, nested_divs_info: dict,
     offset, div_entry: dict, head_state: dict,
     seen_ids: dict[str, int], state: dict, is_outermost: bool,
+    depth: int = 1,
 ):
     """Permissive walker for CBETA-flavor div content.
 
@@ -858,13 +860,24 @@ def _walk_cbeta_div_children(
     plus CBETA-specific ones (``<mulu>``, ``<juan>``, ``<byline>``,
     ``<dialog>``/``<sp>``, …). Unknown container elements are descended into;
     bare ``<seg>`` and ``<pb>`` that turn up at any depth are emitted via the
-    usual machinery."""
+    usual machinery.
+
+    Maintains a run-state for div-level ``<seg>`` siblings (rare in CBETA
+    proper but common inside ``<dialog>``/``<sp>`` recursions). The state is
+    closed at every non-seg sibling, so it never spans a structural boundary
+    like ``<p>`` (which has its own per-paragraph run state).
+    """
     text_id = state["text_id"]
     edition = state["edition"]
+    div_run_state = _new_seg_run_state(seen_ids)
     for child in div.iterchildren():
         if not isinstance(child.tag, str):
             continue
         tag = etree.QName(child).localname
+        # Close any open div-level seg run before non-seg/non-pb siblings.
+        # <pb> alone does not break a run; segs continue or extend it.
+        if tag not in ("seg", "pb"):
+            _close_seg_run(div_run_state, markers, offset)
         if tag == "pb":
             raw_id = _xmlid(child)
             mid, id_extras = _dedup_id(raw_id, seen_ids)
@@ -875,12 +888,16 @@ def _walk_cbeta_div_children(
                 markers_info[mid] = {"type": "page-break", "attrs": attrs}
         elif tag == "head":
             inner_seg = child.find(_q("seg"))
-            seg_text = unicodedata.normalize("NFC", _seg_text(inner_seg))
             raw_id = _xmlid(inner_seg) if inner_seg is not None else _xmlid(child)
             seg_id, id_extras = _dedup_id(raw_id, seen_ids)
             markers.append(Marker(type="tls:head", offset=offset(),
                                   content="", id=seg_id, extras=id_extras))
-            text_buf.append(seg_text)
+            head_text_start = offset()
+            if inner_seg is not None:
+                head_sink = _make_sink(text_buf, markers, offset,
+                                       markers_info, seen_ids, in_head=True)
+                _walk_seg_inline(inner_seg, head_sink)
+            head_text_str = "".join(text_buf)[head_text_start:]
             if "head_attrs" not in div_entry:
                 head_attrs = _attrs_to_dict(child.attrib)
                 if head_attrs:
@@ -890,7 +907,7 @@ def _walk_cbeta_div_children(
                     if inner_extras:
                         div_entry["head_inner_seg_attrs"] = inner_extras
             if is_outermost and not head_state["text"]:
-                head_state["text"] = _cjk_only(seg_text)
+                head_state["text"] = _cjk_only(head_text_str)
                 head_state["id"] = seg_id
         elif tag == "mulu":
             mulu_text = (child.text or "").strip()
@@ -949,46 +966,63 @@ def _walk_cbeta_div_children(
                 if attrs:
                     markers_info[mid] = {"type": "cbeta:juan-end", "attrs": attrs}
         elif tag == "p":
+            p_xmlid = _xmlid(child)
+            p_open_id, p_open_extras = _dedup_id(p_xmlid, seen_ids)
+            open_extras = dict(p_open_extras)
+            open_extras["role"] = "open"
             markers.append(Marker(type="paragraph-break", offset=offset(),
-                                  content="", id=""))
+                                  content="", id=p_open_id, extras=open_extras))
             p_attrs = _attrs_to_dict(child.attrib)
             if p_attrs:
                 div_entry.setdefault("p_attrs", []).append(p_attrs)
             _walk_cbeta_inline_children(
                 child, text_buf, markers, markers_info, offset, seen_ids,
             )
+            p_close_raw = f"{p_xmlid}_end" if p_xmlid else ""
+            p_close_id, p_close_extras = _dedup_id(p_close_raw, seen_ids)
+            close_extras = dict(p_close_extras)
+            close_extras["role"] = "close"
             markers.append(Marker(type="paragraph-break", offset=offset(),
-                                  content="", id=""))
+                                  content="", id=p_close_id, extras=close_extras))
         elif tag == "seg":
-            _emit_seg(child, text_buf, markers, offset, markers_info, seen_ids)
+            _emit_seg_with_run(child, div_run_state, text_buf, markers,
+                               offset, markers_info, seen_ids)
         elif tag == "div":
-            nested_head_id = _find_div_head_id(child)
+            nested_id = _div_marker_id(child)
             nested_entry: dict = {}
             nested_div_attrs = _attrs_to_dict(child.attrib)
             if nested_div_attrs:
                 nested_entry["div_attrs"] = nested_div_attrs
+            nested_level = depth + 1
+            nested_label = _div_head_text(child)
+            start_extras: dict = {"level": nested_level}
+            if nested_label:
+                start_extras["head_text"] = nested_label
             markers.append(Marker(type="tls:div-start", offset=offset(),
-                                  content="", id=nested_head_id))
+                                  content="", id=nested_id,
+                                  extras=start_extras))
             _walk_cbeta_div_children(
                 child, text_buf, markers, markers_info, nested_divs_info,
                 offset, nested_entry, head_state, seen_ids, state,
-                is_outermost=False,
+                is_outermost=False, depth=nested_level,
             )
             markers.append(Marker(type="tls:div-end", offset=offset(),
-                                  content="", id=nested_head_id))
-            if nested_head_id:
-                nested_divs_info[nested_head_id] = nested_entry
+                                  content="", id=nested_id))
+            if nested_id:
+                nested_divs_info[nested_id] = nested_entry
         elif tag in ("byline", "dialog", "sp"):
             # CBETA wraps content (segs, sometimes nested <p>) inside these.
             # Walk through them transparently — they're containers only.
             _walk_cbeta_div_children(
                 child, text_buf, markers, markers_info, nested_divs_info,
                 offset, div_entry, head_state, seen_ids, state,
-                is_outermost=False,
+                is_outermost=False, depth=depth,
             )
         # docNumber, lb, anchor, note, g and other stray elements at div
         # level: ignored. (Inline <g>/<note> are handled by _emit_seg from
         # within seg children.)
+    # Close any open div-level run at end of container.
+    _close_seg_run(div_run_state, markers, offset)
 
 
 def _walk_cbeta_inline_children(
@@ -996,13 +1030,21 @@ def _walk_cbeta_inline_children(
     markers_info: dict, offset, seen_ids: dict[str, int],
 ):
     """Walk children of a ``<p>``-like element, emitting ``<seg>`` content
-    and ``<pb>`` markers; everything else is ignored at this level."""
+    and ``<pb>`` markers; everything else is ignored at this level.
+
+    Maintains the typed-seg run-folding state machine for this paragraph:
+    consecutive ``<seg type=T>`` siblings fold into one
+    ``tls:seg-start`` / ``tls:seg-end`` range; ``<pb>`` does not break the
+    run; an inline ``<note>`` does.
+    """
+    run_state = _new_seg_run_state(seen_ids)
     for child in parent.iterchildren():
         if not isinstance(child.tag, str):
             continue
         tag = etree.QName(child).localname
         if tag == "seg":
-            _emit_seg(child, text_buf, markers, offset, markers_info, seen_ids)
+            _emit_seg_with_run(child, run_state, text_buf, markers,
+                               offset, markers_info, seen_ids)
         elif tag == "pb":
             raw_id = _xmlid(child)
             mid, id_extras = _dedup_id(raw_id, seen_ids)
@@ -1011,7 +1053,13 @@ def _walk_cbeta_inline_children(
             attrs = _attrs_minus(child, ("xml:id",))
             if mid and attrs:
                 markers_info[mid] = {"type": "page-break", "attrs": attrs}
+        elif tag == "note" and child.get("place") == "inline":
+            _close_seg_run(run_state, markers, offset)
+            note_sink = _make_sink(text_buf, markers, offset,
+                                   markers_info, seen_ids)
+            _emit_inline_note(child, note_sink)
         # <lb>, <anchor>, etc.: ignored.
+    _close_seg_run(run_state, markers, offset)
 
 
 def _section_from_div(div, seen_ids: dict[str, int] | None = None) -> tuple[Section, dict, dict, dict]:
@@ -1059,11 +1107,15 @@ def _section_from_div(div, seen_ids: dict[str, int] | None = None) -> tuple[Sect
 def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                        markers_info: dict, nested_divs_info: dict,
                        offset, div_entry: dict, head_state: dict,
-                       seen_ids: dict[str, int], is_outermost: bool):
+                       seen_ids: dict[str, int], is_outermost: bool,
+                       depth: int = 1):
     """Walk one ``<div>``'s children, appending text and markers in document
     order. ``div_entry`` collects attrs (head_attrs / head_inner_seg_attrs /
     p_attrs) for *this* div. ``head_state`` tracks the section-level head
-    fields, set only by the outermost div's first ``<head>``.
+    fields, set only by the outermost div's first ``<head>``. ``depth`` is
+    1 for the section's outermost div and increments for each nested
+    ``<div>`` recursion; nested ``tls:div-start`` markers carry it as
+    ``extras['level']`` so the TOC builder can place them.
     """
     for child in div.iterchildren():
         if not isinstance(child.tag, str):  # skip comments / PIs
@@ -1079,12 +1131,16 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                 markers_info[mid] = {"type": "page-break", "attrs": attrs}
         elif tag == "head":
             inner_seg = child.find(_q("seg"))
-            seg_text = unicodedata.normalize("NFC", _seg_text(inner_seg))
             raw_id = _xmlid(inner_seg) if inner_seg is not None else _xmlid(child)
             seg_id, id_extras = _dedup_id(raw_id, seen_ids)
             markers.append(Marker(type="tls:head", offset=offset(),
                                   content="", id=seg_id, extras=id_extras))
-            text_buf.append(seg_text)
+            head_text_start = offset()
+            if inner_seg is not None:
+                head_sink = _make_sink(text_buf, markers, offset,
+                                       markers_info, seen_ids, in_head=True)
+                _walk_seg_inline(inner_seg, head_sink)
+            head_text_str = "".join(text_buf)[head_text_start:]
             if "head_attrs" not in div_entry:
                 head_attrs = _attrs_to_dict(child.attrib)
                 if head_attrs:
@@ -1094,22 +1150,28 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                     if inner_extras:
                         div_entry["head_inner_seg_attrs"] = inner_extras
             if is_outermost and not head_state["text"]:
-                head_state["text"] = _cjk_only(seg_text)
+                head_state["text"] = _cjk_only(head_text_str)
                 head_state["id"] = seg_id
         elif tag == "p":
+            p_xmlid = _xmlid(child)
+            p_open_id, p_open_extras = _dedup_id(p_xmlid, seen_ids)
+            open_extras = dict(p_open_extras)
+            open_extras["role"] = "open"
             markers.append(Marker(type="paragraph-break", offset=offset(),
-                                  content="", id=""))
+                                  content="", id=p_open_id, extras=open_extras))
             p_attrs = _attrs_to_dict(child.attrib)
             if p_attrs:
                 div_entry.setdefault("p_attrs", []).append(p_attrs)
+            run_state = _new_seg_run_state(seen_ids)
             for seg in child.iterchildren():
                 if not isinstance(seg.tag, str):
                     continue
                 seg_tag = etree.QName(seg).localname
                 if seg_tag == "seg":
-                    _emit_seg(seg, text_buf, markers, offset, markers_info,
-                              seen_ids)
+                    _emit_seg_with_run(seg, run_state, text_buf, markers,
+                                       offset, markers_info, seen_ids)
                 elif seg_tag == "pb":
+                    # <pb> does NOT break a typed-seg run.
                     raw_id = _xmlid(seg)
                     mid, id_extras = _dedup_id(raw_id, seen_ids)
                     markers.append(Marker(type="page-break", offset=offset(),
@@ -1117,35 +1179,91 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                     attrs = _attrs_minus(seg, ("xml:id",))
                     if mid and attrs:
                         markers_info[mid] = {"type": "page-break", "attrs": attrs}
+                elif seg_tag == "note" and seg.get("place") == "inline":
+                    # Inline-note at p-level: break run, emit brackets.
+                    _close_seg_run(run_state, markers, offset)
+                    note_sink = _make_sink(text_buf, markers, offset,
+                                           markers_info, seen_ids)
+                    _emit_inline_note(seg, note_sink)
                 # other inline tags ignored for now
+            _close_seg_run(run_state, markers, offset)
+            p_close_raw = f"{p_xmlid}_end" if p_xmlid else ""
+            p_close_id, p_close_extras = _dedup_id(p_close_raw, seen_ids)
+            close_extras = dict(p_close_extras)
+            close_extras["role"] = "close"
             markers.append(Marker(type="paragraph-break", offset=offset(),
-                                  content="", id=""))
+                                  content="", id=p_close_id, extras=close_extras))
         elif tag == "div":
-            nested_head_id = _find_div_head_id(child)
+            nested_id = _div_marker_id(child)
             nested_entry: dict = {}
             nested_div_attrs = _attrs_to_dict(child.attrib)
             if nested_div_attrs:
                 nested_entry["div_attrs"] = nested_div_attrs
+            nested_level = depth + 1
+            nested_label = _div_head_text(child)
+            start_extras: dict = {"level": nested_level}
+            if nested_label:
+                start_extras["head_text"] = nested_label
             markers.append(Marker(type="tls:div-start", offset=offset(),
-                                  content="", id=nested_head_id))
+                                  content="", id=nested_id,
+                                  extras=start_extras))
             _walk_div_children(
                 child, text_buf, markers, markers_info, nested_divs_info,
-                offset, nested_entry, head_state, seen_ids, is_outermost=False,
+                offset, nested_entry, head_state, seen_ids,
+                is_outermost=False, depth=nested_level,
             )
             markers.append(Marker(type="tls:div-end", offset=offset(),
-                                  content="", id=nested_head_id))
-            if nested_head_id:
-                nested_divs_info[nested_head_id] = nested_entry
+                                  content="", id=nested_id))
+            if nested_id:
+                nested_divs_info[nested_id] = nested_entry
         # Non-element nodes (text/tail) between siblings are ignored —
         # whitespace-only in TLS sources.
 
 
-def _find_div_head_id(div) -> str:
-    """Return the xml:id of the inner ``<seg>`` in this div's first ``<head>``
-    child (or the head's own xml:id, or empty string). Used to key nested-div
-    info and to correlate ``tls:div-start`` / ``tls:div-end`` markers with the
-    head marker that follows them.
+def _div_head_text(div) -> str:
+    """Return a CJK-only TOC label for this div, drawn from its first
+    ``<head>`` child's inner ``<seg>``.
+
+    Inline notes are excluded — the TOC label is for navigation, not
+    commentary. Punctuation and whitespace are stripped because labels
+    must satisfy the same CJK-only invariant as the bundle's body text.
     """
+    head = div.find(_q("head"))
+    if head is None:
+        return ""
+    inner_seg = head.find(_q("seg"))
+    if inner_seg is None:
+        return ""
+    parts: list[str] = []
+    if inner_seg.text:
+        parts.append(inner_seg.text)
+    for child in inner_seg.iterchildren():
+        if not isinstance(child.tag, str):
+            continue
+        ctag = etree.QName(child).localname
+        if ctag == "note" and child.get("place") == "inline":
+            # Skip inline-note text; the TOC label is navigation, not gloss.
+            if child.tail:
+                parts.append(child.tail)
+            continue
+        if child.text:
+            parts.append(child.text)
+        if child.tail:
+            parts.append(child.tail)
+    return _cjk_only(unicodedata.normalize("NFC", "".join(parts)))
+
+
+def _div_marker_id(div) -> str:
+    """Return the canonical id for this div's start/end markers.
+
+    Prefers the div's own ``xml:id`` so the source identifier survives in the
+    bundle. Falls back to the inner ``<seg>``'s xml:id, then the head's own
+    xml:id, then the empty string. The fallback chain preserves backwards-
+    compatible keying for divs that lack their own xml:id.
+    """
+    own = _xmlid(div)
+    if own:
+        return own
     head = div.find(_q("head"))
     if head is None:
         return ""
@@ -1167,68 +1285,233 @@ def _attrs_minus(elem, drop: tuple[str, ...]) -> dict:
     return attrs
 
 
-def _emit_seg(seg, text_buf: list[str], markers: list[Marker], offset_fn,
-              markers_info: dict, seen_ids: dict[str, int]):
-    raw_id = _xmlid(seg)
-    seg_id, id_extras = _dedup_id(raw_id, seen_ids)
-    markers.append(Marker(type="tls:seg", offset=offset_fn(),
-                          content="", id=seg_id, extras=id_extras))
-    attrs = _attrs_minus(seg, ("xml:id",))
-    if seg_id and attrs:
-        markers_info[seg_id] = {"type": "tls:seg", "attrs": attrs}
-    # Walk the seg in mixed-content order. seg.text is the leading text;
-    # each child's .text is its content, .tail is the text following it.
-    # Whitespace-only seg.text (formatting between <seg>...<c/>) is dropped.
-    if seg.text and seg.text.strip():
-        text_buf.append(unicodedata.normalize("NFC", seg.text))
+def _make_sink(text_buf: list[str], markers: list[Marker], offset_fn,
+               markers_info: dict, seen_ids: dict[str, int],
+               *, in_head: bool = False) -> dict:
+    return {
+        "text_buf": text_buf,
+        "markers": markers,
+        "offset": offset_fn,
+        "markers_info": markers_info,
+        "seen_ids": seen_ids,
+        "in_head": in_head,
+        # When True, _append_text_filtered emits markers as usual but
+        # suppresses text appends. Used inside heads' inline notes so the
+        # note's text doesn't bleed into the head's TOC label slice.
+        "suppress_text": False,
+    }
+
+
+def _append_text_filtered(text: str, sink: dict) -> None:
+    """Append NFC-normalized text to ``sink['text_buf']``, enforcing the
+    body-text CJK+PUA invariant.
+
+    CJK ideographs and BKK PUA codepoints flow to text. Ideographic space
+    (U+3000) becomes an ``indent`` marker. Other ASCII whitespace is
+    dropped. Anything else (ASCII parens, stray punctuation residue) is
+    captured as a ``punctuation`` marker so the source byte survives even
+    though it can't sit in body text.
+    """
+    if not text:
+        return
+    suppress = sink.get("suppress_text", False)
+    for ch in unicodedata.normalize("NFC", text):
+        if is_allowed_body_char(ch):
+            if not suppress:
+                sink["text_buf"].append(ch)
+        elif ch == "\u3000":
+            sink["markers"].append(Marker(
+                type="indent", offset=sink["offset"](),
+                content=ch, id="",
+            ))
+        elif ch.isspace():
+            continue
+        else:
+            sink["markers"].append(Marker(
+                type="punctuation", offset=sink["offset"](),
+                content=ch, id="",
+            ))
+
+
+def _emit_inline_note(note, sink: dict) -> None:
+    """Emit a ``<note place="inline">`` as bracket markers around its content.
+
+    The opening ``tls:note-start`` carries the source ``(`` as content (a
+    presentation hint for renderers; ``body.text`` stays CJK-only). The
+    closing ``tls:note-end`` carries ``)``. The note's text content flows
+    through the regular filter — except inside heads, where the sink's
+    ``suppress_text`` flag is engaged so the note doesn't bleed into the
+    head's TOC label slice.
+    """
+    raw_id = _xmlid(note)
+    note_id, id_extras = _dedup_id(raw_id, sink["seen_ids"])
+    extras = dict(id_extras)
+    note_attrs = _attrs_minus(note, ("xml:id",))
+    if note_attrs:
+        extras["note_attrs"] = note_attrs
+    sink["markers"].append(Marker(
+        type="tls:note-start", offset=sink["offset"](),
+        content="(", id=note_id, extras=extras,
+    ))
+
+    saved_suppress = sink["suppress_text"]
+    if sink["in_head"]:
+        sink["suppress_text"] = True
+    try:
+        _walk_seg_inline(note, sink)
+    finally:
+        sink["suppress_text"] = saved_suppress
+
+    end_raw = f"{raw_id}_end" if raw_id else ""
+    end_id, end_extras_dup = _dedup_id(end_raw, sink["seen_ids"])
+    end_extras = dict(end_extras_dup)
+    if note_id:
+        end_extras["note_ref"] = note_id
+    sink["markers"].append(Marker(
+        type="tls:note-end", offset=sink["offset"](),
+        content=")", id=end_id, extras=end_extras,
+    ))
+
+
+def _walk_seg_inline(seg, sink: dict) -> None:
+    """Walk a ``<seg>``'s mixed content, emitting text and markers via the
+    sink. Shared by body and head paths so a single place adds new shapes
+    (inline notes, future inline elements) for both contexts.
+    """
+    if seg is None:
+        return
+    _append_text_filtered(seg.text or "", sink)
     for child in seg.iterchildren():
         if not isinstance(child.tag, str):
             continue
         tag = etree.QName(child).localname
         if tag == "c":
-            markers.append(Marker(type="punctuation", offset=offset_fn(),
-                                  content=child.get("n", ""), id=""))
+            sink["markers"].append(Marker(
+                type="punctuation", offset=sink["offset"](),
+                content=child.get("n", ""), id="",
+            ))
         elif tag == "pb":
             raw_pb_id = _xmlid(child)
-            mid, pb_id_extras = _dedup_id(raw_pb_id, seen_ids)
-            markers.append(Marker(type="page-break", offset=offset_fn(),
-                                  content="", id=mid, extras=pb_id_extras))
+            mid, pb_id_extras = _dedup_id(raw_pb_id, sink["seen_ids"])
+            sink["markers"].append(Marker(
+                type="page-break", offset=sink["offset"](),
+                content="", id=mid, extras=pb_id_extras,
+            ))
             pb_attrs = _attrs_minus(child, ("xml:id",))
             if mid and pb_attrs:
-                markers_info[mid] = {"type": "page-break", "attrs": pb_attrs}
+                sink["markers_info"][mid] = {"type": "page-break", "attrs": pb_attrs}
+        elif tag == "note" and child.get("place") == "inline":
+            _emit_inline_note(child, sink)
         else:
-            # Unknown inline element: keep its text as plain content. CBETA
-            # sources use <g ref="#CBxxx">𮗎</g> for non-Unicode glyphs and
-            # <note place="inline">…</note> for inline interlinear notes;
-            # both should flow into the seg's text stream verbatim.
-            if child.text:
-                text_buf.append(unicodedata.normalize("NFC", child.text))
-        if child.tail:
-            tail = child.tail
-            # Strip whitespace-only tails (formatting artifacts in the XML).
-            if tail.strip():
-                text_buf.append(unicodedata.normalize("NFC", tail))
+            # Unknown inline element: keep its text as plain content.
+            # Non-inline notes, CBETA <g>, <date>, etc. land here.
+            _append_text_filtered(child.text or "", sink)
+        _append_text_filtered(child.tail or "", sink)
 
 
-def _seg_text(seg) -> str:
-    """Text content of a head's inner <seg>, joining mixed content."""
-    if seg is None:
-        return ""
-    parts: list[str] = []
-    if seg.text:
-        parts.append(seg.text)
-    for child in seg.iterchildren():
-        tag = etree.QName(child).localname
-        if tag == "c":
-            # Heads typically have no <c>, but if so the punctuation goes
-            # into the head's text content (heads aren't broken into
-            # markers the same way bodies are).
-            parts.append(child.get("n", ""))
-        elif child.text:
-            parts.append(child.text)
-        if child.tail and child.tail.strip():
-            parts.append(child.tail)
-    return "".join(parts)
+def _emit_seg(seg, text_buf: list[str], markers: list[Marker], offset_fn,
+              markers_info: dict, seen_ids: dict[str, int]):
+    raw_id = _xmlid(seg)
+    seg_id, id_extras = _dedup_id(raw_id, seen_ids)
+    _emit_seg_body(seg, seg_id, id_extras, text_buf, markers, offset_fn,
+                   markers_info, seen_ids)
+
+
+def _emit_seg_body(seg, seg_id: str, id_extras: dict, text_buf: list[str],
+                   markers: list[Marker], offset_fn, markers_info: dict,
+                   seen_ids: dict[str, int]):
+    """Emit the per-seg ``tls:seg`` point marker plus the seg's content,
+    given a precomputed deduped ``seg_id``. Split out so the run-folding
+    state machine can dedup the seg id once (for use on
+    ``tls:seg-start``) and reuse it here."""
+    markers.append(Marker(type="tls:seg", offset=offset_fn(),
+                          content="", id=seg_id, extras=id_extras))
+    attrs = _attrs_minus(seg, ("xml:id",))
+    if seg_id and attrs:
+        markers_info[seg_id] = {"type": "tls:seg", "attrs": attrs}
+    sink = _make_sink(text_buf, markers, offset_fn, markers_info, seen_ids)
+    _walk_seg_inline(seg, sink)
+
+
+def _new_seg_run_state(seen_ids: dict[str, int]) -> dict:
+    """Per-``<p>`` state for the typed-seg run-folding state machine.
+
+    Lives on the ``<p>`` loop's stack frame; reset between paragraphs.
+    A *run* is a maximal sequence of consecutive ``<seg type=T>`` siblings
+    with the same ``T`` value, bracketed in the marker stream by
+    ``tls:seg-start`` / ``tls:seg-end``. Untyped segs and inline ``<note>``
+    children break runs; ``<pb>`` does not.
+    """
+    return {
+        "run_type": None,         # str | None — current run's seg/@type
+        "run_start_marker": None,  # Marker | None — for member_ids updates
+        "run_member_ids": [],      # list[str] — deduped seg ids in run
+        "seen_ids": seen_ids,
+    }
+
+
+def _close_seg_run(state: dict, markers: list[Marker], offset_fn) -> None:
+    """Close the current typed-seg run if open, emitting ``tls:seg-end``.
+
+    The end marker's id is the last member's id with ``_end`` suffix
+    (routed through ``_dedup_id`` so a literal ``_end`` collision still
+    gets a ``_dup{n}`` suffix). No-op if no run is open.
+    """
+    if state["run_type"] is None:
+        return
+    last_id = state["run_member_ids"][-1] if state["run_member_ids"] else ""
+    end_raw = f"{last_id}_end" if last_id else ""
+    end_id, end_extras = _dedup_id(end_raw, state["seen_ids"])
+    end_extras = dict(end_extras)
+    end_extras["seg_type"] = state["run_type"]
+    markers.append(Marker(
+        type="tls:seg-end", offset=offset_fn(),
+        content="", id=end_id, extras=end_extras,
+    ))
+    state["run_type"] = None
+    state["run_start_marker"] = None
+    state["run_member_ids"] = []
+
+
+def _emit_seg_with_run(seg, state: dict, text_buf: list[str],
+                       markers: list[Marker], offset_fn,
+                       markers_info: dict, seen_ids: dict[str, int]) -> None:
+    """Emit one ``<seg>`` while maintaining typed-seg run-folding state.
+
+    Same emission shape as ``_emit_seg`` (``tls:seg`` point marker +
+    content) plus run bookkeeping: opens a new run on the first typed seg,
+    folds consecutive same-type segs into one run, closes the previous
+    run when ``type`` changes or an untyped seg appears.
+    """
+    raw_id = _xmlid(seg)
+    seg_id, id_extras = _dedup_id(raw_id, seen_ids)
+    seg_type = seg.get("type") or None
+
+    if seg_type is None:
+        # Untyped seg breaks the current run.
+        _close_seg_run(state, markers, offset_fn)
+    elif state["run_type"] == seg_type:
+        # Continue the run; record this seg as a member.
+        state["run_member_ids"].append(seg_id)
+        if state["run_start_marker"] is not None:
+            state["run_start_marker"].extras["member_ids"] = list(
+                state["run_member_ids"]
+            )
+    else:
+        # Different type (or first typed seg in this <p>): close, then open.
+        _close_seg_run(state, markers, offset_fn)
+        start_marker = Marker(
+            type="tls:seg-start", offset=offset_fn(),
+            content="", id=seg_id,
+            extras={"seg_type": seg_type, "member_ids": [seg_id]},
+        )
+        markers.append(start_marker)
+        state["run_type"] = seg_type
+        state["run_start_marker"] = start_marker
+        state["run_member_ids"] = [seg_id]
+
+    _emit_seg_body(seg, seg_id, id_extras, text_buf, markers, offset_fn,
+                   markers_info, seen_ids)
 
 
 def _parse_annotations(path: Path,

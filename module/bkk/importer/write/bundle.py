@@ -197,6 +197,40 @@ def _build_toc_classic(
                 "type": "section",
                 "level": 1,
             })
+            # Nested-div TOC entries (level >= 2). Pair each tls:div-start
+            # with its matching tls:div-end via a balanced stack; well-formed
+            # nesting in TEI sources guarantees pairing.
+            start_to_end_offset: dict[int, int] = {}
+            stack: list[int] = []
+            for i, m in enumerate(sec.markers):
+                if m.type == "tls:div-start":
+                    stack.append(i)
+                elif m.type == "tls:div-end" and stack:
+                    s = stack.pop()
+                    start_to_end_offset[s] = m.offset
+            # Emit nested-div entries in document (DFS pre-) order.
+            for i, m in enumerate(sec.markers):
+                if m.type != "tls:div-start" or i not in start_to_end_offset:
+                    continue
+                extras = m.extras or {}
+                level = extras.get("level")
+                head_text = extras.get("head_text", "")
+                if not head_text or not isinstance(level, int) or level < 2:
+                    continue
+                toc.append({
+                    "ref": marker_to_flow({
+                        "seq": seq,
+                        "marker_id": m.id,
+                        "span": [
+                            bucket_name,
+                            start + m.offset,
+                            start + start_to_end_offset[i],
+                        ],
+                    }),
+                    "label": head_text,
+                    "type": "section",
+                    "level": level,
+                })
             cursor = end
     return toc
 

@@ -25,28 +25,10 @@ from pathlib import Path
 
 import yaml
 
-from bkk.importer.pua import PUA_BASE, PUA_END
+from bkk.importer.charset import is_allowed_body_char as _is_allowed_body_char
 from bkk.importer.read.krp import _parse_juan_text
 
 from .test_krp_roundtrip import out_root  # noqa: F401  (pytest fixture)
-
-
-def _is_allowed_body_char(ch: str) -> bool:
-    """True iff ``ch`` is permitted in a juan body ``text`` field.
-
-    The allowed set is CJK ideographs (Unified, Ext A, Ext B, Ext C–F,
-    Compatibility) plus the BKK PUA range. Everything else — punctuation,
-    indents, ASCII, comment text, headings — belongs in markers.
-    """
-    cp = ord(ch)
-    return (
-        0x4E00  <= cp <= 0x9FFF   or  # CJK Unified Ideographs
-        0x3400  <= cp <= 0x4DBF   or  # CJK Ext A
-        0x20000 <= cp <= 0x2A6DF  or  # CJK Ext B
-        0x2A700 <= cp <= 0x2EBEF  or  # CJK Ext C–F
-        0xF900  <= cp <= 0xFAFF   or  # CJK Compatibility
-        PUA_BASE <= cp < PUA_END      # BKK PUA
-    )
 
 
 def _first_offender(s: str) -> tuple[int, str] | None:

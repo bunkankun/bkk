@@ -65,6 +65,7 @@ def _classify(file: str, path: str, kind: str, sample, ours) -> Divergence:
             path.startswith(("body.", "front."))
             or path.startswith("juan[")
             or path.startswith("assets.parts[")
+            or path == "hash"
         ):
             status = "expected"
             note = "hash follows divergent text/markers in the sample"
