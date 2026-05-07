@@ -74,28 +74,32 @@ def export_krp_from_recipe(recipe: Recipe) -> list[Path]:
             written.append(readme_path)
         # Imglist needs an edition's worth of page-breaks; pick the first
         # documentary edition (mirrors the input repo, where _data tracks
-        # the WYG-style ids).
+        # the WYG-style ids). Bundles without page-break image refs (e.g.
+        # text-only sources) skip the whole _data/ tree.
         documentary_selected = [b for b in selected if b.edition_short != "master"]
         if documentary_selected:
-            data_dir = out_root / "_data" / "imglist"
-            data_dir.mkdir(parents=True, exist_ok=True)
             ed = documentary_selected[0]
+            rendered_imglists: list[tuple[Juan, str]] = []
             for juan in ed.juans:
                 if juan_filter is not None and juan.seq not in juan_filter:
                     continue
-                p = data_dir / f"{master.text_id}_{juan.seq:03d}.txt"
-                p.write_text(
-                    _render_imglist(juan, ed.edition_short),
-                    encoding="utf-8",
-                )
-                written.append(p)
-            if image_base_urls:
-                cfg = data_dir / "imginfo.cfg"
-                cfg.write_text(
-                    _render_imginfo(image_base_urls),
-                    encoding="utf-8",
-                )
-                written.append(cfg)
+                body = _render_imglist(juan, ed.edition_short)
+                if body:
+                    rendered_imglists.append((juan, body))
+            if rendered_imglists:
+                data_dir = out_root / "_data" / "imglist"
+                data_dir.mkdir(parents=True, exist_ok=True)
+                for juan, body in rendered_imglists:
+                    p = data_dir / f"{master.text_id}_{juan.seq:03d}.txt"
+                    p.write_text(body, encoding="utf-8")
+                    written.append(p)
+                if image_base_urls:
+                    cfg = data_dir / "imginfo.cfg"
+                    cfg.write_text(
+                        _render_imginfo(image_base_urls),
+                        encoding="utf-8",
+                    )
+                    written.append(cfg)
 
     if recipe.shape == "git":
         _stage_as_git_branches(out_root, master.text_id)

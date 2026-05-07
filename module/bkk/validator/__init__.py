@@ -15,8 +15,12 @@ from .rules import run_all
 __all__ = ["validate_bundle", "Report", "Finding", "ValidationContext"]
 
 
-def validate_bundle(bundle_dir: str | Path) -> Report:
+def validate_bundle(
+    bundle_dir: str | Path,
+    tls_source_root: str | Path | None = None,
+) -> Report:
     """Validate the bundle at *bundle_dir* and return a populated Report."""
-    ctx = load_context(Path(bundle_dir))
+    src_root = Path(tls_source_root) if tls_source_root is not None else None
+    ctx = load_context(Path(bundle_dir), tls_source_root=src_root)
     run_all(ctx)
     return ctx.report

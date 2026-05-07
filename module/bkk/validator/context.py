@@ -50,9 +50,13 @@ class ValidationContext:
     annotations: dict[int, LoadedFile] = field(default_factory=dict)
     pua_map: LoadedFile | None = None
     editions: dict[str, EditionFiles] = field(default_factory=dict)
+    tls_source_root: Path | None = None
 
 
-def load_context(bundle_dir: Path) -> ValidationContext:
+def load_context(
+    bundle_dir: Path,
+    tls_source_root: Path | None = None,
+) -> ValidationContext:
     """Load every YAML file referenced by the manifest layout.
 
     Files that are missing or unparseable are recorded as `LoadedFile`s with
@@ -70,6 +74,7 @@ def load_context(bundle_dir: Path) -> ValidationContext:
         text_id=text_id,
         report=report,
         master_manifest=master,
+        tls_source_root=tls_source_root,
     )
 
     # Master juans + annotations referenced by the manifest.

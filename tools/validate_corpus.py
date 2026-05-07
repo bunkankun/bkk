@@ -27,12 +27,14 @@ def _iter_bundles(input_dir: Path):
             yield child
 
 
-def _validate_one(args: tuple[str, str]) -> tuple[str, list[tuple[str, str]]]:
+def _validate_one(
+    args: tuple[str, str, str | None],
+) -> tuple[str, list[tuple[str, str]]]:
     """Worker: validate one bundle, write its JSON if it has findings, and
     return (bundle_name, [(rule_id, severity), ...])."""
-    bundle_path, output_dir = args
+    bundle_path, output_dir, tls_source_root = args
     bundle_dir = Path(bundle_path)
-    report = validate_bundle(bundle_dir)
+    report = validate_bundle(bundle_dir, tls_source_root=tls_source_root)
     findings = [(f.rule_id, f.severity) for f in report.findings]
     if findings:
         (Path(output_dir) / f"{bundle_dir.name}.json").write_text(
@@ -49,10 +51,16 @@ def main(argv: list[str] | None = None) -> int:
                    help="output directory for per-bundle + summary reports")
     p.add_argument("--workers", type=int, default=os.cpu_count() or 4,
                    help="parallel worker processes (default: CPU count)")
+    p.add_argument("--tls-source", type=Path, default=None,
+                   help="TLS source root (parent of tls-chant/) for "
+                        "char-count parity check")
     args = p.parse_args(argv)
 
     if not args.input.is_dir():
         print(f"error: not a directory: {args.input}", file=sys.stderr)
+        return 2
+    if args.tls_source is not None and not args.tls_source.is_dir():
+        print(f"error: not a directory: {args.tls_source}", file=sys.stderr)
         return 2
     args.output.mkdir(parents=True, exist_ok=True)
 
@@ -66,7 +74,8 @@ def main(argv: list[str] | None = None) -> int:
     per_bundle: list[dict] = []
     clean = 0
 
-    work = [(str(b), str(args.output)) for b in bundles]
+    tls_root_str = str(args.tls_source) if args.tls_source is not None else None
+    work = [(str(b), str(args.output), tls_root_str) for b in bundles]
     done = 0
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         for name, findings in pool.map(_validate_one, work, chunksize=8):

@@ -18,3 +18,4 @@ module/.pytest_cache
 module/output
 module/exports
 module/export
+wip/*
