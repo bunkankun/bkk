@@ -76,27 +76,87 @@ _DEFAULT_GITHUB_USER = "kanripo"
 _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "bkk" / "krp"
 
 
-def _find_tls_text(in_root: Path, text_id: str) -> Path | None:
-    """Locate ``<text-id>.xml`` under ``<in-root>/tls-texts/data/``.
+def _read_kanripo_idno(text_xml: Path) -> str | None:
+    """Return the value of the first ``<idno type="kanripo">`` in ``text_xml``.
 
-    The TLS repo subdivides texts across classification subdirs (e.g. by
-    Kanseki Repository category), so we search recursively. If multiple
-    matches exist we prefer the shallowest path and report a warning to
-    stderr.
+    Used to resolve a canonical text id to one or more split sub-files whose
+    filename stems differ from the canonical id but whose TEI header declares
+    it. Returns ``None`` on parse error or when no kanripo idno is present.
+    """
+    try:
+        from lxml import etree
+    except ImportError:
+        return None
+    try:
+        tree = etree.parse(str(text_xml), etree.XMLParser(recover=True))
+    except Exception:  # noqa: BLE001
+        return None
+    tei_ns = "http://www.tei-c.org/ns/1.0"
+    for idno in tree.iter(f"{{{tei_ns}}}idno"):
+        if (idno.get("type") or "").strip().lower() == "kanripo":
+            val = (idno.text or "").strip()
+            if val:
+                return val
+    return None
+
+
+def _split_subfile_glob(text_id: str) -> str | None:
+    """Return a glob pattern matching letter-suffix split sub-files for
+    ``text_id``, or ``None`` if the id doesn't fit the canonical shape.
+
+    Convention (see ``docs/repair.md``): a canonical id like ``KR2b0007``
+    is delivered as ``KR2b007a.xml``, ``KR2b007b.xml``, … — i.e. one
+    leading zero is dropped from the trailing digit run and a lowercase
+    letter is appended. Mirror that here: strip one zero and append
+    ``[a-z]``.
+    """
+    import re
+    m = re.match(r"^(.*?)(0+)(\d*)$", text_id)
+    if not m or not m.group(2):
+        return None
+    head, zeros, tail = m.group(1), m.group(2), m.group(3)
+    return f"{head}{zeros[1:]}{tail}[a-z].xml"
+
+
+def _find_tls_texts(in_root: Path, text_id: str) -> list[Path]:
+    """Locate the TLS XML(s) for ``text_id`` under ``<in-root>/tls-texts/data/``.
+
+    Two-step resolution:
+
+    1. Exact filename match (``<text-id>.xml``). The TLS repo subdivides
+       texts across classification subdirs, so we glob recursively. If
+       multiple exact matches exist the shallowest path wins (warning
+       to stderr).
+    2. Letter-suffix split sub-files. A handful of TLS texts are split
+       across files whose stems carry a trailing letter (``KR2b007a.xml``,
+       ``KR2b007b.xml``, …) but whose TEI header declares the same
+       canonical ``<idno type="kanripo">`` (``KR2b0007``). When the exact
+       match fails, glob the heuristic shape and verify candidates by
+       reading their kanripo idno.
+
+    Returns the list of matched paths (empty when nothing resolves).
     """
     base = in_root / "tls-texts" / "data"
     if not base.exists():
-        return None
-    matches = sorted(base.rglob(f"{text_id}.xml"), key=lambda p: (len(p.parts), str(p)))
-    if not matches:
-        return None
-    if len(matches) > 1:
-        print(
-            f"warning: multiple matches for {text_id}.xml under {base}; "
-            f"using {matches[0]}",
-            file=sys.stderr,
-        )
-    return matches[0]
+        return []
+
+    exact = sorted(base.rglob(f"{text_id}.xml"),
+                   key=lambda p: (len(p.parts), str(p)))
+    if exact:
+        if len(exact) > 1:
+            print(
+                f"warning: multiple matches for {text_id}.xml under {base}; "
+                f"using {exact[0]}",
+                file=sys.stderr,
+            )
+        return [exact[0]]
+
+    pattern = _split_subfile_glob(text_id)
+    if pattern is None:
+        return []
+    candidates = sorted(base.rglob(pattern))
+    matches = [p for p in candidates if _read_kanripo_idno(p) == text_id]
+    return matches
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -195,57 +255,97 @@ def _run_tls(args) -> int:
         print("error: no texts found to import", file=sys.stderr)
         return 2
 
-    if len(pairs) > 1 and not args.yes:
+    # Bulk-mode confirmation: only when discovery (no --text-id) returned
+    # multiple texts. A single --text-id that resolved to multiple split
+    # sub-files is one logical text — no prompt.
+    if args.text_id is None and len(pairs) > 1 and not args.yes:
         if not _confirm_bulk(pairs):
             print("aborted.", file=sys.stderr)
             return 1
 
     rc = 0
+    canonical_ids: set[str] = set()
     for text_id, text_xml in pairs:
         try:
-            _import_one_tls(args, text_id, text_xml,
-                            sample=args.sample if len(pairs) == 1 else None)
+            canonical = _import_one_tls(
+                args, text_id, text_xml,
+                sample=args.sample if len(pairs) == 1 else None,
+            )
+            if canonical:
+                canonical_ids.add(canonical)
         except Exception as exc:  # noqa: BLE001 — surface per-text failure, keep going
             print(f"error importing {text_id}: {exc}", file=sys.stderr)
             rc = 1
+
+    # When --text-id resolved to multiple split sub-files, write_bundle
+    # has overwritten the bundle's manifest on each call, leaving only
+    # the last sub-file's juans listed. Rebuild it once so the manifest
+    # reflects every imported part.
+    if args.text_id is not None and len(pairs) > 1:
+        from bkk.repair.manifest import rebuild_manifests
+        for cid in sorted(canonical_ids):
+            try:
+                rebuild_manifests(args.out_root / cid)
+                print(
+                    f"rebuilt manifest for {cid} "
+                    f"(canonical id split across {len(pairs)} sub-files)"
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"error rebuilding manifest for {cid}: {exc}",
+                      file=sys.stderr)
+                rc = 1
     return rc
 
 
 def _resolve_tls_targets(args) -> list[tuple[str, Path]]:
     """Map TLS CLI flags → ``[(text_id, text_xml), ...]`` to import.
 
-    With ``--text-id``: single-element list (or empty if the xml is missing,
-    in which case we print the same error the old single-text path used).
+    With ``--text-id``: returns the matching XML(s). Single-element list
+    in the common case; multi-element when the canonical id is split
+    across letter-suffix sub-files (each sub-file is imported by its own
+    filename stem — ``read_tls`` then keys the resulting Bundle by the
+    kanripo idno, so all parts collapse into one bundle directory).
     Without ``--text-id``: enumerate every ``<id>.xml`` under
     ``<in>/tls-texts/data/``; skip with a warning any id we can't resolve.
     """
     from . import source
 
     if args.text_id is not None:
-        text_xml = _find_tls_text(args.in_root, args.text_id)
-        if text_xml is None:
+        matches = _find_tls_texts(args.in_root, args.text_id)
+        if not matches:
             print(
                 f"error: {args.text_id}.xml not found anywhere under "
-                f"{args.in_root / 'tls-texts' / 'data'}",
+                f"{args.in_root / 'tls-texts' / 'data'} "
+                f"(also searched for split sub-files declaring "
+                f"<idno type=\"kanripo\">{args.text_id}</idno>)",
                 file=sys.stderr,
             )
             return []
-        return [(args.text_id, text_xml)]
+        if len(matches) > 1:
+            print(
+                f"{args.text_id}: split across {len(matches)} sub-files; "
+                f"importing all and rebuilding manifest",
+                file=sys.stderr,
+            )
+        return [(p.stem, p) for p in matches]
 
     pairs: list[tuple[str, Path]] = []
     for tid in source.list_local_tls_text_ids(args.in_root):
-        text_xml = _find_tls_text(args.in_root, tid)
-        if text_xml is None:
+        matches = _find_tls_texts(args.in_root, tid)
+        if not matches:
             print(f"warning: skipping {tid}: xml not resolvable",
                   file=sys.stderr)
             continue
-        pairs.append((tid, text_xml))
+        pairs.append((tid, matches[0]))
     return pairs
 
 
 def _import_one_tls(args, text_id: str, text_xml: Path,
-                    *, sample: Path | None) -> None:
-    """Run read+write for one TLS text."""
+                    *, sample: Path | None) -> str:
+    """Run read+write for one TLS text. Returns the canonical text id
+    (from the file's ``<idno type="kanripo">``) under which the bundle
+    was written — same as ``text_id`` for normal texts, but the parent
+    canonical id for letter-suffix split sub-files."""
     existing = inspect_existing_bundle(args.out_root, text_id)
     if existing.state == "krp":
         bundle_dir = existing.manifest_path.parent
@@ -275,6 +375,7 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
 
     if sample is not None:
         _emit_divergence(sample, Path(summary["out_root"]), args.out_root)
+    return bundle.text_id
 
 
 # ---------- KRP --------------------------------------------------------------

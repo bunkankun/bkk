@@ -25,8 +25,14 @@ disk orphaned.
 
 The remedy is a manual maintenance command that scans an existing
 bundle directory and regenerates both manifests from the juan files on
-disk. The importer is unchanged; auto-detection at import time was
-considered and rejected as needlessly invasive.
+disk. The importer was originally unchanged; auto-detection at import
+time was deferred. **Update:** the TLS importer now resolves a
+canonical ``--text-id`` (e.g. ``KR2b0007``) to the set of letter-
+suffix sub-files that declare it via ``<idno type="kanripo">``, imports
+each, and runs ``rebuild_manifests`` on the resulting bundle so the
+manifest reflects every part. ``bkk repair manifest`` remains for
+fixing bundles produced by an older importer or by a corpus-wide bulk
+run that does not pass ``--text-id``.
 
 ## What changed
 
@@ -107,4 +113,3 @@ or part-hash errors.
 - The `<id>.source.yaml` sidecar is also overwritten per sub-file. It
   is not part of the manifest hash chain and the user has not flagged
   it as a problem; left untouched.
-- Auto-detection at import time. The importer is unchanged.
