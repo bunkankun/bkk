@@ -124,10 +124,6 @@ def run(argv: list[str] | None = None) -> int:
     defaults: dict = {}
     if "in" in imp:
         defaults["in_root"] = imp["in"]
-    elif "format" in imp:
-        root_key = "tls_root" if imp["format"] == "tls" else "krp_root"
-        if root_key in g:
-            defaults["in_root"] = g[root_key]
     for rc_key, dest in [
         ("out", "out_root"), ("format", "format"), ("cache_dir", "cache_dir"),
         ("github", "github_user"), ("master_branch", "master_branch"),
@@ -141,6 +137,13 @@ def run(argv: list[str] | None = None) -> int:
         parser.set_defaults(**defaults)
 
     args = parser.parse_args(argv)
+
+    # If --in wasn't supplied by rc or CLI, derive it from the resolved format.
+    if args.in_root is None and "in" not in imp and args.format is not None:
+        root_key = "tls_root" if args.format == "tls" else "krp_root"
+        if root_key in g:
+            args.in_root = g[root_key]
+
     if args.format is None:
         parser.error("--format is required (or set import.format in .bkkrc)")
 
