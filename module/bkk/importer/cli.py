@@ -38,6 +38,17 @@ See :mod:`bkk.importer.source` for the discovery + synthesis logic and
 :mod:`bkk.importer.recipe` for the schema recipes still pin.
 
 Either format emits a BKK bundle under ``<out-root>/<text-id>/``.
+
+Cross-source co-existence (see ``docs/cross-source-merge.md``):
+
+- TLS owns the surface (root) edition. If a TLS bundle already exists
+  at the destination, a subsequent KRP import merges in: documentary
+  editions land under ``editions/<short>/``, the synthesized KRP master
+  is demoted to ``editions/master/`` (variant + witness page-break
+  markers retained), and the TLS root manifest's ``editions:`` list is
+  extended.
+- TLS into an existing KRP bundle is rejected with a hard error. The
+  operator removes the bundle and re-imports in TLS-then-KRP order.
 """
 
 from __future__ import annotations
@@ -49,7 +60,16 @@ from pathlib import Path
 from .diverge import diff_trees, render_report
 from .read.tls import read_tls
 from .recipe import Recipe, load_recipe
-from .write.bundle import write_bundle, write_krp_edition, write_krp_master
+from .write.bundle import (
+    write_bundle, write_krp_edition, write_krp_master, write_pua_map,
+)
+from .write.merge import extend_master_editions, inspect_existing_bundle
+
+
+class BundleConflictError(Exception):
+    """Raised when an importer refuses to write because the existing bundle
+    on disk was produced by an incompatible source. Caught by the bulk
+    loop so other texts can continue."""
 
 
 _DEFAULT_GITHUB_USER = "kanripo"
@@ -226,6 +246,23 @@ def _resolve_tls_targets(args) -> list[tuple[str, Path]]:
 def _import_one_tls(args, text_id: str, text_xml: Path,
                     *, sample: Path | None) -> None:
     """Run read+write for one TLS text."""
+    existing = inspect_existing_bundle(args.out_root, text_id)
+    if existing.state == "krp":
+        bundle_dir = existing.manifest_path.parent
+        raise BundleConflictError(
+            f"{text_id}: a KRP-sourced bundle already exists at "
+            f"{bundle_dir}. TLS imports must precede KRP. "
+            f"Remedy: remove {bundle_dir} and re-import TLS first, "
+            f"then KRP."
+        )
+    if existing.state == "unknown":
+        bundle_dir = existing.manifest_path.parent
+        raise BundleConflictError(
+            f"{text_id}: a bundle already exists at {bundle_dir} but its "
+            f"source can't be classified. Inspect manually or run "
+            f"`bkk repair manifest {bundle_dir}` and retry."
+        )
+
     swl_xml = args.in_root / "tls-data" / "notes" / "swl" / f"{text_id}-ann.xml"
     doc_xml = args.in_root / "tls-data" / "notes" / "doc" / f"{text_id}-ann.xml"
     bundle = read_tls(text_xml, swl_xml, doc_xml, text_id)
@@ -377,25 +414,105 @@ def _confirm_bulk(pairs: list[tuple[str, Path]]) -> bool:
 
 
 def _import_one(recipe: Recipe, out_root: Path, sample: Path | None) -> None:
-    """Run read+write for one synthesized or loaded recipe."""
+    """Run read+write for one synthesized or loaded recipe.
+
+    If a TLS-sourced bundle already exists at ``<out_root>/<text-id>/``,
+    the KRP master is demoted to a regular edition under
+    ``editions/master/`` and the existing TLS surface is preserved. The
+    TLS master manifest's ``editions:`` list is extended with the new
+    KRP edition shorts.
+
+    Per the plan, an ``unknown`` state at the destination is treated as
+    a conflict (the user must investigate before any KRP write touches
+    the directory).
+    """
     # Lazy: keep the lxml/TLS path independent of the krp reader.
     from .read.krp import read_krp
 
+    text_id = recipe.text_id or ""
+    existing = inspect_existing_bundle(out_root, text_id) if text_id else None
+    if existing is not None and existing.state == "unknown":
+        bundle_dir = existing.manifest_path.parent
+        raise BundleConflictError(
+            f"{text_id}: a bundle already exists at {bundle_dir} but its "
+            f"source can't be classified. Inspect manually or run "
+            f"`bkk repair manifest {bundle_dir}` and retry."
+        )
+    merge_into_tls = bool(existing and existing.state == "tls")
+
     documentary, master = read_krp(recipe)
 
-    text_id = recipe.text_id or ""
+    protected: set[str] = (
+        existing.tls_owned_editions if merge_into_tls else set()
+    )
+    if merge_into_tls:
+        # Defensive: don't let a documentary edition collide with the
+        # demoted KRP master's ``master`` short.
+        for bundle in documentary:
+            if bundle.edition_short == "master":
+                raise BundleConflictError(
+                    f"{text_id}: KRP recipe declares a documentary edition "
+                    f"with short 'master', which would collide with the "
+                    f"demoted KRP master in merge mode. Rename the witness."
+                )
+
+    new_edition_entries: list[dict] = []
+
     for bundle in documentary:
+        if bundle.edition_short in protected:
+            print(
+                f"skipping KRP edition {bundle.edition_short} for "
+                f"{bundle.text_id}: short already owned by the TLS surface "
+                f"under editions/{bundle.edition_short}/",
+                file=sys.stderr,
+            )
+            continue
         s = write_krp_edition(bundle, out_root)
         print(
             f"wrote {len(s['juans'])} juan(s) for {s['text_id']} "
             f"edition {s['edition']} under {s['out_root']}"
         )
+        entry: dict = {"short": bundle.edition_short}
+        label = bundle.metadata.get("edition_label")
+        if label:
+            entry["label"] = label
+        new_edition_entries.append(entry)
+
     if master is not None:
-        s = write_krp_master(master, out_root)
+        if merge_into_tls:
+            # Demote: write the synthesized master as a regular edition
+            # under ``editions/master/``, preserving variant + witness
+            # page-break markers. PUA-map still belongs at the bundle root.
+            if master.edition_short in protected:
+                raise BundleConflictError(
+                    f"{text_id}: TLS surface already owns "
+                    f"editions/{master.edition_short}/, but the demoted "
+                    f"KRP master would land there. Resolve manually."
+                )
+            s = write_krp_edition(master, out_root)
+            pua_filename = write_pua_map(master, out_root)
+            print(
+                f"wrote {len(s['juans'])} juan(s) for {s['text_id']} "
+                f"krp-master demoted to edition {s['edition']} under "
+                f"{s['out_root']}"
+                + (f" (+ {pua_filename})" if pua_filename else "")
+            )
+            new_edition_entries.append({"short": master.edition_short})
+        else:
+            s = write_krp_master(master, out_root)
+            print(
+                f"wrote {len(s['juans'])} juan(s) for {s['text_id']} "
+                f"master under {s['out_root']}"
+                + (f" (+ {s['pua_map']})" if "pua_map" in s else "")
+            )
+
+    if merge_into_tls and new_edition_entries:
+        final = extend_master_editions(
+            existing.manifest_path, new_edition_entries,
+        )
         print(
-            f"wrote {len(s['juans'])} juan(s) for {s['text_id']} "
-            f"master under {s['out_root']}"
-            + (f" (+ {s['pua_map']})" if "pua_map" in s else "")
+            f"updated {existing.manifest_path.name}: editions list now "
+            f"{[e.get('short') for e in final if isinstance(e, dict)]}"
         )
 
     if sample is not None and text_id:

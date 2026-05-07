@@ -676,3 +676,22 @@ def write_krp_master(bundle: Bundle, out_root: Path) -> dict:
     if pua_filename is not None:
         summary["pua_map"] = pua_filename
     return summary
+
+
+def write_pua_map(bundle: Bundle, out_root: Path) -> str | None:
+    """Write ``<out_root>/<text-id>/PUA-map.yaml`` from ``bundle.pua_map`` if
+    present. Returns the filename written, or ``None`` if the bundle has no
+    PUA map.
+
+    Used in merge mode where the KRP master is demoted to a regular edition
+    but the PUA-map (which is bundle-wide, not edition-scoped) still belongs
+    at the bundle root.
+    """
+    if bundle.pua_map is None:
+        return None
+    bundle_root = out_root / bundle.text_id
+    bundle_root.mkdir(parents=True, exist_ok=True)
+    pua_dict = _build_pua_map_dict(bundle.pua_map)
+    filename = "PUA-map.yaml"
+    (bundle_root / filename).write_text(dump(pua_dict), encoding="utf-8")
+    return filename
