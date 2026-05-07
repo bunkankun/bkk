@@ -238,7 +238,7 @@ def _build_toc_cbeta(
     return toc
 
 
-def _build_manifest(
+def build_manifest(
     text_id: str,
     edition_short: str | None,           # None → master manifest
     juan_files: list[tuple[int, str, str]],   # (seq, filename, juan_self_hash)
@@ -410,7 +410,7 @@ def write_bundle(bundle: Bundle, out_root: Path) -> dict:
         toc_master.extend(_build_toc(sections_per_bucket, juan))
 
     # ---- edition manifest ----
-    edition_manifest = _build_manifest(
+    edition_manifest = build_manifest(
         text_id, edition_short, juan_edition_files, [], toc_edition,
         bundle.metadata,
     )
@@ -421,7 +421,7 @@ def write_bundle(bundle: Bundle, out_root: Path) -> dict:
     )
 
     # ---- master manifest ----
-    master_manifest = _build_manifest(
+    master_manifest = build_manifest(
         text_id, None, juan_master_files, ann_files, toc_master, bundle.metadata,
     )
     master_manifest["hash"] = manifest_hash(master_manifest)
@@ -615,7 +615,7 @@ def write_krp_edition(bundle: Bundle, out_root: Path) -> dict:
         is_master=False,
     )
 
-    manifest = _build_manifest(
+    manifest = build_manifest(
         text_id, edition_short=short,
         juan_files=juan_files, ann_files=[], toc=toc,
         metadata=bundle.metadata, entity_encoding=True,
@@ -648,7 +648,7 @@ def write_krp_master(bundle: Bundle, out_root: Path) -> dict:
         is_master=True,
     )
 
-    manifest = _build_manifest(
+    manifest = build_manifest(
         text_id, edition_short=None,
         juan_files=juan_files, ann_files=[], toc=toc,
         metadata=bundle.metadata, entity_encoding=True,

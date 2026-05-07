@@ -71,6 +71,13 @@ validate:
 #   tls_source: /custom/tls      # explicit override for --tls-source
 #                                 # (beats global.tls_root)
 
+# ── Repair defaults ────────────────────────────────────────────────────────
+# `bkk repair manifest <X>` accepts X as a path or a bare text-id; bare ids
+# are resolved against (in order) repair.out → import.out → global.corpus.
+repair:
+#   out: /data/bkk/out           # explicit bundle root for the bare-id form
+#                                 # (beats import.out and global.corpus)
+
 # ── Serve defaults ─────────────────────────────────────────────────────────
 # Serve also reads BKK_* environment variables; env vars beat the rc file.
 # CLI flags beat env vars.  admin_token is best kept in ~/.bkkrc (not in a
