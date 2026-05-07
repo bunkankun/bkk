@@ -1,0 +1,2439 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xml:id="X63n1222">
+<teiHeader>
+	<fileDesc>
+		<titleStmt>
+                <title>修禪要訣</title>
+                <author>北天竺 覺愛略說　唐 明恂隨錄　慧智傳譯</author>
+                <respStmt>
+				<resp>Electronic Version by</resp>
+				<name>CBETA</name>
+			</respStmt>
+            </titleStmt>
+		<editionStmt>
+			<edition>XML TEI P5<idno type="kanripo">KR6q0116</idno>
+                    <idno type="DILA">CA0003601</idno>
+                    <idno type="CBETA">X63n1222</idno>
+                </edition>
+			<respStmt xml:id="resp1">
+                    <resp>corrections</resp>
+                    <name>CBETA</name>
+                </respStmt>
+			<respStmt xml:id="resp2">
+                    <resp>corrections</resp>
+                    <name>Xuzangjing</name>
+                </respStmt>
+			<respStmt xml:id="resp3">
+                    <resp>corrections</resp>
+                    <name>CBETA.maha</name>
+                </respStmt>
+		</editionStmt>
+		<extent>
+                <measure unit="char" quantity="3615"/>
+                <date when-iso="2023-05-20T18:30:24.919+09:00"/>
+                <measure unit="juan">1</measure>
+                <measure unit="seg" quantity="692"/>
+                <date when-iso="2023-06-26T09:15:45.807+09:00"/>
+            </extent>
+		<publicationStmt>
+			<idno type="CBETA">
+				<idno type="canon">X</idno>.<idno type="vol">63</idno>.<idno type="no">1222</idno>
+			</idno>
+			<distributor>
+				<name>中華電子佛典協會 (CBETA)</name>
+				<address>
+					<addrLine>
+                            <email>service@cbeta.org</email>
+                        </addrLine>
+				</address>
+			</distributor>
+			<availability>
+				<p>Available for non-commercial use when distributed with this header intact.</p>
+			</availability>
+			<date>2022-10-12 23:43:51 +0800</date>
+		</publicationStmt>
+		<sourceDesc>
+			<bibl>
+				<title level="s">Manji Shinsan Dainihon Zokuzōkyō</title>
+				<title level="s" xml:lang="zh-Hant">卍新纂大日本續藏經</title>
+				<title level="m" xml:lang="zh-Hant">修禪要訣</title>
+			</bibl>
+		</sourceDesc>
+	</fileDesc>
+	<encodingDesc>
+		<projectDesc>
+			<p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:lang="en" cb:type="ly">Input by CBETA, OCR by CBETA, Basic punctuated text as provided by CBETA</p>
+			<p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:lang="zh-Hant" cb:type="ly">CBETA 人工輸入，CBETA 掃瞄辨識，CBETA 提供基本句讀</p>
+		</projectDesc>
+		<editorialDecl>
+			<punctuation resp="#resp1">
+                    <p>基本句讀</p>
+                </punctuation>
+		</editorialDecl>
+		<tagsDecl>
+			<namespace name="http://www.tei-c.org/ns/1.0">
+				<tagUsage gi="rdg">
+					<listWit>
+						<witness xml:id="wit.cbeta">【CB】</witness>
+						<witness xml:id="wit.orig">【卍續】</witness>
+					</listWit>
+				</tagUsage>
+			</namespace>
+		</tagsDecl>
+		<charDecl>
+			<char xml:id="CB00170">
+				<charName>CBETA CHARACTER CB00170</charName>
+				<charProp>
+					<localName>composition</localName>
+					<value>[月*坒]</value>
+				</charProp>
+				<charProp>
+					<localName>normalized form</localName>
+					<value>髀</value>
+				</charProp>
+				<mapping type="unicode">U+43F6</mapping>
+				<mapping xmlns:cb="http://www.cbeta.org/ns/1.0" cb:dec="983210" type="PUA">U+F00AA</mapping>
+			</char>
+			<char xml:id="CB00416">
+				<charName>CBETA CHARACTER CB00416</charName>
+				<charProp>
+					<localName>composition</localName>
+					<value>[竺-二+帚]</value>
+				</charProp>
+				<charProp>
+					<localName>normalized form</localName>
+					<value>帚</value>
+				</charProp>
+				<mapping type="normal_unicode">U+7B92</mapping>
+				<mapping xmlns:cb="http://www.cbeta.org/ns/1.0" cb:dec="983456" type="PUA">U+F01A0</mapping>
+			</char>
+			<char xml:id="CB05903">
+				<charName>CBETA CHARACTER CB05903</charName>
+				<charProp>
+					<localName>composition</localName>
+					<value>[寢-(宋-木)+穴]</value>
+				</charProp>
+				<charProp>
+					<localName>normalized form</localName>
+					<value>寢</value>
+				</charProp>
+				<mapping type="unicode">U+25A0A</mapping>
+				<mapping xmlns:cb="http://www.cbeta.org/ns/1.0" cb:dec="988943" type="PUA">U+F170F</mapping>
+			</char>
+			<char xml:id="CB07194">
+				<charName>CBETA CHARACTER CB07194</charName>
+				<charProp>
+					<localName>composition</localName>
+					<value>[古*見]</value>
+				</charProp>
+				<mapping type="unicode">U+2E5CE</mapping>
+				<mapping xmlns:cb="http://www.cbeta.org/ns/1.0" cb:dec="990234" type="PUA">U+F1C1A</mapping>
+			</char>
+		</charDecl>
+	</encodingDesc>
+	<profileDesc>
+		<langUsage>
+			<language ident="en">English</language>
+			<language ident="zh-Hant">Chinese (Traditional)</language>
+		</langUsage>
+	<textClass>
+                <catRef scheme="#kr-categories" target="#KR6q"/>
+                <catRef scheme="#auth-cat" target="#X63"/>
+                <catRef scheme="#tls-regions" target="#reg002"/>
+            <catRef scheme="#tls-internal" target="#swl"/>
+            </textClass>
+            <creation>
+                <date notBefore="0618" notAfter="0907"/>
+                <persName xml:lang="zh-Hant" key="#A000438">覺愛</persName>
+                <persName xml:lang="zh-Hant" key="#A000661">明恂</persName>
+                <persName xml:lang="zh-Hant" key="#A001727">慧智</persName>
+            </creation>
+        </profileDesc>
+	<revisionDesc>
+		<change when="2013-05-20">
+			<name>CW</name>
+                <name>Ray Chou 周邦信</name>P4 to P5 conversion by p4top5a.py, intended for publication
+		</change>
+		<change when="2004-08-05T10:36:28">
+			Zhou Bang-Xin (ed.) Created initial TEI XML version with BASICX.BAT
+		</change>
+	<change when="2023-05-20T18:30:24.919+09:00">
+                <name>chris</name>Some changes for compatibility with the TLS Application, derived from the version published by CBETA on GitHub.</change>
+        </revisionDesc>
+</teiHeader>
+<text>
+        <body>
+<milestone unit="juan" n="1"/>
+<pb xml:id="X63n1222_CBETA_63-1222.0014c" ed="X" n="0014c" facs="X-xuzang/X63/00/X63-0014.png"/>
+<lb ed="X" n="0014c01"/>
+<lb ed="X" n="0014c02"/>
+            <div type="xu">
+                <mulu type="序" level="1">No. 1222-A 刻修禪要訣序</mulu>
+                <head>
+                    <seg xml:id="X63n1222_CBETA_000-0014c02.s1">No<c n="."/>1222<c n="-"/>A<lb ed="X" n="0014c03"/>
+                        <lb ed="R110" n="0834a01"/>刻修禪要訣序</seg>
+                </head>
+<lb ed="X" n="0014c04"/>
+<lb ed="X" n="0014c05"/>
+                <lb ed="R110" n="0834a02"/>
+                <p xml:id="pX63p0014c0501">
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s1">昔者世高法護譯出禪經<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s2">僧光曇猷等並依教修心<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s3">
+                        <lb ed="X" n="0014c06"/>
+                        <lb ed="R110" n="0834a03"/>後什公入關<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s4">僧叡請出禪法要以來<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s5">往往有其人矣<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s6">
+                        <lb ed="X" n="0014c07"/>
+                        <lb ed="R110" n="0834a04"/>達磨西來<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s7">僧稠東起以後<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s8">斯風大振<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s9">至唐中葉<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s10">金智<lb ed="X" n="0014c08"/>
+                        <lb ed="R110" n="0834a05"/>無畏等三藏傳祕密禪<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s11">別為流派<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s12">今斯所傳<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s13">義兼顯<lb ed="X" n="0014c09"/>
+                        <lb ed="R110" n="0834a06"/>密<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s14">法辨華梵<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s15">實為要訣<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s16">先得數本校以藏篋<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s17">朱盈居<lb ed="X" n="0014c10"/>
+                        <lb ed="R110" n="0834a07"/>士有信之人也<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s18">謀余刻以弘通<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s19">余曰<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s20">彌天有謂曰<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s21">禪<lb ed="X" n="0014c11"/>
+                        <lb ed="R110" n="0834a08"/>思守玄<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s22">鍊微入寂<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s23">在取何道<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s24">猶<g ref="#CB07194">𮗎</g>于掌<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s25">墮癈斯要而<lb ed="X" n="0014c12"/>
+                        <lb ed="R110" n="0834a09"/>希見證<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s26">不亦難乎<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s27">然則入佛道要門<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s28">盖莫過焉<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s29">今子<lb ed="X" n="0014c13"/>
+                        <lb ed="R110" n="0834a10"/>舉之<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s30">誰不隨喜乎<c n="。"/>
+                    </seg>
+                    <seg xml:id="X63n1222_CBETA_000-0014c0501.s31">於是乎序<c n="。"/>
+                    </seg>
+                </p>
+<lb ed="X" n="0014c14"/>
+                <lb ed="R110" n="0834a11"/>
+                <p xml:id="pX63p0014c1401" style="margin-left:1em">
+                    <seg style="margin-left:1em" xml:id="X63n1222_CBETA_000-0014c1401.s1">天明四年甲辰之冬　播磨沙門　智暉　撰</seg>
+                </p>
+            </div>
+<lb ed="X" n="0014c15"/>
+<lb ed="X" n="0014c16"/>
+<lb ed="X" n="0014c17"/>
+<lb ed="X" n="0014c18"/>
+<lb ed="X" n="0014c19"/>
+            <div type="other">
+                <mulu type="其他" level="1">修禪要訣</mulu>
+                <docNumber>No. 1222</docNumber>
+<lb ed="X" n="0014c20"/>
+                <lb ed="R110" n="0834a13"/>
+                <juan fun="open" n="001">
+                    <mulu type="卷" n="1"/>
+                    <jhead>修禪要訣</jhead>
+                </juan>
+<lb ed="X" n="0014c21"/>
+<lb ed="X" n="0014c22"/>
+                <lb ed="R110" n="0834a14"/>
+                <byline xmlns:cb="http://www.cbeta.org/ns/1.0" cb:type="author">
+                    <seg cb:type="author" xml:id="X63n1222_CBETA_001-0834a14.s1">北天竺婆羅門禪師佛陀波利<note place="inline">唐云覺愛</note>
+                        <c n="。"/>
+                    </seg>
+                    <seg cb:type="author" xml:id="X63n1222_CBETA_001-0834a14.s2">隨問略說<c n="。"/>
+                    </seg>
+                </byline>
+                <byline xmlns:cb="http://www.cbeta.org/ns/1.0" cb:type="other">
+                    <seg cb:type="other" xml:id="X63n1222_CBETA_001-0834a14.s1">西<lb ed="X" n="0014c23"/>
+                        <lb ed="R110" n="0834a15"/>京禪林寺沙門明恂問并隨口錄<c n="。"/>
+                    </seg>
+                </byline>
+                <byline xmlns:cb="http://www.cbeta.org/ns/1.0" cb:type="translator">
+                    <seg cb:type="translator" xml:id="X63n1222_CBETA_001-0834a15.s1">同寺梵僧慧智<lb ed="X" n="0014c24"/>
+                        <lb ed="R110" n="0834a16"/>法師傳譯<c n="。"/>
+                    </seg>
+                </byline>
+                <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0014c2405" cb:place="inline">
+                    <seg xml:id="X63n1222_CBETA_001-0014c2405.s1">于時大唐儀鳳二年丁丑歲也<c n="。"/>
+                    </seg>
+                </p>
+<pb xml:id="X63n1222_CBETA_63-1222.0015a" ed="X" n="0015a" facs="X-xuzang/X63/00/X63-0015.png"/>
+<lb ed="X" n="0015a01"/>
+                <lb ed="R110" n="0834a17"/>
+                <dialog type="qa" n="1">
+                    <sp type="question">
+                        <p xml:id="pX63p0015a0101">
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s2">此方古今學禪者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s3">多不能免禪諸障難<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s4">以之觀之<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s5">
+                                <lb ed="X" n="0015a02"/>
+                                <lb ed="R110" n="0834a18"/>將恐此地禪匠得法不盡<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s6">徘徊斯久<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s7">無處申疑<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s8">今忽<lb ed="X" n="0015a03"/>
+                                <lb ed="R110" n="0834b01"/>仰逢曇華示喻<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s9">得承即欲還國<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s10">重會無期<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s11">幸希慈降<lb ed="X" n="0015a04"/>
+                                <lb ed="R110" n="0834b02"/>具說禪要<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0101.s12">庶令學者的有歸憑<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015a0413" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015a0413.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0413.s2">禪法漸授<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0413.s3">不合頓<lb ed="X" n="0015a05"/>
+                                <lb ed="R110" n="0834b03"/>說<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0413.s4">何得具陳<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015a06"/>
+                <lb ed="R110" n="0834b04"/>
+                <dialog type="qa" n="2">
+                    <sp type="question">
+                        <p xml:id="pX63p0015a0601">
+                            <seg xml:id="X63n1222_CBETA_001-0015a0601.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0601.s2">仰承既欲西還<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0601.s3">漸授即當無寄<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0601.s4">佛法既有開制<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0601.s5">幸<lb ed="X" n="0015a07"/>
+                                <lb ed="R110" n="0834b05"/>賜勿阻機緣<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015a0706" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015a0706.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0706.s2">據此實亦可矜<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0706.s3">但可有問隨說耳<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015a08"/>
+                <lb ed="R110" n="0834b06"/>
+                <dialog type="qa" n="3">
+                    <sp type="question">
+                        <p xml:id="pX63p0015a0801">
+                            <seg xml:id="X63n1222_CBETA_001-0015a0801.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0801.s2">有人言<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0801.s3">經說禪定牢固者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0801.s4">如來滅後第三五百年<lb ed="X" n="0015a09"/>
+                                <lb ed="R110" n="0834b07"/>也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0801.s5">時今遠矣<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0801.s6">不合修禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0801.s7">若據此言<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0801.s8">合修禪不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015a0918" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s2">經亦<lb ed="X" n="0015a10"/>
+                                <lb ed="R110" n="0834b08"/>廣云修禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s3">若據佛本不滅<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s4">何論之久近也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s5">西方現今<lb ed="X" n="0015a11"/>
+                                <lb ed="R110" n="0834b09"/>坐得四禪八定者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s6">其數極多<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s7">不可勝計<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s8">若言不合<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s9">其<lb ed="X" n="0015a12"/>
+                                <lb ed="R110" n="0834b10"/>事如何<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s10">三慧之中禪是修慧<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s11">今時豈可但學聞思不<lb ed="X" n="0015a13"/>
+                                <lb ed="R110" n="0834b11"/>許修也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s12">此言偏據極<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s13">非通說<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s14">雖引佛經<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s15">其間非無邪<lb ed="X" n="0015a14"/>
+                                <lb ed="R110" n="0834b12"/>正<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s16">且於聖教偏舉一文以蔽多義者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s17">此當魔說耳<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s18">深<lb ed="X" n="0015a15"/>
+                                <lb ed="R110" n="0834b13"/>可察之<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a0918.s19">深可察之<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015a16"/>
+                <lb ed="R110" n="0834b14"/>
+                <dialog type="qa" n="4">
+                    <sp type="question">
+                        <p xml:id="pX63p0015a1601">
+                            <seg xml:id="X63n1222_CBETA_001-0015a1601.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1601.s2">比見學禪者多有失心<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1601.s3">
+                                <anchor xml:id="nkr_note_orig_0015001" n="0015001"/>令既<anchor xml:id="nkr_note_add_0015a1601" n="0015a1601"/>
+                                <anchor xml:id="beg0015a1601" n="0015a1601"/>已<anchor xml:id="end0015a1601"/>無所復用<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1601.s4">因癈萬<lb ed="X" n="0015a17"/>
+                                <lb ed="R110" n="0834b15"/>行<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1601.s5">虗度一生<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1601.s6">下情以此<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1601.s7">但欲餘修<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1601.s8">且不脩禪得不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015a1720" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s1">答<lb ed="X" n="0015a18"/>
+                                <lb ed="R110" n="0834b16"/>曰<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s2">不也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s3">禪是六度之第五<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s4">亦是三學中定學<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s5">安得不<lb ed="X" n="0015a19"/>
+                                <lb ed="R110" n="0834b17"/>脩<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s6">亦既有人因食噎死<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s7">豈即不食耶<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s8">其失心者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s9">只是<lb ed="X" n="0015a20"/>
+                                <lb ed="R110" n="0834b18"/>不善方法耳<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s10">若解方便<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s11">千萬無失<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s12">幸勿疑怖<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s13">決定須<lb ed="X" n="0015a21"/>
+                                <lb ed="R110" n="0835a01"/>修<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s14">北天竺有一僧<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s15">每習多聞而不學定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s16">彼時讀誦經<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s17">
+                                <lb ed="X" n="0015a22"/>
+                                <lb ed="R110" n="0835a02"/>忽有天來掩其口而語曰<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s18">汝聞思足矣<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s19">何不習禪以<lb ed="X" n="0015a23"/>
+                                <lb ed="R110" n="0835a03"/>之驗之<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s20">縱修餘行而不學定者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a1720.s21">於佛法中未為全得<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015a24"/>
+                <lb ed="R110" n="0835a04"/>
+                <dialog type="qa" n="5">
+                    <sp type="question">
+                        <p xml:id="pX63p0015a2401">
+                            <seg xml:id="X63n1222_CBETA_001-0015a2401.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2401.s2">性多散亂者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2401.s3">學定何由可得<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015a2413" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s2">獼猴尚能坐禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s3">況<pb xml:id="X63n1222_CBETA_63-1222.0015b" ed="X" n="0015b" facs="X-xuzang/X63/00/X63-0015.png"/>
+                                <lb ed="X" n="0015b01"/>
+                                <lb ed="R110" n="0835a05"/>乃人而不得也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s4">學定難者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s5">只為前生未曾習耳<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s6">今復<lb ed="X" n="0015b02"/>
+                                <lb ed="R110" n="0835a06"/>不學<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s7">於未來何可得<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s8">豈令彌歷長久而不得耶<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s9">更期<lb ed="X" n="0015b03"/>
+                                <lb ed="R110" n="0835a07"/>何時<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s10">經曰<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s11">聞思尚如門外<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s12">禪行始似入門<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s13">修禪下至<lb ed="X" n="0015b04"/>
+                                <lb ed="R110" n="0835a08"/>一念<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s14">福尚無量<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s15">豈一生殊可不學也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s16">未能全學者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s17">幸<lb ed="X" n="0015b05"/>
+                                <lb ed="R110" n="0835a09"/>可兼修<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s18">講說之人<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s19">雖復廣議禪法<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s20">且如說食而未入<lb ed="X" n="0015b06"/>
+                                <lb ed="R110" n="0835a10"/>口<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s21">至於禪行<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s22">始如飽飡美食也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s23">昔有國王聞禪之益<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s24">
+                                <lb ed="X" n="0015b07"/>
+                                <lb ed="R110" n="0835a11"/>雖理國務兼復習禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s25">況出家之人落髮屏緣息心無<lb ed="X" n="0015b08"/>
+                                <lb ed="R110" n="0835a12"/>事而不少學<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015a2413.s26">豈是人哉<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015b09"/>
+                <lb ed="R110" n="0835a13"/>
+                <dialog type="qa" n="6">
+                    <sp type="question">
+                        <p xml:id="pX63p0015b0901">
+                            <seg xml:id="X63n1222_CBETA_001-0015b0901.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b0901.s2">學禪但唯坐耶<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015b0908" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015b0908.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b0908.s2">是何言也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b0908.s3">有待之身<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b0908.s4">要須四威<lb ed="X" n="0015b10"/>
+                                <lb ed="R110" n="0835a14"/>儀中易脫而互修<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b0908.s5">寧得唯坐<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b0908.s6">唯坐多招魔事<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015b11"/>
+                <lb ed="R110" n="0835a15"/>
+                <dialog type="qa" n="7">
+                    <sp type="question">
+                        <p xml:id="pX63p0015b1101">
+                            <seg xml:id="X63n1222_CBETA_001-0015b1101.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1101.s2">且四威儀中坐法云何<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015b1111" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s2">結跏端坐<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s3">結跏法<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s4">以左<lb ed="X" n="0015b12"/>
+                                <lb ed="R110" n="0835a16"/>脚壓右右壓左俱得<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s5">若結跏未便<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s6">半跏亦得<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s7">半跏法<lb ed="X" n="0015b13"/>
+                                <lb ed="R110" n="0835a17"/>唯是右壓左<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s8">其兩手各仰舒<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s9">掌亦右壓左<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s10">並不得左<lb ed="X" n="0015b14"/>
+                                <lb ed="R110" n="0835a18"/>壓右也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s11">乃須閉目合口<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s12">舌跓上齶<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s13">或可跓齒<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s14">其閉目<lb ed="X" n="0015b15"/>
+                                <lb ed="R110" n="0835b01"/>合口等並不宜令急<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s15">乃至萬事皆貴舒縱<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s16">不用拘急<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s17">
+                                <lb ed="X" n="0015b16"/>
+                                <lb ed="R110" n="0835b02"/>閉目未慣者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s18">時任稍開<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s19">坐久少似疲倦<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s20">輒改威儀<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s21">勿<lb ed="X" n="0015b17"/>
+                                <lb ed="R110" n="0835b03"/>令生苦<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1111.s22">他皆准此<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015b18"/>
+                <lb ed="R110" n="0835b04"/>
+                <dialog type="qa" n="8">
+                    <sp type="question">
+                        <p xml:id="pX63p0015b1801">
+                            <seg xml:id="X63n1222_CBETA_001-0015b1801.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1801.s2">此方相傳為右手等多動<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1801.s3">坐者要令左壓右<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1801.s4">今乃<lb ed="X" n="0015b19"/>
+                                <lb ed="R110" n="0835b05"/>與彼碩反<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1801.s5">未審何故耶<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015b1910" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015b1910.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1910.s2">西方諸佛<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1910.s3">從佛以來相承<lb ed="X" n="0015b20"/>
+                                <lb ed="R110" n="0835b06"/>坐法皆如是也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1910.s4">並是印法<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1910.s5">此方擅改<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b1910.s6">吾所未詳<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015b21"/>
+                <lb ed="R110" n="0835b07"/>
+                <dialog type="qa" n="9">
+                    <sp type="question">
+                        <p xml:id="pX63p0015b2101">
+                            <seg xml:id="X63n1222_CBETA_001-0015b2101.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2101.s2">坐禪時倚物<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2101.s3">身或俯仰等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2101.s4">任性坐得不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015b2117" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015b2117.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2117.s2">必須正<lb ed="X" n="0015b22"/>
+                                <lb ed="R110" n="0835b08"/>身端坐<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2117.s3">身若倚曲即生病痛<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015b23"/>
+                <lb ed="R110" n="0835b09"/>
+                <dialog type="qa" n="10">
+                    <sp type="question">
+                        <p xml:id="pX63p0015b2301">
+                            <seg xml:id="X63n1222_CBETA_001-0015b2301.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2301.s2">謹聞坐矣<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2301.s3">行法云何<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015b2310" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s2">行即經行也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s3">宜依平坦之<lb ed="X" n="0015b24"/>
+                                <lb ed="R110" n="0835b10"/>地<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s4">自二十步以來<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s5">四十五步以上<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s6">於中經行<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s7">經行時<pb xml:id="X63n1222_CBETA_63-1222.0015c" ed="X" n="0015c" facs="X-xuzang/X63/00/X63-0015.png"/>
+                                <lb ed="X" n="0015c01"/>
+                                <lb ed="R110" n="0835b11"/>覆左手<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s8">以大指屈著掌中<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s9">以餘四指把大指作拳然<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s10">
+                                <lb ed="X" n="0015c02"/>
+                                <lb ed="R110" n="0835b12"/>覆右手<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s11">把左手腕<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s12">即端坐少時<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s13">攝心令住<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s14">謂住鼻端<lb ed="X" n="0015c03"/>
+                                <lb ed="R110" n="0835b13"/>等也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s15">乃行<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s16">行勿太急太緩<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s17">行只接心<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s18">行至界畔即逐<lb ed="X" n="0015c04"/>
+                                <lb ed="R110" n="0835b14"/>日迴身<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s19">還向來處<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s20">住立少時<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s21">如前復行<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s22">行時即開目<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s23">
+                                <lb ed="X" n="0015c05"/>
+                                <lb ed="R110" n="0835b15"/>住即輒閉<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s24">如是久行稍倦<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s25">即休經行<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s26">唯在晝<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015b2310.s27">夜不行<lb ed="X" n="0015c06"/>
+                                <lb ed="R110" n="0835b16"/>也<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015c07"/>
+                <lb ed="R110" n="0835b17"/>
+                <dialog type="qa" n="11">
+                    <sp type="question">
+                        <p xml:id="pX63p0015c0701">
+                            <seg xml:id="X63n1222_CBETA_001-0015c0701.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0701.s2">多人同處經行得不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015c0710" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015c0710.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0710.s2">稍須相離<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0710.s3">令近不得<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015c08"/>
+                <lb ed="R110" n="0835b18"/>
+                <dialog type="qa" n="12">
+                    <sp type="question">
+                        <p xml:id="pX63p0015c0801">
+                            <seg xml:id="X63n1222_CBETA_001-0015c0801.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0801.s2">行審其如是<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0801.s3">往哲寧悉不言<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0801.s4">幸乞指事委陳<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0801.s5">庶今<lb ed="X" n="0015c09"/>
+                                <lb ed="R110" n="0836a01"/>自我作古<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015c0905" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s2">烏萇國有佛經行處<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s3">及彌勒菩薩經行<lb ed="X" n="0015c10"/>
+                                <lb ed="R110" n="0836a02"/>處<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s4">並彫石以為界畔<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s5">今猶宛然<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s6">見者皆遙禮<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s7">無敢踐<lb ed="X" n="0015c11"/>
+                                <lb ed="R110" n="0836a03"/>其所<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s8">菩薩行處<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s9">人或入中<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s10">然欲度其脩短<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s11">或延或促<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s12">
+                                <lb ed="X" n="0015c12"/>
+                                <lb ed="R110" n="0836a04"/>竟無有能定其步數<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s13">諸國屢亦有斯迹耳<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s14">經行之事<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s15">
+                                <lb ed="X" n="0015c13"/>
+                                <lb ed="R110" n="0836a05"/>蓋是尋常<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s16">今古顯然<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s17">無宜致惑<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s18">吁哉小事<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c0905.s19">此地猶迷<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015c14"/>
+                <lb ed="R110" n="0836a06"/>
+                <dialog type="qa" n="13">
+                    <sp type="question">
+                        <p xml:id="pX63p0015c1401">
+                            <seg xml:id="X63n1222_CBETA_001-0015c1401.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1401.s2">遶塔行道與經行何別<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015c1411" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015c1411.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1411.s2">經行者直往直來<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1411.s3">豈同<lb ed="X" n="0015c15"/>
+                                <lb ed="R110" n="0836a07"/>旋遶耶<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1411.s4">又塔是多人往來處<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1411.s5">不可於中經行<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015c16"/>
+                <lb ed="R110" n="0836a08"/>
+                <dialog type="qa" n="14">
+                    <sp type="question">
+                        <p xml:id="pX63p0015c1601">
+                            <seg xml:id="X63n1222_CBETA_001-0015c1601.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1601.s2">此方有逆日行道稱為右旋者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1601.s3">未知是不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015c1618" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015c1618.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1618.s2">西方<lb ed="X" n="0015c17"/>
+                                <lb ed="R110" n="0836a09"/>旋塔並逐日轉<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1618.s3">曾無逆行<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1618.s4">
+                                <note place="inline">此條相乘而起。非此正宗</note>
+                                <c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015c18"/>
+                <lb ed="R110" n="0836a10"/>
+                <dialog type="qa" n="15">
+                    <sp type="question">
+                        <p xml:id="pX63p0015c1801">
+                            <seg xml:id="X63n1222_CBETA_001-0015c1801.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1801.s2">謹聞行矣<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1801.s3">住法云何<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015c1810" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015c1810.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1810.s2">住即端身攝心正立也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1810.s3">兩<lb ed="X" n="0015c19"/>
+                                <lb ed="R110" n="0836a11"/>手一如行時<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1810.s4">如是久立稍覺勞倦<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1810.s5">或雙足如離地之<lb ed="X" n="0015c20"/>
+                                <lb ed="R110" n="0836a12"/>狀<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1810.s6">覺如是等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1810.s7">即宜且休<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c1810.s8">住餘坐等<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015c21"/>
+                <lb ed="R110" n="0836a13"/>
+                <dialog type="qa" n="16">
+                    <sp type="question">
+                        <p xml:id="pX63p0015c2101">
+                            <seg xml:id="X63n1222_CBETA_001-0015c2101.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2101.s2">謹聞住矣<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2101.s3">臥法云何<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015c2110" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015c2110.s1">答右脇著地<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2110.s2">枕右手掌<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2110.s3">舒左<lb ed="X" n="0015c22"/>
+                                <lb ed="R110" n="0836a14"/>手置左<g ref="#CB00170">䏶</g>上<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2110.s4">舒兩足重累<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2110.s5">繫相而臥<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2110.s6">有病患者即任<lb ed="X" n="0015c23"/>
+                                <lb ed="R110" n="0836a15"/>所安而臥<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0015c24"/>
+                <lb ed="R110" n="0836a16"/>
+                <dialog type="qa" n="17">
+                    <sp type="question">
+                        <p xml:id="pX63p0015c2401">
+                            <seg xml:id="X63n1222_CBETA_001-0015c2401.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2401.s2">諸威儀中所有軌則<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2401.s3">並是印法耶<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0015c2415" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0015c2415.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2415.s2">如上習禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2415.s3">行<pb xml:id="X63n1222_CBETA_63-1222.0016a" ed="X" n="0016a" facs="X-xuzang/X63/00/X63-0016.png"/>
+                                <lb ed="X" n="0016a01"/>
+                                <lb ed="R110" n="0836a17"/>住坐臥<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2415.s4">屈申進止<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2415.s5">手足左右等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0015c2415.s6">一一皆是印法<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016a02"/>
+                <lb ed="R110" n="0836a18"/>
+                <dialog type="qa" n="18">
+                    <sp type="question">
+                        <p xml:id="pX63p0016a0201">
+                            <seg xml:id="X63n1222_CBETA_001-0016a0201.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0201.s2">如上威儀修禪之法<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0201.s3">依何乘耶<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016a0214" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016a0214.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0214.s2">依摩訶衍<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016a03"/>
+                <lb ed="R110" n="0836b01"/>
+                <dialog type="qa" n="19">
+                    <sp type="question">
+                        <p xml:id="pX63p0016a0301">
+                            <seg xml:id="X63n1222_CBETA_001-0016a0301.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0301.s2">用四威儀修禪之法<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0301.s3">小乘外道豈可無乎<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016a0318" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s2">此之<lb ed="X" n="0016a04"/>
+                                <lb ed="R110" n="0836b02"/>禪法<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s3">小乘始無<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s4">外道寧有耶<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s5">邪宗本期受苦<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s6">翹足倒<lb ed="X" n="0016a05"/>
+                                <lb ed="R110" n="0836b03"/>懸<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s7">正法為遣勞疲<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s8">威儀易脫<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s9">小乘進或可分有<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0318.s10">外道<lb ed="X" n="0016a06"/>
+                                <lb ed="R110" n="0836b04"/>全無<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016a07"/>
+                <lb ed="R110" n="0836b05"/>
+                <dialog type="qa" n="20">
+                    <sp type="question">
+                        <p xml:id="pX63p0016a0701">
+                            <seg xml:id="X63n1222_CBETA_001-0016a0701.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0701.s2">外道及與三乘皆有禪定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0701.s3">息心遣境<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0701.s4">未審何殊<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016a0720" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016a0720.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0720.s2">
+                                <lb ed="X" n="0016a08"/>
+                                <lb ed="R110" n="0836b06"/>外道執我以習禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0720.s3">小乘計法而修定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0720.s4">大乘止觀<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0720.s5">人法<lb ed="X" n="0016a09"/>
+                                <lb ed="R110" n="0836b07"/>雙除<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a0720.s6">此其別也<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016a10"/>
+                <lb ed="R110" n="0836b08"/>
+                <dialog type="qa" n="21">
+                    <sp type="question">
+                        <p xml:id="pX63p0016a1001">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1001.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1001.s2">將欲學禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1001.s3">以何方便為先<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016a1012" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s2">先起大慈悲心<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s3">永捨<lb ed="X" n="0016a11"/>
+                                <lb ed="R110" n="0836b09"/>報怨之念<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s4">方得習禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s5">貪瞋設起<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s6">速還除懺<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s7">如杖擊水<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s8">
+                                <lb ed="X" n="0016a12"/>
+                                <lb ed="R110" n="0836b10"/>暫開還合也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s9">惡念相續<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1012.s10">不可學禪<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016a13"/>
+                <lb ed="R110" n="0836b11"/>
+                <dialog type="qa" n="22">
+                    <sp type="question">
+                        <p xml:id="pX63p0016a1301">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1301.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1301.s2">創初學禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1301.s3">即觀無相得不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016a1312" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1312.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1312.s2">須以方便漸次而入<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1312.s3">
+                                <lb ed="X" n="0016a14"/>
+                                <lb ed="R110" n="0836b12"/>吾未見頓現無相者<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016a15"/>
+                <lb ed="R110" n="0836b13"/>
+                <dialog type="qa" n="23">
+                    <sp type="question">
+                        <p xml:id="pX63p0016a1501">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1501.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1501.s2">漸次云何<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016a1506" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1506.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1506.s2">如是間學者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1506.s3">令心先住長安一城之<lb ed="X" n="0016a16"/>
+                                <lb ed="R110" n="0836b14"/>中<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1506.s4">但勿令出外<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1506.s5">如是漸住一寺一房<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1506.s6">乃至鼻端<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1506.s7">心若<lb ed="X" n="0016a17"/>
+                                <lb ed="R110" n="0836b15"/>不住<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1506.s8">還攝令住<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016a18"/>
+                <lb ed="R110" n="0836b16"/>
+                <dialog type="qa" n="24">
+                    <sp type="question">
+                        <p xml:id="pX63p0016a1801">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1801.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1801.s2">鼻端云何<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016a1806" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1806.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1806.s2">想於鼻端如一滴垂露<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1806.s3">住心觀此<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016a19"/>
+                <lb ed="R110" n="0836b17"/>
+                <dialog type="qa" n="25">
+                    <sp type="question">
+                        <p xml:id="pX63p0016a1901">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1901.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1901.s2">此想成<anchor xml:id="nkr_note_add_0016a1901" n="0016a1901"/>
+                                <anchor xml:id="beg0016a1901" n="0016a1901"/>已<anchor xml:id="end0016a1901"/>
+                                <c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1901.s3">復何所觀<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016a1911" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s2">次想臍中如沙裏細泉<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s3">此<lb ed="X" n="0016a20"/>
+                                <lb ed="R110" n="0836b18"/>想若成<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s4">或見光明及腹中諸事<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s5">次觀頂上狀如甕口<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s6">
+                                <lb ed="X" n="0016a21"/>
+                                <lb ed="R110" n="0837a01"/>直下貫身徹於下地中也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s7">既此想<anchor xml:id="nkr_note_add_0016a2101" n="0016a2101"/>
+                                <anchor xml:id="beg0016a2101" n="0016a2101"/>已<anchor xml:id="end0016a2101"/>
+                                <c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s8">次觀頂上想<anchor xml:id="nkr_note_add_0016a2102" n="0016a2102"/>
+                                <anchor xml:id="beg0016a2102" n="0016a2102"/>已<anchor xml:id="end0016a2102"/>
+                                <lb ed="X" n="0016a22"/>
+                                <lb ed="R110" n="0837a02"/>觀頂上去頂四指<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s9">令心住此<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s10">從是以後<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s11">身漸自在<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s12">次<lb ed="X" n="0016a23"/>
+                                <lb ed="R110" n="0837a03"/>乃得入無相等觀<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s13">從淺至深<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a1911.s14">狀若登梯之漸也<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016a24"/>
+                <lb ed="R110" n="0837a04"/>
+                <dialog type="qa" n="26">
+                    <sp type="question">
+                        <p xml:id="pX63p0016a2401">
+                            <seg xml:id="X63n1222_CBETA_001-0016a2401.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2401.s2">亦有從想鼻端超越<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2401.s3">即得無相觀不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016a2416" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016a2416.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2416.s2">譬似有人<pb xml:id="X63n1222_CBETA_63-1222.0016b" ed="X" n="0016b" facs="X-xuzang/X63/00/X63-0016.png"/>
+                                <lb ed="X" n="0016b01"/>
+                                <lb ed="R110" n="0837a05"/>於沙土中本求銅鐵<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2416.s3">因或得金<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2416.s4">此亦然也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2416.s5">從緣鼻端<lb ed="X" n="0016b02"/>
+                                <lb ed="R110" n="0837a06"/>或入頂想<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2416.s6">或入火光定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2416.s7">或得無相等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2416.s8">如是超次<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016a2416.s9">中間<lb ed="X" n="0016b03"/>
+                                <lb ed="R110" n="0837a07"/>不定<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016b04"/>
+                <lb ed="R110" n="0837a08"/>
+                <dialog type="qa" n="27">
+                    <sp type="question">
+                        <p xml:id="pX63p0016b0401">
+                            <seg xml:id="X63n1222_CBETA_001-0016b0401.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0401.s2">經云<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0401.s3">若心有住則為非住<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0401.s4">或云心依境界是動非<lb ed="X" n="0016b05"/>
+                                <lb ed="R110" n="0837a09"/>禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0401.s5">若緣鼻端等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0401.s6">豈非有住耶<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016b0512" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016b0512.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0512.s2">鼻等想成<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0512.s3">輒便捨之<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0512.s4">
+                                <lb ed="X" n="0016b06"/>
+                                <lb ed="R110" n="0837a10"/>更觀餘相<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0512.s5">纔得尋捨<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0512.s6">何成住耶<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016b07"/>
+                <lb ed="R110" n="0837a11"/>
+                <dialog type="qa" n="28">
+                    <sp type="question">
+                        <p xml:id="pX63p0016b0701">
+                            <seg xml:id="X63n1222_CBETA_001-0016b0701.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0701.s2">緣鼻端等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0701.s3">積想乃成<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0701.s4">久積想心<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0701.s5">其必難捨<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0701.s6">寧輒捨<lb ed="X" n="0016b08"/>
+                                <lb ed="R110" n="0837a12"/>鼻<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0701.s7">次得緣臍<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016b0806" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016b0806.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0806.s2">本作要期<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0806.s3">得而不<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0806.s4">住及想成<anchor xml:id="nkr_note_add_0016b0801" n="0016b0801"/>
+                                <anchor xml:id="beg0016b0801" n="0016b0801"/>已<anchor xml:id="end0016b0801"/>
+                                <c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0806.s5">自有<lb ed="X" n="0016b09"/>
+                                <lb ed="R110" n="0837a13"/>猒心<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0806.s6">猒心既生<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b0806.s7">捨之甚易<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016b10"/>
+                <lb ed="R110" n="0837a14"/>
+                <dialog type="qa" n="29">
+                    <sp type="question">
+                        <p xml:id="pX63p0016b1001">
+                            <seg xml:id="X63n1222_CBETA_001-0016b1001.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1001.s2">如聖教說<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1001.s3">初入道者先教五停心等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1001.s4">今何不爾<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016b1020" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016b1020.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1020.s2">
+                                <lb ed="X" n="0016b11"/>
+                                <lb ed="R110" n="0837a15"/>五停心及鼻端等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1020.s3">各是一途<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1020.s4">吾所稟承<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1020.s5">但依此也<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016b12"/>
+                <lb ed="R110" n="0837a16"/>
+                <dialog type="qa" n="30">
+                    <sp type="question">
+                        <p xml:id="pX63p0016b1201">
+                            <seg xml:id="X63n1222_CBETA_001-0016b1201.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1201.s2">有聖教云<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1201.s3">若不先學多聞<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1201.s4">不許脩定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1201.s5">其少聞者得<lb ed="X" n="0016b13"/>
+                                <lb ed="R110" n="0837a17"/>修禪不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016b1304" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016b1304.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1304.s2">如吾和上闍棃相承一途<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1304.s3">直爾學禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1304.s4">無問<lb ed="X" n="0016b14"/>
+                                <lb ed="R110" n="0837a18"/>多聞少聞也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1304.s5">先多聞者最為第一<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1304.s6">或多聞者倒益浮<lb ed="X" n="0016b15"/>
+                                <lb ed="R110" n="0837b01"/>散<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1304.s7">固有順定多聞及不順者也<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016b16"/>
+                <lb ed="R110" n="0837b02"/>
+                <dialog type="qa" n="31">
+                    <sp type="question">
+                        <p xml:id="pX63p0016b1601">
+                            <seg xml:id="X63n1222_CBETA_001-0016b1601.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1601.s2">聞思修慧次第相生<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1601.s3">多聞聞慧既無<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1601.s4">禪定脩慧寧<lb ed="X" n="0016b17"/>
+                                <lb ed="R110" n="0837b03"/>起<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016b1702" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016b1702.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1702.s2">設使有人一字不識<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1702.s3">但解禪法<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1702.s4">亦是多聞<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1702.s5">非要<lb ed="X" n="0016b18"/>
+                                <lb ed="R110" n="0837b04"/>廣尋文句等也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1702.s6">周利般陀誦箕忘<g ref="#CB00416">󰆠</g>成大羅漢<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1702.s7">此豈<lb ed="X" n="0016b19"/>
+                                <lb ed="R110" n="0837b05"/>多聞耶<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1702.s8">且成斯證<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b1702.s9">未必一切皆然<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016b20"/>
+                <lb ed="R110" n="0837b06"/>
+                <dialog type="qa" n="32">
+                    <sp type="question">
+                        <p xml:id="pX63p0016b2001">
+                            <seg xml:id="X63n1222_CBETA_001-0016b2001.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2001.s2">其有持戒及破戒者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2001.s3">並得學禪不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016b2015" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016b2015.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2015.s2">無問持戒破<lb ed="X" n="0016b21"/>
+                                <lb ed="R110" n="0837b07"/>戒<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2015.s3">並得學禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2015.s4">先淨持戒<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2015.s5">尤是第一<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016b22"/>
+                <lb ed="R110" n="0837b08"/>
+                <dialog type="qa" n="33">
+                    <sp type="question">
+                        <p xml:id="pX63p0016b2201">
+                            <seg xml:id="X63n1222_CBETA_001-0016b2201.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2201.s2">聖教云<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2201.s3">尸羅清淨三昧現前<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2201.s4">破戒之人何得修定<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+<lb ed="X" n="0016b23"/>
+                    <lb ed="R110" n="0837b09"/>
+                    <sp type="answer">
+                        <p xml:id="pX63p0016b2301">
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s2">聲聞持戒乃是菩薩破戒<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s3">小乘犯重即便永弃<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s4">何<lb ed="X" n="0016b24"/>
+                                <lb ed="R110" n="0837b10"/>得修禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s5">尸羅不淨定不現前者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s6">據此說也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s7">若大乘中<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s8">
+                                <pb xml:id="X63n1222_CBETA_63-1222.0016c" ed="X" n="0016c" facs="X-xuzang/X63/00/X63-0016.png"/>
+                                <lb ed="X" n="0016c01"/>
+                                <lb ed="R110" n="0837b11"/>但能息心即真懺悔<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s9">真懺悔故障滅戒生<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s10">故得禪定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s11">
+                                <lb ed="X" n="0016c02"/>
+                                <lb ed="R110" n="0837b12"/>示有先入方等懺悔<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s12">得滅罪相<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s13">更修戒品<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016b2301.s14">方始習禪<lb ed="X" n="0016c03"/>
+                                <lb ed="R110" n="0837b13"/>者也<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016c04"/>
+                <lb ed="R110" n="0837b14"/>
+                <dialog type="qa" n="34">
+                    <sp type="question">
+                        <p xml:id="pX63p0016c0401">
+                            <seg xml:id="X63n1222_CBETA_001-0016c0401.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0401.s2">以何法修<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0401.s3">令心速定<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016c0410" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s2">速求定者反是懈怠<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s3">慎勿<lb ed="X" n="0016c05"/>
+                                <lb ed="R110" n="0837b15"/>求速<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s4">
+                                <anchor xml:id="nkr_note_add_0016c0501" n="0016c0501"/>
+                                <anchor xml:id="beg0016c0501" n="0016c0501"/>但<anchor xml:id="end0016c0501"/>能離念<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s5">息諸攀緣<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s6">非求非不求<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s7">得定若不得<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s8">
+                                <lb ed="X" n="0016c06"/>
+                                <lb ed="R110" n="0837b16"/>但勿計念者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s9">是大精進也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s10">烏萇國有一僧<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s11">久坐不能<lb ed="X" n="0016c07"/>
+                                <lb ed="R110" n="0837b17"/>得定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s12">遂癈業<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s13">忽有天化為人來其前<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s14">磨一鐵鎚<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s15">僧問<lb ed="X" n="0016c08"/>
+                                <lb ed="R110" n="0837b18"/>何用<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s16">答曰欲以作針<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s17">僧曰何由可成<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s18">天曰不休即成<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s19">
+                                <lb ed="X" n="0016c09"/>
+                                <lb ed="R110" n="0838a01"/>僧遂體悟<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s20">還復習禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s21">因得道果<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s22">後復住滅定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s23">住滅定<lb ed="X" n="0016c10"/>
+                                <lb ed="R110" n="0838a02"/>故<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s24">迄今猶在<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s25">但以離念為勤<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c0410.s26">得定何慮不速乎<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016c11"/>
+                <lb ed="R110" n="0838a03"/>
+                <dialog type="qa" n="35">
+                    <sp type="question">
+                        <p xml:id="pX63p0016c1101">
+                            <seg xml:id="X63n1222_CBETA_001-0016c1101.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1101.s2">定中有何相耶<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016c1108" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s2">定相極多<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s3">且舉三五<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s4">或頭似丈<lb ed="X" n="0016c12"/>
+                                <lb ed="R110" n="0838a04"/>夫之狀<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s5">或覺身上多諸垢穢膩<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s6">此等是有障之相<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s7">即<lb ed="X" n="0016c13"/>
+                                <lb ed="R110" n="0838a05"/>宜改易威儀<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s8">或且休止<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s9">或覺身上如蟲蟻行<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s10">或復如<lb ed="X" n="0016c14"/>
+                                <lb ed="R110" n="0838a06"/>雲及白疊等從背上起並<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s11">勿怪亦勿手髑<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s12">或如滴油<lb ed="X" n="0016c15"/>
+                                <lb ed="R110" n="0838a07"/>從頭面下<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s13">或見所坐處明<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s14">此等並是定前相也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s15">或久<lb ed="X" n="0016c16"/>
+                                <lb ed="R110" n="0838a08"/>坐立<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s16">身有勞倦<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s17">傍聞彈指聲或觸門等聲者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s18">即直出<lb ed="X" n="0016c17"/>
+                                <lb ed="R110" n="0838a09"/>定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s19">或<g ref="#CB05903">𥨊</g>息等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s20">此是諸天善神<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s21">善知人勞倦<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s22">來相警耳<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s23">
+                                <lb ed="X" n="0016c18"/>
+                                <lb ed="R110" n="0838a10"/>或覺身有輕舉而亦樂者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s24">是神足前相<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s25">或輕舉而苦<lb ed="X" n="0016c19"/>
+                                <lb ed="R110" n="0838a11"/>者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s26">是風大增也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s27">或身上有處熱者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s28">是火光定相<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s29">或見<lb ed="X" n="0016c20"/>
+                                <lb ed="R110" n="0838a12"/>一室明者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s30">是初禪之前相<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s31">或聞奇妙香氣世間無比<lb ed="X" n="0016c21"/>
+                                <lb ed="R110" n="0838a13"/>者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s32">此是定成之相<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s33">如是等類不可具述<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s34">
+                                <anchor xml:id="nkr_note_add_0016c2101" n="0016c2101"/>
+                                <anchor xml:id="beg0016c2101" n="0016c2101"/>但<anchor xml:id="end0016c2101"/>覺如<anchor xml:id="nkr_note_orig_0016001" n="0016001"/>是違<lb ed="X" n="0016c22"/>
+                                <lb ed="R110" n="0838a14"/>順等相<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s35">皆勿取著以生憂喜<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c1108.s36">但緣本境安靜其心<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0016c23"/>
+                <lb ed="R110" n="0838a15"/>
+                <dialog type="qa" n="36">
+                    <sp type="question">
+                        <p xml:id="pX63p0016c2301">
+                            <seg xml:id="X63n1222_CBETA_001-0016c2301.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c2301.s2">坐禪者既不用違強身心<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c2301.s3">若覺如上蟲蟻行等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c2301.s4">抑<lb ed="X" n="0016c24"/>
+                                <lb ed="R110" n="0838a16"/>情不觸<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c2301.s5">豈不違強耶<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0016c2409" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0016c2409.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c2409.s2">未得定時不用違強<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c2409.s3">漸既在<pb xml:id="X63n1222_CBETA_63-1222.0017a" ed="X" n="0017a" facs="X-xuzang/X63/00/X63-0017.png"/>
+                                <lb ed="X" n="0017a01"/>
+                                <lb ed="R110" n="0838a17"/>定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0016c2409.s4">違強無失<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017a02"/>
+                <lb ed="R110" n="0838a18"/>
+                <dialog type="qa" n="37">
+                    <sp type="question">
+                        <p xml:id="pX63p0017a0201">
+                            <seg xml:id="X63n1222_CBETA_001-0017a0201.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0201.s2">將從定出<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0201.s3">時節等云何<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017a0211" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s2">初學定者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s3">先作要期<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s4">或<lb ed="X" n="0017a03"/>
+                                <lb ed="R110" n="0838b01"/>若干時<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s5">或鳴鐘<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s6">或一時一更等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s7">當須出定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s8">如是期<anchor xml:id="nkr_note_add_0017a0301" n="0017a0301"/>
+                                <anchor xml:id="beg0017a0301" n="0017a0301"/>已<anchor xml:id="end0017a0301"/>
+                                <c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s9">
+                                <lb ed="X" n="0017a04"/>
+                                <lb ed="R110" n="0838b02"/>然後入禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s10">必須然也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s11">其有入定或經劫數或一二七<lb ed="X" n="0017a05"/>
+                                <lb ed="R110" n="0838b03"/>日等者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s12">並隨其心有此脩短耳<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s13">欲出定時<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s14">先從心動<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s15">
+                                <lb ed="X" n="0017a06"/>
+                                <lb ed="R110" n="0838b04"/>心動<anchor xml:id="nkr_note_add_0017a0601" n="0017a0601"/>
+                                <anchor xml:id="beg0017a0601" n="0017a0601"/>已<anchor xml:id="end0017a0601"/>
+                                <c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s16">即氣脉漸通<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s17">然後徐徐動身而起<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s18">故經云<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0211.s19">世<lb ed="X" n="0017a07"/>
+                                <lb ed="R110" n="0838b05"/>尊從禪安詳而起<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017a08"/>
+                <lb ed="R110" n="0838b06"/>
+                <dialog type="qa" n="38">
+                    <sp type="question">
+                        <p xml:id="pX63p0017a0801">
+                            <seg xml:id="X63n1222_CBETA_001-0017a0801.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0801.s2">若有魔事<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0801.s3">云何遣除<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017a0810" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s2">但解四威儀中易脫而修<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s3">
+                                <lb ed="X" n="0017a09"/>
+                                <lb ed="R110" n="0838b07"/>即無魔事<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s4">慎勿勉強以自生苦<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s5">道從樂生<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s6">不同外道<lb ed="X" n="0017a10"/>
+                                <lb ed="R110" n="0838b08"/>受諸苦法<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s7">解此消息<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s8">魔事自除<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s9">猶不除者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s10">即宜捨置<lb ed="X" n="0017a11"/>
+                                <lb ed="R110" n="0838b09"/>或讀誦經論<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s11">乃至入諸市肆遊目放心<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s12">魔事必遣<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s13">但<lb ed="X" n="0017a12"/>
+                                <lb ed="R110" n="0838b10"/>有禪病<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s14">宜依經教以禪法治<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a0810.s15">非但針藥等所能療耳<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017a13"/>
+                <lb ed="R110" n="0838b11"/>
+                <dialog type="qa" n="39">
+                    <sp type="question">
+                        <p xml:id="pX63p0017a1301">
+                            <seg xml:id="X63n1222_CBETA_001-0017a1301.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1301.s2">坐禪有預防魔事法不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017a1311" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s2">凡欲學禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s3">先起悲願<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s4">我<lb ed="X" n="0017a14"/>
+                                <lb ed="R110" n="0838b12"/>今修定<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s5">必取菩提<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s6">廣利群物<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s7">唯願三寶諸天神等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s8">宜<lb ed="X" n="0017a15"/>
+                                <lb ed="R110" n="0838b13"/>衛其身<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s9">使無災障<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s10">每斯誓<anchor xml:id="nkr_note_add_0017a1501" n="0017a1501"/>
+                                <anchor xml:id="beg0017a1501" n="0017a1501"/>已<anchor xml:id="end0017a1501"/>
+                                <c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s11">然後習禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s12">然於禪堂內<lb ed="X" n="0017a16"/>
+                                <lb ed="R110" n="0838b14"/>四壁邊上<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s13">多畵聖僧形像<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s14">並作結跏坐禪定狀<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s15">其聖<lb ed="X" n="0017a17"/>
+                                <lb ed="R110" n="0838b15"/>僧像稍宜大作<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s16">仍以花香供養<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s17">近下復畵諸凡僧像<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s18">
+                                <lb ed="X" n="0017a18"/>
+                                <lb ed="R110" n="0838b16"/>稍宜小作<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s19">大小如人<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s20">亦作禪狀<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s21">然後於中學禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a1311.s22">可得<lb ed="X" n="0017a19"/>
+                                <lb ed="R110" n="0838b17"/>預防魔事<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017a20"/>
+                <lb ed="R110" n="0838b18"/>
+                <dialog type="qa" n="40">
+                    <sp type="question">
+                        <p xml:id="pX63p0017a2001">
+                            <seg xml:id="X63n1222_CBETA_001-0017a2001.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2001.s2">佛堂中坐禪得不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017a2009" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017a2009.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2009.s2">坐禪宜於靜室樹下塚間及<lb ed="X" n="0017a21"/>
+                                <lb ed="R110" n="0839a01"/>露坐等<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2009.s3">不須在於佛堂中也<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017a22"/>
+                <lb ed="R110" n="0839a02"/>
+                <dialog type="qa" n="41">
+                    <sp type="question">
+                        <p xml:id="pX63p0017a2201">
+                            <seg xml:id="X63n1222_CBETA_001-0017a2201.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2201.s2">多人同處坐禪得不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017a2210" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017a2210.s1">答曰<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2210.s2">得然<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2210.s3">各面他背坐<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2210.s4">不得<lb ed="X" n="0017a23"/>
+                                <lb ed="R110" n="0839a03"/>相向<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2210.s5">若有多人<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2210.s6">夜中燃一燈燭<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2210.s7">人少不須用<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017a24"/>
+                <lb ed="R110" n="0839a04"/>
+                <dialog type="qa" n="42">
+                    <sp type="question">
+                        <p xml:id="pX63p0017a2401">
+                            <seg xml:id="X63n1222_CBETA_001-0017a2401.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2401.s2">坐禪須被受持袈裟不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017a2411" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017a2411.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017a2411.s2">裸得無在<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<pb xml:id="X63n1222_CBETA_63-1222.0017b" ed="X" n="0017b" facs="X-xuzang/X63/00/X63-0017.png"/>
+<lb ed="X" n="0017b01"/>
+                <lb ed="R110" n="0839a05"/>
+                <dialog type="qa" n="43">
+                    <sp type="question">
+                        <p xml:id="pX63p0017b0101">
+                            <seg xml:id="X63n1222_CBETA_001-0017b0101.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0101.s2">學禪者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0101.s3">一切時常攝念耶<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017b0112" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017b0112.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0112.s2">除大小便<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0112.s3">餘時常須<lb ed="X" n="0017b02"/>
+                                <lb ed="R110" n="0839a06"/>攝心<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017b03"/>
+                <lb ed="R110" n="0839a07"/>
+                <dialog type="qa" n="44">
+                    <sp type="question">
+                        <p xml:id="pX63p0017b0301">
+                            <seg xml:id="X63n1222_CBETA_001-0017b0301.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0301.s2">定心名止<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0301.s3">止中即有觀不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017b0312" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017b0312.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0312.s2">但<anchor xml:id="nkr_note_orig_0017001" n="0017001"/>只勿學<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0312.s3">臨時自當<lb ed="X" n="0017b04"/>
+                                <lb ed="R110" n="0839a08"/>知<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017b05"/>
+                <lb ed="R110" n="0839a09"/>
+                <dialog type="qa" n="45">
+                    <sp type="question">
+                        <p xml:id="pX63p0017b0501">
+                            <seg xml:id="X63n1222_CBETA_001-0017b0501.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0501.s2">坐禪人兼得持經講說等不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017b0513" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017b0513.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0513.s2">力所堪者皆得兼<lb ed="X" n="0017b06"/>
+                                <lb ed="R110" n="0839a10"/>修<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0513.s3">然諸業中禪業最勝<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0513.s4">是以西方上房上供先給禪<lb ed="X" n="0017b07"/>
+                                <lb ed="R110" n="0839a11"/>師<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0513.s5">經律等師與其中下<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017b08"/>
+                <lb ed="R110" n="0839a12"/>
+                <dialog type="qa" n="46">
+                    <sp type="question">
+                        <p xml:id="pX63p0017b0801">
+                            <seg xml:id="X63n1222_CBETA_001-0017b0801.s1">問<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0801.s2">有禪業者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0801.s3">命終之際能排惡趣不<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                    <sp type="answer">
+                        <p xmlns:cb="http://www.cbeta.org/ns/1.0" xml:id="pX63p0017b0815" cb:place="inline">
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s1">答<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s2">如極邊險<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s3">不<lb ed="X" n="0017b09"/>
+                                <lb ed="R110" n="0839a13"/>持弓矢逢賊必危<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s4">身亦如是<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s5">既處無常<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s6">不預修禪<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s7">臨<lb ed="X" n="0017b10"/>
+                                <lb ed="R110" n="0839a14"/>終必亂心捨命<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s8">多生惡趣<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s9">定心自在<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s10">臨終無顛倒<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s11">無<lb ed="X" n="0017b11"/>
+                                <lb ed="R110" n="0839a15"/>顛倒故隨心受生善所<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s12">即此生中尚期果證<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s13">何況臨<lb ed="X" n="0017b12"/>
+                                <lb ed="R110" n="0839a16"/>終不排惡趣乎<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s14">亦有一生學禪而不能得<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s15">臨欲捨命<lb ed="X" n="0017b13"/>
+                                <lb ed="R110" n="0839a17"/>而始得者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s16">其人死之後<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s17">顏色不變<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s18">身體柔輭<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s19">是其相<lb ed="X" n="0017b14"/>
+                                <lb ed="R110" n="0839a18"/>也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s20">禪師屢云<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s21">聞思學者適猶習於良方<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s22">至於修慧始<lb ed="X" n="0017b15"/>
+                                <lb ed="R110" n="0839b01"/>如服於妙藥<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s23">雖有多聞施戒等行<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s24">猶不安禪者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s25">尚未<lb ed="X" n="0017b16"/>
+                                <lb ed="R110" n="0839b02"/>得名修道人也<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s26">又云禪定者<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s27">乃陶冶麤鄙<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s28">澡練神明<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s29">
+                                <lb ed="X" n="0017b17"/>
+                                <lb ed="R110" n="0839b03"/>味道之輩特宜存習<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s30">但恂暫逢玄匠<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s31">略問如前<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s32">迫以<lb ed="X" n="0017b18"/>
+                                <lb ed="R110" n="0839b04"/>短時<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s33">不遑周詳備<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s34">更詳金牒<c n="。"/>
+                            </seg>
+                            <seg xml:id="X63n1222_CBETA_001-0017b0815.s35">參而用焉<c n="。"/>
+                            </seg>
+                        </p>
+                    </sp>
+                </dialog>
+<lb ed="X" n="0017b19"/>
+                <lb ed="R110" n="0839b05"/>
+<lb ed="X" n="0017b20"/>
+                <lb ed="R110" n="0839b06"/>
+                <juan fun="close" n="1">
+                    <jhead>修禪要訣一卷</jhead>
+                </juan>
+            </div>
+<lb ed="X" n="0017b21"/>
+            <lb ed="R110" n="0839b07"/>
+<lb ed="X" n="0017b22"/>
+            <lb ed="R110" n="0839b08"/>
+            <div type="w">
+                <p xml:id="pX63p0017b2201">
+                    <seg xml:id="X63n1222_CBETA_1-0017b2201.s1">承保三年六月二十二日於光明書寫畢</seg>
+                </p>
+            </div>
+</body>
+<back>
+<div xmlns="http://www.cbeta.org/ns/1.0" type="apparatus">
+<head xmlns="http://www.tei-c.org/ns/1.0">校注</head>
+<p xmlns="http://www.tei-c.org/ns/1.0">
+<app from="#beg0015a1601" to="#end0015a1601">
+                        <lem wit="#wit.cbeta" resp="#resp3">已</lem>
+                        <rdg wit="#wit.orig">巳</rdg>
+                    </app>
+<app from="#beg0016a1901" to="#end0016a1901">
+                        <lem wit="#wit.cbeta" resp="#resp3">已</lem>
+                        <rdg wit="#wit.orig">巳</rdg>
+                    </app>
+<app from="#beg0016a2101" to="#end0016a2101">
+                        <lem wit="#wit.cbeta" resp="#resp3">已</lem>
+                        <rdg wit="#wit.orig">巳</rdg>
+                    </app>
+<app from="#beg0016a2102" to="#end0016a2102">
+                        <lem wit="#wit.cbeta" resp="#resp3">已</lem>
+                        <rdg wit="#wit.orig">巳</rdg>
+                    </app>
+<app from="#beg0016b0801" to="#end0016b0801">
+                        <lem wit="#wit.cbeta" resp="#resp3">已</lem>
+                        <rdg wit="#wit.orig">巳</rdg>
+                    </app>
+<app from="#beg0016c0501" to="#end0016c0501">
+                        <lem wit="#wit.cbeta" resp="#resp3">但</lem>
+                        <rdg wit="#wit.orig">伹</rdg>
+                    </app>
+<app from="#beg0016c2101" to="#end0016c2101">
+                        <lem wit="#wit.cbeta" resp="#resp3">但</lem>
+                        <rdg wit="#wit.orig">伹</rdg>
+                    </app>
+<app from="#beg0017a0301" to="#end0017a0301">
+                        <lem wit="#wit.cbeta" resp="#resp3">已</lem>
+                        <rdg wit="#wit.orig">巳</rdg>
+                    </app>
+<app from="#beg0017a0601" to="#end0017a0601">
+                        <lem wit="#wit.cbeta" resp="#resp3">已</lem>
+                        <rdg wit="#wit.orig">巳</rdg>
+                    </app>
+<app from="#beg0017a1501" to="#end0017a1501">
+                        <lem wit="#wit.cbeta" resp="#resp3">已</lem>
+                        <rdg wit="#wit.orig">巳</rdg>
+                    </app>
+</p>
+</div>
+<div xmlns="http://www.cbeta.org/ns/1.0" type="xuzang-notes">
+<head xmlns="http://www.tei-c.org/ns/1.0">卍續藏 校注</head>
+<p xmlns="http://www.tei-c.org/ns/1.0">
+<note n="0015001" resp="#resp2" place="foot text" type="orig" target="#nkr_note_orig_0015001">令上疑脫縱字</note>
+<note n="0016001" resp="#resp2" place="foot text" type="orig" target="#nkr_note_orig_0016001">是一作此</note>
+<note n="0017001" resp="#resp2" place="foot text" type="orig" target="#nkr_note_orig_0017001">只勿一作亦修</note>
+</p>
+</div>
+<div xmlns="http://www.cbeta.org/ns/1.0" type="add-notes">
+<head xmlns="http://www.tei-c.org/ns/1.0">新增校注</head>
+<p xmlns="http://www.tei-c.org/ns/1.0">
+<note n="0015a1601" resp="#resp1" type="add" target="#nkr_note_add_0015a1601">已【CB】，巳【卍續】</note>
+<note n="0016a1901" resp="#resp1" type="add" target="#nkr_note_add_0016a1901">已【CB】，巳【卍續】</note>
+<note n="0016a2101" resp="#resp1" type="add" target="#nkr_note_add_0016a2101">已【CB】，巳【卍續】</note>
+<note n="0016a2102" resp="#resp1" type="add" target="#nkr_note_add_0016a2102">已【CB】，巳【卍續】</note>
+<note n="0016b0801" resp="#resp1" type="add" target="#nkr_note_add_0016b0801">已【CB】，巳【卍續】</note>
+<note n="0016c0501" resp="#resp1" type="add" target="#nkr_note_add_0016c0501">但【CB】，伹【卍續】</note>
+<note n="0016c2101" resp="#resp1" type="add" target="#nkr_note_add_0016c2101">但【CB】，伹【卍續】</note>
+<note n="0017a0301" resp="#resp1" type="add" target="#nkr_note_add_0017a0301">已【CB】，巳【卍續】</note>
+<note n="0017a0601" resp="#resp1" type="add" target="#nkr_note_add_0017a0601">已【CB】，巳【卍續】</note>
+<note n="0017a1501" resp="#resp1" type="add" target="#nkr_note_add_0017a1501">已【CB】，巳【卍續】</note>
+</p>
+</div>
+</back>
+    </text>
+</TEI>

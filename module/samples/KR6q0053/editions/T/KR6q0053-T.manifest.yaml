@@ -9,24 +9,31 @@ assets:
 table_of_contents:
 - ref: {seq: 1, marker_id: KR6q0053_T_001-0495a.4-h, span: [front, 0, 295]}
   label: 臨濟慧照玄公大宗師語錄序
+  type: section
   level: 1
 - ref: {seq: 1, marker_id: KR6q0053_T_001-0495a.51-h, span: [front, 295, 925]}
   label: 臨濟慧照玄公大宗師語錄序
+  type: section
   level: 1
 - ref: {seq: 1, marker_id: KR6q0053_T_001-0495c.12-h, span: [front, 925, 1506]}
   label: 臨濟慧照玄公大宗師語錄序
+  type: section
   level: 1
 - ref: {seq: 1, marker_id: KR6q0053_T_001-0496a.44-h, span: [front, 1506, 1793]}
   label: 鎮州臨濟慧照禪師語錄序
+  type: section
   level: 1
 - ref: {seq: 1, marker_id: KR6q0053_T_001-0496b.32-h, span: [body, 0, 9661]}
   label: 鎮州臨濟慧照禪師語錄
+  type: section
   level: 1
 - ref: {seq: 1, marker_id: KR6q0053_T_001-0503a.45-h, span: [body, 9661, 11612]}
   label: 勘辨
+  type: section
   level: 1
 - ref: {seq: 1, marker_id: KR6q0053_T_001-0504b.82-h, span: [body, 11612, 14560]}
   label: 行錄
+  type: section
   level: 1
 metadata:
   title: 臨濟錄
@@ -44,4 +51,4 @@ metadata:
     path: data/tls/KR6q0053.xml
   edition:
     short: T
-hash: sha256:f43752ac95e64d3d3b2865da7bebab9690f73b6f0b2223798bc6a65207747ba6
+hash: sha256:50298e03955b861d82e7245000dd8dea5984bbb6253ae37c70f4501411b069dc

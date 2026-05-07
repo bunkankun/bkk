@@ -160,7 +160,8 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
     component of the marker ids, which follow ``<text-id>_<edition>_<location>``
     in both the Kanripo and TLS corpora.
     """
-    sections, divs_info, markers_info, tei_info, parse_errors = _parse_text(text_xml)
+    (sections, divs_info, markers_info, tei_info, parse_errors,
+     flavor) = _parse_text(text_xml, text_id)
     if parse_errors:
         print(f"warning: {text_id}: {len(parse_errors)} XML error(s) in "
               f"{text_xml.name}; continuing with recovery",
@@ -193,11 +194,12 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
     )
 
     metadata = _parse_metadata(text_xml, text_id)
+    krp_id = metadata["identifiers"]["krp"]
     edition_short = _derive_edition_short(sections, text_id)
 
     source_info: dict = {
-        "text_id": text_id,
-        "format": "tls",
+        "text_id": krp_id,
+        "format": "tls-cbeta" if flavor == "cbeta" else "tls",
         "format_version": 1,
         "source_files": _source_files(text_xml, swl_ann, doc_ann),
         "tei": tei_info,
@@ -209,11 +211,18 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
     if parse_errors:
         source_info["parse_errors"] = parse_errors
 
-    juans = _build_juans(sections, annotations, text_id)
+    # CBETA juan grouping is computed *after* marker-id normalization so the
+    # split Section copies returned in the groups carry canonical ids.
+    juan_groups = (
+        _split_sections_into_cbeta_juans(sections) if flavor == "cbeta" else None
+    )
+    juans = _build_juans(
+        sections, annotations, text_id, flavor=flavor, juan_groups=juan_groups,
+    )
     source = {"repository": "tls-texts", "path": f"data/tls/{text_id}.xml"}
     metadata.setdefault("source", source)
     return Bundle(
-        text_id=text_id,
+        text_id=krp_id,
         juans=juans,
         metadata=metadata,
         edition_short=edition_short,
@@ -222,12 +231,20 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
     )
 
 
-def _build_juans(sections: list[Section], annotations: list[Annotation],
-                 text_id: str) -> list[Juan]:
+def _build_juans(
+    sections: list[Section], annotations: list[Annotation], text_id: str,
+    *, flavor: str = "classic",
+    juan_groups: list[tuple[str, list[Section]]] | None = None,
+) -> list[Juan]:
     """Group ``sections`` into per-juan :class:`Juan` objects and partition
     ``annotations`` by which juan contains their seg.
+
+    When ``juan_groups`` is provided (CBETA flavor), it is used verbatim;
+    otherwise classic boundary-by-marker-id splitting runs over ``sections``.
     """
-    groups = _split_sections_into_juans(sections, text_id)
+    groups = juan_groups if juan_groups is not None else (
+        _split_sections_into_juans(sections, text_id)
+    )
     if not groups:
         return [Juan(seq=1, sections=[], annotations=list(annotations))]
 
@@ -250,10 +267,43 @@ def _build_juans(sections: list[Section], annotations: list[Annotation],
         if idx is not None:
             buckets[idx].append(ann)
 
-    return [
-        Juan(seq=seqs[i], sections=secs, annotations=buckets[i])
-        for i, (_, secs) in enumerate(groups)
-    ]
+    juans: list[Juan] = []
+    for i, (label, secs) in enumerate(groups):
+        seq = seqs[i]
+        metadata: dict = {}
+        if flavor == "cbeta":
+            metadata["flavor"] = "cbeta"
+            # Force pre-juan content (the ``_000`` group) into the front
+            # bucket regardless of head-text heuristics. Subsequent juans
+            # follow the default classifier.
+            if label == "000":
+                secs = [_with_section_bucket(s, "front") for s in secs]
+            # Capture juan-level metadata from the first cbeta:juan-start
+            # marker found in this group, if any.
+            for sec in secs:
+                jstart = next(
+                    (m for m in sec.markers if m.type == "cbeta:juan-start"),
+                    None,
+                )
+                if jstart is not None:
+                    if jstart.extras.get("jhead"):
+                        metadata["juan_label"] = jstart.extras["jhead"]
+                    metadata["juan_marker_id"] = jstart.id
+                    break
+        juans.append(Juan(
+            seq=seq, sections=secs, annotations=buckets[i], metadata=metadata,
+        ))
+    return juans
+
+
+def _with_section_bucket(section: Section, bucket: str) -> Section:
+    return Section(
+        head_text=section.head_text,
+        head_marker_id=section.head_marker_id,
+        text=section.text,
+        markers=list(section.markers),
+        bucket=bucket,
+    )
 
 
 _LABEL_BEARING_MARKERS = ("page-break", "tls:head", "tls:seg")
@@ -446,6 +496,107 @@ def _split_sections_into_juans(
     return groups
 
 
+def _split_sections_into_cbeta_juans(
+    sections: list[Section],
+) -> list[tuple[str, list[Section]]]:
+    """Split ``sections`` at every ``cbeta:juan-start`` marker.
+
+    Pre-juan content (whatever appears before the first juan-start) is
+    grouped under label ``"000"``. Each subsequent group is keyed by the
+    ``juan_n`` extras of the boundary marker. Splitting is done by marker
+    *index* (not offset) so a juan-start at offset 0 still pulls in the
+    juan-start marker itself, while leaving any same-offset markers (e.g. a
+    pre-juan ``cbeta:mulu``) in the previous group.
+    """
+    groups: list[tuple[str, list[Section]]] = []
+    current_label = "000"
+
+    def append(label: str, sec: Section) -> None:
+        if not sec.text and not sec.markers:
+            return
+        if groups and groups[-1][0] == label:
+            groups[-1][1].append(sec)
+        else:
+            groups.append((label, [sec]))
+
+    for sec in sections:
+        boundaries = [
+            (i, m.extras.get("juan_n", "001"))
+            for i, m in enumerate(sec.markers)
+            if m.type == "cbeta:juan-start"
+        ]
+        if not boundaries:
+            append(current_label, sec)
+            continue
+
+        head = sec
+        consumed_markers = 0
+        cursor_label = current_label
+        for marker_idx, new_label in boundaries:
+            local_idx = marker_idx - consumed_markers
+            front, head = _split_section_at_marker_index(head, local_idx)
+            append(cursor_label, front)
+            consumed_markers = marker_idx
+            cursor_label = new_label
+        append(cursor_label, head)
+        current_label = cursor_label
+
+    return groups
+
+
+def _split_section_at_marker_index(
+    section: Section, idx: int,
+) -> tuple[Section, Section]:
+    """Split ``section`` so ``markers[:idx]`` go to the front and
+    ``markers[idx:]`` to the back. Text is split at ``markers[idx].offset``.
+
+    Marker-index splitting (vs. offset-based ``_split_section_at``) lets us
+    preserve the *order* of markers at the same offset — necessary when a
+    pre-juan ``cbeta:mulu`` and its trailing ``cbeta:juan-start`` both sit
+    at offset 0 of a section: only the juan-start (and everything after)
+    must go to the new juan.
+    """
+    if idx <= 0:
+        empty = Section(
+            head_text=section.head_text,
+            head_marker_id=section.head_marker_id,
+            text="",
+            markers=[],
+        )
+        return empty, section
+    if idx >= len(section.markers):
+        empty = Section(
+            head_text=section.head_text,
+            head_marker_id=section.head_marker_id,
+            text="",
+            markers=[],
+        )
+        return section, empty
+
+    split_offset = section.markers[idx].offset
+    front_text = section.text[:split_offset]
+    back_text = section.text[split_offset:]
+    front_markers = list(section.markers[:idx])
+    back_markers = [
+        Marker(type=m.type, offset=m.offset - split_offset,
+               content=m.content, id=m.id, extras=dict(m.extras))
+        for m in section.markers[idx:]
+    ]
+    front = Section(
+        head_text=section.head_text,
+        head_marker_id=section.head_marker_id,
+        text=front_text,
+        markers=front_markers,
+    )
+    back = Section(
+        head_text=section.head_text,
+        head_marker_id=section.head_marker_id,
+        text=back_text,
+        markers=back_markers,
+    )
+    return front, back
+
+
 def _source_files(text_xml: Path, swl_ann: Path | None,
                   doc_ann: Path | None) -> dict:
     out: dict = {"text": str(text_xml)}
@@ -477,10 +628,13 @@ def _derive_edition_short(sections: list, text_id: str) -> str:
     return "T"
 
 
-def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict, list[dict]]:
+def _parse_text(
+    path: Path, text_id: str,
+) -> tuple[list[Section], dict, dict, dict, list[dict], str]:
     """Parse the text XML.
 
-    Returns ``(sections, divs_info, markers_info, tei_info, parse_errors)``:
+    Returns ``(sections, divs_info, markers_info, tei_info, parse_errors,
+    flavor)``:
     - ``sections``: ordered list of Sections used by the bundle pipeline.
     - ``divs_info``: source attrs per top-level div, keyed by head_marker_id.
     - ``markers_info``: source attrs per id-bearing marker (pb, head outer,
@@ -492,6 +646,13 @@ def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict, list[dict]
     - ``parse_errors``: list of ``{level, message, line}`` dicts from the
       parser's error log (non-empty only when the source had XML defects
       such as empty ``xml:id`` values or duplicate ids).
+    - ``flavor``: ``"classic"`` (top-level divs only) or ``"cbeta"``
+      (explicit ``<juan fun="open"/>`` boundaries).
+
+    For CBETA flavor, the caller is expected to derive juan groups from the
+    returned ``sections`` via :func:`_split_sections_into_cbeta_juans` —
+    *after* :func:`_normalize_juan_label_width` has run, so the split
+    Section copies don't fall out of sync with the canonical marker ids.
     """
     parser = etree.XMLParser(recover=True)
     tree = etree.parse(str(path), parser)
@@ -504,7 +665,34 @@ def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict, list[dict]
     if body is None:
         raise ValueError(f"no <body> element in {path}")
 
+    flavor = "cbeta" if body.find(f".//{_q('juan')}") is not None else "classic"
+
     seen_ids: dict[str, int] = {}
+    if flavor == "cbeta":
+        edition = _scan_edition_from_body(body, text_id) or "CBETA"
+        sections, divs_info, markers_info = _parse_body_cbeta(
+            body, seen_ids, text_id, edition,
+        )
+    else:
+        sections, divs_info, markers_info = _parse_body_classic(body, seen_ids)
+
+    tei_info: dict = {}
+    if etree.QName(root).localname == "TEI":
+        root_attrs = _attrs_to_dict(root.attrib)
+        if root_attrs:
+            tei_info["root_attrs"] = root_attrs
+    header_el = tree.find(f".//{_q('teiHeader')}")
+    if header_el is not None:
+        tei_info["header"] = _to_tree(header_el)
+
+    return sections, divs_info, markers_info, tei_info, parse_errors, flavor
+
+
+def _parse_body_classic(body, seen_ids: dict[str, int]) -> tuple[
+    list[Section], dict, dict,
+]:
+    """Walk a classic-TLS ``<body>``: each top-level ``<div>`` becomes one
+    Section, with juan boundaries derived later from marker ids."""
     sections: list[Section] = []
     divs_info: dict = {}
     markers_info: dict = {}
@@ -522,17 +710,308 @@ def _parse_text(path: Path) -> tuple[list[Section], dict, dict, dict, list[dict]
         # tls:div-start / tls:div-end markers).
         for nested_id, nested_entry in nested_div_entries.items():
             divs_info[nested_id] = nested_entry
+    return sections, divs_info, markers_info
 
-    tei_info: dict = {}
-    if etree.QName(root).localname == "TEI":
-        root_attrs = _attrs_to_dict(root.attrib)
-        if root_attrs:
-            tei_info["root_attrs"] = root_attrs
-    header_el = tree.find(f".//{_q('teiHeader')}")
-    if header_el is not None:
-        tei_info["header"] = _to_tree(header_el)
 
-    return sections, divs_info, markers_info, tei_info, parse_errors
+def _scan_edition_from_body(body, text_id: str) -> str | None:
+    """Find the edition short id from the first ``<seg xml:id=...>`` in body.
+
+    Returns ``None`` if no parseable seg id is found. Used to seed CBETA
+    parsing before the Section list (which `_derive_edition_short` would
+    otherwise key off) has been built.
+    """
+    prefix = f"{text_id}_"
+    for seg in body.iter(_q("seg")):
+        sid = _xmlid(seg)
+        if not sid.startswith(prefix):
+            continue
+        edition, sep, _ = sid[len(prefix):].partition("_")
+        if sep and edition:
+            return edition
+    return None
+
+
+def _normalize_juan_n(raw: str) -> str:
+    """Pad a numeric juan ``n`` to JUAN_LABEL_WIDTH digits; pass non-numeric
+    values through unchanged. Empty string falls back to ``"001"``."""
+    if not raw:
+        return "001"
+    if raw.isdigit() and len(raw) < JUAN_LABEL_WIDTH:
+        return raw.zfill(JUAN_LABEL_WIDTH)
+    return raw
+
+
+def _parse_body_cbeta(
+    body, seen_ids: dict[str, int], text_id: str, edition: str,
+) -> tuple[list[Section], dict, dict]:
+    """Walk a CBETA-flavor ``<body>``.
+
+    Top-level non-div children (``<milestone>``, ``<pb>``, ``<lb>``) appearing
+    before the first div are stashed as leading markers and re-emitted at
+    offset 0 of the first opened section so they aren't lost. Each ``<div>``
+    becomes one Section, walked permissively to recognise CBETA-specific
+    elements (``<juan>``, ``<mulu>``, ``<byline>``, ``<dialog>/<sp>``, …) on
+    top of the classic vocabulary.
+    """
+    sections: list[Section] = []
+    divs_info: dict = {}
+    markers_info: dict = {}
+    state: dict = {
+        "juan_label": "000",   # current juan label; updated on <juan fun=open>
+        "mulu_indexes": {},     # juan_label -> next 1-based mulu index
+        "text_id": text_id,
+        "edition": edition,
+    }
+    leading_markers: list[Marker] = []
+    leading_markers_info: dict = {}
+
+    for child in body.iterchildren():
+        if not isinstance(child.tag, str):
+            continue
+        tag = etree.QName(child).localname
+        if tag == "div":
+            section, div_entry, marker_entries, nested_entries = (
+                _section_from_div_cbeta(
+                    child, seen_ids, state,
+                    leading_markers if not sections else None,
+                )
+            )
+            # Leading top-level markers (only meaningful before first div) are
+            # consumed by the first section that gets opened.
+            if not sections:
+                for mid, info in leading_markers_info.items():
+                    markers_info[mid] = info
+                leading_markers = []
+                leading_markers_info = {}
+            sections.append(section)
+            if section.head_marker_id:
+                divs_info[section.head_marker_id] = div_entry
+            for mid, info in marker_entries.items():
+                markers_info[mid] = info
+            for nested_id, nested_entry in nested_entries.items():
+                divs_info[nested_id] = nested_entry
+        elif tag == "pb":
+            raw_id = _xmlid(child)
+            mid, id_extras = _dedup_id(raw_id, seen_ids)
+            leading_markers.append(Marker(
+                type="page-break", offset=0,
+                content="", id=mid, extras=id_extras,
+            ))
+            attrs = _attrs_minus(child, ("xml:id",))
+            if mid and attrs:
+                leading_markers_info[mid] = {"type": "page-break", "attrs": attrs}
+        # <milestone>, <lb>, and other top-level non-div children are
+        # ignored — they're whitespace/layout artifacts in CBETA sources.
+
+    return sections, divs_info, markers_info
+
+
+def _section_from_div_cbeta(
+    div, seen_ids: dict[str, int], state: dict,
+    leading_markers: list[Marker] | None,
+) -> tuple[Section, dict, dict, dict]:
+    """Walk a CBETA-flavor ``<div>``, producing a Section plus div_entry,
+    markers_info, and nested_divs_info. ``state`` carries the rolling juan
+    label updated by ``<juan fun="open">`` markers. ``leading_markers``, if
+    given, are prepended to this section's markers (used to attach pre-div
+    body-level pb's to the first section opened)."""
+    text_buf: list[str] = []
+    markers: list[Marker] = []
+    if leading_markers:
+        markers.extend(leading_markers)
+    markers_info: dict = {}
+    nested_divs_info: dict = {}
+
+    div_entry: dict = {}
+    div_attrs = _attrs_to_dict(div.attrib)
+    if div_attrs:
+        div_entry["div_attrs"] = div_attrs
+
+    head_state = {"text": "", "id": ""}
+
+    def offset() -> int:
+        return sum(len(p) for p in text_buf)
+
+    _walk_cbeta_div_children(
+        div, text_buf, markers, markers_info, nested_divs_info,
+        offset, div_entry, head_state, seen_ids, state, is_outermost=True,
+    )
+
+    section = Section(
+        head_text=head_state["text"],
+        head_marker_id=head_state["id"],
+        text="".join(text_buf),
+        markers=markers,
+    )
+    return section, div_entry, markers_info, nested_divs_info
+
+
+def _walk_cbeta_div_children(
+    div, text_buf: list[str], markers: list[Marker],
+    markers_info: dict, nested_divs_info: dict,
+    offset, div_entry: dict, head_state: dict,
+    seen_ids: dict[str, int], state: dict, is_outermost: bool,
+):
+    """Permissive walker for CBETA-flavor div content.
+
+    Handles classic elements (``<head>``, ``<p>``, nested ``<div>``, ``<pb>``)
+    plus CBETA-specific ones (``<mulu>``, ``<juan>``, ``<byline>``,
+    ``<dialog>``/``<sp>``, …). Unknown container elements are descended into;
+    bare ``<seg>`` and ``<pb>`` that turn up at any depth are emitted via the
+    usual machinery."""
+    text_id = state["text_id"]
+    edition = state["edition"]
+    for child in div.iterchildren():
+        if not isinstance(child.tag, str):
+            continue
+        tag = etree.QName(child).localname
+        if tag == "pb":
+            raw_id = _xmlid(child)
+            mid, id_extras = _dedup_id(raw_id, seen_ids)
+            markers.append(Marker(type="page-break", offset=offset(),
+                                  content="", id=mid, extras=id_extras))
+            attrs = _attrs_minus(child, ("xml:id",))
+            if mid and attrs:
+                markers_info[mid] = {"type": "page-break", "attrs": attrs}
+        elif tag == "head":
+            inner_seg = child.find(_q("seg"))
+            seg_text = unicodedata.normalize("NFC", _seg_text(inner_seg))
+            raw_id = _xmlid(inner_seg) if inner_seg is not None else _xmlid(child)
+            seg_id, id_extras = _dedup_id(raw_id, seen_ids)
+            markers.append(Marker(type="tls:head", offset=offset(),
+                                  content="", id=seg_id, extras=id_extras))
+            text_buf.append(seg_text)
+            if "head_attrs" not in div_entry:
+                head_attrs = _attrs_to_dict(child.attrib)
+                if head_attrs:
+                    div_entry["head_attrs"] = head_attrs
+                if inner_seg is not None:
+                    inner_extras = _attrs_minus(inner_seg, ("xml:id",))
+                    if inner_extras:
+                        div_entry["head_inner_seg_attrs"] = inner_extras
+            if is_outermost and not head_state["text"]:
+                head_state["text"] = _cjk_only(seg_text)
+                head_state["id"] = seg_id
+        elif tag == "mulu":
+            mulu_text = (child.text or "").strip()
+            if not mulu_text:
+                # Empty <mulu type="卷" n="N"/> inside <juan>: not a TOC entry
+                # on its own; the surrounding <juan fun="open"> handles it.
+                continue
+            juan_label = state["juan_label"]
+            idx_map = state["mulu_indexes"]
+            idx_map[juan_label] = idx_map.get(juan_label, 0) + 1
+            mid = f"{text_id}_{edition}_{juan_label}-mulu-{idx_map[juan_label]}"
+            extras: dict = {}
+            mulu_type = child.get("type")
+            if mulu_type:
+                extras["mulu_type"] = mulu_type
+            level = child.get("level")
+            if level:
+                extras["level"] = level
+            markers.append(Marker(
+                type="cbeta:mulu", offset=offset(),
+                content=unicodedata.normalize("NFC", mulu_text),
+                id=mid, extras=extras,
+            ))
+            attrs = _attrs_to_dict(child.attrib)
+            if attrs:
+                markers_info[mid] = {"type": "cbeta:mulu", "attrs": attrs}
+        elif tag == "juan":
+            fun = child.get("fun", "")
+            n_raw = child.get("n", "")
+            n = _normalize_juan_n(n_raw)
+            jhead_el = child.find(_q("jhead"))
+            jhead_text = ""
+            if jhead_el is not None and jhead_el.text:
+                jhead_text = unicodedata.normalize("NFC", jhead_el.text.strip())
+            if fun == "open":
+                state["juan_label"] = n
+                mid = f"{text_id}_{edition}_{n}-juan-start"
+                extras: dict = {"juan_n": n}
+                if jhead_text:
+                    extras["jhead"] = jhead_text
+                markers.append(Marker(
+                    type="cbeta:juan-start", offset=offset(),
+                    content=jhead_text, id=mid, extras=extras,
+                ))
+                attrs = _attrs_to_dict(child.attrib)
+                if attrs:
+                    markers_info[mid] = {"type": "cbeta:juan-start", "attrs": attrs}
+            elif fun == "close":
+                mid = f"{text_id}_{edition}_{n}-juan-end"
+                extras = {"juan_n": n}
+                markers.append(Marker(
+                    type="cbeta:juan-end", offset=offset(),
+                    content=jhead_text, id=mid, extras=extras,
+                ))
+                attrs = _attrs_to_dict(child.attrib)
+                if attrs:
+                    markers_info[mid] = {"type": "cbeta:juan-end", "attrs": attrs}
+        elif tag == "p":
+            markers.append(Marker(type="paragraph-break", offset=offset(),
+                                  content="", id=""))
+            p_attrs = _attrs_to_dict(child.attrib)
+            if p_attrs:
+                div_entry.setdefault("p_attrs", []).append(p_attrs)
+            _walk_cbeta_inline_children(
+                child, text_buf, markers, markers_info, offset, seen_ids,
+            )
+            markers.append(Marker(type="paragraph-break", offset=offset(),
+                                  content="", id=""))
+        elif tag == "seg":
+            _emit_seg(child, text_buf, markers, offset, markers_info, seen_ids)
+        elif tag == "div":
+            nested_head_id = _find_div_head_id(child)
+            nested_entry: dict = {}
+            nested_div_attrs = _attrs_to_dict(child.attrib)
+            if nested_div_attrs:
+                nested_entry["div_attrs"] = nested_div_attrs
+            markers.append(Marker(type="tls:div-start", offset=offset(),
+                                  content="", id=nested_head_id))
+            _walk_cbeta_div_children(
+                child, text_buf, markers, markers_info, nested_divs_info,
+                offset, nested_entry, head_state, seen_ids, state,
+                is_outermost=False,
+            )
+            markers.append(Marker(type="tls:div-end", offset=offset(),
+                                  content="", id=nested_head_id))
+            if nested_head_id:
+                nested_divs_info[nested_head_id] = nested_entry
+        elif tag in ("byline", "dialog", "sp"):
+            # CBETA wraps content (segs, sometimes nested <p>) inside these.
+            # Walk through them transparently — they're containers only.
+            _walk_cbeta_div_children(
+                child, text_buf, markers, markers_info, nested_divs_info,
+                offset, div_entry, head_state, seen_ids, state,
+                is_outermost=False,
+            )
+        # docNumber, lb, anchor, note, g and other stray elements at div
+        # level: ignored. (Inline <g>/<note> are handled by _emit_seg from
+        # within seg children.)
+
+
+def _walk_cbeta_inline_children(
+    parent, text_buf: list[str], markers: list[Marker],
+    markers_info: dict, offset, seen_ids: dict[str, int],
+):
+    """Walk children of a ``<p>``-like element, emitting ``<seg>`` content
+    and ``<pb>`` markers; everything else is ignored at this level."""
+    for child in parent.iterchildren():
+        if not isinstance(child.tag, str):
+            continue
+        tag = etree.QName(child).localname
+        if tag == "seg":
+            _emit_seg(child, text_buf, markers, offset, markers_info, seen_ids)
+        elif tag == "pb":
+            raw_id = _xmlid(child)
+            mid, id_extras = _dedup_id(raw_id, seen_ids)
+            markers.append(Marker(type="page-break", offset=offset(),
+                                  content="", id=mid, extras=id_extras))
+            attrs = _attrs_minus(child, ("xml:id",))
+            if mid and attrs:
+                markers_info[mid] = {"type": "page-break", "attrs": attrs}
+        # <lb>, <anchor>, etc.: ignored.
 
 
 def _section_from_div(div, seen_ids: dict[str, int] | None = None) -> tuple[Section, dict, dict, dict]:
@@ -717,7 +1196,13 @@ def _emit_seg(seg, text_buf: list[str], markers: list[Marker], offset_fn,
             pb_attrs = _attrs_minus(child, ("xml:id",))
             if mid and pb_attrs:
                 markers_info[mid] = {"type": "page-break", "attrs": pb_attrs}
-        # else: skip unknown inline elements but keep their text content
+        else:
+            # Unknown inline element: keep its text as plain content. CBETA
+            # sources use <g ref="#CBxxx">𮗎</g> for non-Unicode glyphs and
+            # <note place="inline">…</note> for inline interlinear notes;
+            # both should flow into the seg's text stream verbatim.
+            if child.text:
+                text_buf.append(unicodedata.normalize("NFC", child.text))
         if child.tail:
             tail = child.tail
             # Strip whitespace-only tails (formatting artifacts in the XML).
@@ -923,7 +1408,23 @@ def _parse_metadata(text_xml: Path, text_id: str) -> dict:
     if title_el is not None and title_el.text:
         md["title"] = title_el.text.strip()
 
-    md["identifiers"] = {"krp": text_id}
+    root = tree.getroot()
+    tei_xml_id = root.get(_q("id", XML_NS), "")
+
+    identifiers: dict = {}
+    for idno in tree.iter(_q("idno")):
+        id_type = idno.get("type", "").strip()
+        id_val = (idno.text or "").strip()
+        if id_type and id_val:
+            key = "krp" if id_type.lower() == "kanripo" else id_type.lower()
+            identifiers[key] = id_val
+
+    identifiers.setdefault("krp", text_id)
+
+    if tei_xml_id and tei_xml_id != identifiers.get("krp"):
+        identifiers["tei_id"] = tei_xml_id
+
+    md["identifiers"] = identifiers
 
     # textClass catRefs become tags.
     tags: dict = {}

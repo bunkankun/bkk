@@ -156,10 +156,31 @@ def _juan_self_hash(juan_dict: dict) -> str:
 
 def _build_toc(
     sections_per_bucket: dict[str, list[Section]],
+    juan: Juan,
+) -> list[dict]:
+    """Build TOC entries for one juan.
+
+    Classic TLS (no ``flavor`` in juan.metadata): one ``type: section`` entry
+    per section. Span is ``[bucket, start, end]`` where end is exclusive
+    (start of next section in the same bucket, or len(text)).
+
+    CBETA-flavor (``juan.metadata["flavor"] == "cbeta"``): emit one
+    ``type: juan`` entry per ``cbeta:juan-start`` marker (label = jhead text;
+    span = ``[bucket, marker_offset, len(bucket_text)]``) and one
+    ``type: mulu`` point entry per ``cbeta:mulu`` marker (label = marker
+    content; span = ``[bucket, offset, offset]``). ``<head>``-derived
+    section entries are not emitted.
+    """
+    flavor = juan.metadata.get("flavor")
+    if flavor == "cbeta":
+        return _build_toc_cbeta(sections_per_bucket, juan.seq)
+    return _build_toc_classic(sections_per_bucket, juan.seq)
+
+
+def _build_toc_classic(
+    sections_per_bucket: dict[str, list[Section]],
     seq: int,
 ) -> list[dict]:
-    """One TOC entry per section. Span is ``[bucket, start, end]`` where end
-    is exclusive (start of next section in the same bucket, or len(text))."""
     toc: list[dict] = []
     for bucket_name, secs in sections_per_bucket.items():
         cursor = 0
@@ -173,9 +194,47 @@ def _build_toc(
                     "span": [bucket_name, start, end],
                 }),
                 "label": sec.head_text,
+                "type": "section",
                 "level": 1,
             })
             cursor = end
+    return toc
+
+
+def _build_toc_cbeta(
+    sections_per_bucket: dict[str, list[Section]],
+    seq: int,
+) -> list[dict]:
+    toc: list[dict] = []
+    for bucket_name, secs in sections_per_bucket.items():
+        text, markers, _ = merge_sections(secs)
+        if not text and not markers:
+            continue
+        end_of_bucket = len(text)
+        for m in markers:
+            if m.type == "cbeta:juan-start":
+                label = m.extras.get("jhead", "") or ""
+                toc.append({
+                    "ref": marker_to_flow({
+                        "seq": seq,
+                        "marker_id": m.id,
+                        "span": [bucket_name, m.offset, end_of_bucket],
+                    }),
+                    "label": label,
+                    "type": "juan",
+                    "level": 1,
+                })
+            elif m.type == "cbeta:mulu":
+                toc.append({
+                    "ref": marker_to_flow({
+                        "seq": seq,
+                        "marker_id": m.id,
+                        "span": [bucket_name, m.offset, m.offset],
+                    }),
+                    "label": m.content,
+                    "type": "mulu",
+                    "level": 1,
+                })
     return toc
 
 
@@ -347,8 +406,8 @@ def write_bundle(bundle: Bundle, out_root: Path) -> dict:
             ann_files.append((juan.seq, ann_filename))
 
         # TOC entries — one per section, computed offsets per spec.
-        toc_edition.extend(_build_toc(sections_per_bucket, juan.seq))
-        toc_master.extend(_build_toc(sections_per_bucket, juan.seq))
+        toc_edition.extend(_build_toc(sections_per_bucket, juan))
+        toc_master.extend(_build_toc(sections_per_bucket, juan))
 
     # ---- edition manifest ----
     edition_manifest = _build_manifest(
