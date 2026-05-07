@@ -70,7 +70,28 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    from bkk.config import load_rc
+    rc = load_rc()
+    g = rc.get("global", {})
+    exp = rc.get("export", {})
+
+    parser = build_parser()
+    defaults: dict = {}
+    for rc_key, dest in [
+        ("format", "format"), ("shape", "shape"), ("mode", "mode"),
+        ("output_dir", "output_dir"),
+    ]:
+        if rc_key in exp:
+            defaults[dest] = exp[rc_key]
+    corpus = exp.get("corpus") or g.get("corpus")
+    if corpus is not None:
+        defaults["corpus"] = corpus
+    if g.get("skip_confirm") or exp.get("skip_confirm"):
+        defaults["yes"] = True
+    if defaults:
+        parser.set_defaults(**defaults)
+
+    args = parser.parse_args(argv)
 
     if args.corpus is not None and args.bundle is not None:
         print("error: --corpus and --bundle are mutually exclusive",

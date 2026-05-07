@@ -31,7 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="output path (default: <bundle_dir>/<textid>.bkkx)")
 
     pm = sub.add_parser("merge", help="merge per-bundle indices under a corpus root")
-    pm.add_argument("corpus_root", type=Path)
+    pm.add_argument("corpus_root", type=Path, nargs="?", default=None,
+                    help="corpus root (or set global.corpus in .bkkrc)")
     pm.add_argument("--out", type=Path, required=True,
                     help="merged .bkkx output path")
     pm.add_argument("--prefix", default=None,
@@ -56,7 +57,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    from bkk.config import load_rc
+    rc = load_rc()
+    g = rc.get("global", {})
+    idx = rc.get("index", {})
+
+    parser = build_parser()
+    corpus = idx.get("corpus") or g.get("corpus")
+    if corpus is not None:
+        parser.set_defaults(corpus_root=corpus)
+    args = parser.parse_args(argv)
+
+    if args.cmd == "merge" and args.corpus_root is None:
+        parser.error("corpus_root is required (or set global.corpus in .bkkrc)")
+
     if args.cmd == "build":
         path = build_index(args.bundle_dir, args.out)
         print(f"wrote {path}")

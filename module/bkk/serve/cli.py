@@ -48,7 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
 def run(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    base = ServeConfig.from_env(corpus_root=args.corpus)
+    from bkk.config import load_rc
+    rc = load_rc()
+    rc_serve = {**rc.get("global", {}), **rc.get("serve", {})}
+
+    base = ServeConfig.from_env(corpus_root=args.corpus, rc=rc_serve)
     config = base.merge_cli(
         corpus_root=args.corpus,
         index_path=args.index,

@@ -1,6 +1,71 @@
 # CLI module for the BKK files
 
 
+## Configuration file (`.bkkrc`)
+
+Persistent defaults for any `bkk` subcommand can be stored in a YAML file
+named `.bkkrc`.  Copy `.bkkrc.sample` (in this directory) to `~/.bkkrc` and
+uncomment the settings you want.
+
+### Search and merge order
+
+`bkk` collects every `.bkkrc` it finds along the path from `~` down to the
+current working directory and deep-merges them, with files closer to `cwd`
+taking precedence:
+
+```
+~/.bkkrc            ← lowest priority  (credentials, shared paths)
+~/work/.bkkrc
+~/work/project/.bkkrc  ← highest priority  (project-specific overrides)
+```
+
+This lets you keep `serve.admin_token` in `~/.bkkrc` and override only
+`serve.host` in a project-local file without repeating the token.
+
+### Precedence
+
+```
+.bkkrc  <  env vars (BKK_*)  <  CLI flags
+```
+
+### Minimal example
+
+```yaml
+global:
+  corpus: /data/bkk/corpus   # shared corpus root
+  tls_root: /data/tls        # TLS source → bkk import --in (tls), bkk validate --tls-source
+  krp_root: /data/krp        # KRP mirror  → bkk import --in (krp)
+  skip_confirm: true         # skip bulk-op prompts (bkk import/export --yes)
+
+import:
+  format: krp
+  cache_dir: ~/.cache/bkk/krp
+
+serve:
+  admin_token: changeme      # keep this in ~/.bkkrc, not in a project file
+  port: 9000
+```
+
+> **Note:** Do not use bare `yes:` as a YAML key — YAML 1.1 parses it as a
+> boolean.  Use `skip_confirm: true` instead (shown above).
+
+### Section reference
+
+| Section | CLI args affected |
+|---|---|
+| `global.corpus` | `bkk export --corpus`, `bkk index merge <corpus_root>`, `bkk serve --corpus` |
+| `global.tls_root` | `bkk import --in` (when `format=tls`), `bkk validate --tls-source` |
+| `global.krp_root` | `bkk import --in` (when `format=krp`) |
+| `global.skip_confirm` | `bkk import --yes`, `bkk export --yes` |
+| `import.*` | all `bkk import` flags; `import.in` overrides the global roots |
+| `export.*` | all `bkk export` flags; `export.corpus` overrides `global.corpus` |
+| `index.corpus` | overrides `global.corpus` for `bkk index merge` |
+| `validate.tls_source` | overrides `global.tls_root` for `bkk validate --tls-source` |
+| `serve.*` | all `bkk serve` flags; also read from `BKK_*` env vars (env beats rc) |
+
+See `.bkkrc.sample` for the full list of supported keys with inline comments.
+
+
 ## Import
 
 Here is where the import is handled. We will have input from different sources, with varying shapes.  

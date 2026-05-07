@@ -81,7 +81,8 @@ def _find_tls_text(in_root: Path, text_id: str) -> Path | None:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk.importer")
-    p.add_argument("--format", required=True, choices=["tls", "krp"])
+    p.add_argument("--format", choices=["tls", "krp"], default=None,
+                   help="source format: tls or krp (required; or set import.format in .bkkrc)")
     p.add_argument("--recipe", type=Path, default=None,
                    help="recipe YAML pinning per-text knobs (krp); when given, "
                         "supplies --in/--out/--text-id defaults and overrides "
@@ -114,7 +115,34 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    from bkk.config import load_rc
+    rc = load_rc()
+    g = rc.get("global", {})
+    imp = rc.get("import", {})
+
+    parser = build_parser()
+    defaults: dict = {}
+    if "in" in imp:
+        defaults["in_root"] = imp["in"]
+    elif "format" in imp:
+        root_key = "tls_root" if imp["format"] == "tls" else "krp_root"
+        if root_key in g:
+            defaults["in_root"] = g[root_key]
+    for rc_key, dest in [
+        ("out", "out_root"), ("format", "format"), ("cache_dir", "cache_dir"),
+        ("github", "github_user"), ("master_branch", "master_branch"),
+        ("imglist_branch", "imglist_branch"),
+    ]:
+        if rc_key in imp:
+            defaults[dest] = imp[rc_key]
+    if g.get("skip_confirm") or imp.get("skip_confirm"):
+        defaults["yes"] = True
+    if defaults:
+        parser.set_defaults(**defaults)
+
+    args = parser.parse_args(argv)
+    if args.format is None:
+        parser.error("--format is required (or set import.format in .bkkrc)")
 
     if args.format == "tls":
         return _run_tls(args)

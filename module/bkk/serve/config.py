@@ -19,29 +19,67 @@ class ServeConfig:
     web_dist: Path | None = None
 
     @classmethod
-    def from_env(cls, *, corpus_root: Path | str | None = None) -> "ServeConfig":
+    def from_env(
+        cls,
+        *,
+        corpus_root: Path | str | None = None,
+        rc: dict | None = None,
+    ) -> "ServeConfig":
+        """Build config from defaults < rc file < env vars.
+
+        ``rc`` is the merged global+serve section dict from ``bkk.config.load_rc()``.
+        ``corpus_root`` is the CLI-supplied value (may be None); it is passed here only
+        so that the required-field check can surface a useful error early.
+        """
+        rc = rc or {}
+
         env_corpus = os.environ.get("BKK_CORPUS_ROOT")
-        root_str = corpus_root or env_corpus
+        root_str = corpus_root or env_corpus or rc.get("corpus")
         if root_str is None:
             raise ValueError(
-                "corpus_root is required: pass --corpus or set BKK_CORPUS_ROOT"
+                "corpus_root is required: pass --corpus, set BKK_CORPUS_ROOT, "
+                "or add 'corpus' under [global] or [serve] in .bkkrc"
             )
         root = Path(root_str).resolve()
 
         env_index = os.environ.get("BKK_INDEX_PATH")
-        index = Path(env_index).resolve() if env_index else root / "_corpus.bkkx"
+        rc_index = rc.get("index")
+        if env_index:
+            index = Path(env_index).resolve()
+        elif rc_index:
+            index = Path(rc_index).resolve()
+        else:
+            index = root / "_corpus.bkkx"
 
         env_web_dist = os.environ.get("BKK_WEB_DIST")
-        web_dist = Path(env_web_dist).resolve() if env_web_dist else None
+        rc_web_dist = rc.get("web_dist")
+        if env_web_dist:
+            web_dist: Path | None = Path(env_web_dist).resolve()
+        elif rc_web_dist:
+            web_dist = Path(rc_web_dist).resolve()
+        else:
+            web_dist = None
+
+        env_host = os.environ.get("BKK_HOST")
+        host = env_host if env_host is not None else rc.get("host", "127.0.0.1")
+
+        env_port = os.environ.get("BKK_PORT")
+        port = int(env_port) if env_port is not None else int(rc.get("port", 8000))
+
+        env_token = os.environ.get("BKK_ADMIN_TOKEN")
+        admin_token = env_token if env_token is not None else rc.get("admin_token")
+
+        env_repo = os.environ.get("BKK_UPSTREAM_REPO")
+        upstream_repo = env_repo if env_repo is not None else rc.get("upstream_repo")
 
         return cls(
             corpus_root=root,
             index_path=index,
-            host=os.environ.get("BKK_HOST", "127.0.0.1"),
-            port=int(os.environ.get("BKK_PORT", "8000")),
-            admin_token=os.environ.get("BKK_ADMIN_TOKEN"),
+            host=host,
+            port=port,
+            admin_token=admin_token,
             reload=False,
-            upstream_repo=os.environ.get("BKK_UPSTREAM_REPO"),
+            upstream_repo=upstream_repo,
             web_dist=web_dist,
         )
 
