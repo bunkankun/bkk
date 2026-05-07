@@ -20,66 +20,66 @@
 # ── Global defaults ────────────────────────────────────────────────────────
 # These apply to every subcommand that uses the named concept.
 #
-[global]
-# corpus: /data/bkk/corpus      # shared corpus root
-#                               #   → bkk export --corpus
-#                               #   → bkk index merge <corpus_root>
-#                               #   → bkk serve --corpus
+global:
+#   corpus: /data/bkk/corpus      # shared corpus root
+#                                 #   → bkk export --corpus
+#                                 #   → bkk index merge <corpus_root>
+#                                 #   → bkk serve --corpus
 #
-# tls_root: /data/tls           # TLS source tree
-#                               #   → bkk import --in  (when format=tls)
-#                               #   → bkk validate --tls-source
+#   tls_root: /data/tls           # TLS source tree
+#                                 #   → bkk import --in  (when format=tls)
+#                                 #   → bkk validate --tls-source
 #
-# krp_root: /data/krp           # Kanripo mirror (parent of <id>/ clones)
-#                               #   → bkk import --in  (when format=krp)
+#   krp_root: /data/krp           # Kanripo mirror (parent of <id>/ clones)
+#                                 #   → bkk import --in  (when format=krp)
 #
-# skip_confirm: true            # skip bulk-operation confirmation prompts
-#                               #   → bkk import --yes
-#                               #   → bkk export --yes
+#   skip_confirm: true            # skip bulk-operation confirmation prompts
+#                                 #   → bkk import --yes
+#                                 #   → bkk export --yes
 
 # ── Import defaults ────────────────────────────────────────────────────────
-[import]
-# format: krp                   # source format: tls | krp
-#                               # also determines which global root feeds --in
+import:
+#   format: krp                   # source format: tls | krp
+#                                 # also determines which global root feeds --in
 #
-# in: /custom/path              # explicit --in override
-#                               # (beats global.tls_root / global.krp_root)
+#   in: /custom/path              # explicit --in override
+#                                 # (beats global.tls_root / global.krp_root)
 #
-# out: /data/bkk/out            # output root (bundles written under <out>/<id>/)
+#   out: /data/bkk/out            # output root (bundles written under <out>/<id>/)
 #
-# cache_dir: ~/.cache/bkk/krp  # local cache for github clones (krp)
-# github: kanripo              # github user/org to fetch from (krp)
-# master_branch: master        # branch carrying the curated master (krp)
-# imglist_branch: _data        # branch carrying imglist + imginfo (krp)
-# skip_confirm: true           # override global.skip_confirm for import only
+#   cache_dir: ~/.cache/bkk/krp  # local cache for github clones (krp)
+#   github: kanripo              # github user/org to fetch from (krp)
+#   master_branch: master        # branch carrying the curated master (krp)
+#   imglist_branch: _data        # branch carrying imglist + imginfo (krp)
+#   skip_confirm: true           # override global.skip_confirm for import only
 
 # ── Export defaults ────────────────────────────────────────────────────────
-[export]
-# format: krp                   # output format: tls | krp
-# shape: dirs                   # krp output shape: dirs | git | single
-# mode: split                   # krp file mode: split | concat
-# output_dir: /data/bkk/out    # output directory
-# corpus: /data/bkk/corpus     # override global.corpus for export only
-# skip_confirm: true           # override global.skip_confirm for export only
+export:
+#   format: krp                   # output format: tls | krp
+#   shape: dirs                   # krp output shape: dirs | git | single
+#   mode: split                   # krp file mode: split | concat
+#   output_dir: /data/bkk/out    # output directory
+#   corpus: /data/bkk/corpus     # override global.corpus for export only
+#   skip_confirm: true           # override global.skip_confirm for export only
 
 # ── Index defaults ─────────────────────────────────────────────────────────
-[index]
-# corpus: /data/bkk/corpus     # override global.corpus for `bkk index merge`
+index:
+#   corpus: /data/bkk/corpus     # override global.corpus for `bkk index merge`
 
 # ── Validate defaults ──────────────────────────────────────────────────────
-[validate]
-# tls_source: /custom/tls      # explicit override for --tls-source
-#                               # (beats global.tls_root)
+validate:
+#   tls_source: /custom/tls      # explicit override for --tls-source
+#                                 # (beats global.tls_root)
 
 # ── Serve defaults ─────────────────────────────────────────────────────────
 # Serve also reads BKK_* environment variables; env vars beat the rc file.
 # CLI flags beat env vars.  admin_token is best kept in ~/.bkkrc (not in a
 # project-local file that might be committed to version control).
-[serve]
-# host: 127.0.0.1
-# port: 8000
-# admin_token: changeme         # bearer token for /admin/* endpoints
-# upstream_repo: org/repo       # GitHub ORG/REPO surfaced to the SPA on GET /
-# web_dist: /path/to/dist      # directory containing the built SPA
-# corpus: /data/bkk/corpus     # override global.corpus for serve only
-# index: /data/bkk/_corpus.bkkx
+serve:
+#   host: 127.0.0.1
+#   port: 8000
+#   admin_token: changeme         # bearer token for /admin/* endpoints
+#   upstream_repo: org/repo       # GitHub ORG/REPO surfaced to the SPA on GET /
+#   web_dist: /path/to/dist      # directory containing the built SPA
+#   corpus: /data/bkk/corpus     # override global.corpus for serve only
+#   index: /data/bkk/_corpus.bkkx
