@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from bkk.index import Index, build_index, merge_bundles
+from bkk.index.cli import run as cli_run
 from bkk.index.merge import discover_bundles, is_stale
 
 
@@ -229,6 +230,69 @@ def test_no_build_errors_when_missing(tmp_path):
     out = tmp_path / "corpus.bkkx"
     with pytest.raises(FileNotFoundError, match="--no-build"):
         merge_bundles(tmp_path, out, no_build=True)
+
+
+def test_cli_merge_defaults_out_to_corpus_underscore(tmp_path, monkeypatch):
+    """`bkk.index merge <corpus>` with no --out writes <corpus>/_corpus.bkkx."""
+    _write_bundle(tmp_path, "KR0a0001", "abc")
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    rc = cli_run(["merge", str(tmp_path)])
+    assert rc == 0
+    assert (tmp_path / "_corpus.bkkx").is_file()
+
+
+def test_cli_merge_out_from_index_rc(tmp_path, monkeypatch):
+    """`index.out` in .bkkrc beats the <corpus>/_corpus.bkkx default."""
+    _write_bundle(tmp_path, "KR0a0001", "abc")
+    elsewhere = tmp_path / "elsewhere" / "merged.bkkx"
+    elsewhere.parent.mkdir()
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {"index": {"out": elsewhere}})
+    rc = cli_run(["merge", str(tmp_path)])
+    assert rc == 0
+    assert elsewhere.is_file()
+    assert not (tmp_path / "_corpus.bkkx").exists()
+
+
+def test_cli_merge_corpus_from_global_rc(tmp_path, monkeypatch):
+    """`global.corpus` in .bkkrc supplies the positional, --out defaults under it."""
+    _write_bundle(tmp_path, "KR0a0001", "abc")
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {"global": {"corpus": tmp_path}})
+    rc = cli_run(["merge"])
+    assert rc == 0
+    assert (tmp_path / "_corpus.bkkx").is_file()
+
+
+def test_progress_emits_per_bundle_lines(tmp_path, capsys):
+    _write_bundle(tmp_path, "KR0a0001", "abc")
+    _write_bundle(tmp_path, "KR0a0002", "def")
+    out = tmp_path / "corpus.bkkx"
+    merge_bundles(tmp_path, out, progress=True)
+    err = capsys.readouterr().err
+    assert "[build 1/2] KR0a0001 built" in err
+    assert "[build 2/2] KR0a0002 built" in err
+    assert "[merge 1/2] KR0a0001" in err
+    assert "[merge 2/2] KR0a0002" in err
+    assert "done in" in err
+
+
+def test_progress_silent_by_default(tmp_path, capsys):
+    _write_bundle(tmp_path, "KR0a0001", "abc")
+    out = tmp_path / "corpus.bkkx"
+    merge_bundles(tmp_path, out)
+    assert capsys.readouterr().err == ""
+
+
+def test_cli_merge_explicit_out_wins(tmp_path, monkeypatch):
+    """An explicit --out beats both index.out and the corpus-relative default."""
+    _write_bundle(tmp_path, "KR0a0001", "abc")
+    rc_out = tmp_path / "rc.bkkx"
+    cli_out = tmp_path / "cli.bkkx"
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {"index": {"out": rc_out}})
+    rc = cli_run(["merge", str(tmp_path), "--out", str(cli_out)])
+    assert rc == 0
+    assert cli_out.is_file()
+    assert not rc_out.exists()
+    assert not (tmp_path / "_corpus.bkkx").exists()
 
 
 def test_bundle_table_provenance(tmp_path):

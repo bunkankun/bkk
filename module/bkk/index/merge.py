@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import sys
+import time
 from pathlib import Path
 
 from .build import build_index, compute_bkkx_hash
@@ -76,12 +78,14 @@ def merge_bundles(
     prefix: str | None = None,
     rebuild: bool = False,
     no_build: bool = False,
+    progress: bool = False,
 ) -> Path:
     """Build (if needed) and merge every bundle under ``corpus_root``.
 
     ``rebuild=True`` forces every per-bundle ``.bkkx`` to be rebuilt regardless
     of mtime. ``no_build=True`` errors instead of building when a per-bundle
-    ``.bkkx`` is missing or stale.
+    ``.bkkx`` is missing or stale. ``progress=True`` writes one status line
+    per bundle to stderr for each pass (build, merge), plus a final summary.
     """
     corpus_root = Path(corpus_root)
     out_path = Path(out_path)
@@ -95,10 +99,13 @@ def merge_bundles(
             + (f" with prefix {prefix!r}" if prefix else "")
         )
 
+    n = len(bundles)
+    t0 = time.monotonic()
     sources: list[tuple[str, Path]] = []
-    for bundle_dir in bundles:
+    for i, bundle_dir in enumerate(bundles, 1):
         textid = bundle_dir.name
         bkkx = bundle_dir / f"{textid}.bkkx"
+        t_bundle = time.monotonic()
         if rebuild or is_stale(bundle_dir, bkkx):
             if no_build:
                 raise FileNotFoundError(
@@ -106,7 +113,13 @@ def merge_bundles(
                     "(--no-build forbids rebuilding)"
                 )
             build_index(bundle_dir, bkkx)
+            action = "built"
+        else:
+            action = "cached"
         sources.append((textid, bkkx))
+        if progress:
+            dt = time.monotonic() - t_bundle
+            _emit_progress(f"[build {i}/{n}] {textid} {action} ({dt:.2f}s)")
 
     conn = sqlite3.connect(str(out_path))
     try:
@@ -124,14 +137,27 @@ def merge_bundles(
             ],
         )
         offsets = {"juan": 0, "bucket": 0, "witness": 0, "variant": 0}
-        for textid, bkkx in sources:
+        for i, (textid, bkkx) in enumerate(sources, 1):
+            t_bundle = time.monotonic()
             _merge_one(conn, textid, bkkx, offsets)
             offsets = _refresh_offsets(conn)
+            if progress:
+                dt = time.monotonic() - t_bundle
+                _emit_progress(f"[merge {i}/{n}] {textid} ({dt:.2f}s)")
+        if progress:
+            _emit_progress("building heavy indices…")
         create_heavy_indices(conn)
         conn.commit()
     finally:
         conn.close()
+    if progress:
+        _emit_progress(f"done in {time.monotonic() - t0:.1f}s → {out_path}")
     return out_path
+
+
+def _emit_progress(msg: str) -> None:
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
 
 
 # -- internals ----------------------------------------------------------------

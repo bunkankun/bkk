@@ -53,7 +53,7 @@ serve:
 
 | Section | CLI args affected |
 |---|---|
-| `global.corpus` | `bkk export --corpus`, `bkk index merge <corpus_root>`, `bkk serve --corpus` |
+| `global.corpus` | `bkk export --corpus`, `bkk index merge <corpus>`, `bkk serve --corpus` |
 | `global.tls_root` | `bkk import --in` (when `format=tls`), `bkk validate --tls-source` |
 | `global.krp_root` | `bkk import --in` (when `format=krp`) |
 | `global.skip_confirm` | `bkk import --yes`, `bkk export --yes` |
@@ -153,13 +153,16 @@ Walks `<bundle_dir>/<textid>_NNN.yaml` plus the manifest and writes
 ### Corpus-level merge
 
 ```
-python -m bkk.index merge <corpus_root> --out corpus.bkkx
+python -m bkk.index merge <corpus> [--out PATH]      # default: <corpus>/_corpus.bkkx
                           [--prefix KR3a]   # restrict to one subgroup
                           [--rebuild]       # rebuild every per-bundle .bkkx
                           [--no-build]      # error if any per-bundle .bkkx is missing/stale
 ```
 
-Walks `<corpus_root>/<textid>/<textid>.manifest.yaml`, builds any missing or
+`<corpus>` falls back to `index.corpus` / `global.corpus` from `.bkkrc`;
+`--out` falls back to `index.out` from `.bkkrc`, else `<corpus>/_corpus.bkkx`.
+
+Walks `<corpus>/<textid>/<textid>.manifest.yaml`, builds any missing or
 stale per-bundle `.bkkx` (mtime check against the manifest and juan files),
 then unions every per-bundle index into one merged `.bkkx`. Primary keys are
 shifted per source so they remain unique in the merged file. The merged

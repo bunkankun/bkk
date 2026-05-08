@@ -23,7 +23,7 @@
 global:
 #   corpus: /data/bkk/corpus      # shared corpus root
 #                                 #   → bkk export --corpus
-#                                 #   → bkk index merge <corpus_root>
+#                                 #   → bkk index merge <corpus>
 #                                 #   → bkk serve --corpus
 #
 #   tls_root: /data/tls           # TLS source tree
@@ -65,6 +65,8 @@ export:
 # ── Index defaults ─────────────────────────────────────────────────────────
 index:
 #   corpus: /data/bkk/corpus     # override global.corpus for `bkk index merge`
+#   out: /data/bkk/_corpus.bkkx  # merged .bkkx output path for `bkk index merge`
+#                                # (default: <corpus>/_corpus.bkkx)
 
 # ── Validate defaults ──────────────────────────────────────────────────────
 validate:

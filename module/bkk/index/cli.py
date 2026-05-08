@@ -3,8 +3,8 @@
 Subcommands::
 
     python -m bkk.index build <bundle_dir> [--out PATH]
-    python -m bkk.index merge <corpus_root> --out PATH [--prefix KR3a]
-                                            [--rebuild | --no-build]
+    python -m bkk.index merge <corpus> [--out PATH] [--prefix KR3a]
+                                       [--rebuild | --no-build]
     python -m bkk.index search <bkkx_path> <query> [--context N]
                                                    [--witness LABEL]...
                                                    [--textid ID]
@@ -30,11 +30,13 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("--out", type=Path, default=None,
                     help="output path (default: <bundle_dir>/<textid>.bkkx)")
 
-    pm = sub.add_parser("merge", help="merge per-bundle indices under a corpus root")
-    pm.add_argument("corpus_root", type=Path, nargs="?", default=None,
-                    help="corpus root (or set global.corpus in .bkkrc)")
-    pm.add_argument("--out", type=Path, required=True,
-                    help="merged .bkkx output path")
+    pm = sub.add_parser("merge", help="merge per-bundle indices under a corpus")
+    pm.add_argument("corpus", type=Path, nargs="?", default=None,
+                    help="corpus directory (or set global.corpus in .bkkrc)")
+    pm.add_argument("--out", type=Path, default=None,
+                    help="merged .bkkx output path "
+                         "(default: index.out from .bkkrc, "
+                         "else <corpus>/_corpus.bkkx)")
     pm.add_argument("--prefix", default=None,
                     help="restrict to bundles whose textid starts with PREFIX "
                          "(e.g. KR3a)")
@@ -63,13 +65,15 @@ def run(argv: list[str] | None = None) -> int:
     idx = rc.get("index", {})
 
     parser = build_parser()
-    corpus = idx.get("corpus") or g.get("corpus")
-    if corpus is not None:
-        parser.set_defaults(corpus_root=corpus)
     args = parser.parse_args(argv)
 
-    if args.cmd == "merge" and args.corpus_root is None:
-        parser.error("corpus_root is required (or set global.corpus in .bkkrc)")
+    if args.cmd == "merge":
+        if args.corpus is None:
+            args.corpus = idx.get("corpus") or g.get("corpus")
+        if args.corpus is None:
+            parser.error("corpus is required (or set global.corpus in .bkkrc)")
+        if args.out is None:
+            args.out = Path(idx.get("out") or args.corpus / "_corpus.bkkx")
 
     if args.cmd == "build":
         path = build_index(args.bundle_dir, args.out)
@@ -77,8 +81,9 @@ def run(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "merge":
         path = merge_bundles(
-            args.corpus_root, args.out,
+            args.corpus, args.out,
             prefix=args.prefix, rebuild=args.rebuild, no_build=args.no_build,
+            progress=True,
         )
         print(f"wrote {path}")
         return 0
