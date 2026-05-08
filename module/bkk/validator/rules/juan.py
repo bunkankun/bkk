@@ -10,7 +10,7 @@ VALID_BUCKETS = ("front", "body", "back")
 KNOWN_MARKER_TYPES = {
     "page-break", "line-break", "indent", "punctuation", "paragraph-break",
     "comment", "head", "variant",
-    "kr:org-directive",
+    "kr:org-directive", "kr:non-cjk",
     "tls:head", "tls:seg", "tls:ann",
     "tls:div-start", "tls:div-end",
 }

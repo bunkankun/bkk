@@ -19,8 +19,10 @@ import difflib
 import io
 import re
 import subprocess
+import unicodedata
 from pathlib import Path
 
+from ..charset import is_allowed_body_char
 from ..classify import split_front_by_opening_indent
 from ..ir import Bundle, Juan, Marker, Section
 from ..pua import summarise_pua_codepoints
@@ -227,10 +229,15 @@ def _clean_head_text(raw: str) -> str:
     ``[提要]<pb:KR3a0013_WYG_000-2a>``). The TOC label should be the bare
     kanji title; the ``<md:...>`` references in particular point at other
     editions and are dropped wholesale (see project memory).
+
+    The result is then filtered to the body-text CJK+PUA invariant so any
+    residual Latin / brackets / punctuation in the directive (drafting
+    annotations, edition notes) doesn't leak into the TOC slug.
     """
     cleaned = _PB_INLINE_RE.sub("", raw)
     cleaned = _MD_INLINE_RE.sub("", cleaned).strip()
-    return cleaned.strip("[]").strip()
+    cleaned = cleaned.strip("[]").strip()
+    return "".join(ch for ch in cleaned if is_allowed_body_char(ch))
 
 
 def _parse_juan_text(text: str, juan_seq: int,
@@ -423,12 +430,34 @@ _PUNCT_CHARS = set(
 def _emit_line_chars(line: str, text_buf: list[str], markers: list[Marker],
                      offset_fn) -> None:
     """Walk one logical line, separating text vs indent/punctuation markers
-    and expanding ``&KRnnnn;`` entities to their PUA codepoints."""
+    and expanding ``&KRnnnn;`` entities to their PUA codepoints.
+
+    Anything that fails the body-text CJK+PUA invariant and isn't already
+    classified (indent, ``_PUNCT_CHARS``, PUA entity) is coalesced into a
+    single ``kr:non-cjk`` marker per contiguous run — KRP source carries
+    inline Sanskrit transliterations (e.g. ``Mahāmaudgalyāyana.``) as
+    whole-line glosses; per-run markers preserve the phrase as one
+    navigable unit. ASCII whitespace (tab, space, CR) is layout, not
+    data, and is dropped silently.
+    """
+    non_cjk_run: list[str] = []
+
+    def flush_non_cjk() -> None:
+        if not non_cjk_run:
+            return
+        content = unicodedata.normalize("NFC", "".join(non_cjk_run))
+        non_cjk_run.clear()
+        markers.append(Marker(
+            type="kr:non-cjk", offset=offset_fn(),
+            content=content, id="",
+        ))
+
     i = 0
     n = len(line)
     while i < n:
         ch = line[i]
         if ch == "\u3000":  # full-width indent
+            flush_non_cjk()
             j = i
             while j < n and line[j] == "\u3000":
                 j += 1
@@ -439,6 +468,7 @@ def _emit_line_chars(line: str, text_buf: list[str], markers: list[Marker],
             i = j
             continue
         if ch in _PUNCT_CHARS:
+            flush_non_cjk()
             markers.append(Marker(
                 type="punctuation", offset=offset_fn(),
                 content=ch, id="",
@@ -448,12 +478,23 @@ def _emit_line_chars(line: str, text_buf: list[str], markers: list[Marker],
         if ch == "&":
             m = _PUA_ENTITY_RE.match(line, i)
             if m:
+                flush_non_cjk()
                 cp = 0x105000 + int(m.group(1))
                 text_buf.append(chr(cp))
                 i = m.end()
                 continue
-        text_buf.append(ch)
+        if is_allowed_body_char(ch):
+            flush_non_cjk()
+            text_buf.append(ch)
+            i += 1
+            continue
+        if ch in (" ", "\t", "\r"):
+            flush_non_cjk()
+            i += 1
+            continue
+        non_cjk_run.append(ch)
         i += 1
+    flush_non_cjk()
 
 
 # ---------- variant detection ----------------------------------------------

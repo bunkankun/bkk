@@ -266,3 +266,63 @@ def test_heading_and_comment_lines_become_markers():
         assert 0 <= m.offset <= text_len
         assert m.offset >= last
         last = m.offset
+
+
+_NON_CJK_JUAN = (
+    "# -*- coding: utf-8 -*-\n"
+    "#+TITLE: 試験\n"
+    "#+PROPERTY: ID KRT0001\n"
+    "#+PROPERTY: JUAN 試験篇\n"
+    "<pb:KRT0001_TEST_001-1a>¶"
+    "大目揵連¶"
+    "\tMahāmaudgalyāyana.¶"
+    "摩訶迦旃延¶"
+)
+
+
+def test_non_cjk_run_becomes_marker():
+    """Inline Latin glosses (e.g. Sanskrit transliterations) coalesce into a
+    single ``kr:non-cjk`` marker per contiguous run; ASCII whitespace is
+    dropped; body text stays CJK+PUA-only."""
+    juan = _parse_juan_text(_NON_CJK_JUAN, juan_seq=1, text_id="KRT0001",
+                            imglist={})
+    sec = juan.sections[0]
+    # No Latin or ASCII period bleeds into body text.
+    assert "M" not in sec.text
+    assert "." not in sec.text
+    assert sec.text == "大目揵連摩訶迦旃延"
+    non_cjk = [m for m in sec.markers if m.type == "kr:non-cjk"]
+    assert len(non_cjk) == 1
+    assert non_cjk[0].content == "Mahāmaudgalyāyana."
+    # Marker sits at the boundary between the two CJK runs.
+    assert non_cjk[0].offset == len("大目揵連")
+
+
+def test_body_text_is_cjk_pua_only():
+    """The body-text invariant: every char in ``sec.text`` is allowed."""
+    from bkk.importer.charset import is_allowed_body_char
+    juan = _parse_juan_text(_NON_CJK_JUAN, juan_seq=1, text_id="KRT0001",
+                            imglist={})
+    for sec in juan.sections:
+        for ch in sec.text:
+            assert is_allowed_body_char(ch), (
+                f"non-CJK/PUA char {ch!r} (U+{ord(ch):04X}) leaked into body"
+            )
+
+
+_DIRTY_HEAD_JUAN = (
+    "# -*- coding: utf-8 -*-\n"
+    "#+TITLE: 試験\n"
+    "#+PROPERTY: ID KRT0001\n"
+    "#+PROPERTY: JUAN 試験篇 [draft]\n"
+    "<pb:KRT0001_TEST_001-1a>¶"
+    "本文¶"
+)
+
+
+def test_head_text_filtered_to_cjk():
+    """Latin / brackets / spaces in JUAN directives are stripped from the
+    TOC label, leaving a CJK-only slug."""
+    juan = _parse_juan_text(_DIRTY_HEAD_JUAN, juan_seq=1, text_id="KRT0001",
+                            imglist={})
+    assert juan.sections[0].head_text == "試験篇"
