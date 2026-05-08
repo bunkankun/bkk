@@ -76,6 +76,21 @@ _DEFAULT_GITHUB_USER = "kanripo"
 _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "bkk" / "krp"
 
 
+def _effective_out_root(out_root: Path, text_id: str, by_section: bool) -> Path:
+    """Apply the ``--by-section`` slicing layer.
+
+    With section slicing, each text's bundle lands at
+    ``<out>/<section>/<text-id>/`` (section = ``KRnX`` prefix); without it,
+    at ``<out>/<text-id>/``. The KRP and TLS write paths use this once per
+    text so every downstream call (writers, divergence reports, manifest
+    rebuilds, existing-bundle inspection) sees the same effective root.
+    """
+    if not by_section:
+        return out_root
+    from .source import section_prefix
+    return out_root / section_prefix(text_id)
+
+
 def _read_kanripo_idno(text_xml: Path) -> str | None:
     """Return the value of the first ``<idno type="kanripo">`` in ``text_xml``.
 
@@ -171,11 +186,19 @@ def build_parser() -> argparse.ArgumentParser:
                    help="source root: tls repo, or kanripo mirror "
                         "(parent of <prefix>/<text-id>/ clones)")
     p.add_argument("--out", dest="out_root", type=Path, default=None,
-                   help="output directory (bundle written under <out>/<text-id>/)")
+                   help="output directory (bundle written under "
+                        "<out>/<text-id>/, or <out>/<section>/<text-id>/ "
+                        "with --by-section)")
     p.add_argument("--text-id", default=None, help="single text id (e.g. KR6q0053)")
     p.add_argument("--section", default=None,
                    help="krp: import every text under a corpus prefix "
                         "(e.g. KR3a); requires confirmation")
+    p.add_argument("--by-section", dest="by_section", action="store_true",
+                   default=False,
+                   help="slice output by KR sub-section: bundles land under "
+                        "<out>/<section>/<text-id>/ (e.g. KR6d/KR6d0001/) so "
+                        "large corpora don't crowd a single directory; "
+                        "applies to both --format tls and --format krp")
     p.add_argument("--github", dest="github_user", default=None,
                    help=f"krp: github user/org to fetch from "
                         f"(default {_DEFAULT_GITHUB_USER!r} when --in is unset)")
@@ -211,6 +234,8 @@ def run(argv: list[str] | None = None) -> int:
     ]:
         if rc_key in imp:
             defaults[dest] = imp[rc_key]
+    if imp.get("by_section"):
+        defaults["by_section"] = True
     if g.get("skip_confirm") or imp.get("skip_confirm"):
         defaults["yes"] = True
     if defaults:
@@ -285,7 +310,10 @@ def _run_tls(args) -> int:
         from bkk.repair.manifest import rebuild_manifests
         for cid in sorted(canonical_ids):
             try:
-                rebuild_manifests(args.out_root / cid)
+                effective_out = _effective_out_root(
+                    args.out_root, cid, args.by_section,
+                )
+                rebuild_manifests(effective_out / cid)
                 print(
                     f"rebuilt manifest for {cid} "
                     f"(canonical id split across {len(pairs)} sub-files)"
@@ -346,11 +374,21 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
     (from the file's ``<idno type="kanripo">``) under which the bundle
     was written — same as ``text_id`` for normal texts, but the parent
     canonical id for letter-suffix split sub-files."""
-    existing = inspect_existing_bundle(args.out_root, text_id)
+    swl_xml = args.in_root / "tls-data" / "notes" / "swl" / f"{text_id}-ann.xml"
+    doc_xml = args.in_root / "tls-data" / "notes" / "doc" / f"{text_id}-ann.xml"
+    bundle = read_tls(text_xml, swl_xml, doc_xml, text_id)
+
+    # Use the canonical id from the bundle (split sub-files collapse onto
+    # the parent id) so all parts of one logical text share one section
+    # bucket even when the per-file ``text_id`` differs from the canonical.
+    effective_out = _effective_out_root(
+        args.out_root, bundle.text_id, args.by_section,
+    )
+    existing = inspect_existing_bundle(effective_out, bundle.text_id)
     if existing.state == "krp":
         bundle_dir = existing.manifest_path.parent
         raise BundleConflictError(
-            f"{text_id}: a KRP-sourced bundle already exists at "
+            f"{bundle.text_id}: a KRP-sourced bundle already exists at "
             f"{bundle_dir}. TLS imports must precede KRP. "
             f"Remedy: remove {bundle_dir} and re-import TLS first, "
             f"then KRP."
@@ -358,23 +396,19 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
     if existing.state == "unknown":
         bundle_dir = existing.manifest_path.parent
         raise BundleConflictError(
-            f"{text_id}: a bundle already exists at {bundle_dir} but its "
+            f"{bundle.text_id}: a bundle already exists at {bundle_dir} but its "
             f"source can't be classified. Inspect manually or run "
             f"`bkk repair manifest {bundle_dir}` and retry."
         )
 
-    swl_xml = args.in_root / "tls-data" / "notes" / "swl" / f"{text_id}-ann.xml"
-    doc_xml = args.in_root / "tls-data" / "notes" / "doc" / f"{text_id}-ann.xml"
-    bundle = read_tls(text_xml, swl_xml, doc_xml, text_id)
-
-    summary = write_bundle(bundle, args.out_root)
+    summary = write_bundle(bundle, effective_out)
     print(
         f"wrote {len(summary['juans'])} juan(s) for {summary['text_id']} "
         f"under {summary['out_root']}"
     )
 
     if sample is not None:
-        _emit_divergence(sample, Path(summary["out_root"]), args.out_root)
+        _emit_divergence(sample, Path(summary["out_root"]), effective_out)
     return bundle.text_id
 
 
@@ -430,7 +464,13 @@ def _run_krp(args) -> int:
     for text_id, repo_path in pairs:
         try:
             recipe = _synthesize(args, text_id, repo_path)
-            _import_one(recipe, args.out_root, args.sample if len(pairs) == 1 else None)
+            effective_out = _effective_out_root(
+                args.out_root, text_id, args.by_section,
+            )
+            _import_one(
+                recipe, effective_out,
+                args.sample if len(pairs) == 1 else None,
+            )
         except Exception as exc:  # noqa: BLE001 — surface per-text failure, keep going
             print(f"error importing {text_id}: {exc}", file=sys.stderr)
             rc = 1
@@ -451,7 +491,10 @@ def _run_krp_recipe(args) -> int:
               "`output.bundle` in the recipe", file=sys.stderr)
         return 2
 
-    _import_one(recipe, out_root, args.sample)
+    effective_out = _effective_out_root(
+        out_root, recipe.text_id or "", args.by_section,
+    )
+    _import_one(recipe, effective_out, args.sample)
     return 0
 
 

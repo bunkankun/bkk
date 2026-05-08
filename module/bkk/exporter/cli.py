@@ -196,19 +196,20 @@ def _iter_bundle_dirs(corpus: Path, *, text_id: str | None,
     """Yield each bundle subdir of ``corpus``, optionally filtered.
 
     A directory is a bundle iff it contains ``<dirname>.manifest.yaml``
-    (the same predicate :mod:`tools.validate_corpus` uses).
+    (the same predicate :mod:`tools.validate_corpus` uses). Both the flat
+    layout (``<corpus>/<text-id>/``) and the sectioned layout produced by
+    ``bkk import --by-section`` (``<corpus>/<section>/<text-id>/``) are
+    discovered transparently.
     """
-    for child in sorted(corpus.iterdir()):
-        if not child.is_dir():
-            continue
-        name = child.name
+    from bkk.index.merge import discover_bundles
+
+    for bundle in discover_bundles(corpus):
+        name = bundle.name
         if text_id is not None and name != text_id:
             continue
         if section is not None and not name.startswith(section):
             continue
-        manifest = child / f"{name}.manifest.yaml"
-        if manifest.exists():
-            yield child
+        yield bundle
 
 
 def _confirm_bulk(bundles: list[Path]) -> bool:

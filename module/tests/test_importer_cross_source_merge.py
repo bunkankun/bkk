@@ -273,6 +273,7 @@ def test_tls_into_unknown_state_errors(tmp_path: Path):
         in_root = TLS_FIXTURE_ROOT
         out_root = tmp_path
         sample = None
+        by_section = False
 
     with pytest.raises(BundleConflictError) as excinfo:
         _import_one_tls(_Args(), FIXTURE_TEXT_ID, TLS_FIXTURE_XML, sample=None)

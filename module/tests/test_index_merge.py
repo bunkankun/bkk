@@ -66,6 +66,47 @@ def test_discover_bundles_and_prefix(tmp_path):
     ]
 
 
+def test_discover_bundles_sectioned_layout(tmp_path):
+    """`bkk import --by-section` puts bundles under ``<corpus>/<section>/<id>/``.
+    The discoverer should walk one level deeper to find them, and ``prefix``
+    should still filter on the leaf text-id name."""
+    _write_bundle(tmp_path / "KR1a", "KR1a0001", "abc")
+    _write_bundle(tmp_path / "KR1a", "KR1a0002", "def")
+    _write_bundle(tmp_path / "KR3a", "KR3a0001", "ghi")
+
+    assert [b.name for b in discover_bundles(tmp_path)] == [
+        "KR1a0001", "KR1a0002", "KR3a0001",
+    ]
+    assert [b.name for b in discover_bundles(tmp_path, prefix="KR1a")] == [
+        "KR1a0001", "KR1a0002",
+    ]
+
+
+def test_discover_bundles_mixed_layout(tmp_path):
+    """Flat and sectioned bundles can coexist in one corpus; the result is
+    sorted by leaf id regardless of where the bundle physically sits."""
+    _write_bundle(tmp_path, "KR1a0001", "abc")             # flat
+    _write_bundle(tmp_path / "KR1a", "KR1a0002", "def")    # sectioned
+    _write_bundle(tmp_path / "KR3a", "KR3a0001", "ghi")    # sectioned
+
+    assert [b.name for b in discover_bundles(tmp_path)] == [
+        "KR1a0001", "KR1a0002", "KR3a0001",
+    ]
+
+
+def test_merge_unions_sectioned_bundles(tmp_path):
+    """End-to-end: merge_bundles works on a sectioned corpus."""
+    _write_bundle(tmp_path / "KR0a", "KR0a0001", "abcDEFghi")
+    _write_bundle(tmp_path / "KR0a", "KR0a0002", "xyzDEFwvu")
+    out = tmp_path / "corpus.bkkx"
+    merge_bundles(tmp_path, out)
+
+    with Index(out) as ix:
+        assert ix.bundles == ["KR0a0001", "KR0a0002"]
+        textids = sorted({h.textid for h in ix.search("DEF")})
+    assert textids == ["KR0a0001", "KR0a0002"]
+
+
 def test_merge_unions_two_bundles(tmp_path):
     _write_bundle(tmp_path, "KR0a0001", "abcDEFghi")
     _write_bundle(tmp_path, "KR0a0002", "xyzDEFwvu")

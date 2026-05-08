@@ -130,6 +130,16 @@ TBD
 
 TBD
 
+### Output layout
+
+By default each bundle is written at `<out>/<text-id>/`. Pass
+`--by-section` (or set `import.by_section: true` in `.bkkrc`) to slice
+the output into 4-character prefix buckets — bundles land at
+`<out>/<section>/<text-id>/` instead, e.g. `KR6d/KR6d0001/`. Useful for
+large corpora to avoid overloading file browsers with thousands of
+sibling directories. `bkk index merge` and `bkk export --corpus`
+discover bundles in either layout (or a mix of both).
+
 ## Index
 
 The indexer turns a bundle (or a whole corpus root) into a portable SQLite
@@ -162,11 +172,13 @@ python -m bkk.index merge <corpus> [--out PATH]      # default: <corpus>/_corpus
 `<corpus>` falls back to `index.corpus` / `global.corpus` from `.bkkrc`;
 `--out` falls back to `index.out` from `.bkkrc`, else `<corpus>/_corpus.bkkx`.
 
-Walks `<corpus>/<textid>/<textid>.manifest.yaml`, builds any missing or
-stale per-bundle `.bkkx` (mtime check against the manifest and juan files),
-then unions every per-bundle index into one merged `.bkkx`. Primary keys are
-shifted per source so they remain unique in the merged file. The merged
-artifact carries a `bundle` provenance table (textid, editions, source path,
+Walks `<corpus>` for `<textid>/<textid>.manifest.yaml`, descending one
+level for sectioned layouts (`<corpus>/<section>/<textid>/`) produced by
+`bkk import --by-section`. Builds any missing or stale per-bundle `.bkkx`
+(mtime check against the manifest and juan files), then unions every
+per-bundle index into one merged `.bkkx`. Primary keys are shifted per
+source so they remain unique in the merged file. The merged artifact
+carries a `bundle` provenance table (textid, editions, source path,
 sha256 of the source `.bkkx`).
 
 ### Search

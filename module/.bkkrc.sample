@@ -47,6 +47,12 @@ import:
 #
 #   out: /data/bkk/out            # output root (bundles written under <out>/<id>/)
 #
+#   by_section: true              # slice output by KR sub-section: bundles
+#                                 # land under <out>/<section>/<id>/ (e.g.
+#                                 # KR6d/KR6d0001/) so large corpora don't
+#                                 # crowd a single directory; works for both
+#                                 # tls and krp formats
+#
 #   cache_dir: ~/.cache/bkk/krp  # local cache for github clones (krp)
 #   github: kanripo              # github user/org to fetch from (krp)
 #   master_branch: master        # branch carrying the curated master (krp)

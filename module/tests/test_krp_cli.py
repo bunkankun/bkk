@@ -88,3 +88,21 @@ def test_cli_in_and_github_mutually_exclusive(tmp_path: Path, capsys):
     ])
     assert rc == 2
     assert "mutually exclusive" in capsys.readouterr().err
+
+
+def test_cli_by_section_slices_output(tmp_path: Path):
+    """--by-section places the bundle under <out>/<section>/<text-id>/."""
+    rc = run([
+        "--format", "krp",
+        "--in", str(FIXTURE_ROOT),
+        "--text-id", FIXTURE_TEXT_ID,
+        "--out", str(tmp_path),
+        "--by-section",
+    ])
+    assert rc == 0
+    section_root = tmp_path / "KR3a" / FIXTURE_TEXT_ID
+    assert section_root.is_dir()
+    assert (section_root / f"{FIXTURE_TEXT_ID}.manifest.yaml").is_file()
+    # Without --by-section the bundle would have landed at <out>/<text-id>/;
+    # confirm it didn't.
+    assert not (tmp_path / FIXTURE_TEXT_ID).exists()

@@ -24,19 +24,38 @@ log = logging.getLogger("bkk.index")
 def discover_bundles(corpus_root: Path | str, prefix: str | None = None) -> list[Path]:
     """Return bundle directories under ``corpus_root``, sorted by textid.
 
-    A directory ``X/`` qualifies iff ``X/X.manifest.yaml`` exists. ``prefix``
-    optionally restricts to directories whose name starts with that prefix
-    (mirrors the importer's ``--section`` flag).
+    A directory ``X/`` qualifies iff ``X/X.manifest.yaml`` exists. Both the
+    flat layout (``<corpus>/<text-id>/``) and the sectioned layout produced
+    by ``bkk import --by-section`` (``<corpus>/<section>/<text-id>/``) are
+    discovered: any subdirectory that doesn't itself look like a bundle is
+    probed one level deeper for sectioned bundles. Mixed corpora work too.
+
+    ``prefix`` filters by the *leaf* (text-id) name, mirroring the importer's
+    ``--section`` flag — so ``prefix="KR1a"`` matches bundle ids starting
+    with ``KR1a`` regardless of which directory layout they live under.
     """
     corpus_root = Path(corpus_root)
     out: list[Path] = []
     for sub in sorted(corpus_root.iterdir()):
         if not sub.is_dir():
             continue
-        if prefix and not sub.name.startswith(prefix):
-            continue
         if (sub / f"{sub.name}.manifest.yaml").exists():
+            if prefix and not sub.name.startswith(prefix):
+                continue
             out.append(sub)
+            continue
+        # ``sub`` isn't a bundle itself; treat it as a possible section dir
+        # and probe one level deeper. Non-section folders (no nested
+        # bundles) yield nothing and are silently skipped.
+        for grand in sorted(sub.iterdir()):
+            if not grand.is_dir():
+                continue
+            if not (grand / f"{grand.name}.manifest.yaml").exists():
+                continue
+            if prefix and not grand.name.startswith(prefix):
+                continue
+            out.append(grand)
+    out.sort(key=lambda p: p.name)
     return out
 
 
