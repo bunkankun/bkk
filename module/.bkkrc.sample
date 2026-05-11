@@ -39,13 +39,15 @@ global:
 
 # ── Import defaults ────────────────────────────────────────────────────────
 import:
-#   format: krp                   # source format: tls | krp
+#   format: krp                   # source format: tls | krp | translation
 #                                 # also determines which global root feeds --in
+#                                 # (translation reads from <in>/tls-data/translations/)
 #
 #   in: /custom/path              # explicit --in override
 #                                 # (beats global.tls_root / global.krp_root)
 #
-#   out: /data/bkk/out            # output root (bundles written under <out>/<id>/)
+#   out: /data/bkk/out            # output root (bundles written under <out>/<id>/;
+#                                 #  translations land under <out>/translations/<stem>/)
 #
 #   by_section: true              # slice output by KR sub-section: bundles
 #                                 # land under <out>/<section>/<id>/ (e.g.
@@ -57,6 +59,7 @@ import:
 #   github: kanripo              # github user/org to fetch from (krp)
 #   master_branch: master        # branch carrying the curated master (krp)
 #   imglist_branch: _data        # branch carrying imglist + imginfo (krp)
+#   lang: en                     # translation: filter to one BCP-47 language tag
 #   skip_confirm: true           # override global.skip_confirm for import only
 
 # ── Export defaults ────────────────────────────────────────────────────────

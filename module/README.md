@@ -76,7 +76,7 @@ A `read` module will read them in to an abstract shape and a `write` module will
 
 `bkk import --format <format> ` 
 
-The format will be `krp` for the Kanseki Repository format, and `tls` for the TLS / HXWD format. 
+The format will be `krp` for the Kanseki Repository format, `tls` for the TLS / HXWD source-text format, and `translation` for TLS-shaped translation files (one TEI `type="transl"` document per language/revision; see [docs/translation-import.md](../docs/translation-import.md)).
 
 ### Archival format
 
@@ -121,6 +121,25 @@ See [recipes/KR3a0013.yaml](recipes/KR3a0013.yaml) for the schema.
 XML format used in the TLS application.  In the application, texts are in subdirectories of `tls-texts/data/`, sources for the annotations in `tls-data/notes/swl` and `tls-data/notes/doc` 
 
 See `input/tls` for the text files that will be used to produce the output, to be written to `output/`
+
+#### TLS translations
+
+Companion translations of TLS source texts live under
+`<tls-root>/tls-data/translations/` as one TEI `type="transl"` file per
+(text-id, language[, revision]), e.g. `KR1h0004-en.xml` or
+`KR1h0004-fr-138ffefe.xml`. Each `<seg corresp="#KR…_tls_<location>">`
+pins one translation segment to a source marker; empty segs are dropped.
+
+```
+python -m bkk.importer --format translation \
+       --in <tls-root> --out <out-root> \
+       [--text-id KR1h0004] [--lang en]
+```
+
+Each file becomes its own bundle under `<out>/translations/<stem>/` —
+snapshots (`-<rev>` suffix) coexist alongside the un-suffixed bundle.
+See [docs/translation-import.md](../docs/translation-import.md) for the
+output layout and per-segment span shape.
 
 #### CBETA
 

@@ -32,6 +32,24 @@ KRP invocation::
     # legacy recipe-driven path (overrides everything else)
     python -m bkk.importer --format krp --recipe <recipe.yaml>
 
+Translation invocation::
+
+    # every translation file under <in>/tls-data/translations/
+    python -m bkk.importer --format translation --in <tls-root> --out <out>
+
+    # narrow to one source text id (all languages / revisions for that id)
+    python -m bkk.importer --format translation --in <tls-root> \\
+                           --out <out> --text-id KR1h0004
+
+    # narrow further by target language
+    python -m bkk.importer --format translation --in <tls-root> \\
+                           --out <out> --text-id KR1h0004 --lang en
+
+Each input XML file becomes one bundle at
+``<out>/translations/<file-stem>/``; the stem (e.g.
+``KR1h0004-en-588d9aad``) preserves snapshot suffixes so revisions are
+imported as distinct bundles. See ``bunkankun.md`` §"Translations".
+
 The recipe-less paths derive editions, master/imglist branches, witnesses,
 title, and date from the source repo itself (branch list + ``Readme.org``).
 See :mod:`bkk.importer.source` for the discovery + synthesis logic and
@@ -54,6 +72,7 @@ Cross-source co-existence (see ``docs/cross-source-merge.md``):
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -176,8 +195,9 @@ def _find_tls_texts(in_root: Path, text_id: str) -> list[Path]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk.importer")
-    p.add_argument("--format", choices=["tls", "krp"], default=None,
-                   help="source format: tls or krp (required; or set import.format in .bkkrc)")
+    p.add_argument("--format", choices=["tls", "krp", "translation"], default=None,
+                   help="source format: tls, krp, or translation "
+                        "(required; or set import.format in .bkkrc)")
     p.add_argument("--recipe", type=Path, default=None,
                    help="recipe YAML pinning per-text knobs (krp); when given, "
                         "supplies --in/--out/--text-id defaults and overrides "
@@ -190,6 +210,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "<out>/<text-id>/, or <out>/<section>/<text-id>/ "
                         "with --by-section)")
     p.add_argument("--text-id", default=None, help="single text id (e.g. KR6q0053)")
+    p.add_argument("--lang", default=None,
+                   help="translation: filter to one BCP-47 language tag "
+                        "(e.g. en, fr); applies only to --format translation")
     p.add_argument("--section", default=None,
                    help="krp: import every text under a corpus prefix "
                         "(e.g. KR3a); requires confirmation")
@@ -230,7 +253,7 @@ def run(argv: list[str] | None = None) -> int:
     for rc_key, dest in [
         ("out", "out_root"), ("format", "format"), ("cache_dir", "cache_dir"),
         ("github", "github_user"), ("master_branch", "master_branch"),
-        ("imglist_branch", "imglist_branch"),
+        ("imglist_branch", "imglist_branch"), ("lang", "lang"),
     ]:
         if rc_key in imp:
             defaults[dest] = imp[rc_key]
@@ -245,7 +268,7 @@ def run(argv: list[str] | None = None) -> int:
 
     # If --in wasn't supplied by rc or CLI, derive it from the resolved format.
     if args.in_root is None and "in" not in imp and args.format is not None:
-        root_key = "tls_root" if args.format == "tls" else "krp_root"
+        root_key = "krp_root" if args.format == "krp" else "tls_root"
         if root_key in g:
             args.in_root = g[root_key]
 
@@ -256,6 +279,8 @@ def run(argv: list[str] | None = None) -> int:
         return _run_tls(args)
     if args.format == "krp":
         return _run_krp(args)
+    if args.format == "translation":
+        return _run_translation(args)
     print(f"error: unknown format {args.format!r}", file=sys.stderr)
     return 2
 
@@ -662,6 +687,110 @@ def _import_one(recipe: Recipe, out_root: Path, sample: Path | None) -> None:
     if sample is not None and text_id:
         ours_root = out_root / text_id
         _emit_divergence(sample, ours_root, out_root)
+
+
+# ---------- Translation ----------------------------------------------------
+
+
+# Filename grammar: <text-id>-<lang>[-<rev>]
+#   text-id: KR + word chars (e.g. KR1h0004)
+#   lang:    BCP-47-ish 2-3 letter tag, optionally with a region subtag
+#            of 2+ uppercase letters or 3-4 digits (en, en-US, de-1996)
+#   rev:     optional revision suffix, 4+ lowercase hex chars (snapshot id)
+# The rev pattern is strict (≥4 hex) so it can't be mistaken for a region
+# subtag like ``us`` or ``1996``.
+_TRANSLATION_STEM_RE = re.compile(
+    r"^(?P<text>KR\w+?)-"
+    r"(?P<lang>[a-z]{2,3}(?:-(?:[A-Z]{2,}|[0-9]{3,4}))?)"
+    r"(?:-(?P<rev>[0-9a-f]{4,}))?$"
+)
+
+
+def _run_translation(args) -> int:
+    """Dispatch the translation path.
+
+    Walks ``<in>/tls-data/translations/`` for ``<text-id>-<lang>[-<rev>].xml``
+    files and imports each as its own bundle under
+    ``<out>/translations/<file-stem>/``. ``--text-id`` and ``--lang``
+    narrow the discovery set; both are optional.
+    """
+    if args.in_root is None or args.out_root is None:
+        print("error: --in and --out are required for --format translation",
+              file=sys.stderr)
+        return 2
+
+    paths = _resolve_translation_targets(args)
+    if not paths:
+        print("error: no translation files found to import", file=sys.stderr)
+        return 2
+
+    if len(paths) > 1 and not args.yes:
+        if not _confirm_bulk([(p.stem, p) for p in paths]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    for xml_path in paths:
+        try:
+            _import_one_translation(args, xml_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+    return rc
+
+
+def _resolve_translation_targets(args) -> list[Path]:
+    """Map translation CLI flags → list of XML paths to import."""
+    base = args.in_root / "tls-data" / "translations"
+    if not base.exists():
+        print(
+            f"error: {base} does not exist "
+            f"(expected <in>/tls-data/translations/)",
+            file=sys.stderr,
+        )
+        return []
+
+    lang_filter = (args.lang or "").strip() or None
+    text_filter = (args.text_id or "").strip() or None
+
+    matches: list[Path] = []
+    for path in sorted(base.rglob("*.xml")):
+        m = _TRANSLATION_STEM_RE.match(path.stem)
+        if not m:
+            continue
+        if text_filter and m.group("text") != text_filter:
+            continue
+        if lang_filter and m.group("lang") != lang_filter:
+            continue
+        matches.append(path)
+    return matches
+
+
+def _import_one_translation(args, xml_path: Path) -> None:
+    """Read one translation XML and write its bundle."""
+    from .read.translation import read_translation
+    from .write.translation import write_translation
+
+    m = _TRANSLATION_STEM_RE.match(xml_path.stem)
+    lang_hint = m.group("lang") if m else None
+
+    bundle = read_translation(
+        xml_path,
+        language_hint=lang_hint,
+        bundle_id_hint=xml_path.stem,
+    )
+
+    effective_out = _effective_out_root(
+        args.out_root, bundle.source_text_id, args.by_section,
+    )
+    summary = write_translation(
+        bundle, effective_out,
+        source_bundle_root=effective_out,
+    )
+    print(
+        f"wrote translation bundle {summary['bundle_id']} "
+        f"({len(summary['juans'])} juan file(s)) under {summary['out_root']}"
+    )
 
 
 def _emit_divergence(sample: Path, ours_root: Path, out_root: Path) -> None:
