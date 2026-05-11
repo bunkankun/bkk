@@ -125,6 +125,11 @@ def load_recipe(path: Path) -> Recipe:
             raise RecipeError(
                 f"recipe at {path}: `editions` must be a list of strings"
             )
+        if shape == "git":
+            raise RecipeError(
+                f"recipe at {path}: `editions:` is not supported with "
+                f"shape: git (shape: git always emits all editions)"
+            )
 
     juans = raw.get("juans")
     if juans is not None:
@@ -225,3 +230,8 @@ def _validate_executable(recipe: Recipe) -> None:
         raise RecipeError("shape: single requires `edition:`")
     if recipe.shape != "single" and recipe.edition:
         raise RecipeError("`edition:` is only valid with shape: single")
+    if recipe.shape == "git" and recipe.editions is not None:
+        raise RecipeError(
+            "`editions:` is not supported with shape: git "
+            "(shape: git always emits all editions)"
+        )

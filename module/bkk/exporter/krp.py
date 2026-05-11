@@ -14,6 +14,7 @@ Recipe knobs ``shape`` (dirs/git/single), ``mode`` (split/concat),
 
 from __future__ import annotations
 
+import datetime
 import re
 import subprocess
 from pathlib import Path
@@ -34,21 +35,71 @@ def export_krp_from_recipe(recipe: Recipe) -> list[Path]:
     for b in documentary:
         bundles_by_short[b.edition_short] = b
 
-    selected = _select_editions(bundles_by_short, recipe)
+    # Default behaviour with no explicit edition selection: emit only the
+    # bkk surface (master) edition, flattened at the output root.
+    flatten_master = recipe.shape == "dirs" and recipe.editions is None
+
     juan_filter = set(recipe.juans) if recipe.juans else None
 
     base_edition = master.metadata.get("base_edition") or _fallback_base_edition(
         bundles_by_short,
     )
     title = master.metadata.get("title") or master.text_id
-    date = master.metadata.get("date", "") or ""
+    date = datetime.date.today().isoformat()
     image_base_urls = master.metadata.get("image_base_urls") or {}
     editions_meta = master.metadata.get("editions") or []
+    if not editions_meta:
+        # TLS-sourced bundles don't carry a top-level `editions:` block; fall
+        # back to listing the documentary witnesses by their short id so the
+        # `* 版本` table in Readme.org is still populated.
+        editions_meta = [
+            {"short": d.edition_short, "label": d.edition_short}
+            for d in documentary
+        ]
 
     out_root = recipe.output_dir
     out_root.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []
+    if flatten_master:
+        written.extend(_write_edition_files(
+            master, master.text_id, recipe.mode, out_root,
+            base_edition=base_edition, title=title, date=date,
+            juan_filter=juan_filter,
+        ))
+        return written
+
+    if recipe.shape == "git":
+        # Surface always lands on `master`; documentary editions on branches
+        # named by their `edition_short`. Bypass `bundles_by_short` so we
+        # don't lose the master when its edition_short collides with a
+        # documentary witness (TLS-sourced bundles).
+        branches: list[tuple[str, Bundle]] = [("master", master)]
+        for doc in documentary:
+            branches.append((doc.edition_short, doc))
+        for branch, ed in branches:
+            branch_dir = out_root / branch
+            written.extend(_write_edition_files(
+                ed, master.text_id, recipe.mode, branch_dir,
+                base_edition=base_edition, title=title, date=date,
+                juan_filter=juan_filter,
+            ))
+            readme_path = branch_dir / "Readme.org"
+            readme_path.write_text(
+                _render_readme(master, editions_meta, base_edition, title,
+                               date, juan_filter),
+                encoding="utf-8",
+            )
+            written.append(readme_path)
+        written.extend(_write_data_files(
+            documentary, master.text_id, out_root, image_base_urls,
+            juan_filter,
+        ))
+        _stage_as_git_branches(out_root, master.text_id)
+        return written
+
+    selected = _select_editions(bundles_by_short, recipe)
+
     if recipe.shape == "single":
         ed = next(b for b in selected if b.edition_short == recipe.edition)
         written.extend(_write_edition_files(
@@ -56,54 +107,66 @@ def export_krp_from_recipe(recipe: Recipe) -> list[Path]:
             base_edition=base_edition, title=title, date=date,
             juan_filter=juan_filter,
         ))
-    else:
-        for ed in selected:
-            ed_dir = out_root / ed.edition_short
-            written.extend(_write_edition_files(
-                ed, master.text_id, recipe.mode, ed_dir,
-                base_edition=base_edition, title=title, date=date,
-                juan_filter=juan_filter,
-            ))
-        if any(b.edition_short == "master" for b in selected):
-            readme_path = out_root / "master" / "Readme.org"
-            readme_path.write_text(
-                _render_readme(master, editions_meta, base_edition, title,
-                               date, juan_filter),
-                encoding="utf-8",
-            )
-            written.append(readme_path)
-        # Imglist needs an edition's worth of page-breaks; pick the first
-        # documentary edition (mirrors the input repo, where _data tracks
-        # the WYG-style ids). Bundles without page-break image refs (e.g.
-        # text-only sources) skip the whole _data/ tree.
-        documentary_selected = [b for b in selected if b.edition_short != "master"]
-        if documentary_selected:
-            ed = documentary_selected[0]
-            rendered_imglists: list[tuple[Juan, str]] = []
-            for juan in ed.juans:
-                if juan_filter is not None and juan.seq not in juan_filter:
-                    continue
-                body = _render_imglist(juan, ed.edition_short)
-                if body:
-                    rendered_imglists.append((juan, body))
-            if rendered_imglists:
-                data_dir = out_root / "_data" / "imglist"
-                data_dir.mkdir(parents=True, exist_ok=True)
-                for juan, body in rendered_imglists:
-                    p = data_dir / f"{master.text_id}_{juan.seq:03d}.txt"
-                    p.write_text(body, encoding="utf-8")
-                    written.append(p)
-                if image_base_urls:
-                    cfg = data_dir / "imginfo.cfg"
-                    cfg.write_text(
-                        _render_imginfo(image_base_urls),
-                        encoding="utf-8",
-                    )
-                    written.append(cfg)
+        return written
 
-    if recipe.shape == "git":
-        _stage_as_git_branches(out_root, master.text_id)
+    # shape: dirs with an explicit editions filter.
+    for ed in selected:
+        ed_dir = out_root / ed.edition_short
+        written.extend(_write_edition_files(
+            ed, master.text_id, recipe.mode, ed_dir,
+            base_edition=base_edition, title=title, date=date,
+            juan_filter=juan_filter,
+        ))
+    if any(b.edition_short == "master" for b in selected):
+        readme_path = out_root / "master" / "Readme.org"
+        readme_path.write_text(
+            _render_readme(master, editions_meta, base_edition, title,
+                           date, juan_filter),
+            encoding="utf-8",
+        )
+        written.append(readme_path)
+    documentary_selected = [b for b in selected if b.edition_short != "master"]
+    written.extend(_write_data_files(
+        documentary_selected, master.text_id, out_root, image_base_urls,
+        juan_filter,
+    ))
+    return written
 
+
+def _write_data_files(
+    documentary: list[Bundle], text_id: str, out_root: Path,
+    image_base_urls: dict[str, str], juan_filter: set[int] | None,
+) -> list[Path]:
+    """Emit ``_data/imglist/*.txt`` + ``_data/imginfo.cfg`` if any page-break
+    markers carry image refs. Returns the written paths (empty list when
+    there's nothing to write — TLS-sourced or text-only bundles).
+    """
+    written: list[Path] = []
+    if not documentary:
+        return written
+    # Imglist needs an edition's worth of page-breaks; pick the first
+    # documentary edition (mirrors the input repo, where _data tracks the
+    # WYG-style ids).
+    ed = documentary[0]
+    rendered_imglists: list[tuple[Juan, str]] = []
+    for juan in ed.juans:
+        if juan_filter is not None and juan.seq not in juan_filter:
+            continue
+        body = _render_imglist(juan, ed.edition_short)
+        if body:
+            rendered_imglists.append((juan, body))
+    if not rendered_imglists:
+        return written
+    data_dir = out_root / "_data" / "imglist"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    for juan, body in rendered_imglists:
+        p = data_dir / f"{text_id}_{juan.seq:03d}.txt"
+        p.write_text(body, encoding="utf-8")
+        written.append(p)
+    if image_base_urls:
+        cfg = data_dir / "imginfo.cfg"
+        cfg.write_text(_render_imginfo(image_base_urls), encoding="utf-8")
+        written.append(cfg)
     return written
 
 
@@ -200,7 +263,11 @@ def _render_header(text_id: str, title: str, date: str,
 
 
 def _render_juan_body(text: str, markers: list[dict]) -> str:
-    """Splice text and markers back into mandoku-view source."""
+    """Splice text and markers back into mandoku-view source.
+
+    `¶` line-breaks emit ``¶\\n`` and `<pb:...>` page-breaks are pushed onto
+    their own line so the output resembles canonical Kanripo source format.
+    """
     out: list[str] = []
     cursor = 0
     sorted_markers = sorted(
@@ -213,9 +280,11 @@ def _render_juan_body(text: str, markers: list[dict]) -> str:
             cursor = off
         kind = m.get("type")
         if kind == "page-break":
+            if not _ends_with_newline(out):
+                out.append("\n")
             out.append(f"<pb:{m.get('id', '')}>")
         elif kind == "line-break":
-            out.append("¶")
+            out.append("¶\n")
         elif kind == "indent":
             out.append(m.get("content", "") or "")
         elif kind == "punctuation":
@@ -229,7 +298,18 @@ def _render_juan_body(text: str, markers: list[dict]) -> str:
         # variant / kr:org-directive / unknown: silently skipped in v1.
     if cursor < len(text):
         out.append(_encode_pua(text[cursor:]))
+    if not _ends_with_newline(out):
+        out.append("\n")
     return "".join(out)
+
+
+def _ends_with_newline(out: list[str]) -> bool:
+    """True if the buffer is empty or its last chunk ends with ``\\n``.
+
+    Empty counts as newlined so a body that opens with `<pb:...>` does not
+    get a leading blank line.
+    """
+    return not out or out[-1].endswith("\n")
 
 
 def _render_juan(juan: Juan, text_id: str, title: str, date: str,
@@ -309,16 +389,28 @@ def _render_imginfo(image_base_urls: dict[str, str]) -> str:
 def _render_readme(master: Bundle, editions_meta: list[dict],
                    base_edition: str, title: str, date: str,
                    juan_filter: set[int] | None) -> str:
+    """Render a ``Readme.org`` index in canonical Kanripo source style.
+
+    ``* 版本`` lists each edition (short id + label); ``* 目次`` lists each
+    TOC entry as a ``** [[file:<name>::<anchor>][<label>]]`` heading. The
+    same content goes on every branch — file references resolve to whatever
+    edition's juan files happen to be on the current branch.
+    """
+    title_line = f"#+TITLE: {title}"
+    if base_edition:
+        title_line += f" / {base_edition}"
     lines = [
-        f"#+TITLE: {title} / {base_edition}",
+        title_line,
         f"#+DATE: {date}",
+        "",
         "* 版本",
     ]
     for entry in editions_meta:
         short = entry.get("short", "")
         label = entry.get("label", short)
         lines.append(f" |       {short}|{label}|")
-    lines.append("目次")
+    lines.append("")
+    lines.append("* 目次")
     seen: set[tuple[int, str]] = set()
     toc = master.metadata.get("table_of_contents") or []
     for entry in toc:
@@ -340,8 +432,9 @@ def _render_readme(master: Bundle, editions_meta: list[dict],
         title_raw = entry.get("label", "") or ""
         entry_title = re.sub(r"<pb:[^>]+>", "", title_raw).strip()
         entry_title = entry_title.strip("[]")
-        entry_title = f"{title} {entry_title}".strip()
-        lines.append(f" - [[file:{filename}::{anchor}][{entry_title}]]")
+        if not entry_title:
+            continue
+        lines.append(f"** [[file:{filename}::{anchor}][{entry_title}]]")
     return "\n".join(lines) + "\n"
 
 
