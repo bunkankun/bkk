@@ -143,14 +143,17 @@ A marker that names a witness does not include the witness's content. The refere
 
 Markers are the mechanism by which information that has been removed from the text stream during canonicalization, or that annotates the text stream from outside it, is reattached to specific positions in the canonical text.
 
+Markers come in two shapes. **Point markers** apply at a single position; they carry an `offset` alone. **Range markers** apply to a slice of the text stream; they carry an additional `length` field, and apply to the slice `[offset, offset + length)`. The shape is fixed by the marker type. The `length` field mirrors the codepoint-slice form already used in the recipe-selection vocabulary (§"Selection").
+
 Every marker carries the following required fields:
 
 - **type:** the kind of marker.
-- **offset:** the codepoint position in the canonical text stream to which the marker applies.
+- **offset:** the codepoint position in the canonical text stream where the marker begins.
+- **length:** the codepoint span of the marker. Present on range-typed markers, absent on point-typed.
 
-Optional fields are defined per marker type and may include **id**, **content**, **note**, and structured fields specific to the type.
+Optional fields are defined per marker type and may include **id**, **content**, **note**, **responds-to** (an id referring to another marker, used by markers that comment on or extend another marker), and structured fields specific to the type. A marker carrying an `id` may be referenced from elsewhere; ids are local to the juan unless qualified.
 
-The set of marker types is open. A small **core vocabulary** is defined for layout, structural, and substitution markers — page break, line break, indent, punctuation, paragraph break, register divider, substitution — and projects may extend the set for their own purposes. A marker type that is not in the core vocabulary should be namespaced by the project introducing it.
+The set of marker types is open. A small **core vocabulary** is defined for layout, structural, voicing, and substitution markers: page break, line break, indent, punctuation, paragraph break, register divider, head, comment, and substitution are point-typed; voice (§"Voices") is range-typed. Projects may extend the set for their own purposes; a marker type that is not in the core vocabulary should be namespaced by the project introducing it.
 
 #### Substitution markers
 
@@ -177,6 +180,49 @@ A substitution marker may carry optional fields including **id**, **note**, **wi
 
 The reason enumeration is intended to be stable: new categorical reasons that generalize beyond a single project should accumulate in this list rather than be hidden inside the `extension` slot.
 
+#### Voices
+
+A **voice** marker records that a slice of the canonical text stream belongs to a named textual layer. It is the mechanism by which interleaved threads — a root text and its commentaries, for example — are disentangled so that a consumer can extract any one layer, present several in parallel, or reproduce the interleaved source as published.
+
+A voice marker is range-typed. It carries the required marker fields together with:
+
+- **type:** the literal value `voice`.
+- **length:** the slice length, in codepoints.
+- **name:** the textual layer this slice belongs to.
+
+The **name** vocabulary is open. A small recognized set is defined so that cross-project work stays legible:
+
+- `root` — the primary, commented-upon text.
+- `commentary` — a layer of comment on a root text.
+- `subcommentary` — a layer of comment on a commentary.
+- `gloss` — a short interlinear annotation (typical layout: between the lines, in smaller characters).
+
+Projects extend by prefixing — `kr:apparatus`, `tls:swl`, and so on — consistent with the rest of the marker vocabulary.
+
+A voice marker may carry optional fields including **id**, **note**, and **responds-to** — the id of another voice marker that this voice answers to. A `subcommentary` voice typically `responds-to` a `commentary` voice; a `commentary` voice `responds-to` a `root` voice. The relationship is many-to-one: a single root span may attract several commentary spans, each of which names that root span as its `responds-to` target.
+
+Voices coexist with the single text stream of the juan; there is no separate per-voice text element. The juan's canonical text contains every voice's content in source order, and voice markers carve it into named slices. A consumer extracting "only the root" filters by `name=root` and reads the slices in offset order; one reproducing the interleaved form walks all voice markers in offset order. Both presentations are derivations of the same canonical text and the same hash.
+
+The lighter-weight point markers `comment` and `head` (which carry out-of-stream `content`) remain available for sparse interlinear material — short editor's notes, occasional headings — where promoting the inserted text into a first-class slice of the text stream would be overkill. Voices are the right tool when the inner layer is dense enough that it needs to be canonicalized, hashed, and marker-able in its own right.
+
+**Example.** A short commentary passage alternates root lines and commentary on those lines. The canonical text of the juan, rendered as a single stream, reads:
+
+```
+色不異空謂色相虛幻不離空性空不異色謂空性遍周不離色相
+```
+
+The juan carries four voice markers:
+
+```yaml
+markers:
+  - {type: voice, offset: 0,  length: 4, name: root,       id: r1}
+  - {type: voice, offset: 4,  length: 9, name: commentary, responds-to: r1}
+  - {type: voice, offset: 13, length: 4, name: root,       id: r2}
+  - {type: voice, offset: 17, length: 9, name: commentary, responds-to: r2}
+```
+
+A consumer extracting `name=root` walks the marker list in offset order and concatenates the slices `[0,4)` and `[13,17)`, yielding `色不異空空不異色`. A consumer reproducing the interleaved source walks every voice marker in offset order and emits the slices in sequence, producing the original stream. Both presentations are derivations of the same canonical text and the same hash; neither presentation requires altering the underlying juan.
+
 ### Manifest
 
 The **manifest** is the entry point for a bundle. It identifies the bundle as a whole, lists the assets it contains, and declares the reference assets against which those assets were canonicalized. A consumer who is given a manifest, together with the means to resolve canonical identifiers, has everything required to verify and use the bundle.
@@ -201,6 +247,84 @@ A manifest carries the following **optional** fields, used when applicable:
 The manifest is the only place in a bundle where the bundle is named as a whole. Juan files identify themselves by position and content; reference assets identify themselves by their own identifiers. The manifest binds them.
 
 A manifest is itself addressable and may be referenced from other bundles — most notably from recipe files, which pin a specific manifest by identifier and hash in order to compose content drawn from it.
+
+### Overlay bundles
+
+An **overlay bundle** is a bundle that contributes additional markers to another bundle's text stream without modifying it. Its manifest declares a **target** — the canonical identifier and hash of a target bundle — and its juan files carry marker collections that address offsets in the corresponding juans of the target. The target is unaffected: its hash does not change, and existing pins to it remain valid. The overlay is independently addressable, hashed, and versioned per the usual bundle pattern.
+
+The motivation is straightforward. Useful markers can be authored after a bundle has been published, by parties who do not own the target, for purposes its original author may not have considered: segmentation introduced for the sake of a translation, modern punctuation added to a classical source, voice markers added to disentangle a layout the source did not mark machine-readably, scholarly annotation distributed independently. A consumer composes the target with whichever overlays they want via a recipe.
+
+#### Overlay manifest
+
+An overlay manifest is a regular bundle manifest with one additional required field:
+
+- **target:** a sub-mapping carrying the target bundle's `canonical_identifier` and `hash`.
+
+The other manifest fields keep their usual meanings, with two natural specializations:
+
+- **juan:** the overlay's juan files. Each entry names a file in the overlay and the sequence number of the **target** juan it pertains to. An overlay need not cover every juan of the target; uncovered juans simply contribute no overlay markers.
+- **canonical_set:** the overlay's own declaration, against which any marker `content` text in the overlay is canonicalized. Typically the same version the target was canonicalized against; a different version is allowed but should be noted.
+
+An overlay's juan file has the same shape as a regular juan file but its **body text is the empty string** by construction: the overlay carries no text of its own. The body still has a hash (over the empty string); the substance is the `markers` collection, whose offsets address into the target juan's text stream. This is the one relaxation of the "body must be non-empty" rule given in §"Archival format".
+
+#### Use cases
+
+- **Segmentation overlay** — adds seg markers (`tls:seg` or equivalent) to a source that has no segmentation. Translation work against unsegmented sources is the primary motivation (see §"Translations").
+- **Voicing overlay** — adds `voice` markers to a source whose typesetting interleaves root and commentary without explicit machine-readable threading.
+- **Punctuation overlay** — adds modern punctuation as an opt-in layer over an unpunctuated classical source.
+- **Annotation overlay** — adds notes, glosses, or apparatus from a specific scholar, distributed independently of the source.
+
+#### Composition and merge
+
+A recipe pinning a target plus one or more overlays is fulfilled by the middleware as follows: each pinned bundle is resolved and verified; the overlays' markers are merged into the target's per-juan marker collections; the merged result is returned to the consumer. **No marker is dropped** — the middleware preserves every marker from every pinned bundle. Within a merged collection, markers are ordered by the rules already defined in §"Hash and integrity model" (sort by `offset`, then by `priority` default zero, then by stable comparison on `type`).
+
+Conflicting *semantics* — two overlays asserting overlapping `voice.name` ranges, for example, or two segmentation overlays whose seg boundaries disagree — are surfaced to the consumer as overlapping or contradictory markers; the renderer decides whether to display both, prefer one, or warn the user. The format does not arbitrate. Archival fidelity favours preservation; rendering policy is a consumer concern, consistent with the recipe format's silence about output (§"What a recipe is silent about").
+
+A target bundle's hash is independent of any overlays that exist for it. An overlay's hash covers the overlay alone. Recipe hashes cover the pinned set, and so transitively cover the composition.
+
+#### Worked examples
+
+**Translation against an unsegmented source.** A KRP source `bkk:krp/KR6c0101/v1` carries page-breaks and line-breaks but no seg markers. A segmentation overlay `bkk:overlay/KR6c0101-segs-acme/v1` declares the target and contributes seg markers per juan; its juan 1 file is essentially empty body plus a marker collection:
+
+```yaml
+target:
+  canonical_identifier: bkk:krp/KR6c0101/v1
+  hash: sha256:1af8…
+canonical_set: bkk:charset/cjk-v1
+seq: 1
+body: ""
+markers:
+  - {type: 'tls:seg', offset: 0,   id: 001-1a.1}
+  - {type: 'tls:seg', offset: 47,  id: 001-1a.2}
+  - {type: 'tls:seg', offset: 132, id: 001-1a.3}
+  # …
+```
+
+A translation `bkk:translation/KR6c0101-en-smith/v1` references those seg ids directly in its spans:
+
+```markdown
+[The discourse opens with…]{corresp=001-1a.1}
+[The first exposition turns on…]{corresp=001-1a.2}
+```
+
+The composing recipe pins all three:
+
+```yaml
+pins:
+  - role: base
+    canonical_identifier: bkk:krp/KR6c0101/v1
+    hash: sha256:1af8…
+  - role: overlay
+    canonical_identifier: bkk:overlay/KR6c0101-segs-acme/v1
+    hash: sha256:2c91…
+  - role: translation
+    canonical_identifier: bkk:translation/KR6c0101-en-smith/v1
+    hash: sha256:4f2e…
+```
+
+When fulfilled, the middleware merges the overlay's seg markers into the target's per-juan marker collection; the translation's `corresp` values resolve against those merged ids exactly as they would against natively-authored segs. The source bundle's hash and existing pins are unaffected.
+
+**Post-publication annotation overlay.** A bundle `bkk:krp/KR6q0053/v1` has been published for years. A scholar later authors a set of glosses and short apparatus notes against it and distributes them as `bkk:overlay/KR6q0053-glosses-tanaka/v1`. The overlay's manifest pins the target by hash; each juan file in the overlay carries `comment` point markers and `gloss`-voice range markers at the relevant offsets, with empty body text. Readers compose the two via a recipe pinning the source and the overlay. The scholar can publish revisions as new overlay versions, each with its own hash; a reader pinning a specific overlay version sees exactly the annotations as the scholar published them at that moment. The source's hash, identifier, and existing pins remain valid through every revision of the overlay.
 
 ### Recipe format
 
@@ -372,6 +496,150 @@ Authoring — producing bundles from source materials, computing canonical hashe
 ## Clients
 
 *To be drafted.*
+
+## Translations
+
+A translation is, in BKK terms, a bundle in its own right. It has a canonical identifier, a hash, a manifest, and is composable with other bundles through recipes. It is *not* an annotation on a source bundle and does not live inside one. What links a translation to its source is a recipe pin — `role: base` for the source, `role: translation` for the translation — together with per-segment references inside the translation that point back into the source by marker id.
+
+A translation must be readable on its own. A reader who picks up only the translation bundle, without ever resolving the source, should encounter a complete, coherent text in the target language. References to source segments are present so that source and translation can be presented in parallel when both are available, but they are not load-bearing for reading the translation in isolation. This is a deliberate departure from the current TLS-style translation format, where segment-by-segment alignment dictates the reading order and the translation is unreadable without the source alongside.
+
+### Archival format
+
+The archival format is **Markdown with a YAML header**. The header carries the manifest-style metadata that ties the translation to its source and identifies it as an addressable bundle. The body is the translation's prose, in the order a reader is meant to read it, with source-segment alignment recorded inline via Pandoc-style attribute spans.
+
+#### YAML header
+
+The header is delimited by `---` lines at the start of the file and carries at least:
+
+- **canonical_identifier:** the bundle's stable identifier, as for any BKK bundle.
+- **canonical_location:** the normative publication location.
+- **source:** a sub-mapping pinning the translated source by `canonical_identifier` and `hash`. A translation pins exactly one source bundle; multi-source compositions are expressed through recipes, not by stacking pins inside a translation.
+- **language:** the target language as a BCP-47 tag (`fr`, `en`, `de-1996`, `zh-Hant`).
+- **title:** the translation's title in the target language.
+- **responsibility:** an ordered list of `{role, name}` entries — translator, editor, reviser, annotator. Roles draw on a small recognized vocabulary and may be extended where needed.
+- **license:** the licence under which the translation is distributed. Required, since translations carry their own copyright independently of the source.
+- **hash:** the bundle hash, computed as described in §"Canonicalization", below.
+
+Optional header fields, used where applicable, include `original_title`, `publication` (publisher, year, place — when the translation has a prior print existence), `date` (the date of this version of the translation), `note`, `table_of_contents` (target-language headings that index into the body), and `juan` (analogous to the source-bundle juan list when the translation is split across multiple files).
+
+Because the target language is rarely CJK, **`canonical_set`** does not apply. Unicode normalization to NFC is still performed; the canonical-character-set machinery is otherwise inert for translation bundles. A future translation into a CJK target language may re-introduce a canonical set declaration; the slot is reserved.
+
+#### Body
+
+The body is ordinary Markdown. Headings, paragraphs, lists, footnotes, and inline emphasis all work as elsewhere. The translator is free to introduce headings, section breaks, and prefatory material that have no counterpart in the source — this is what makes the translation readable on its own.
+
+Source alignment is recorded with **Pandoc-style attribute spans**. A span surrounding a piece of translated prose declares which source segment(s) it corresponds to:
+
+```markdown
+[Le Maître a dit :]{corresp=002-1a.3}
+[Qui gouverne le peuple par l'exemple de sa vertu]{corresp=002-1a.4}
+[est comme l'étoile polaire.]{corresp=002-1a.5}
+```
+
+The `corresp` value is a **source marker id**, given in its relative form — the source `text-id` and edition are pinned by the bundle's `source` header field, so `002-1a.3` is unambiguous. Where multiple source segments collapse into one translation segment, `corresp` is space-separated:
+
+```markdown
+[The Master's combined remark.]{corresp="002-1a.3 002-1a.4 002-1a.5"}
+```
+
+Where a single source segment is split across multiple translation segments, the same `corresp` is repeated on each:
+
+```markdown
+[The first half of the remark,]{corresp=002-1a.3}
+[and the second half.]{corresp=002-1a.3}
+```
+
+A span may carry additional attributes alongside `corresp` — `resp` (the responsible editor for that segment), `modified` (an ISO 8601 timestamp), and free-form `note` strings — all in the same braces:
+
+```markdown
+[Le Maître a dit :]{corresp=002-1a.3 resp=CH modified=2024-07-20T16:46:45.958+09:00}
+```
+
+When the source bundle has **no seg markers** — many KRP sources carry only page-breaks and line-breaks — the recommended path is to pin a **segmentation overlay** (§"Overlay bundles") for that source. The translation's composing recipe pins the source, the overlay, and the translation; the overlay contributes seg ids that the translation references in `corresp`, exactly as it would for a natively-segmented source. The translation file does not need to know that the seg ids come from an overlay rather than the target — `corresp` syntax is unchanged.
+
+Where authoring a segmentation overlay is not worth the effort, two coarser shapes are available, drawn from the same selection vocabulary the recipe format already uses (§"Selection"):
+
+- **Marker-bounded ranges** — `corresp-from=<marker-id> corresp-to=<marker-id>` pins the translation span to the slice of source text bounded by two named markers, typically page-breaks. Suitable for citation-style translation where page-side granularity is the working unit.
+- **Codepoint slices** — `corresp-juan=<seq> corresp-offset=<n> corresp-length=<m>` pins to an explicit slice of a source juan. The escape hatch for cases where no marker boundary fits.
+
+All three shapes — seg id, marker-bounded range, codepoint slice — may coexist within a single translation, span by span.
+
+Prose outside any span is **untethered content** — translator's preface, section headings, footnotes, bridging text, anything the translator authored without a source-side anchor. Untethered content is first-class translation material; it is preserved through canonicalization and carries no `corresp`. Markdown footnotes are the natural carrier for translator's notes; they may themselves contain spans if the note quotes a passage that is aligned.
+
+A translation need not be exhaustive: source segments with no covering span are simply unmapped. A reader-side tool may present these as gaps when both bundles are available; in standalone reading they are invisible.
+
+#### File structure
+
+A short translation may live in a single Markdown file. A longer one mirrors the source's juan structure: one Markdown file per juan, listed in the manifest's `juan` field. The translation is free to choose its own file split — a translation may, for instance, organize itself by translator-chosen chapters that do not align to source juans — but the conventional choice of one-file-per-source-juan keeps parallel rendering uncomplicated.
+
+### Canonicalization and hashing
+
+The Markdown form is the **storage form**. Hashing operates over a **canonical form** derived by parsing: spans are extracted into an ordered list of segments, each carrying its `corresp`, attributes, and text content; untethered prose is preserved as text-only segments without `corresp`; the YAML header is parsed and re-emitted in canonical key order. The resulting structure is serialized using RFC 8785 JSON Canonicalization Scheme (JCS), and the SHA-256 of those bytes is the bundle hash. This is the same separation of storage form from canonical serialization used by juan files (§"Hash and integrity model").
+
+Two consequences:
+
+- Reformatting the Markdown — line breaks, whitespace inside spans, ordering of attributes within a brace — does not change the hash.
+- Reordering segments in the reading order *does* change the hash. The reading order is part of the translation's identity.
+
+### Composition via recipes
+
+A translation is composed with its source through a recipe with two pins:
+
+```yaml
+pins:
+  - role: base
+    canonical_identifier: bkk:krp/KR1h0004/v1
+    hash: sha256:…
+  - role: translation
+    canonical_identifier: bkk:translation/KR1h0004-fr-levi/v1
+    hash: sha256:…
+```
+
+A client that fulfils this recipe receives both bundles and can render them in parallel by walking the translation's spans and resolving each `corresp` against the base. The alignment data lives entirely in the translation; the recipe carries no alignment language of its own, consistent with §"Alignment between pins".
+
+A translation bundle may be pinned standalone — without a `base` companion — for readers who only want the translation. The translation has all the metadata required to be presented on its own.
+
+### Migration from the TLS translation format
+
+Existing translations in the TLS toolchain (see `samples/translations/`) carry a `<seg corresp="…">` for each source segment in source order. They typically omit translator-authored structure — headings, paragraph breaks, prefatory material — because the source provided that structure visually and the reader was assumed to have it available. They are not, in their current form, readable in isolation.
+
+Migration is therefore not a mechanical reshape. A conversion tool can:
+
+- Extract each TEI `<seg>` into a Pandoc attribute span with `corresp` carrying the marker id (stripping any leading `#`).
+- Carry over `resp`, `modified`, and `xml:lang` as span attributes.
+- Lift the `<teiHeader>` into the YAML header — `<titleStmt>` to `title`/`responsibility`, `<publicationStmt>` to `publication`/`license`, `<sourceDesc>` to `source`.
+- Detect empty segs (`<seg .../>` with no content) and drop them from the output rather than emit empty spans.
+
+What the tool *cannot* do automatically, and what a human pass must do after, is:
+
+- Introduce paragraph and section breaks where the source's page-side structure was implicitly carrying them.
+- Add translator's headings, chapter titles, and any prefatory material needed for the translation to stand on its own.
+- Restore translator's footnotes that were inlined into segment content (visible in the French sample, where a footnote's full text is concatenated with the translation of the segment it annotates) and split them out into proper Markdown footnotes.
+- Reorder where the source-driven sequence produced an unreadable target-language sequence, leaving the `corresp` values intact.
+
+A migrated bundle is therefore expected to go through a **standalone-reading review** before it is hashed and published. The hash of a migrated translation reflects the corrected form, not the verbatim TLS export. Earlier verbatim exports may be retained as separate bundle versions if a project wishes to preserve them for provenance, but they are not the canonical archival representation.
+
+### Purpose-built editor
+
+The Markdown-plus-spans format is editable in any UTF-8 text editor and renderable through any Pandoc-aware tool (Quarto, RStudio, VS Code with the Quarto extension). For routine prose work that is sufficient. What generic Markdown tooling does *not* surface — and what a purpose-built editor should — is alignment-aware authoring.
+
+The editor's responsibilities, listed in roughly increasing order of project specificity:
+
+- **Source resolution through bunkanlib.** The editor reads the bundle header, resolves the `source` pin through the middleware, verifies the source's hash, and displays the source text alongside the translation.
+- **Parallel view.** A two-pane layout — source on one side, translation on the other — with the two synchronized by `corresp`. Selecting a segment in either pane highlights its counterpart in the other.
+- **Alignment status overlay.** Visual indicators for each source segment: translated, untranslated, multiply translated (more than one span carries this `corresp`), and for each translation span: aligned, untethered, dangling (`corresp` does not resolve in the source).
+- **Span management.** Selecting a stretch of translated prose and pressing a key wraps it in a span; selecting a source segment and clicking "assign" sets the `corresp` of the currently active translation span. Attribute editing is form-driven rather than by hand-typing braces.
+- **Overlay awareness.** When the recipe pins a segmentation overlay (§"Overlay bundles") alongside the source, the editor surfaces the overlay's seg markers as the default granularity for `corresp` assignment. When no segmentation overlay is available, the editor falls back to marker-bounded ranges — typically page-breaks or line-breaks — and offers an explicit codepoint-slice option for arbitrary character boundaries. The choice of granularity is per-translation, not global: a translator may pin a segmentation overlay for one source and use coarser fallbacks for another.
+- **Source-side navigation aids.** Per-character dictionary lookup, lookup of recognized phrases, marker-id-aware search, jump to next/previous segment, jump to a referenced page-side.
+- **Validation.** On save and on demand: every `corresp` resolves in the source; every span is well-formed; the YAML header validates; `responsibility` and `license` are present; the bundle re-hashes consistently.
+- **History per segment.** The `modified` and `resp` attributes are maintained automatically — every edit to a span's text updates both. A diff view per segment supports review by an editor who is not the translator.
+- **Round-trip stability.** The editor never silently rewrites Markdown. Files written by the editor and files written by hand round-trip through the canonicalizer to the same hash.
+- **Reference-asset awareness.** PUA codepoints in the source are rendered through the source bundle's declared entity encoding (§"Entity encodings"), so the translator sees the intended glyph rather than a missing-glyph box.
+- **Migration assistance.** A mode that loads a TLS-format translation, runs the conversion described above, and presents the result for the standalone-reading review pass — flagging segments with no surrounding paragraph structure, empty segs, inlined footnotes, and other artefacts that need a human decision.
+
+The editor is a client of bunkanlib; it does not have its own resolution model. It writes the storage-form Markdown; the canonicalizer that produces the hash is shared with the rest of the toolchain.
+
+A first-cut editor that delivers parallel view, alignment status, and span management is enough to begin authoring. The remaining items can be added incrementally without breaking the format.
 
 ## References
 
