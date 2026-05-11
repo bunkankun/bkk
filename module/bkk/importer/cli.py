@@ -692,17 +692,18 @@ def _import_one(recipe: Recipe, out_root: Path, sample: Path | None) -> None:
 # ---------- Translation ----------------------------------------------------
 
 
-# Filename grammar: <text-id>-<lang>[-<rev>]
-#   text-id: KR + word chars (e.g. KR1h0004)
-#   lang:    BCP-47-ish 2-3 letter tag, optionally with a region subtag
-#            of 2+ uppercase letters or 3-4 digits (en, en-US, de-1996)
-#   rev:     optional revision suffix, 4+ lowercase hex chars (snapshot id)
-# The rev pattern is strict (≥4 hex) so it can't be mistaken for a region
-# subtag like ``us`` or ``1996``.
+# Filename grammar: <text-id>-<lang>[-<tail>]
+#   text-id: uppercase-letter prefix + alphanumerics (KR1h0004, CH7x2024,
+#            T48n2016, EX1a0001, B…). Lazy so the first '-' boundary wins.
+#   lang:    2-3 lowercase letters (en, fr, ja, com, ogr, …). Real-world
+#            TLS filenames carry no BCP-47 region/variant subtag here; any
+#            extra dash-separated token (variant like 'ku', translator
+#            code like 'ge'/'ds'/'oa', revision hash) lands in <tail>.
+#   tail:    optional free-form suffix preserved verbatim in the bundle id.
 _TRANSLATION_STEM_RE = re.compile(
-    r"^(?P<text>KR\w+?)-"
-    r"(?P<lang>[a-z]{2,3}(?:-(?:[A-Z]{2,}|[0-9]{3,4}))?)"
-    r"(?:-(?P<rev>[0-9a-f]{4,}))?$"
+    r"^(?P<text>[A-Z][A-Za-z0-9]+?)-"
+    r"(?P<lang>[a-z]{2,3})"
+    r"(?:-(?P<tail>.+))?$"
 )
 
 
@@ -780,12 +781,13 @@ def _import_one_translation(args, xml_path: Path) -> None:
         bundle_id_hint=xml_path.stem,
     )
 
-    effective_out = _effective_out_root(
+    source_bundle_root = _effective_out_root(
         args.out_root, bundle.source_text_id, args.by_section,
     )
     summary = write_translation(
-        bundle, effective_out,
-        source_bundle_root=effective_out,
+        bundle, args.out_root,
+        source_bundle_root=source_bundle_root,
+        by_section=args.by_section,
     )
     print(
         f"wrote translation bundle {summary['bundle_id']} "

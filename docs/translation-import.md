@@ -26,36 +26,52 @@ bkk import --format translation --in <tls-root> --out <out-root>
 ```
 
 `--in` defaults to `global.tls_root` from `.bkkrc`. The reader scans
-`<in>/tls-data/translations/` recursively for files whose stem matches
-`^(KR\w+?)-([a-z]{2,3}(?:-(?:[A-Z]{2,}|[0-9]{3,4}))?)(?:-([0-9a-f]{4,}))?$`
-— `<text-id>-<lang>[-<rev>]`. `--text-id` and `--lang` filter the
-resolved set; without filters, every matching file is imported. The
+`<in>/tls-data/translations/` recursively (so the `ai/` and `by-hand/`
+subtrees are picked up alongside top-level files) for stems matching
+`^(?P<text>[A-Z][A-Za-z0-9]+?)-(?P<lang>[a-z]{2,3})(?:-(?P<tail>.+))?$`
+— `<text-id>-<lang>[-<tail>]`. The text-id accepts any uppercase-letter
+prefix (KR, CH, T, B, EX, …); lang is a bare 2-3 letter code (TLS
+filenames carry no BCP-47 region/variant subtag in practice); anything
+after that — variant codes like `ku`, translator codes like `ge`/`ds`,
+revision hashes, or arbitrary combinations — is opaque `<tail>` and is
+preserved verbatim in the bundle id. `--text-id` and `--lang` filter
+the resolved set; without filters, every matching file is imported. The
 existing `_confirm_bulk` prompt fires when more than one file is
 resolved (suppressed by `--yes` or `global.skip_confirm`).
 
-`--by-section` slots a 4-char prefix layer under `translations/`, e.g.
-`<out>/translations/KR1h/KR1h0004-en/`.
+`--by-section` slips a 4-char prefix between `translations/` and the
+text-id, so a large corpus doesn't crowd a single directory: e.g.
+`<out>/translations/KR1h/KR1h0004/en/KR1h0004-en/`.
 
 ## Output layout
 
 ```
-<out-root>/translations/<bundle-id>/
-  <bundle-id>.manifest.yaml      # YAML header + per-juan list (the manifest)
-  <bundle-id>_001.md             # one Markdown file per source juan
+<out-root>/translations/<source-text-id>/<lang>/<bundle-id>/
+  <bundle-id>.md            # bundle entry point: YAML manifest + juan TOC body
+  <bundle-id>_001.md        # one Markdown file per source juan
   <bundle-id>_002.md
   ...
-  <bundle-id>.source.yaml        # raw teiHeader sidecar (round-trip)
+  <bundle-id>.source.yaml   # raw teiHeader sidecar (round-trip)
 ```
 
 `<bundle-id>` is always the input file's stem. `KR1h0004-en.xml` and
-`KR1h0004-en-588d9aad.xml` produce two coexisting bundles
-(`KR1h0004-en/` and `KR1h0004-en-588d9aad/`); no de-duplication.
+`KR1h0004-en-588d9aad.xml` produce two coexisting bundles under
+`translations/KR1h0004/en/`; no de-duplication. Different languages of
+the same source live side-by-side under `translations/<text-id>/`.
+Translator-coded variants land alongside their plain-lang siblings
+(`KR5e0001-en-ge-79d65648/` and `KR5e0001-en-ds-…/` both under
+`translations/KR5e0001/en/`); Japanese-kuntenized files
+(`CH2a1436-ja-ku-96965668/`) group under `translations/<text-id>/ja/`
+since `ku` is part of the bundle id rather than the lang grouping.
 
-### Manifest
+### Bundle entry-point (`<bundle-id>.md`)
+
+YAML front-matter carries the full manifest; the body is a
+human-readable juan TOC. Example header:
 
 ```yaml
 canonical_identifier: bkk:translation/<bundle-id>/v1
-canonical_location: ""
+canonical_location: ''
 source:
   canonical_identifier: bkk:krp/<source-text-id>/v1
   hash: sha256:…                 # copied from the source bundle's manifest;
@@ -65,73 +81,134 @@ language: en
 title: …
 original_title: …
 responsibility:
-  - { role: translator, name: … }
-  - { role: creator, name: … }
-publication: { … }
+  - {role: translator, name: …}
+  - {role: creator, name: …}
+publication: {…}
 license: …
 date: …
 juan:
-  - { seq: 1, label: "001", file: <bundle-id>_001.md, hash: sha256:… }
-  - { seq: 2, label: "002", file: <bundle-id>_002.md, hash: sha256:… }
+  - {seq: 1, label: '001', file: <bundle-id>_001.md, hash: sha256:…}
+  - {seq: 2, label: '002', file: <bundle-id>_002.md, hash: sha256:…}
 hash: sha256:…
 ```
 
-### Per-juan `.md`
-
-One Pandoc-style attribute span per non-empty segment, one segment per
-line:
+Body shape:
 
 ```markdown
-[Le Maître a dit :]{corresp=002-1a.3 lang=en resp=CH modified=2024-07-20T16:46:45.958+09:00}
-[Qui gouverne le peuple par l'exemple de sa vertu]{corresp=002-1a.4 resp=CH modified=…}
+# <title>
+
+## Juan
+
+- [001](<bundle-id>_001.md)
+- [002](<bundle-id>_002.md)
+…
 ```
 
-- `corresp` carries the location component only — the `<text-id>_<edition>_`
-  prefix is stripped because the bundle's `source` pin makes both implicit.
-- `lang` is emitted only when the per-seg `xml:lang` differs from the
-  bundle language, so the common case stays terse. A mismatch is
-  preserved verbatim (some TLS files carry `xml:lang="en"` on every seg
-  even in a French translation — see `KR1h0004-fr`).
-- Attribute values containing spaces / quotes / equals are quoted.
+The TOC is purely human-facing; hashing and machine consumption use the
+front-matter `juan:` list. The `# <title>` heading is skipped when the
+bundle has no `title`.
+
+### Per-juan file (`<bundle-id>_NNN.md`)
+
+YAML front-matter carries juan-level metadata only — not a copy of the
+bundle manifest. The body is a sequence of Pandoc-style attribute spans,
+one per non-empty segment, one line each:
+
+```markdown
+---
+canonical_identifier: bkk:translation/<bundle-id>/v1#juan/<label>
+bundle: bkk:translation/<bundle-id>/v1
+juan_seq: 1
+juan_label: '002'
+hash: sha256:…
+markers:
+- {ref: 002-1a.3, corresp: [002-1a.3], resp: CH, modified: '2024-07-20T16:46:45.958+09:00'}
+- {ref: [002-1a.4, 002-1a.5], corresp: [002-1a.4, 002-1a.5], resp: CH, modified: '2024-07-20T16:48:01.214+09:00'}
+- {ref: 002-1a.4-2, corresp: [002-1a.4], resp: CH, modified: '2024-07-20T16:50:11.002+09:00'}
+---
+[Le Maître a dit :]{@002-1a.3}
+[Qui …]{@002-1a.4 @002-1a.5}
+[Et donc …]{@002-1a.4-2}
+```
+
+Header fields:
+
+- `canonical_identifier` carries the juan-local fragment `#juan/<label>`,
+  making each juan separately addressable.
+- `bundle` back-references the entry point.
+- `juan_seq`/`juan_label` mirror the matching `juan:` entry in the
+  bundle manifest.
+- `hash` equals that entry's `hash` (single source of truth: edit a
+  juan's body, the hash changes in one place, both files stay in sync).
+- `markers:` — one entry per body span, in body order. Each entry holds
+  `ref` (body-side pairing key; a single string for single-corresp segs,
+  a list for multi-corresp), `corresp` (always a list of raw source
+  location strings), and, when set, `lang` (only when it differs from
+  the bundle's language, same omission rule as before), `resp`,
+  `modified`.
+
+Body shape:
+
+- Single-corresp seg → `[text]{@<loc>}`.
+- Multi-corresp seg → `[text]{@<loc1> @<loc2> …}` (matches the list
+  shape of `ref` in the header entry).
+- Collision (a corresp already used as a body `ref` in the same juan) →
+  the second/third/… occurrence is suffixed `-2`/`-3`/… so every body
+  ref token is unique within the juan. Suffix lands on `ref` only; the
+  original location is preserved verbatim in `corresp`.
 - Empty `<seg .../>` elements are dropped silently per the spec
   (paragraph polish is a human pass).
+- Attribute values containing `[`, `]`, `\`, or newlines are escaped in
+  the rendered span text.
+
+Round-trip from a per-juan file back to a span's full attribute set is a
+positional pair: read `markers:` in order, pair entry `i` with body
+line `i`.
 
 ## Hashing
 
-Hashes are over a **parsed, JCS-canonicalized form**, not the storage
-text — reformatting the `.md` does not change the hash, the same way
-juan YAML formatting does not change juan hashes. Both the per-juan
-hash and the manifest hash flow through the existing `sha256_jcs` /
-`manifest_hash` helpers in [`bkk/importer/hashing.py`](../module/bkk/importer/hashing.py).
+Three-tier chain, all under `sha256_jcs` (JCS → SHA-256):
 
-The canonical segment form mirrors the writer's attribute-omission rules
-(same-language `lang` is omitted in both) so the rendered Markdown and
-the hash agree.
+1. **Per-juan hash** — JCS over `{segments: [<canonical seg> …]}`. The
+   canonical seg form drops storage-only fields (e.g. the body `ref`
+   shorthand and `markers` storage) and applies the same `lang`
+   omission rule. Lands in the per-juan file's `hash` and the bundle
+   manifest's `juan[i].hash`.
+2. **Bundle hash** — JCS over `{<manifest-without-hash>, segments:
+   [<flat canonical segs across juans, juan-seq order>]}`. Matches the
+   spec's "parsed canonical form: header + ordered list of segments".
+3. The result patches into the manifest's `hash` field before the
+   manifest is serialized into the entry-point file's front-matter.
+
+The `markers:` list is storage-form only — it does **not** participate
+in the canonical hash. Reformatting a `.md` (whitespace, key order,
+flow vs block YAML) does not change either hash.
 
 ## Juan grouping
 
 Segments are bucketed by the leading digit run of their first
 `corresp` location — `001-2a.3` → juan `001`. Numeric labels are
-zero-padded to 3 digits in both the filename and the manifest's
-`label`. Segs whose corresp doesn't fit the canonical marker-id shape
-go into a synthetic `_unknown` bucket and are surfaced in a stderr
-warning.
+zero-padded to 3 digits in the filename, the manifest's `juan[].label`,
+and each per-juan file's `juan_label`. Segs whose corresp doesn't fit
+the canonical marker-id shape go into a synthetic `_unknown` bucket and
+are surfaced in a stderr warning.
 
 ## Source-bundle hash resolution
 
-After writing the bundle, the importer looks at
-`<out-root>/<source-text-id>/<source-text-id>.manifest.yaml`. If
-present, its `hash` is copied into `source.hash`. If absent, the field
-is `null` and a stderr warning fires — the translation imports cleanly
-and a later run after the source bundle exists fills the hash on
-re-import.
+After writing, the importer looks at
+`<out-root>/<source-text-id>/<source-text-id>.manifest.yaml` (or the
+`--by-section`-aware equivalent — i.e. the same path the KRP/TLS
+writers would have produced). If present, its `hash` is copied into
+`source.hash`. If absent, the field is `null` and a stderr warning
+fires — the translation imports cleanly and a later run after the
+source bundle exists fills the hash on re-import.
 
 ## Conflict / re-import
 
 Translation bundles have no cross-source merge complexity. Re-running
-the importer overwrites `<out>/translations/<bundle-id>/` after the
-bulk-confirm prompt (or unconditionally with `--yes`). Output is
-byte-stable across runs given identical input.
+the importer overwrites `<out>/translations/<text-id>/<lang>/<bundle-id>/`
+after the bulk-confirm prompt (or unconditionally with `--yes`). Output
+is byte-stable across runs given identical input.
 
 ## Reader notes (`module/bkk/importer/read/translation.py`)
 
@@ -157,7 +234,8 @@ byte-stable across runs given identical input.
 - [module/bkk/importer/read/translation.py](../module/bkk/importer/read/translation.py)
   — TEI parser, marker-id splitter, header lift.
 - [module/bkk/importer/write/translation.py](../module/bkk/importer/write/translation.py)
-  — per-juan Markdown render, manifest build, JCS hash.
+  — bundle entry-point + per-juan render, marker collision logic,
+  manifest build, JCS hash.
 - [module/tests/test_translation_import.py](../module/tests/test_translation_import.py)
   — end-to-end coverage against the four samples under
   [module/samples/translations/](../module/samples/translations/).
@@ -170,5 +248,6 @@ cd module && python -m pytest tests/test_translation_import.py -v
 
 Covers single-file import, empty-seg drop, per-juan grouping, hash
 reproducibility, snapshot coexistence, license/responsibility
-extraction, conditional `lang` emission, and source-hash resolution
-when the source bundle is present.
+extraction, conditional `lang` emission, source-hash resolution when
+the source bundle is present, per-juan header shape, body-ref/header
+correspondence, and bundle-hash sensitivity to segment edits.
