@@ -210,6 +210,13 @@ the importer overwrites `<out>/translations/<text-id>/<lang>/<bundle-id>/`
 after the bulk-confirm prompt (or unconditionally with `--yes`). Output
 is byte-stable across runs given identical input.
 
+Pass `--on-exists skip` to leave any bundle directory that already
+exists on disk untouched. In bulk discovery the existence check runs
+before the confirmation prompt, so the prompt lists only the bundles
+that will actually be (re)written; a one-line `skipped N bundle(s)`
+report precedes it. The default is `--on-exists overwrite` (today's
+behavior).
+
 ## Reader notes (`module/bkk/importer/read/translation.py`)
 
 - Independent of `read/tls.py`. TLS source-text files carry divs,

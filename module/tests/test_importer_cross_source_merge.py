@@ -278,3 +278,98 @@ def test_tls_into_unknown_state_errors(tmp_path: Path):
     with pytest.raises(BundleConflictError) as excinfo:
         _import_one_tls(_Args(), FIXTURE_TEXT_ID, TLS_FIXTURE_XML, sample=None)
     assert "can't be classified" in str(excinfo.value)
+
+
+# ---------- --on-exists ----------------------------------------------------
+
+
+@fixtures_present
+def test_on_exists_skip_skips_krp_into_existing_tls_merge(tmp_path: Path):
+    """--on-exists skip treats an existing TLS bundle as 'leave it alone',
+    so a subsequent KRP import does NOT merge editions on top of it.
+
+    Per the design: skip is total — it applies to the merge case too.
+    """
+    rc = run([
+        "--format", "tls",
+        "--in", str(TLS_FIXTURE_ROOT),
+        "--text-id", FIXTURE_TEXT_ID,
+        "--out", str(tmp_path),
+    ])
+    assert rc == 0
+    bundle_root = tmp_path / FIXTURE_TEXT_ID
+    master_path = bundle_root / f"{FIXTURE_TEXT_ID}.manifest.yaml"
+    master_before = master_path.read_text(encoding="utf-8")
+    editions_before = sorted(
+        p.name for p in (bundle_root / "editions").iterdir()
+        if p.is_dir()
+    )
+
+    rc = run([
+        "--format", "krp",
+        "--in", str(KRP_FIXTURE_ROOT),
+        "--text-id", FIXTURE_TEXT_ID,
+        "--on-exists", "skip",
+        "--out", str(tmp_path),
+    ])
+    assert rc == 0
+    # Bundle is untouched: master manifest is byte-identical, and the
+    # editions/ subdirs are exactly what TLS wrote on the first pass.
+    assert master_path.read_text(encoding="utf-8") == master_before
+    editions_after = sorted(
+        p.name for p in (bundle_root / "editions").iterdir()
+        if p.is_dir()
+    )
+    assert editions_after == editions_before
+
+
+@fixtures_present
+def test_on_exists_skip_does_not_mask_tls_into_existing_krp_error(
+    tmp_path: Path, capsys,
+):
+    """The TLS-into-existing-KRP hard error is independent of --on-exists.
+
+    skip is for 'leave the bundle alone'; the conflict here is a usage
+    mistake (wrong import order) that the user still needs to see.
+    """
+    rc = run([
+        "--format", "krp",
+        "--in", str(KRP_FIXTURE_ROOT),
+        "--text-id", FIXTURE_TEXT_ID,
+        "--out", str(tmp_path),
+    ])
+    assert rc == 0
+    _ = capsys.readouterr()
+
+    rc = run([
+        "--format", "tls",
+        "--in", str(TLS_FIXTURE_ROOT),
+        "--text-id", FIXTURE_TEXT_ID,
+        "--on-exists", "skip",
+        "--out", str(tmp_path),
+    ])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "KRP-sourced bundle already exists" in err
+
+
+@fixtures_present
+def test_on_exists_skip_skips_krp_re_import(tmp_path: Path):
+    """A second KRP import of the same text is a no-op under skip."""
+    base_args = [
+        "--format", "krp",
+        "--in", str(KRP_FIXTURE_ROOT),
+        "--text-id", FIXTURE_TEXT_ID,
+        "--out", str(tmp_path),
+    ]
+    assert run(base_args) == 0
+    master_path = (
+        tmp_path / FIXTURE_TEXT_ID / f"{FIXTURE_TEXT_ID}.manifest.yaml"
+    )
+    sentinel = tmp_path / FIXTURE_TEXT_ID / "SKIP-SENTINEL.txt"
+    sentinel.write_text("untouched", encoding="utf-8")
+    master_before = master_path.read_text(encoding="utf-8")
+
+    assert run(base_args + ["--on-exists", "skip"]) == 0
+    assert sentinel.exists() and sentinel.read_text() == "untouched"
+    assert master_path.read_text(encoding="utf-8") == master_before

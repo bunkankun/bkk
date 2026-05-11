@@ -60,7 +60,13 @@ def write_translation(
     Returns a summary dict ``{bundle_id, out_root, juans, bundle_path,
     source_hash_resolved}``.
     """
-    bundle_dir = _bundle_dir(out_root, bundle, by_section=by_section)
+    bundle_dir = translation_bundle_dir(
+        out_root,
+        source_text_id=bundle.source_text_id,
+        language=bundle.language,
+        bundle_id=bundle.bundle_id,
+        by_section=by_section,
+    )
     bundle_dir.mkdir(parents=True, exist_ok=True)
 
     juan_groups = _group_segments_by_juan(bundle.segments)
@@ -139,16 +145,28 @@ def write_translation(
 # ---------- path layout ----------------------------------------------------
 
 
-def _bundle_dir(
-    out_root: Path, bundle: TranslationBundle, *, by_section: bool,
+def translation_bundle_dir(
+    out_root: Path,
+    *,
+    source_text_id: str | None,
+    language: str | None,
+    bundle_id: str,
+    by_section: bool,
 ) -> Path:
+    """Compute the canonical output directory for a translation bundle.
+
+    Single source of truth for the
+    ``<out_root>/translations/[<section>/]<source-text-id>/<lang>/<bundle-id>/``
+    layout — the writer uses it to place files, and the CLI uses it to
+    decide whether a bundle already exists for ``--on-exists skip``.
+    """
     parts = ["translations"]
-    if by_section and bundle.source_text_id:
-        parts.append(section_prefix(bundle.source_text_id))
+    if by_section and source_text_id:
+        parts.append(section_prefix(source_text_id))
     parts.extend([
-        bundle.source_text_id or "_unknown",
-        bundle.language or "_unknown",
-        bundle.bundle_id,
+        source_text_id or "_unknown",
+        language or "_unknown",
+        bundle_id,
     ])
     return out_root.joinpath(*parts)
 

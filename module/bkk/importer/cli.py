@@ -110,6 +110,24 @@ def _effective_out_root(out_root: Path, text_id: str, by_section: bool) -> Path:
     return out_root / section_prefix(text_id)
 
 
+def _on_exists_skip(args) -> bool:
+    """True iff the user asked us to skip existing bundles.
+
+    Tolerant of test fixtures that synthesize a fake args object without
+    setting the attribute — defaults to ``False`` (the pre-existing
+    "overwrite" behavior).
+    """
+    return getattr(args, "on_exists", "overwrite") == "skip"
+
+
+def _report_skipped(bundle_dir: Path, *, kind: str, label: str) -> None:
+    """One-line stderr report for a bundle that was skipped on existence."""
+    print(
+        f"skipping {kind} {label}: bundle already exists at {bundle_dir}",
+        file=sys.stderr,
+    )
+
+
 def _read_kanripo_idno(text_xml: Path) -> str | None:
     """Return the value of the first ``<idno type="kanripo">`` in ``text_xml``.
 
@@ -234,6 +252,14 @@ def build_parser() -> argparse.ArgumentParser:
                         f"(default: {_DEFAULT_CACHE_DIR})")
     p.add_argument("--yes", action="store_true",
                    help="skip the bulk-import confirmation prompt")
+    p.add_argument("--on-exists", dest="on_exists",
+                   choices=["overwrite", "skip"], default="overwrite",
+                   help="behavior when a target bundle directory already "
+                        "exists: 'overwrite' (default; pre-existing "
+                        "behavior, including the KRP-into-TLS merge) or "
+                        "'skip' (leave the on-disk bundle alone). "
+                        "Conflict errors (TLS into existing KRP, unknown "
+                        "bundle state) are unaffected.")
     p.add_argument("--sample", type=Path, default=None,
                    help="optional sample tree to diff against; emits a "
                         "divergence-from-sample.md alongside the output")
@@ -254,6 +280,7 @@ def run(argv: list[str] | None = None) -> int:
         ("out", "out_root"), ("format", "format"), ("cache_dir", "cache_dir"),
         ("github", "github_user"), ("master_branch", "master_branch"),
         ("imglist_branch", "imglist_branch"), ("lang", "lang"),
+        ("on_exists", "on_exists"),
     ]:
         if rc_key in imp:
             defaults[dest] = imp[rc_key]
@@ -304,6 +331,17 @@ def _run_tls(args) -> int:
     if not pairs:
         print("error: no texts found to import", file=sys.stderr)
         return 2
+
+    # --on-exists skip: drop any text whose TLS bundle already exists on
+    # disk before we prompt, so the bulk-confirm prompt only lists the
+    # texts that will actually be (re)written. KRP/unknown states are
+    # *not* filtered here — those still produce hard errors per-text.
+    if _on_exists_skip(args) and args.text_id is None:
+        pairs = _skip_filter_tls_pairs(args, pairs)
+        if not pairs:
+            print("nothing to import: all discovered texts already exist.",
+                  file=sys.stderr)
+            return 0
 
     # Bulk-mode confirmation: only when discovery (no --text-id) returned
     # multiple texts. A single --text-id that resolved to multiple split
@@ -393,6 +431,39 @@ def _resolve_tls_targets(args) -> list[tuple[str, Path]]:
     return pairs
 
 
+def _skip_filter_tls_pairs(
+    args, pairs: list[tuple[str, Path]],
+) -> list[tuple[str, Path]]:
+    """Drop pairs whose target TLS bundle already exists on disk.
+
+    KRP-shaped and unknown-shaped existing bundles are *not* filtered —
+    those produce hard errors at write time and should remain visible to
+    the user, even under ``--on-exists skip``.
+    """
+    kept: list[tuple[str, Path]] = []
+    skipped = 0
+    for tid, text_xml in pairs:
+        effective_out = _effective_out_root(
+            args.out_root, tid, args.by_section,
+        )
+        existing = inspect_existing_bundle(effective_out, tid)
+        if existing.state == "tls":
+            bundle_dir = (
+                existing.manifest_path.parent if existing.manifest_path
+                else effective_out / tid
+            )
+            _report_skipped(bundle_dir, kind="tls", label=tid)
+            skipped += 1
+            continue
+        kept.append((tid, text_xml))
+    if skipped:
+        print(
+            f"skipped {skipped} text(s) (already imported)",
+            file=sys.stderr,
+        )
+    return kept
+
+
 def _import_one_tls(args, text_id: str, text_xml: Path,
                     *, sample: Path | None) -> str:
     """Run read+write for one TLS text. Returns the canonical text id
@@ -425,6 +496,18 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
             f"source can't be classified. Inspect manually or run "
             f"`bkk repair manifest {bundle_dir}` and retry."
         )
+
+    # --on-exists skip: leave a pre-existing TLS bundle untouched. The
+    # pre-filter in `_run_tls` already drops these from bulk runs; this
+    # guard catches the single-text path (and any caller of
+    # `_import_one_tls` directly).
+    if existing.state == "tls" and _on_exists_skip(args):
+        bundle_dir = (
+            existing.manifest_path.parent if existing.manifest_path
+            else effective_out / bundle.text_id
+        )
+        _report_skipped(bundle_dir, kind="tls", label=bundle.text_id)
+        return ""
 
     summary = write_bundle(bundle, effective_out)
     print(
@@ -480,6 +563,17 @@ def _run_krp(args) -> int:
         print("error: no texts found to import", file=sys.stderr)
         return 2
 
+    # --on-exists skip: drop any text whose bundle already exists on disk
+    # (KRP- or TLS-shaped — the merge case is treated as "already there"
+    # per the design). Unknown-state bundles are *not* filtered; those
+    # still produce a hard error inside `_import_one`.
+    if _on_exists_skip(args) and args.text_id is None:
+        pairs = _skip_filter_krp_pairs(args, pairs)
+        if not pairs:
+            print("nothing to import: all discovered texts already exist.",
+                  file=sys.stderr)
+            return 0
+
     if len(pairs) > 1 and not args.yes:
         if not _confirm_bulk(pairs):
             print("aborted.", file=sys.stderr)
@@ -495,6 +589,7 @@ def _run_krp(args) -> int:
             _import_one(
                 recipe, effective_out,
                 args.sample if len(pairs) == 1 else None,
+                on_exists=getattr(args, "on_exists", "overwrite"),
             )
         except Exception as exc:  # noqa: BLE001 — surface per-text failure, keep going
             print(f"error importing {text_id}: {exc}", file=sys.stderr)
@@ -519,8 +614,43 @@ def _run_krp_recipe(args) -> int:
     effective_out = _effective_out_root(
         out_root, recipe.text_id or "", args.by_section,
     )
-    _import_one(recipe, effective_out, args.sample)
+    _import_one(
+        recipe, effective_out, args.sample,
+        on_exists=getattr(args, "on_exists", "overwrite"),
+    )
     return 0
+
+
+def _skip_filter_krp_pairs(
+    args, pairs: list[tuple[str, Path]],
+) -> list[tuple[str, Path]]:
+    """Drop pairs whose KRP- or TLS-shaped bundle already exists on disk.
+
+    Unknown-state bundles are *not* filtered: those produce a hard
+    error in ``_import_one`` and should remain visible.
+    """
+    kept: list[tuple[str, Path]] = []
+    skipped = 0
+    for tid, repo_path in pairs:
+        effective_out = _effective_out_root(
+            args.out_root, tid, args.by_section,
+        )
+        existing = inspect_existing_bundle(effective_out, tid)
+        if existing.state in ("krp", "tls"):
+            bundle_dir = (
+                existing.manifest_path.parent if existing.manifest_path
+                else effective_out / tid
+            )
+            _report_skipped(bundle_dir, kind=existing.state, label=tid)
+            skipped += 1
+            continue
+        kept.append((tid, repo_path))
+    if skipped:
+        print(
+            f"skipped {skipped} text(s) (already imported)",
+            file=sys.stderr,
+        )
+    return kept
 
 
 def _resolve_targets(args) -> list[tuple[str, Path]]:
@@ -582,7 +712,10 @@ def _confirm_bulk(pairs: list[tuple[str, Path]]) -> bool:
     return ans in {"y", "yes"}
 
 
-def _import_one(recipe: Recipe, out_root: Path, sample: Path | None) -> None:
+def _import_one(
+    recipe: Recipe, out_root: Path, sample: Path | None,
+    *, on_exists: str = "overwrite",
+) -> None:
     """Run read+write for one synthesized or loaded recipe.
 
     If a TLS-sourced bundle already exists at ``<out_root>/<text-id>/``,
@@ -594,6 +727,10 @@ def _import_one(recipe: Recipe, out_root: Path, sample: Path | None) -> None:
     Per the plan, an ``unknown`` state at the destination is treated as
     a conflict (the user must investigate before any KRP write touches
     the directory).
+
+    ``on_exists="skip"`` short-circuits the import when a KRP- or TLS-
+    shaped bundle already exists at the destination. Unknown-state
+    bundles still error.
     """
     # Lazy: keep the lxml/TLS path independent of the krp reader.
     from .read.krp import read_krp
@@ -607,6 +744,17 @@ def _import_one(recipe: Recipe, out_root: Path, sample: Path | None) -> None:
             f"source can't be classified. Inspect manually or run "
             f"`bkk repair manifest {bundle_dir}` and retry."
         )
+    if (
+        on_exists == "skip"
+        and existing is not None
+        and existing.state in ("krp", "tls")
+    ):
+        bundle_dir = (
+            existing.manifest_path.parent if existing.manifest_path
+            else out_root / text_id
+        )
+        _report_skipped(bundle_dir, kind=existing.state, label=text_id)
+        return
     merge_into_tls = bool(existing and existing.state == "tls")
 
     documentary, master = read_krp(recipe)
@@ -725,6 +873,18 @@ def _run_translation(args) -> int:
         print("error: no translation files found to import", file=sys.stderr)
         return 2
 
+    # --on-exists skip: filename match already gives us text-id, lang and
+    # the bundle id (== stem), so we can compute the expected output
+    # directory without parsing the XML.
+    if _on_exists_skip(args):
+        paths = _skip_filter_translation_paths(args, paths)
+        if not paths:
+            print(
+                "nothing to import: all discovered bundles already exist.",
+                file=sys.stderr,
+            )
+            return 0
+
     if len(paths) > 1 and not args.yes:
         if not _confirm_bulk([(p.stem, p) for p in paths]):
             print("aborted.", file=sys.stderr)
@@ -738,6 +898,41 @@ def _run_translation(args) -> int:
             print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
             rc = 1
     return rc
+
+
+def _skip_filter_translation_paths(
+    args, paths: list[Path],
+) -> list[Path]:
+    """Drop translation files whose bundle dir already exists on disk."""
+    from .write.translation import translation_bundle_dir
+
+    kept: list[Path] = []
+    skipped = 0
+    for xml_path in paths:
+        m = _TRANSLATION_STEM_RE.match(xml_path.stem)
+        if not m:
+            kept.append(xml_path)
+            continue
+        bundle_dir = translation_bundle_dir(
+            args.out_root,
+            source_text_id=m.group("text"),
+            language=m.group("lang"),
+            bundle_id=xml_path.stem,
+            by_section=args.by_section,
+        )
+        if bundle_dir.exists():
+            _report_skipped(
+                bundle_dir, kind="translation", label=xml_path.stem,
+            )
+            skipped += 1
+            continue
+        kept.append(xml_path)
+    if skipped:
+        print(
+            f"skipped {skipped} bundle(s) (already imported)",
+            file=sys.stderr,
+        )
+    return kept
 
 
 def _resolve_translation_targets(args) -> list[Path]:
@@ -770,7 +965,7 @@ def _resolve_translation_targets(args) -> list[Path]:
 def _import_one_translation(args, xml_path: Path) -> None:
     """Read one translation XML and write its bundle."""
     from .read.translation import read_translation
-    from .write.translation import write_translation
+    from .write.translation import translation_bundle_dir, write_translation
 
     m = _TRANSLATION_STEM_RE.match(xml_path.stem)
     lang_hint = m.group("lang") if m else None
@@ -780,6 +975,22 @@ def _import_one_translation(args, xml_path: Path) -> None:
         language_hint=lang_hint,
         bundle_id_hint=xml_path.stem,
     )
+
+    # --on-exists skip: per-text guard, mirrors the bulk pre-filter so
+    # direct callers and single-file invocations are protected too.
+    if _on_exists_skip(args):
+        bundle_dir = translation_bundle_dir(
+            args.out_root,
+            source_text_id=bundle.source_text_id,
+            language=bundle.language,
+            bundle_id=bundle.bundle_id,
+            by_section=args.by_section,
+        )
+        if bundle_dir.exists():
+            _report_skipped(
+                bundle_dir, kind="translation", label=bundle.bundle_id,
+            )
+            return
 
     source_bundle_root = _effective_out_root(
         args.out_root, bundle.source_text_id, args.by_section,

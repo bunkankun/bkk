@@ -371,3 +371,91 @@ def test_bundle_hash_changes_with_segment_edit(
         / "KR1h0004-en" / "KR1h0004-en.md"
     )
     assert m_before["hash"] != m_after["hash"]
+
+
+# ---------- --on-exists -----------------------------------------------------
+
+
+def test_on_exists_skip_leaves_existing_bundle_alone(
+    in_root: Path, tmp_path: Path,
+):
+    """With --on-exists skip, a second run does not rewrite the bundle.
+
+    Verified by dropping a sentinel file alongside the bundle entry-point
+    and asserting it (and a hand-edit to the bundle .md) survive the
+    second run.
+    """
+    out = tmp_path / "out"
+    args = [
+        "--format", "translation",
+        "--in", str(in_root),
+        "--out", str(out),
+        "--text-id", "KR1h0004",
+        "--lang", "en",
+        "--yes",
+    ]
+    assert run(args) == 0
+    bundle_dir = out / "translations" / "KR1h0004" / "en" / "KR1h0004-en"
+    bundle_md = bundle_dir / "KR1h0004-en.md"
+    sentinel = bundle_dir / "SENTINEL.txt"
+    sentinel.write_text("untouched", encoding="utf-8")
+    edited = bundle_md.read_text(encoding="utf-8") + "\n<!-- hand edit -->\n"
+    bundle_md.write_text(edited, encoding="utf-8")
+
+    assert run(args + ["--on-exists", "skip"]) == 0
+    assert sentinel.exists() and sentinel.read_text() == "untouched"
+    assert bundle_md.read_text(encoding="utf-8") == edited
+
+
+def test_on_exists_overwrite_is_default(in_root: Path, tmp_path: Path):
+    """Default --on-exists overwrites (regression guard for today's
+    behavior)."""
+    out = tmp_path / "out"
+    args = [
+        "--format", "translation",
+        "--in", str(in_root),
+        "--out", str(out),
+        "--text-id", "KR1h0004",
+        "--lang", "en",
+        "--yes",
+    ]
+    assert run(args) == 0
+    bundle_md = (
+        out / "translations" / "KR1h0004" / "en"
+        / "KR1h0004-en" / "KR1h0004-en.md"
+    )
+    bundle_md.write_text("CORRUPTED", encoding="utf-8")
+
+    assert run(args) == 0
+    assert bundle_md.read_text(encoding="utf-8") != "CORRUPTED"
+    assert bundle_md.read_text(encoding="utf-8").startswith("---\n")
+
+
+def test_on_exists_skip_bulk_prefilter_reports_skipped(
+    in_root: Path, tmp_path: Path, capsys,
+):
+    """Bulk run with --on-exists skip: existing bundles are reported via
+    stderr and the importer returns 0 even when every discovered file is
+    skipped."""
+    out = tmp_path / "out"
+    # First pass: import every translation under in_root (no filters).
+    assert run([
+        "--format", "translation",
+        "--in", str(in_root),
+        "--out", str(out),
+        "--yes",
+    ]) == 0
+    _ = capsys.readouterr()
+
+    # Second pass: with skip, everything is already on disk.
+    rc = run([
+        "--format", "translation",
+        "--in", str(in_root),
+        "--out", str(out),
+        "--on-exists", "skip",
+        "--yes",
+    ])
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "skipped" in err and "already imported" in err
+    assert "nothing to import" in err
