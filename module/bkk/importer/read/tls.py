@@ -774,16 +774,16 @@ def _parse_body_cbeta(
             section, div_entry, marker_entries, nested_entries = (
                 _section_from_div_cbeta(
                     child, seen_ids, state,
-                    leading_markers if not sections else None,
+                    leading_markers or None,
                 )
             )
-            # Leading top-level markers (only meaningful before first div) are
-            # consumed by the first section that gets opened.
-            if not sections:
-                for mid, info in leading_markers_info.items():
-                    markers_info[mid] = info
-                leading_markers = []
-                leading_markers_info = {}
+            # Body-level non-div markers (pb, lb) accumulated since the last
+            # div are consumed by this section at offset 0, then cleared so
+            # the next section starts fresh.
+            for mid, info in leading_markers_info.items():
+                markers_info[mid] = info
+            leading_markers = []
+            leading_markers_info = {}
             sections.append(section)
             if section.head_marker_id:
                 divs_info[section.head_marker_id] = div_entry
@@ -801,8 +801,10 @@ def _parse_body_cbeta(
             attrs = _attrs_minus(child, ("xml:id",))
             if mid and attrs:
                 leading_markers_info[mid] = {"type": "page-break", "attrs": attrs}
-        # <milestone>, <lb>, and other top-level non-div children are
-        # ignored — they're whitespace/layout artifacts in CBETA sources.
+        elif tag == "lb":
+            _emit_lb(child, leading_markers, lambda: 0, seen_ids)
+        # <milestone> and other top-level non-div children are ignored —
+        # they're whitespace/layout artifacts in CBETA sources.
 
     return sections, divs_info, markers_info
 
@@ -847,6 +849,21 @@ def _section_from_div_cbeta(
     return section, div_entry, markers_info, nested_divs_info
 
 
+def _emit_lb(child, markers: list[Marker], offset_fn,
+             seen_ids: dict[str, int]) -> None:
+    """Emit a ``line-break`` marker for a ``<lb/>`` element. The id is
+    synthesized from ``ed`` + ``n`` (the only identifying attrs on TLS lb's,
+    which never carry xml:id). Empty when both are missing."""
+    ed = child.get("ed", "")
+    n = child.get("n", "")
+    raw_id = f"{ed}_{n}" if (ed or n) else ""
+    lb_id, id_extras = _dedup_id(raw_id, seen_ids)
+    markers.append(Marker(
+        type="line-break", offset=offset_fn(),
+        content="", id=lb_id, extras=id_extras,
+    ))
+
+
 def _walk_cbeta_div_children(
     div, text_buf: list[str], markers: list[Marker],
     markers_info: dict, nested_divs_info: dict,
@@ -874,9 +891,10 @@ def _walk_cbeta_div_children(
         if not isinstance(child.tag, str):
             continue
         tag = etree.QName(child).localname
-        # Close any open div-level seg run before non-seg/non-pb siblings.
-        # <pb> alone does not break a run; segs continue or extend it.
-        if tag not in ("seg", "pb"):
+        # Close any open div-level seg run before non-seg/non-pb/non-lb
+        # siblings. <pb> and <lb> alone do not break a run; segs continue
+        # or extend it.
+        if tag not in ("seg", "pb", "lb"):
             _close_seg_run(div_run_state, markers, offset)
         if tag == "pb":
             raw_id = _xmlid(child)
@@ -1018,7 +1036,9 @@ def _walk_cbeta_div_children(
                 offset, div_entry, head_state, seen_ids, state,
                 is_outermost=False, depth=depth,
             )
-        # docNumber, lb, anchor, note, g and other stray elements at div
+        elif tag == "lb":
+            _emit_lb(child, markers, offset, seen_ids)
+        # docNumber, anchor, note, g and other stray elements at div
         # level: ignored. (Inline <g>/<note> are handled by _emit_seg from
         # within seg children.)
     # Close any open div-level run at end of container.
@@ -1058,7 +1078,9 @@ def _walk_cbeta_inline_children(
             note_sink = _make_sink(text_buf, markers, offset,
                                    markers_info, seen_ids)
             _emit_inline_note(child, note_sink)
-        # <lb>, <anchor>, etc.: ignored.
+        elif tag == "lb":
+            _emit_lb(child, markers, offset, seen_ids)
+        # <anchor>, etc.: ignored.
     _close_seg_run(run_state, markers, offset)
 
 
@@ -1129,6 +1151,8 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
             attrs = _attrs_minus(child, ("xml:id",))
             if mid and attrs:
                 markers_info[mid] = {"type": "page-break", "attrs": attrs}
+        elif tag == "lb":
+            _emit_lb(child, markers, offset, seen_ids)
         elif tag == "head":
             inner_seg = child.find(_q("seg"))
             raw_id = _xmlid(inner_seg) if inner_seg is not None else _xmlid(child)
@@ -1185,6 +1209,9 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                     note_sink = _make_sink(text_buf, markers, offset,
                                            markers_info, seen_ids)
                     _emit_inline_note(seg, note_sink)
+                elif seg_tag == "lb":
+                    # <lb> does NOT break a typed-seg run (same as pb).
+                    _emit_lb(seg, markers, offset, seen_ids)
                 # other inline tags ignored for now
             _close_seg_run(run_state, markers, offset)
             p_close_raw = f"{p_xmlid}_end" if p_xmlid else ""
@@ -1400,6 +1427,8 @@ def _walk_seg_inline(seg, sink: dict) -> None:
             pb_attrs = _attrs_minus(child, ("xml:id",))
             if mid and pb_attrs:
                 sink["markers_info"][mid] = {"type": "page-break", "attrs": pb_attrs}
+        elif tag == "lb":
+            _emit_lb(child, sink["markers"], sink["offset"], sink["seen_ids"])
         elif tag == "note" and child.get("place") == "inline":
             _emit_inline_note(child, sink)
         else:

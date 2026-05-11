@@ -33,6 +33,19 @@ def _set_attrs(el: etree._Element, attrs: dict) -> None:
         el.set(_expand_attr(k), v)
 
 
+def _split_lb_id(lb_id: str) -> tuple[str, str]:
+    """Split a synthesized ``line-break`` id back into ``(ed, n)`` for
+    XML emission. Inverse of the importer's ``f"{ed}_{n}"`` synthesis;
+    strips any ``_dup{n}`` collision suffix added by ``_dedup_id``."""
+    if not lb_id:
+        return ("", "")
+    base = lb_id.split("_dup", 1)[0]
+    ed, sep, n = base.partition("_")
+    if not sep:
+        return ("", base)
+    return (ed, n)
+
+
 def _append_text(el: etree._Element, text: str) -> None:
     """Append ``text`` to an element's text-content stream.
 
@@ -125,6 +138,16 @@ def _build_div(section: Section, divs_info: dict, markers_info: dict
         if gap:
             _append_text(text_target(ctx), gap)
         last_offset = m.offset
+
+        if m.type == "line-break":
+            lb = etree.SubElement(text_target(ctx), _q("lb"))
+            ed, n = _split_lb_id(m.id)
+            if ed:
+                lb.set("ed", ed)
+            if n:
+                lb.set("n", n)
+            i += 1
+            continue
 
         if m.type == "page-break":
             # If a non-pb marker shares this offset *after* the pb, the

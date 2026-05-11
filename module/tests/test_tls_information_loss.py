@@ -353,3 +353,112 @@ def test_nested_div_start_carries_level_and_head_text_extras():
     assert starts[0].extras["head_text"] == "章一"
     assert starts[1].extras["level"] == 3
     assert starts[1].extras["head_text"] == "節甲"
+
+
+# ---------- shape 6: <lb/> preservation -------------------------------------
+
+
+def test_lb_at_div_level_emits_line_break():
+    """A bare ``<lb ed=… n=…/>`` between div-level siblings emits a
+    ``line-break`` marker with id synthesized as ``{ed}_{n}``."""
+    div = _div_xml(textwrap.dedent("""\
+        <head><seg xml:id="H">頭</seg></head>
+        <lb ed="X" n="0014c04"/>
+        <p xml:id="P1"><seg xml:id="S1">內</seg></p>
+    """))
+    lbs = [m for m in _markers(div) if m.type == "line-break"]
+    assert [m.id for m in lbs] == ["X_0014c04"]
+
+
+def test_lb_inline_in_seg_emits_line_break():
+    """``<lb/>`` siblings inside a ``<seg>``'s mixed content emit
+    ``line-break`` markers in document order, and the seg's CJK text
+    spans across the lb position remain intact."""
+    div = _div_xml(textwrap.dedent("""\
+        <head><seg xml:id="H">頭</seg></head>
+        <p xml:id="P">\
+<seg xml:id="S">金智<lb ed="X" n="0014c08"/><lb ed="R110" n="0834a05"/>無畏</seg></p>
+    """))
+    section, _, _, _ = _section_from_div(div)
+    lbs = [m for m in section.markers if m.type == "line-break"]
+    assert [m.id for m in lbs] == ["X_0014c08", "R110_0834a05"]
+    # The two lb markers sit at the same offset, between 金智 and 無畏.
+    assert lbs[0].offset == lbs[1].offset
+    assert "金智無畏" in section.text
+
+
+def test_lb_does_not_break_seg_run():
+    """``<lb/>`` between consecutive ``<seg type=T>`` siblings does not
+    close the typed-seg run — same behaviour as ``<pb/>``."""
+    div = _div_xml(textwrap.dedent("""\
+        <head><seg xml:id="H">頭</seg></head>
+        <p>
+          <seg xml:id="A" type="comm">甲</seg>
+          <lb ed="X" n="0014c10"/>
+          <seg xml:id="B" type="comm">乙</seg>
+        </p>
+    """))
+    markers = _markers(div)
+    starts = [m for m in markers if m.type == "tls:seg-start"]
+    ends = [m for m in markers if m.type == "tls:seg-end"]
+    assert len(starts) == 1
+    assert len(ends) == 1
+    # The lb still landed as a marker.
+    assert any(m.type == "line-break" and m.id == "X_0014c10" for m in markers)
+
+
+def test_lb_without_attrs_still_emitted():
+    """An attribute-less ``<lb/>`` still produces a ``line-break`` marker
+    (with empty id) — preserving the source element's presence."""
+    div = _div_xml(textwrap.dedent("""\
+        <head><seg xml:id="H">頭</seg></head>
+        <lb/>
+        <p xml:id="P"><seg xml:id="S">x</seg></p>
+    """))
+    lbs = [m for m in _markers(div) if m.type == "line-break"]
+    assert len(lbs) == 1
+    assert lbs[0].id == ""
+
+
+def test_lb_marker_exports_back_to_lb_element():
+    """Exporter round-trip: a ``line-break`` marker with id ``{ed}_{n}``
+    emits an ``<lb ed=… n=…/>`` element in the rebuilt XML."""
+    from bkk.exporter.tls import _build_div
+    from bkk.importer.ir import Marker, Section
+
+    section = Section(
+        head_text="頭",
+        head_marker_id="H",
+        text="金智無畏",
+        markers=[
+            Marker(type="tls:head", offset=0, content="", id="H"),
+            Marker(type="paragraph-break", offset=1, content="", id="P",
+                   extras={"role": "open"}),
+            Marker(type="tls:seg", offset=1, content="", id="S"),
+            Marker(type="line-break", offset=3, content="", id="X_0014c08"),
+            Marker(type="line-break", offset=3, content="",
+                   id="R110_0834a05"),
+            Marker(type="paragraph-break", offset=4, content="", id="P_end",
+                   extras={"role": "close"}),
+        ],
+    )
+    div_el = _build_div(section,
+                        {"H": {"head_attrs": {}, "head_inner_seg_attrs": {}}},
+                        {})
+    lbs = div_el.findall(f".//{{{TEI_NS}}}lb")
+    assert [lb.get("ed") for lb in lbs] == ["X", "R110"]
+    assert [lb.get("n") for lb in lbs] == ["0014c08", "0834a05"]
+    # No xml:id should be written — ed/n carry all the lb's identity.
+    for lb in lbs:
+        assert lb.get(f"{{{XML_NS}}}id") is None
+
+
+def test_split_lb_id_handles_dedup_suffix():
+    """``_split_lb_id`` strips the ``_dup{n}`` collision suffix before
+    splitting so duplicate-id round-trips still recover clean ``ed``/``n``."""
+    from bkk.exporter.tls import _split_lb_id
+
+    assert _split_lb_id("X_0014c08") == ("X", "0014c08")
+    assert _split_lb_id("R110_0834a05") == ("R110", "0834a05")
+    assert _split_lb_id("X_0014c08_dup1") == ("X", "0014c08")
+    assert _split_lb_id("") == ("", "")
