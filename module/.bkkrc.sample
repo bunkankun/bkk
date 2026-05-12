@@ -7,8 +7,8 @@
 #
 # Precedence (lowest → highest): .bkkrc < env vars < CLI flags
 #
-# Supported sections: global, import, export, index, validate, serve
-# Unknown section names cause bkk to exit with an error.
+# Supported sections: global, import, export, index, validate, serve,
+# repair, voice. Unknown section names cause bkk to exit with an error.
 #
 # Path values are resolved relative to the file that defines them.
 # ~ is expanded.  Relative paths without ~ are made absolute from the
@@ -86,6 +86,13 @@ validate:
 # `bkk repair manifest <X>` accepts X as a path or a bare text-id; bare ids
 # are resolved against (in order) repair.out → import.out → global.corpus.
 repair:
+#   out: /data/bkk/out           # explicit bundle root for the bare-id form
+#                                 # (beats import.out and global.corpus)
+
+# ── Voice defaults ─────────────────────────────────────────────────────────
+# `bkk voice add <X>` accepts X as a path or a bare text-id; bare ids
+# are resolved against (in order) voice.out → import.out → global.corpus.
+voice:
 #   out: /data/bkk/out           # explicit bundle root for the bare-id form
 #                                 # (beats import.out and global.corpus)
 

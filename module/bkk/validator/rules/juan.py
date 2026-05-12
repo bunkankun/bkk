@@ -9,7 +9,7 @@ from ..context import ValidationContext, LoadedFile
 VALID_BUCKETS = ("front", "body", "back")
 KNOWN_MARKER_TYPES = {
     "page-break", "line-break", "indent", "punctuation", "paragraph-break",
-    "comment", "head", "variant",
+    "comment", "head", "variant", "voice",
     "kr:org-directive", "kr:non-cjk",
     "tls:head", "tls:seg", "tls:ann",
     "tls:div-start", "tls:div-end",
@@ -202,9 +202,10 @@ def _check_markers(
                     )
                 else:
                     seen_ids[mid] = i
-            # tls:ann markers carry annotation UUIDs, not the standard
+            # tls:ann markers carry annotation UUIDs and voice markers carry
+            # juan-local r1/c1 ids — neither follows the standard
             # <text-id>_<edition>_<location> form. Skip the format check.
-            if mtype != "tls:ann":
+            if mtype not in ("tls:ann", "voice"):
                 _check_marker_id_format(
                     ctx, lf, bucket_name, i, mid, allowed_marker_editions,
                 )
