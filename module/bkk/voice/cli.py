@@ -2,15 +2,26 @@
 
 Currently exposes one operation: ``add <bundle-dir-or-text-id>``, which
 walks every juan file in the bundle (master plus each documentary
-edition), derives ``voice`` range markers from the ``(`` / ``)``
-punctuation marker pairs already on disk, writes them back into each
-juan's marker collection, and refreshes the juan and manifest hashes.
+edition), derives ``voice`` range markers from the markers already on
+disk, writes them back into each juan's marker collection, and refreshes
+the juan and manifest hashes.
 
     python -m bkk voice add <out-root>/<text-id>/
     python -m bkk voice add <text-id>     # resolved via .bkkrc
 
 Bare-id form resolves the bundle root against (in order)
 ``voice.out``, ``import.out``, ``global.corpus`` from ``.bkkrc``.
+
+``--source`` selects the derivation:
+
+- ``parens`` (default) — from ``(`` / ``)`` punctuation marker pairs,
+  used for KRP-style inline commentary fences.
+- ``indent`` — from ``line-break``/``indent`` markers, used for sources
+  whose layout indents commentary, head, and attribution differently.
+- ``all`` — both derivers, merged. The indent deriver's ids get
+  upper-case prefixes (``R``/``C``/``H``/``A``…) so they don't collide
+  with the paren deriver's ``r``/``c`` ids; overlapping spans are
+  written through with a per-juan stderr warning.
 
 ``--force`` strips any pre-existing ``voice`` markers and rederives;
 without it the command refuses to touch a bundle that already carries
@@ -33,10 +44,14 @@ from bkk.importer.hashing import manifest_hash, sha256_jcs, ZERO_HASH
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
 
 from .derive import derive_voice_markers
+from .derive_indent import derive_voice_markers_from_indent
+
+
+_VALID_SOURCES = ("parens", "indent", "all")
 
 
 _JUAN_RE = re.compile(
-    r"^(?P<text_id>.+?)_(?P<seq>\d{3})(?:-(?P<short>[A-Za-z0-9]+))?\.yaml$",
+    r"^(?P<text_id>.+?)_(?P<seq>\d{3})(?:-(?P<short>[A-Za-z0-9][A-Za-z0-9_-]*))?\.yaml$",
 )
 _BUCKETS = ("front", "body", "back")
 
@@ -60,6 +75,12 @@ def build_parser() -> argparse.ArgumentParser:
              "(overrides voice.out / import.out / global.corpus)",
     )
     pa.add_argument(
+        "--source", dest="source", choices=_VALID_SOURCES, default=None,
+        help="derivation source: 'parens' (default; (…) pairs), "
+             "'indent' (layout indentation), or 'all' (both, merged). "
+             "Falls back to voice.source in .bkkrc; otherwise 'parens'.",
+    )
+    pa.add_argument(
         "--force", action="store_true",
         help="replace existing voice markers (default: refuse if any are present)",
     )
@@ -75,16 +96,30 @@ def run(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     out_root = args.out_root
-    if out_root is None:
+    source = args.source
+    if out_root is None or source is None:
         from bkk.config import load_rc
         rc = load_rc()
-        out_root = (
-            rc.get("voice", {}).get("out")
-            or rc.get("import", {}).get("out")
-            or rc.get("global", {}).get("corpus")
-        )
+        if out_root is None:
+            out_root = (
+                rc.get("voice", {}).get("out")
+                or rc.get("import", {}).get("out")
+                or rc.get("global", {}).get("corpus")
+            )
+        if source is None:
+            source = rc.get("voice", {}).get("source") or "parens"
+            if source not in _VALID_SOURCES:
+                print(
+                    f"error: .bkkrc voice.source={source!r} not in "
+                    f"{list(_VALID_SOURCES)}",
+                    file=sys.stderr,
+                )
+                return 2
 
-    return _run_add(args.bundle, out_root, force=args.force, dry_run=args.dry_run)
+    return _run_add(
+        args.bundle, out_root, source=source,
+        force=args.force, dry_run=args.dry_run,
+    )
 
 
 def _resolve_bundle_dir(bundle: str, out_root: Path | None) -> Path:
@@ -101,7 +136,7 @@ def _resolve_bundle_dir(bundle: str, out_root: Path | None) -> Path:
     raise FileNotFoundError(f"bundle directory not found: {p}")
 
 
-def _run_add(bundle: str, out_root, *, force: bool, dry_run: bool) -> int:
+def _run_add(bundle: str, out_root, *, source: str, force: bool, dry_run: bool) -> int:
     try:
         bundle_dir = _resolve_bundle_dir(bundle, out_root)
     except FileNotFoundError as exc:
@@ -140,7 +175,7 @@ def _run_add(bundle: str, out_root, *, force: bool, dry_run: bool) -> int:
         try:
             stats = _process_one(
                 juan_dir, manifest_path, text_id, short,
-                force=force, dry_run=dry_run,
+                source=source, force=force, dry_run=dry_run,
             )
         except (RuntimeError, ValueError) as exc:
             print(f"  error: {exc}", file=sys.stderr)
@@ -166,7 +201,7 @@ def _run_add(bundle: str, out_root, *, force: bool, dry_run: bool) -> int:
 
 def _process_one(
     juan_dir: Path, manifest_path: Path, text_id: str, short: str | None,
-    *, force: bool, dry_run: bool,
+    *, source: str, force: bool, dry_run: bool,
 ) -> dict:
     """Apply voice derivation to all juan files under ``juan_dir`` and update
     ``manifest_path``. Returns a small stats dict.
@@ -228,9 +263,13 @@ def _process_one(
                     if not (isinstance(m, dict) and m.get("type") == "voice")
                 ]
             try:
-                new_voices = derive_voice_markers(len(text), markers)
+                new_voices = _derive_for_bucket(source, len(text), markers)
             except ValueError as exc:
                 raise ValueError(f"{juan_path.name} [{bucket_name}]: {exc}") from exc
+            if source == "all":
+                _warn_voice_overlaps(
+                    new_voices, juan_path.name, bucket_name,
+                )
             if not new_voices:
                 if force and existing:
                     bucket["markers"] = [marker_to_flow(m) for m in markers]
@@ -279,6 +318,62 @@ def _process_one(
         "commentary": total_cmt,
         "lines": lines,
     }
+
+
+def _derive_for_bucket(
+    source: str, text_len: int, markers: list,
+) -> list[dict]:
+    """Dispatch to the requested deriver(s) and return their merged output.
+
+    For ``--source all`` the indent deriver's per-name id counters are
+    given upper-case prefixes (``R``/``C``/``H``/``A``…) so they don't
+    collide with the paren deriver's ``r``/``c`` ids in the same bucket.
+    """
+    if source == "parens":
+        return derive_voice_markers(text_len, markers)
+    if source == "indent":
+        return derive_voice_markers_from_indent(text_len, markers)
+    if source == "all":
+        parens_voices = derive_voice_markers(text_len, markers)
+        indent_voices = derive_voice_markers_from_indent(text_len, markers)
+        for v in indent_voices:
+            mid = v.get("id")
+            if isinstance(mid, str) and mid and mid[0].islower():
+                v["id"] = mid[0].upper() + mid[1:]
+            rt = v.get("responds-to")
+            if isinstance(rt, str) and rt and rt[0].islower():
+                v["responds-to"] = rt[0].upper() + rt[1:]
+        return list(parens_voices) + list(indent_voices)
+    raise ValueError(f"unknown voice source: {source!r}")
+
+
+def _warn_voice_overlaps(
+    voices: list[dict], juan_name: str, bucket_name: str,
+) -> None:
+    """Print a stderr warning per voice marker that overlaps another.
+
+    Used under ``--source all`` to surface cases where a parens-derived
+    span and an indent-derived span occupy overlapping offsets. Both
+    markers are kept; the consumer chooses rendering policy.
+    """
+    spans = sorted(
+        (
+            (v["offset"], v["offset"] + v.get("length", 0), v.get("id"))
+            for v in voices
+            if isinstance(v, dict) and isinstance(v.get("offset"), int)
+        ),
+        key=lambda s: (s[0], s[1]),
+    )
+    for i, (a_start, a_end, a_id) in enumerate(spans):
+        for b_start, b_end, b_id in spans[i + 1:]:
+            if b_start >= a_end:
+                break
+            print(
+                f"  warning: {juan_name} [{bucket_name}]: voice spans "
+                f"{a_id} [{a_start},{a_end}) and {b_id} "
+                f"[{b_start},{b_end}) overlap",
+                file=sys.stderr,
+            )
 
 
 def _existing_voice_count(juan_data: dict) -> int:
