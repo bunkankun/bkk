@@ -63,6 +63,12 @@ WITNESS_LIST: dict[str, Any] = {
     "WYG and SBCK":       {"value": ["WYG", "SBCK"]},
 }
 
+VOICE_LIST: dict[str, Any] = {
+    "root only":         {"value": ["root"]},
+    "commentary only":   {"value": ["commentary"]},
+    "root or commentary": {"value": ["root", "commentary"]},
+}
+
 # Range hints (markers)
 FROM: dict[str, Any] = {"start": {"value": 0}}
 TO: dict[str, Any] = {"first 200 chars": {"value": 200}}

@@ -160,7 +160,7 @@ def merge_bundles(
                 ("kind", "corpus"),
             ],
         )
-        offsets = {"juan": 0, "bucket": 0, "witness": 0, "variant": 0}
+        offsets = {"juan": 0, "bucket": 0, "witness": 0, "variant": 0, "voice_range": 0}
         for i, (textid, bkkx) in enumerate(sources, 1):
             t_bundle = time.monotonic()
             _merge_one(conn, textid, bkkx, offsets)
@@ -219,6 +219,7 @@ def _merge_one(conn: sqlite3.Connection, textid: str, bkkx: Path,
         b = offsets["bucket"]
         w = offsets["witness"]
         v = offsets["variant"]
+        vr = offsets["voice_range"]
 
         conn.execute(
             "INSERT INTO juan(juan_id, textid, seq, hash) "
@@ -243,6 +244,13 @@ def _merge_one(conn: sqlite3.Connection, textid: str, bkkx: Path,
             "content, witness, witness_form FROM src.variant",
             (v, b),
         )
+        conn.execute(
+            "INSERT INTO voice_range(voice_range_id, bucket_id, master_offset, "
+            "length, name, voice_id, responds_to) "
+            "SELECT voice_range_id + ?, bucket_id + ?, master_offset, length, "
+            "name, voice_id, responds_to FROM src.voice_range",
+            (vr, b),
+        )
         conn.execute("INSERT INTO toc SELECT * FROM src.toc")
         conn.execute(
             "INSERT INTO trigram(gram, source_kind, source_id, position) "
@@ -262,8 +270,9 @@ def _merge_one(conn: sqlite3.Connection, textid: str, bkkx: Path,
 
 def _refresh_offsets(conn: sqlite3.Connection) -> dict[str, int]:
     return {
-        "juan":    conn.execute("SELECT COALESCE(MAX(juan_id), 0) FROM juan").fetchone()[0],
-        "bucket":  conn.execute("SELECT COALESCE(MAX(bucket_id), 0) FROM bucket").fetchone()[0],
-        "witness": conn.execute("SELECT COALESCE(MAX(witness_id), 0) FROM witness").fetchone()[0],
-        "variant": conn.execute("SELECT COALESCE(MAX(variant_id), 0) FROM variant").fetchone()[0],
+        "juan":        conn.execute("SELECT COALESCE(MAX(juan_id), 0) FROM juan").fetchone()[0],
+        "bucket":      conn.execute("SELECT COALESCE(MAX(bucket_id), 0) FROM bucket").fetchone()[0],
+        "witness":     conn.execute("SELECT COALESCE(MAX(witness_id), 0) FROM witness").fetchone()[0],
+        "variant":     conn.execute("SELECT COALESCE(MAX(variant_id), 0) FROM variant").fetchone()[0],
+        "voice_range": conn.execute("SELECT COALESCE(MAX(voice_range_id), 0) FROM voice_range").fetchone()[0],
     }

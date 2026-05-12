@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from .ir import Hit, VariantOverlay
+from .schema import SCHEMA_VERSION
 from .witness import Segment, witness_to_master_span
 
 
@@ -19,6 +20,14 @@ class Index:
         self._conn = sqlite3.connect(str(path))
         self._conn.row_factory = sqlite3.Row
         meta = dict(self._conn.execute("SELECT key, value FROM meta").fetchall())
+        version = int(meta.get("schema_version", "0") or "0")
+        if version != SCHEMA_VERSION:
+            self._conn.close()
+            raise ValueError(
+                f"index at {path} has schema version {version}, "
+                f"expected {SCHEMA_VERSION}; rebuild it with `bkk index build` "
+                f"(or `bkk index merge --rebuild` for a corpus index)"
+            )
         self.textid = meta.get("textid", "")
         self.editions = json.loads(meta.get("editions", "[]"))
         # Corpus indices populate the `bundle` table; per-bundle indices don't
@@ -48,6 +57,7 @@ class Index:
         context: int = 20,
         witnesses: set[str] | None = None,
         textid: str | None = None,
+        voices: set[str] | None = None,
     ) -> Iterator[Hit]:
         """Yield :class:`Hit` for every position matching ``query``.
 
@@ -56,6 +66,12 @@ class Index:
         side (in chars). ``witnesses`` restricts which witness texts are
         searched; master matches are always returned. ``textid`` scopes
         results to a single bundle when the index is a merged corpus.
+
+        ``voices``, when given, filters hits to those with at least one
+        fully-containing voice range whose ``name`` is in the set. A hit
+        nested inside two ranges (e.g. ``sound-gloss`` inside
+        ``commentary``) qualifies for either name. ``None`` means no
+        voice filter — all hits are emitted, each tagged with its voice.
         """
         query = unicodedata.normalize("NFC", query)
         if not query:
@@ -63,8 +79,17 @@ class Index:
         candidates = self._candidate_positions(query)
         for (kind, src_id), positions in candidates.items():
             yield from self._verify_and_emit(
-                query, kind, src_id, sorted(positions), context, witnesses, textid,
+                query, kind, src_id, sorted(positions), context,
+                witnesses, textid, voices,
             )
+
+    def available_voices(self) -> list[str]:
+        """Return the sorted set of distinct voice names present in the index."""
+        return [
+            r[0] for r in self._conn.execute(
+                "SELECT DISTINCT name FROM voice_range ORDER BY name"
+            )
+        ]
 
     # -- candidate enumeration ------------------------------------------------
 
@@ -115,7 +140,7 @@ class Index:
     # -- verification + emission ---------------------------------------------
 
     def _verify_and_emit(
-        self, query, kind, src_id, positions, context, witnesses, textid,
+        self, query, kind, src_id, positions, context, witnesses, textid, voices,
     ) -> Iterator[Hit]:
         if kind == "bucket":
             row = self._conn.execute(
@@ -131,10 +156,12 @@ class Index:
             for pos in positions:
                 if row["text"][pos:pos + len(query)] != query:
                     continue
-                yield self._make_hit(
+                hit = self._make_hit(
                     row["textid"], row["seq"], row["kind"], row["bucket_id"],
                     row["text"], pos, len(query), "master", query, context,
                 )
+                if _passes_voice_filter(hit, voices):
+                    yield hit
             return
 
         # witness
@@ -164,11 +191,13 @@ class Index:
             # the master-text scan and would render as a duplicate KWIC line.
             if btext[m_off:m_off + m_len] == query:
                 continue
-            yield self._make_hit(
+            hit = self._make_hit(
                 row["textid"], row["seq"], row["kind"], row["bucket_id"],
                 btext, m_off, m_len, label, query, context,
                 witness_text=wtext[pos:pos + len(query)],
             )
+            if _passes_voice_filter(hit, voices):
+                yield hit
 
     def _make_hit(
         self, textid, juan_seq, bucket_kind, bucket_id, bucket_text,
@@ -176,6 +205,7 @@ class Index:
     ) -> Hit:
         win_lo = max(0, m_off - context)
         win_hi = m_off + m_len + context
+        voice, voice_stack = self._classify_voice(bucket_id, m_off, m_off + m_len)
         return Hit(
             textid=textid,
             juan_seq=juan_seq,
@@ -189,7 +219,42 @@ class Index:
             right=bucket_text[m_off + m_len:win_hi],
             overlays=tuple(self._overlays(bucket_id, win_lo, win_hi)),
             toc_label=self._toc_label(textid, juan_seq, bucket_kind, m_off),
+            voice=voice,
+            voice_stack=voice_stack,
         )
+
+    def _classify_voice(
+        self, bucket_id: int, hit_start: int, hit_end: int,
+    ) -> tuple[str, tuple[str, ...]]:
+        """Return (voice, voice_stack) under strict containment.
+
+        - ≥1 range fully contains the hit → ``voice`` is the innermost name
+          (smallest covering range); ``voice_stack`` lists every fully
+          containing range's name, outermost → innermost.
+        - some range intersects but none fully contains → ``("mixed", ())``.
+        - no range touches the hit → ``("none", ())``.
+        """
+        rows = self._conn.execute(
+            "SELECT master_offset, length, name FROM voice_range "
+            "WHERE bucket_id = ? "
+            "AND master_offset < ? "
+            "AND master_offset + length > ?",
+            (bucket_id, hit_end, hit_start),
+        ).fetchall()
+        if not rows:
+            return "none", ()
+        containing: list[tuple[int, int, str]] = []
+        for r in rows:
+            r_start = r["master_offset"]
+            r_end = r_start + r["length"]
+            if r_start <= hit_start and r_end >= hit_end:
+                containing.append((r_start, r_end, r["name"]))
+        if not containing:
+            return "mixed", ()
+        # Outer-to-inner: widest range first, narrowest last.
+        containing.sort(key=lambda t: (t[1] - t[0], t[0]), reverse=True)
+        stack = tuple(name for _s, _e, name in containing)
+        return stack[-1], stack
 
     def _overlays(self, bucket_id: int, lo: int, hi: int) -> list[VariantOverlay]:
         rows = self._conn.execute(
@@ -219,6 +284,18 @@ class Index:
             (textid, juan_seq, bucket, m_off, m_off),
         ).fetchone()
         return row["label"] if row else None
+
+
+def _passes_voice_filter(hit: Hit, voices: set[str] | None) -> bool:
+    """True iff the hit qualifies under the voice filter set.
+
+    None means no filter. Otherwise the hit qualifies if some
+    fully-containing voice range's name is in ``voices`` — so a hit
+    nested inside two ranges qualifies under either name.
+    """
+    if voices is None:
+        return True
+    return any(name in voices for name in hit.voice_stack)
 
 
 def _decode_segments(blob) -> list[Segment]:

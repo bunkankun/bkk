@@ -18,3 +18,12 @@ What we want to achieve:
 
 - we would like to have a search procedure that could also be used also on static sites driven with JS from the browser,  if possible. 
 
+## Voice-aware search
+
+Each bucket carries `type: voice` range markers (see `bunkankun.md` §"Voices") that name slices of text as `root`, `commentary`, etc. These are materialised in the index as a `voice_range` table; every hit is tagged with the **innermost** voice range that fully contains its span (`Hit.voice`) plus the outermost→innermost chain of containing names (`Hit.voice_stack`).
+
+- A hit that does not lie entirely within any single range is tagged `mixed`; a hit in unmarked text (e.g. front matter) is `none`.
+- The filter `--voice NAME` (CLI) / `?voice=NAME` (HTTP) keeps only hits that have **some** fully-containing range with that name — so a hit nested inside a sound-gloss inside a commentary qualifies under either `--voice commentary` or `--voice sound-gloss`. The flag is repeatable; omitting it returns all hits.
+- The vocabulary is open: any name emitted by the importer (`root`, `commentary`, future `sound-gloss`, named commentators, …) shows up in `Index.available_voices()` and is a valid filter value without code changes.
+- Witness hits inherit the master span's voice via the segment map, so variant-mediated hits classify the same way as the underlying master reading.
+

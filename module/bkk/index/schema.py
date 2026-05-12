@@ -2,14 +2,16 @@
 
 One file per bundle, or one merged file across many bundles. Tables:
 
-- ``meta``       — schema version, textid (per-bundle only), edition list
-- ``bundle``     — one row per bundle in the file (merged corpus indices)
-- ``juan``       — one row per juan
-- ``bucket``     — front/body/back text per juan (master/established reading)
-- ``witness``    — derived per-witness text plus segment map back to master
-- ``variant``    — flattened variant entries for KWIC overlay rendering
-- ``toc``        — manifest TOC entries (for KWIC chapter labels)
-- ``trigram``    — character-trigram inverted index over master + witness text
+- ``meta``        — schema version, textid (per-bundle only), edition list
+- ``bundle``      — one row per bundle in the file (merged corpus indices)
+- ``juan``        — one row per juan
+- ``bucket``      — front/body/back text per juan (master/established reading)
+- ``witness``     — derived per-witness text plus segment map back to master
+- ``variant``     — flattened variant entries for KWIC overlay rendering
+- ``voice_range`` — ranges tagging stretches of bucket text by voice (root,
+                    commentary, …); enables voice-filtered KWIC and stats
+- ``toc``         — manifest TOC entries (for KWIC chapter labels)
+- ``trigram``     — character-trigram inverted index over master + witness text
 
 The schema is shaped so the same file can be queried by ``sql.js``/``wa-sqlite``
 in a browser without translation.
@@ -17,7 +19,7 @@ in a browser without translation.
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 TABLES_DDL = """
 CREATE TABLE meta (
@@ -64,6 +66,16 @@ CREATE TABLE variant (
   witness_form  TEXT    NOT NULL
 );
 
+CREATE TABLE voice_range (
+  voice_range_id INTEGER PRIMARY KEY,
+  bucket_id      INTEGER NOT NULL REFERENCES bucket(bucket_id),
+  master_offset  INTEGER NOT NULL,
+  length         INTEGER NOT NULL,
+  name           TEXT    NOT NULL,   -- open vocab: 'root', 'commentary', and (later) 'sound-gloss', 'commentator-a', ...
+  voice_id       TEXT    NOT NULL,   -- juan-local id from the YAML marker, e.g. 'r1', 'c3'
+  responds_to    TEXT                -- juan-local id of the range this glosses; NULL for root
+);
+
 CREATE TABLE toc (
   textid     TEXT    NOT NULL,
   juan_seq   INTEGER NOT NULL,
@@ -87,6 +99,7 @@ CREATE TABLE trigram (
 # faster than maintaining a trigram b-tree row by row.
 INDICES_DDL = """
 CREATE INDEX idx_variant_overlay ON variant(bucket_id, master_offset);
+CREATE INDEX idx_voice_range_lookup ON voice_range(bucket_id, master_offset);
 CREATE INDEX idx_toc_lookup ON toc(textid, juan_seq, bucket, span_start);
 CREATE INDEX idx_trigram_gram ON trigram(gram);
 """
@@ -96,7 +109,12 @@ DDL = TABLES_DDL + INDICES_DDL
 
 def drop_heavy_indices(conn) -> None:
     """Drop the indices that get rebuilt at the end of a bulk-merge run."""
-    for name in ("idx_trigram_gram", "idx_toc_lookup", "idx_variant_overlay"):
+    for name in (
+        "idx_trigram_gram",
+        "idx_toc_lookup",
+        "idx_variant_overlay",
+        "idx_voice_range_lookup",
+    ):
         conn.execute(f"DROP INDEX IF EXISTS {name}")
 
 

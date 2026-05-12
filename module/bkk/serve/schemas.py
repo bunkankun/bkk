@@ -59,6 +59,17 @@ class HitOut(BaseModel):
     right: str
     overlays: list[VariantOverlayOut] = []
     toc_label: str | None = None
+    voice: str = Field(
+        "none",
+        description="innermost voice name fully containing the hit "
+                    "('root', 'commentary', …), or 'mixed' if it straddles "
+                    "voice boundaries, or 'none' if no voice range covers it",
+    )
+    voice_stack: list[str] = Field(
+        default_factory=list,
+        description="outermost → innermost names of every voice range fully "
+                    "containing the hit; empty for 'mixed'/'none'",
+    )
     recipe: dict[str, Any] = Field(
         default_factory=dict,
         description="one-pin recipe pinning this hit (re-submittable to /recipes:fulfil)",

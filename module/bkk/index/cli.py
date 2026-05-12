@@ -8,6 +8,7 @@ Subcommands::
     python -m bkk.index search <bkkx_path> <query> [--context N]
                                                    [--witness LABEL]...
                                                    [--textid ID]
+                                                   [--voice NAME]...
 """
 
 from __future__ import annotations
@@ -55,6 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
                          "master matches are always returned")
     ps.add_argument("--textid", default=None,
                     help="restrict to one bundle (corpus indices)")
+    ps.add_argument("--voice", action="append", default=None,
+                    help="restrict to hits fully contained in a voice range "
+                         "of this name (repeatable; e.g. 'root', 'commentary'). "
+                         "Hits nested inside multiple ranges qualify under any "
+                         "of their names. Omit to return all hits.")
     return p
 
 
@@ -90,9 +96,18 @@ def run(argv: list[str] | None = None) -> int:
     if args.cmd == "search":
         with Index(args.index_path) as ix:
             wits = set(args.witness) if args.witness else None
+            voices = set(args.voice) if args.voice else None
+            if voices is not None:
+                available = set(ix.available_voices())
+                unknown = voices - available
+                if unknown:
+                    parser.error(
+                        f"unknown voice name(s) {sorted(unknown)!r}; "
+                        f"available in this index: {sorted(available)!r}"
+                    )
             hits = ix.search(
                 args.query, context=args.context,
-                witnesses=wits, textid=args.textid,
+                witnesses=wits, textid=args.textid, voices=voices,
             )
             for hit in hits:
                 _print_hit(hit)
@@ -106,6 +121,7 @@ def _print_hit(h: Hit) -> None:
         label += f"  [{h.toc_label}]"
     if h.matched_via != "master":
         label += f"  via {h.matched_via}={h.matched_text!r}"
+    label += f"  ({'>'.join(h.voice_stack) if h.voice_stack else h.voice})"
     print(label)
     print(f"  …{h.left}「{h.match}」{h.right}…")
     for o in h.overlays:

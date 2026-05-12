@@ -158,6 +158,14 @@ def search(
                     "master matches are always returned",
         openapi_examples=ex.WITNESS_LIST,
     ),
+    voice: list[str] | None = Query(
+        None,
+        description="restrict to hits fully contained in a voice range of the "
+                    "given name(s), e.g. 'root' or 'commentary' (repeatable). "
+                    "Hits nested inside multiple ranges qualify under any of "
+                    "their names. Omit to return all hits.",
+        openapi_examples=ex.VOICE_LIST,
+    ),
     sort: Sort = Query(
         "match",
         description=(
@@ -178,8 +186,21 @@ def search(
         raise errors.index_unavailable(state._index_error or "index not built")
 
     witnesses = set(witness) if witness else None
+    voices = set(voice) if voice else None
+    if voices is not None:
+        available = set(ix.available_voices())
+        unknown = voices - available
+        if unknown:
+            ix.close()
+            raise errors.bad_request(
+                "unknown_voice",
+                unknown=sorted(unknown),
+                available=sorted(available),
+            )
     try:
-        all_hits = list(ix.search(q, context=context, witnesses=witnesses, textid=textid))
+        all_hits = list(ix.search(
+            q, context=context, witnesses=witnesses, textid=textid, voices=voices,
+        ))
     finally:
         ix.close()
 
@@ -216,6 +237,8 @@ def search(
                     for o in h.overlays
                 ],
                 toc_label=h.toc_label,
+                voice=h.voice,
+                voice_stack=list(h.voice_stack),
                 recipe=_hit_recipe(h.textid, h),
             )
             for h in page

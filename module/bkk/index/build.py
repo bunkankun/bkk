@@ -91,11 +91,11 @@ def build_index(bundle_dir: Path | str, out_path: Path | str | None = None) -> P
                 )
                 bucket_id = cur.lastrowid
 
-                variants = [
-                    m for m in (bucket.get("markers") or [])
-                    if m.get("type") == "variant"
-                ]
+                markers = bucket.get("markers") or []
+                variants = [m for m in markers if m.get("type") == "variant"]
+                voices = [m for m in markers if m.get("type") == "voice"]
                 _insert_variant_rows(cur, bucket_id, variants)
+                _insert_voice_ranges(cur, bucket_id, voices, len(text), textid, seq, kind)
                 _insert_witness_texts(cur, bucket_id, text, variants, editions)
                 _insert_trigrams(cur, "bucket", bucket_id, text)
 
@@ -123,6 +123,78 @@ def _insert_variant_rows(cur, bucket_id: int, variants: list[dict]) -> None:
             "witness, witness_form) VALUES (?,?,?,?,?,?)",
             rows,
         )
+
+
+def _insert_voice_ranges(
+    cur, bucket_id: int, voices: list[dict], text_len: int,
+    textid: str, juan_seq: int, bucket_kind: str,
+) -> None:
+    """Insert voice range rows; assert basic shape invariants.
+
+    Same-name siblings overlapping each other indicate an importer bug
+    (different-name overlaps are legitimate nesting, e.g. a sound gloss
+    inside a commentary). Coverage gaps are allowed and surface as
+    ``voice=none`` at query time.
+    """
+    if not voices:
+        return
+    rows = []
+    ids_seen: set[str] = set()
+    for v in voices:
+        off = v.get("offset")
+        length = v.get("length")
+        name = v.get("name")
+        vid = v.get("id")
+        responds_to = v.get("responds-to")
+        if not isinstance(off, int) or not isinstance(length, int):
+            raise ValueError(
+                f"{textid}:{juan_seq}/{bucket_kind}: voice marker missing "
+                f"integer offset/length: {v!r}"
+            )
+        if off < 0 or length < 0 or off + length > text_len:
+            raise ValueError(
+                f"{textid}:{juan_seq}/{bucket_kind}: voice marker out of range "
+                f"(offset={off}, length={length}, text_len={text_len})"
+            )
+        if not name:
+            raise ValueError(
+                f"{textid}:{juan_seq}/{bucket_kind}: voice marker missing "
+                f"non-empty name: {v!r}"
+            )
+        if not vid:
+            raise ValueError(
+                f"{textid}:{juan_seq}/{bucket_kind}: voice marker missing "
+                f"non-empty id: {v!r}"
+            )
+        ids_seen.add(vid)
+        rows.append((bucket_id, off, length, name, vid, responds_to))
+
+    by_name: dict[str, list[tuple[int, int]]] = {}
+    for _bid, off, length, name, _vid, _rt in rows:
+        by_name.setdefault(name, []).append((off, off + length))
+    for name, ranges in by_name.items():
+        ranges.sort()
+        for (a_start, a_end), (b_start, b_end) in zip(ranges, ranges[1:]):
+            if b_start < a_end:
+                raise ValueError(
+                    f"{textid}:{juan_seq}/{bucket_kind}: overlapping voice "
+                    f"ranges with name={name!r}: [{a_start},{a_end}) vs "
+                    f"[{b_start},{b_end})"
+                )
+
+    for row in rows:
+        responds_to = row[5]
+        if responds_to is not None and responds_to not in ids_seen:
+            raise ValueError(
+                f"{textid}:{juan_seq}/{bucket_kind}: voice marker "
+                f"responds-to={responds_to!r} has no matching id in the same bucket"
+            )
+
+    cur.executemany(
+        "INSERT INTO voice_range(bucket_id, master_offset, length, name, "
+        "voice_id, responds_to) VALUES (?,?,?,?,?,?)",
+        rows,
+    )
 
 
 def _insert_witness_texts(cur, bucket_id: int, master_text: str,

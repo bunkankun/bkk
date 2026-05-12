@@ -27,6 +27,14 @@ class Hit:
     the substring as it appeared in the matched source text. ``overlays``
     lists every variant entry whose master span intersects the KWIC window
     so the renderer can display them alongside the master line.
+
+    ``voice`` is the innermost voice name fully containing the hit span
+    (``"root"``, ``"commentary"``, …); ``"mixed"`` if the span straddles
+    voice boundaries with no single containing range; ``"none"`` if no
+    voice range covers it (e.g. unmarked front matter). ``voice_stack``
+    lists every fully-containing range's name, outermost → innermost, so
+    callers can display a path like ``("commentary", "sound-gloss")``
+    without re-querying.
     """
 
     textid: str
@@ -41,3 +49,5 @@ class Hit:
     right: str
     overlays: tuple[VariantOverlay, ...]
     toc_label: str | None
+    voice: str
+    voice_stack: tuple[str, ...]
