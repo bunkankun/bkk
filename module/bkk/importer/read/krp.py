@@ -242,7 +242,8 @@ def _clean_head_text(raw: str) -> str:
 
 def _parse_juan_text(text: str, juan_seq: int,
                      text_id: str,
-                     imglist: dict[tuple[str, str], str]) -> Juan:
+                     imglist: dict[tuple[str, str], str],
+                     edition_short: str) -> Juan:
     """Parse one mandoku-view juan source file into a Juan IR.
 
     Strips the org-mode header, walks ``¶``-terminated logical lines, and
@@ -295,9 +296,35 @@ def _parse_juan_text(text: str, juan_seq: int,
             page_id = pb.group(1)
             current_page_id = page_id
             line_counter = 0
+            cur_offset = offset()
+            # The kanripo "page missing" convention is to bracket the missing
+            # image with two ``<pb:X>`` lines, separated only by ``# ...``
+            # comments — e.g. ``<pb:7b> / # SB1_0309-127.png / # page missing
+            # / <pb:7b>``. The second pb is the same id at the same content
+            # offset; emitting both would produce duplicate ids. Detect by
+            # looking back through markers since the last text advance:
+            # if the most recent page-break has the same id at the same
+            # offset, skip — merging any image extras into it.
+            prior_pb = None
+            for prev in reversed(markers):
+                if prev.type == "page-break":
+                    prior_pb = prev
+                    break
+                if prev.type not in ("comment",):
+                    break
+            if (
+                prior_pb is not None
+                and prior_pb.id == page_id
+                and prior_pb.offset == cur_offset
+            ):
+                short = page_id.split("_")[-1]
+                img = _lookup_image(imglist, page_id, short)
+                if img and "image" not in prior_pb.extras:
+                    prior_pb.extras["image"] = img
+                return
             marker = Marker(
                 type="page-break",
-                offset=offset(),
+                offset=cur_offset,
                 content="",
                 id=page_id,
             )
@@ -332,7 +359,18 @@ def _parse_juan_text(text: str, juan_seq: int,
             return
         # Plain text line: emit a line-break marker, then walk the chars.
         line_counter += 1
-        line_id = f"{current_page_id}{line_counter:02d}"
+        if current_page_id:
+            line_id = f"{current_page_id}{line_counter:02d}"
+        else:
+            # No <pb:...> has been seen yet — front-matter line preceding
+            # the first page break (seen in WYG and other editions whose
+            # front material is not opened by a page-break). Synthesise a
+            # location segment so the id still matches the standard
+            # <text-id>_<edition>_<location> form.
+            line_id = (
+                f"{text_id}_{edition_short}_"
+                f"{juan_seq:03d}-front{line_counter:02d}"
+            )
         markers.append(Marker(
             type="line-break", offset=offset(), content="", id=line_id,
         ))
@@ -650,7 +688,7 @@ def read_krp(recipe: Recipe) -> tuple[list[Bundle], Bundle | None]:
         juans = []
         for seq, path in juan_files:
             raw = _git_show(repo, ed.branch, path)
-            juan = _parse_juan_text(raw, seq, text_id, imglist)
+            juan = _parse_juan_text(raw, seq, text_id, imglist, ed.short)
             juan.sections = split_front_by_opening_indent(juan.sections)
             juans.append(juan)
         bundle = Bundle(
@@ -676,18 +714,21 @@ def read_krp(recipe: Recipe) -> tuple[list[Bundle], Bundle | None]:
         juan_files = _list_juan_files(repo, ms.branch, text_id)
         seqs = [seq for seq, _ in juan_files]
         imglist = _load_imglist(repo, imglist_branch, imglist_path, text_id, seqs)
-        juans = []
-        for seq, path in juan_files:
-            raw = _git_show(repo, ms.branch, path)
-            juan = _parse_juan_text(raw, seq, text_id, imglist)
-            juan.sections = split_front_by_opening_indent(juan.sections)
-            juans.append(juan)
 
-        # Resolve base_edition from the source header (#+PROPERTY: BASEEDITION)
-        # of the first juan; fall back to the first witness short.
+        # Resolve base_edition up front so it can prefix any front-matter
+        # line-break ids that precede the first <pb:...> in the source.
         base_edition = _read_base_edition(repo, ms.branch, juan_files)
         if base_edition is None and ms.witnesses:
             base_edition = ms.witnesses[0]
+
+        juans = []
+        for seq, path in juan_files:
+            raw = _git_show(repo, ms.branch, path)
+            juan = _parse_juan_text(
+                raw, seq, text_id, imglist, base_edition or "",
+            )
+            juan.sections = split_front_by_opening_indent(juan.sections)
+            juans.append(juan)
 
         master_editions = [
             {"short": ed.short, **(

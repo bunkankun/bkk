@@ -61,7 +61,7 @@ _SYNTHETIC_JUAN = (
 
 def test_synthetic_body_is_cjk_only():
     juan = _parse_juan_text(_SYNTHETIC_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={})
+                            imglist={}, edition_short="TEST")
     sec = juan.sections[0]
     offender = _first_offender(sec.text)
     assert offender is None, (
@@ -73,7 +73,7 @@ def test_synthetic_body_is_cjk_only():
 
 def test_synthetic_body_extracts_structure_to_markers():
     juan = _parse_juan_text(_SYNTHETIC_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={})
+                            imglist={}, edition_short="TEST")
     sec = juan.sections[0]
     types = [m.type for m in sec.markers]
     # The structural lines all surfaced as typed markers.

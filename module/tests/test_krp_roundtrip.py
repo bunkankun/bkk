@@ -159,7 +159,8 @@ _MIN_JUAN = (
 
 def test_parse_min_juan_basic_shape():
     juan = _parse_juan_text(_MIN_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={("TEST", "001-1a"): "img/test-1a.png"})
+                            imglist={("TEST", "001-1a"): "img/test-1a.png"},
+                            edition_short="TEST")
     assert juan.seq == 1
     assert len(juan.sections) == 1
     sec = juan.sections[0]
@@ -170,7 +171,8 @@ def test_parse_min_juan_basic_shape():
 
 def test_parse_min_juan_markers():
     juan = _parse_juan_text(_MIN_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={("TEST", "001-1a"): "img/test-1a.png"})
+                            imglist={("TEST", "001-1a"): "img/test-1a.png"},
+                            edition_short="TEST")
     types = [m.type for m in juan.sections[0].markers]
     # Expect: page-break, line-break, indent, line-break, indent
     assert types[0] == "page-break"
@@ -183,7 +185,7 @@ def test_parse_min_juan_markers():
 
 def test_parse_min_juan_offsets_in_range():
     juan = _parse_juan_text(_MIN_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={})
+                            imglist={}, edition_short="TEST")
     sec = juan.sections[0]
     text_len = len(sec.text)
     for m in sec.markers:
@@ -206,7 +208,7 @@ _MD_JUAN = (
 def test_md_markers_are_dropped():
     """<md:...> chunks (cross-edition refs) emit no marker and no text."""
     juan = _parse_juan_text(_MD_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={})
+                            imglist={}, edition_short="TEST")
     sec = juan.sections[0]
     # No marker carries the OTHER edition's id, and the chunk leaves no
     # textual residue.
@@ -238,7 +240,7 @@ def test_heading_and_comment_lines_become_markers():
     """`** ...` headings → ``head`` markers; `# ...` comments → ``comment``
     markers. Body text stays free of org metadata."""
     juan = _parse_juan_text(_HEAD_COMMENT_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={})
+                            imglist={}, edition_short="TEST")
     sec = juan.sections[0]
     # Body is pure CJK content — no `**`, no `#`.
     assert sec.text == "天下皆知美斯惡已"
@@ -285,7 +287,7 @@ def test_non_cjk_run_becomes_marker():
     single ``kr:non-cjk`` marker per contiguous run; ASCII whitespace is
     dropped; body text stays CJK+PUA-only."""
     juan = _parse_juan_text(_NON_CJK_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={})
+                            imglist={}, edition_short="TEST")
     sec = juan.sections[0]
     # No Latin or ASCII period bleeds into body text.
     assert "M" not in sec.text
@@ -302,7 +304,7 @@ def test_body_text_is_cjk_pua_only():
     """The body-text invariant: every char in ``sec.text`` is allowed."""
     from bkk.importer.charset import is_allowed_body_char
     juan = _parse_juan_text(_NON_CJK_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={})
+                            imglist={}, edition_short="TEST")
     for sec in juan.sections:
         for ch in sec.text:
             assert is_allowed_body_char(ch), (
@@ -324,5 +326,5 @@ def test_head_text_filtered_to_cjk():
     """Latin / brackets / spaces in JUAN directives are stripped from the
     TOC label, leaving a CJK-only slug."""
     juan = _parse_juan_text(_DIRTY_HEAD_JUAN, juan_seq=1, text_id="KRT0001",
-                            imglist={})
+                            imglist={}, edition_short="TEST")
     assert juan.sections[0].head_text == "試験篇"
