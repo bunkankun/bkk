@@ -83,15 +83,20 @@ def run(argv: list[str] | None = None) -> int:
     ]:
         if rc_key in exp:
             defaults[dest] = exp[rc_key]
-    corpus = exp.get("corpus") or g.get("corpus")
-    if corpus is not None:
-        defaults["corpus"] = corpus
     if g.get("skip_confirm") or exp.get("skip_confirm"):
         defaults["yes"] = True
     if defaults:
         parser.set_defaults(**defaults)
 
     args = parser.parse_args(argv)
+
+    # corpus rc fallback: only when the user passed neither --corpus nor
+    # --bundle on the CLI. An explicit --bundle suppresses the rc corpus
+    # default so the single-bundle path doesn't trip mutual-exclusion.
+    if args.corpus is None and args.bundle is None:
+        rc_corpus = exp.get("corpus") or g.get("corpus")
+        if rc_corpus is not None:
+            args.corpus = Path(rc_corpus)
 
     if args.corpus is not None and args.bundle is not None:
         print("error: --corpus and --bundle are mutually exclusive",

@@ -19,6 +19,12 @@ from bkk.exporter import cli as exporter_cli
 from .test_krp_export import TEXT_ID, bundle_dir  # noqa: F401
 
 
+@pytest.fixture(autouse=True)
+def _isolate_bkkrc(monkeypatch):
+    """Don't let the user's real .bkkrc bleed defaults into CLI parsing."""
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+
+
 def _capture(argv: list[str]) -> tuple[int, str, str]:
     out, err = io.StringIO(), io.StringIO()
     with redirect_stdout(out), redirect_stderr(err):

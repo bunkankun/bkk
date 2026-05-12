@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from bkk.importer.cli import _find_tls_text
+from bkk.importer.cli import _find_tls_texts
 from bkk.importer.read.tls import read_tls
 from bkk.importer.write.bundle import write_bundle
 from bkk.validator import validate_bundle
@@ -25,8 +25,9 @@ TEXT_ID = "KR6q0053"
 @pytest.fixture(scope="module")
 def fresh_bundle(tmp_path_factory) -> Path:
     in_root = REPO / "input" / "tls"
-    text_xml = _find_tls_text(in_root, TEXT_ID)
-    assert text_xml is not None
+    matches = _find_tls_texts(in_root, TEXT_ID)
+    assert matches
+    text_xml = matches[0]
     bundle = read_tls(
         text_xml,
         in_root / "tls-data" / "notes" / "swl" / f"{TEXT_ID}-ann.xml",

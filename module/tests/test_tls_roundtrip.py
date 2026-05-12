@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from bkk.importer.cli import _find_tls_text
+from bkk.importer.cli import _find_tls_texts
 from bkk.importer.diverge import diff_trees, render_report
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
 from bkk.importer.read.tls import read_tls
@@ -29,8 +29,9 @@ TEXT_ID = "KR6q0053"
 def out_root(tmp_path_factory) -> Path:
     """Run the importer once for the suite."""
     in_root = REPO / "input" / "tls"
-    text_xml = _find_tls_text(in_root, TEXT_ID)
-    assert text_xml is not None, f"{TEXT_ID}.xml not found under {in_root}"
+    matches = _find_tls_texts(in_root, TEXT_ID)
+    assert matches, f"{TEXT_ID}.xml not found under {in_root}"
+    text_xml = matches[0]
     bundle = read_tls(
         text_xml,
         in_root / "tls-data" / "notes" / "swl" / f"{TEXT_ID}-ann.xml",

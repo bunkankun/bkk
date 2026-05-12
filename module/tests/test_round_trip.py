@@ -20,7 +20,7 @@ import yaml
 
 from bkk.exporter.recipe import Recipe
 from bkk.exporter.tls import export_tls_from_recipe
-from bkk.importer.cli import _find_tls_text
+from bkk.importer.cli import _find_tls_texts
 from bkk.importer.read.tls import read_tls
 from bkk.importer.write.bundle import write_bundle
 
@@ -34,8 +34,9 @@ def _load(path: Path) -> dict:
 
 
 def _read_input(in_root: Path):
-    text_xml = _find_tls_text(in_root, TEXT_ID)
-    assert text_xml is not None
+    matches = _find_tls_texts(in_root, TEXT_ID)
+    assert matches
+    text_xml = matches[0]
     return read_tls(
         text_xml,
         in_root / "tls-data" / "notes" / "swl" / f"{TEXT_ID}-ann.xml",

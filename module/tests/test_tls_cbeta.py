@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from bkk.importer.cli import _find_tls_text
+from bkk.importer.cli import _find_tls_texts
 from bkk.importer.ir import Marker, Section
 from bkk.importer.read.tls import (
     _split_sections_into_cbeta_juans,
@@ -93,8 +93,9 @@ def test_no_pre_juan_content_skips_000_group():
 def cbeta_out_root(tmp_path_factory) -> Path:
     """Run the CBETA importer once for the suite."""
     in_root = REPO / "input" / "tls"
-    text_xml = _find_tls_text(in_root, TEI_ID)
-    assert text_xml is not None, f"{TEI_ID}.xml not found under {in_root}"
+    matches = _find_tls_texts(in_root, TEI_ID)
+    assert matches, f"{TEI_ID}.xml not found under {in_root}"
+    text_xml = matches[0]
     bundle = read_tls(
         text_xml,
         in_root / "tls-data" / "notes" / "swl" / f"{TEI_ID}-ann.xml",

@@ -14,7 +14,7 @@ from lxml import etree
 
 from bkk.exporter.read_bundle import read_bundle
 from bkk.exporter.tls import build_ann_xml, build_text_xml
-from bkk.importer.cli import _find_tls_text
+from bkk.importer.cli import _find_tls_texts
 from bkk.importer.read.tls import read_tls
 from bkk.importer.write.bundle import write_bundle
 
@@ -28,7 +28,9 @@ TLS_NS = "http://hxwd.org/ns/1.0"
 @pytest.fixture(scope="module")
 def rebuilt_bundle(tmp_path_factory):
     in_root = REPO / "input" / "tls"
-    text_xml = _find_tls_text(in_root, TEXT_ID)
+    matches = _find_tls_texts(in_root, TEXT_ID)
+    assert matches
+    text_xml = matches[0]
     bundle = read_tls(
         text_xml,
         in_root / "tls-data" / "notes" / "swl" / f"{TEXT_ID}-ann.xml",
