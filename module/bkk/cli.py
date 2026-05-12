@@ -16,6 +16,7 @@ own ``--help`` and option grammar.
 
 from __future__ import annotations
 
+import signal
 import sys
 from typing import Callable
 
@@ -82,6 +83,11 @@ def _print_help() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Restore default SIGPIPE so piping output to ``head`` etc. exits cleanly
+    # instead of raising BrokenPipeError on the next print.
+    if hasattr(signal, "SIGPIPE"):
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in ("-h", "--help", "help"):
         _print_help()
