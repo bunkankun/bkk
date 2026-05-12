@@ -146,7 +146,12 @@ def merge_bundles(
         # below, so we don't bother restoring these pragmas.
         conn.execute("PRAGMA synchronous = OFF")
         conn.execute("PRAGMA journal_mode = MEMORY")
-        conn.execute("PRAGMA temp_store = MEMORY")
+        # FILE (not MEMORY) so the heavy-index CREATE INDEX sort can spill to
+        # disk; corpus-scale trigram tables (billions of rows) blow past RAM.
+        conn.execute("PRAGMA temp_store = FILE")
+        conn.execute(f"PRAGMA temp_store_directory = '{out_path.parent}'")
+        # Bounded page cache so we never OOM regardless of corpus size.
+        conn.execute("PRAGMA cache_size = -2000000")
         conn.executescript(TABLES_DDL)
         conn.executemany(
             "INSERT INTO meta(key, value) VALUES (?, ?)",
