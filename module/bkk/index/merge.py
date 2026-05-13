@@ -121,20 +121,30 @@ def merge_bundles(
     n = len(bundles)
     t0 = time.monotonic()
     sources: list[tuple[str, Path]] = []
+    failures: list[tuple[str, str]] = []
     for i, bundle_dir in enumerate(bundles, 1):
         textid = bundle_dir.name
         bkkx = bundle_dir / f"{textid}.bkkx"
         t_bundle = time.monotonic()
-        if rebuild or is_stale(bundle_dir, bkkx):
-            if no_build:
-                raise FileNotFoundError(
-                    f"per-bundle index missing or stale at {bkkx} "
-                    "(--no-build forbids rebuilding)"
-                )
-            build_index(bundle_dir, bkkx)
-            action = "built"
-        else:
-            action = "cached"
+        stale = rebuild or is_stale(bundle_dir, bkkx)
+        # --no-build is an explicit precondition the caller asserts up front,
+        # not a per-bundle failure to recover from — surface it loudly.
+        if stale and no_build:
+            raise FileNotFoundError(
+                f"per-bundle index missing or stale at {bkkx} "
+                "(--no-build forbids rebuilding)"
+            )
+        try:
+            if stale:
+                build_index(bundle_dir, bkkx)
+                action = "built"
+            else:
+                action = "cached"
+        except Exception as e:
+            failures.append((textid, f"build: {e}"))
+            if progress:
+                _emit_progress(f"[build {i}/{n}] {textid} SKIPPED ({e})")
+            continue
         sources.append((textid, bkkx))
         if progress:
             dt = time.monotonic() - t_bundle
@@ -161,13 +171,20 @@ def merge_bundles(
             ],
         )
         offsets = {"juan": 0, "bucket": 0, "witness": 0, "variant": 0, "voice_range": 0}
+        m = len(sources)
         for i, (textid, bkkx) in enumerate(sources, 1):
             t_bundle = time.monotonic()
-            _merge_one(conn, textid, bkkx, offsets)
+            try:
+                _merge_one(conn, textid, bkkx, offsets)
+            except Exception as e:
+                failures.append((textid, f"merge: {e}"))
+                if progress:
+                    _emit_progress(f"[merge {i}/{m}] {textid} SKIPPED ({e})")
+                continue
             offsets = _refresh_offsets(conn)
             if progress:
                 dt = time.monotonic() - t_bundle
-                _emit_progress(f"[merge {i}/{n}] {textid} ({dt:.2f}s)")
+                _emit_progress(f"[merge {i}/{m}] {textid} ({dt:.2f}s)")
         if progress:
             _emit_progress("building heavy indices…")
         create_heavy_indices(conn)
@@ -176,6 +193,11 @@ def merge_bundles(
         conn.close()
     if progress:
         _emit_progress(f"done in {time.monotonic() - t0:.1f}s → {out_path}")
+    if failures:
+        sys.stderr.write(f"\nskipped {len(failures)} bundle(s):\n")
+        for textid, reason in failures:
+            sys.stderr.write(f"  {textid}: {reason}\n")
+        sys.stderr.flush()
     return out_path
 
 
@@ -264,6 +286,11 @@ def _merge_one(conn: sqlite3.Connection, textid: str, bkkx: Path,
         # Commit so the implicit write transaction releases its lock on the
         # attached source database before we DETACH it.
         conn.commit()
+    except Exception:
+        # Same reasoning as the commit above: release the write txn so DETACH
+        # doesn't trip on "database is locked".
+        conn.rollback()
+        raise
     finally:
         conn.execute("DETACH src")
 

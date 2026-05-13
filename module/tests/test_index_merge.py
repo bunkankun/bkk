@@ -273,6 +273,71 @@ def test_no_build_errors_when_missing(tmp_path):
         merge_bundles(tmp_path, out, no_build=True)
 
 
+def _write_bad_voice_bundle(root: Path, textid: str, body_text: str) -> Path:
+    """Bundle with an out-of-range voice marker — build_index will raise."""
+    bundle_dir = root / textid
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / f"{textid}_001.yaml").write_text(
+        yaml.safe_dump({
+            "canonical_identifier": f"bkk:test/{textid}/v1/juan/1",
+            "seq": 1,
+            "body": {
+                "text": body_text,
+                "hash": "sha256:0",
+                "markers": [{
+                    "type": "voice", "name": "root", "id": "v1",
+                    "offset": 0, "length": len(body_text) + 99,
+                }],
+            },
+            "hash": "sha256:0",
+        }, allow_unicode=True),
+        encoding="utf-8",
+    )
+    (bundle_dir / f"{textid}.manifest.yaml").write_text(
+        yaml.safe_dump({
+            "canonical_identifier": f"bkk:test/{textid}/v1",
+            "editions": [{"short": "X", "label": "x"}],
+            "assets": {"parts": [
+                {"seq": 1, "filename": f"{textid}_001.yaml", "hash": "sha256:0"},
+            ]},
+            "table_of_contents": [
+                {"ref": {"seq": 1, "marker_id": f"{textid}_001-1a",
+                         "span": ["body", 0, len(body_text)]},
+                 "label": f"{textid} juan"},
+            ],
+        }, allow_unicode=True),
+        encoding="utf-8",
+    )
+    return bundle_dir
+
+
+def test_merge_skips_bundle_that_fails_to_build(tmp_path, capsys):
+    """A per-bundle build failure should not abort the whole merge run;
+    the merge proceeds with the remaining bundles and the skipped ones are
+    listed at the end."""
+    _write_bundle(tmp_path, "KR0a0001", "abc")
+    _write_bad_voice_bundle(tmp_path, "KR0a0002", "xyz")
+    _write_bundle(tmp_path, "KR0a0003", "def")
+    out = tmp_path / "corpus.bkkx"
+
+    merge_bundles(tmp_path, out, progress=True)
+
+    err = capsys.readouterr().err
+    assert "[build 2/3] KR0a0002 SKIPPED" in err
+    assert "skipped 1 bundle(s)" in err
+    assert "KR0a0002: build:" in err
+
+    # The two well-formed bundles still made it into the merged corpus.
+    conn = sqlite3.connect(str(out))
+    try:
+        rows = [r[0] for r in conn.execute(
+            "SELECT textid FROM bundle ORDER BY textid"
+        )]
+    finally:
+        conn.close()
+    assert rows == ["KR0a0001", "KR0a0003"]
+
+
 def test_cli_merge_defaults_out_to_corpus_underscore(tmp_path, monkeypatch):
     """`bkk.index merge <corpus>` with no --out writes <corpus>/_corpus.bkkx."""
     _write_bundle(tmp_path, "KR0a0001", "abc")
