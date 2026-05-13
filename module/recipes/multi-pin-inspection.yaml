@@ -1,0 +1,47 @@
+kind: bkk.recipe/v1
+pins:
+  - name: root
+    role: base
+    textid: KR3a0001
+    selection:
+      juan: 1
+  - name: comm
+    role: commentary
+    textid: KR3a0001
+    selection:
+      juan: 1
+      from: KR3a0001_SBCK_001-1a02
+      to: KR3a0001_WYG_001-1b
+
+datasets:
+  root_variants:
+    from: root
+    collect: markers
+    where:
+      type: variant
+    include_text: true
+    context: 4
+  comm_variants:
+    from: comm
+    collect: markers
+    where:
+      type: variant
+    include_text: true
+    context: 4
+
+render:
+  format: markdown
+  template: |
+    # {{ pins.root.label }} — variants report
+
+    Comparing variants in the whole juan against a narrow slice.
+
+    ## Root pin (`{{ pins.root.role }}` — {{ pins.root.textid }}, juan {{ pins.root.selection.juan }})
+    {% for v in datasets.root_variants %}
+    - @{{ v.offset }}+{{ v.length }} `{{ v.left }}【{{ v.text }}】{{ v.right }}` → WYG: `{{ v.get('WYG') or '—' }}`
+    {% endfor %}
+
+    ## Commentary pin (`{{ pins.comm.role }}` — {{ pins.comm.textid }}, {{ pins.comm.selection.from }} → {{ pins.comm.selection.to }})
+    {% for v in datasets.comm_variants %}
+    - @{{ v.offset }}+{{ v.length }} `{{ v.left }}【{{ v.text }}】{{ v.right }}` → WYG: `{{ v.get('WYG') or '—' }}`
+    {% endfor %}
