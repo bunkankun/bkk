@@ -196,6 +196,7 @@ The **name** vocabulary is open. A small recognized set is defined so that cross
 - `commentary` — a layer of comment on a root text.
 - `subcommentary` — a layer of comment on a commentary.
 - `gloss` — a short interlinear annotation (typical layout: between the lines, in smaller characters).
+- `note` — a bracketed span whose specific role (commentary, gloss, alternate reading, citation, …) is left unresolved. Used when the only available signal is a punctuation fence such as `(`…`)` and the deriver can't claim anything stronger.
 
 Projects extend by prefixing — `kr:apparatus`, `tls:swl`, and so on — consistent with the rest of the marker vocabulary.
 

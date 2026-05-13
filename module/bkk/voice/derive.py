@@ -1,11 +1,20 @@
 """Derive ``voice`` markers from ``(`` / ``)`` punctuation pairs.
 
-In KRP source layouts, double-column small-character commentary is fenced
-by ``(`` … ``)`` (with ``/`` as a column-break inside). The KRP importer
+In KRP source layouts, double-column small-character text is fenced by
+``(`` … ``)`` (with ``/`` as a column-break inside). The KRP importer
 extracts those as ``punctuation`` point markers so the source round-trips,
-but the voice semantics — what is root, what is commentary — never make
-it onto the canonical text stream. This module recovers them as
-range-typed ``voice`` markers (see bunkankun.md §"Voices").
+but the voice semantics — what kind of layer the fenced text belongs to —
+never make it onto the canonical text stream.
+
+Paren-bounded text serves many purposes in the corpus: commentator gloss,
+editorial note, alternate reading, source citation, phonological annotation.
+A deriver that sees only the punctuation can't disambiguate these. This
+module therefore makes the minimal, defensible claim: it emits one
+``voice`` marker per paren span with ``name="note"``, and leaves the
+non-paren text unvoiced. Anything stronger (e.g. classifying the note as
+``commentary`` and the surrounding text as ``root``) belongs to the
+indent deriver — which has the layout signal — or to a downstream pass
+that consults external context.
 """
 
 from __future__ import annotations
@@ -18,12 +27,15 @@ def derive_voice_markers(
 
     ``markers`` is the bucket's existing marker list (plain dicts as
     loaded from YAML); it is not mutated. ``/`` punctuation markers are
-    column-break layout inside a commentary and are ignored.
+    column-break layout inside a paren span and are ignored.
+
+    Each ``(...)`` pair produces a single ``voice`` marker with
+    ``name="note"`` covering the offsets from the opener through the
+    closer (inclusive of both). Ids are assigned per-bucket as ``n1``,
+    ``n2``, ….
 
     Returns an empty list when the bucket carries no ``(`` punctuation
-    marker — voicing implies at least one commentary span, and an
-    all-root bucket is left unmarked rather than wrapped in a single
-    cover marker.
+    marker.
 
     Raises :class:`ValueError` if the ``(``/``)`` pairing is malformed.
     """
@@ -71,45 +83,12 @@ def derive_voice_markers(
         i += 2
 
     out: list[dict] = []
-    cursor = 0
-    n_root = 0
-    n_cmt = 0
-    prev_root_id: str | None = None
-    for o_open, o_close in spans:
-        if o_open > cursor:
-            n_root += 1
-            rid = f"r{n_root}"
-            out.append({
-                "type": "voice",
-                "offset": cursor,
-                "length": o_open - cursor,
-                "name": "root",
-                "id": rid,
-            })
-            prev_root_id = rid
-        n_cmt += 1
-        cid = f"c{n_cmt}"
-        cmt: dict = {
+    for i, (o_open, o_close) in enumerate(spans, 1):
+        out.append({
             "type": "voice",
             "offset": o_open,
             "length": o_close - o_open,
-            "name": "commentary",
-            "id": cid,
-        }
-        if prev_root_id is not None:
-            cmt["responds-to"] = prev_root_id
-        out.append(cmt)
-        cursor = o_close
-
-    if cursor < text_len:
-        n_root += 1
-        rid = f"r{n_root}"
-        out.append({
-            "type": "voice",
-            "offset": cursor,
-            "length": text_len - cursor,
-            "name": "root",
-            "id": rid,
+            "name": "note",
+            "id": f"n{i}",
         })
-
     return out

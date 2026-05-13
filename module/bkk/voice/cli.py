@@ -1,10 +1,11 @@
 """Command-line entry point for ``bkk voice``.
 
-Currently exposes one operation: ``add <bundle-dir-or-text-id>``, which
-walks every juan file in the bundle (master plus each documentary
-edition), derives ``voice`` range markers from the markers already on
-disk, writes them back into each juan's marker collection, and refreshes
-the juan and manifest hashes.
+Exposes two operations:
+
+``add <bundle-dir-or-text-id>`` walks every juan file in the bundle
+(master plus each documentary edition), derives ``voice`` range markers
+from the markers already on disk, writes them back into each juan's
+marker collection, and refreshes the juan and manifest hashes.
 
     python -m bkk voice add <out-root>/<text-id>/
     python -m bkk voice add <text-id>     # resolved via .bkkrc
@@ -15,19 +16,28 @@ Bare-id form resolves the bundle root against (in order)
 ``--source`` selects the derivation:
 
 - ``parens`` (default) — from ``(`` / ``)`` punctuation marker pairs,
-  used for KRP-style inline commentary fences.
-- ``indent`` — from ``line-break``/``indent`` markers, used for sources
-  whose layout indents commentary, head, and attribution differently.
-- ``all`` — both derivers, merged. The indent deriver's ids get
-  upper-case prefixes (``R``/``C``/``H``/``A``…) so they don't collide
-  with the paren deriver's ``r``/``c`` ids; overlapping spans are
-  written through with a per-juan stderr warning.
+  emits ``note`` voice spans for paren-bounded text. The deriver makes
+  no claim about whether the paren span is commentary, gloss, or
+  alternate reading — only that it's bracketed.
+- ``indent`` — from ``line-break``/``indent`` markers, emits
+  ``root``/``commentary``/``head``/``attribution`` for sources whose
+  layout indents each textual layer differently.
+- ``all`` — both derivers, concatenated. The two derivers use disjoint
+  voice names (paren → ``note``; indent → ``root``/``commentary``/…),
+  so same-name overlaps are impossible by construction; heterogeneous
+  overlaps are written through with a per-juan stderr warning.
 
 ``--force`` strips any pre-existing ``voice`` markers and rederives;
 without it the command refuses to touch a bundle that already carries
 voice markers, so reruns are safe.
 
 ``--dry-run`` reports per-juan counts without writing.
+
+``remove <bundle-dir-or-text-id>`` strips every ``voice`` marker from
+each juan in the bundle (master and every edition) and refreshes the
+affected juan and manifest hashes. It does not derive. Idempotent:
+juans with no voice markers are left untouched. Useful for undoing a
+bad ``add`` run before re-deriving with different options.
 """
 
 from __future__ import annotations
@@ -88,6 +98,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", dest="dry_run", action="store_true",
         help="report what would be written without modifying files",
     )
+
+    pr = sub.add_parser(
+        "remove",
+        help="strip every voice marker from each juan (master + every "
+             "edition) and refresh juan and manifest hashes; does not derive",
+    )
+    pr.add_argument(
+        "bundle", type=str,
+        help="bundle directory, or a bare text-id resolved against "
+             "voice.out / import.out / global.corpus from .bkkrc",
+    )
+    pr.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help="bundle output root used to resolve a bare text-id "
+             "(overrides voice.out / import.out / global.corpus)",
+    )
+    pr.add_argument(
+        "--dry-run", dest="dry_run", action="store_true",
+        help="report what would be removed without modifying files",
+    )
     return p
 
 
@@ -96,25 +126,30 @@ def run(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     out_root = args.out_root
-    source = args.source
-    if out_root is None or source is None:
+    if out_root is None:
         from bkk.config import load_rc
         rc = load_rc()
-        if out_root is None:
-            out_root = (
-                rc.get("voice", {}).get("out")
-                or rc.get("import", {}).get("out")
-                or rc.get("global", {}).get("corpus")
+        out_root = (
+            rc.get("voice", {}).get("out")
+            or rc.get("import", {}).get("out")
+            or rc.get("global", {}).get("corpus")
+        )
+
+    if args.op == "remove":
+        return _run_remove(args.bundle, out_root, dry_run=args.dry_run)
+
+    source = args.source
+    if source is None:
+        from bkk.config import load_rc
+        rc = load_rc()
+        source = rc.get("voice", {}).get("source") or "parens"
+        if source not in _VALID_SOURCES:
+            print(
+                f"error: .bkkrc voice.source={source!r} not in "
+                f"{list(_VALID_SOURCES)}",
+                file=sys.stderr,
             )
-        if source is None:
-            source = rc.get("voice", {}).get("source") or "parens"
-            if source not in _VALID_SOURCES:
-                print(
-                    f"error: .bkkrc voice.source={source!r} not in "
-                    f"{list(_VALID_SOURCES)}",
-                    file=sys.stderr,
-                )
-                return 2
+            return 2
 
     return _run_add(
         args.bundle, out_root, source=source,
@@ -166,8 +201,7 @@ def _run_add(bundle: str, out_root, *, source: str, force: bool, dry_run: bool) 
                 targets.append((sub, mf, sub.name))
 
     overall_juans = 0
-    overall_root = 0
-    overall_cmt = 0
+    overall_by_name: dict[str, int] = {}
     failed: list[str] = []
     for juan_dir, manifest_path, short in targets:
         scope = "master" if short is None else f"edition {short}"
@@ -183,16 +217,14 @@ def _run_add(bundle: str, out_root, *, source: str, force: bool, dry_run: bool) 
             failed.append(scope)
             continue
         overall_juans += stats["juans"]
-        overall_root += stats["root"]
-        overall_cmt += stats["commentary"]
+        for name, count in stats["by_name"].items():
+            overall_by_name[name] = overall_by_name.get(name, 0) + count
         for line in stats["lines"]:
             print(line)
 
     verb = "would derive" if dry_run else "derived"
-    print(
-        f"{verb} {overall_cmt} commentary + {overall_root} root voice "
-        f"marker(s) across {overall_juans} juan file(s)"
-    )
+    summary = _format_voice_counts(overall_by_name) or "0 voice marker(s)"
+    print(f"{verb} {summary} across {overall_juans} juan file(s)")
     if failed:
         print(f"skipped {len(failed)} scope(s) due to errors: {', '.join(failed)}", file=sys.stderr)
         return 1
@@ -229,8 +261,7 @@ def _process_one(
         raise RuntimeError(f"no juan files found under {juan_dir}")
 
     lines: list[str] = []
-    total_root = 0
-    total_cmt = 0
+    total_by_name: dict[str, int] = {}
     # First pass: derive everything in memory. If any juan/bucket fails, we
     # abort the scope without having written a single file.
     pending: list[tuple[Path, dict, str]] = []  # (path, juan_data, new_hash)
@@ -247,8 +278,7 @@ def _process_one(
                 "(pass --force to replace)"
             )
 
-        n_root = 0
-        n_cmt = 0
+        juan_by_name: dict[str, int] = {}
         for bucket_name in _BUCKETS:
             bucket = data.get(bucket_name)
             if not isinstance(bucket, dict):
@@ -275,10 +305,8 @@ def _process_one(
                     bucket["markers"] = [marker_to_flow(m) for m in markers]
                 continue
             for v in new_voices:
-                if v["name"] == "root":
-                    n_root += 1
-                else:
-                    n_cmt += 1
+                name = v["name"]
+                juan_by_name[name] = juan_by_name.get(name, 0) + 1
             # Append voice markers then re-sort by (offset, original index)
             # — same rule the writer uses in importer.write.bundle.
             combined = list(markers) + new_voices
@@ -286,15 +314,14 @@ def _process_one(
             indexed.sort(key=lambda p: (p[1]["offset"], p[0]))
             bucket["markers"] = [marker_to_flow(m) for _, m in indexed]
 
-        if n_root == 0 and n_cmt == 0:
-            lines.append(f"  juan {seq:03d}: no commentary brackets; left as-is")
+        if not juan_by_name:
+            lines.append(f"  juan {seq:03d}: no voice signal; left as-is")
             continue
 
-        total_root += n_root
-        total_cmt += n_cmt
+        for name, count in juan_by_name.items():
+            total_by_name[name] = total_by_name.get(name, 0) + count
         lines.append(
-            f"  juan {seq:03d}: {n_cmt} commentary span(s), "
-            f"{n_root} root span(s)"
+            f"  juan {seq:03d}: {_format_voice_counts(juan_by_name)}"
         )
 
         new_hash = _juan_self_hash(data)
@@ -314,10 +341,164 @@ def _process_one(
 
     return {
         "juans": len(juan_entries),
-        "root": total_root,
-        "commentary": total_cmt,
+        "by_name": total_by_name,
         "lines": lines,
     }
+
+
+def _run_remove(bundle: str, out_root, *, dry_run: bool) -> int:
+    try:
+        bundle_dir = _resolve_bundle_dir(bundle, out_root)
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    text_id = bundle_dir.name
+
+    targets: list[tuple[Path, Path, str | None]] = []
+    master_manifest = bundle_dir / f"{text_id}.manifest.yaml"
+    if not master_manifest.exists():
+        print(f"error: master manifest not found: {master_manifest}", file=sys.stderr)
+        return 2
+    targets.append((bundle_dir, master_manifest, None))
+
+    editions_root = bundle_dir / "editions"
+    if editions_root.is_dir():
+        for sub in sorted(editions_root.iterdir()):
+            if not sub.is_dir():
+                continue
+            mf = sub / f"{text_id}-{sub.name}.manifest.yaml"
+            if mf.exists():
+                targets.append((sub, mf, sub.name))
+
+    overall_juans = 0
+    overall_removed = 0
+    failed: list[str] = []
+    for juan_dir, manifest_path, short in targets:
+        scope = "master" if short is None else f"edition {short}"
+        print(f"[{scope}]")
+        try:
+            stats = _process_one_remove(
+                juan_dir, manifest_path, text_id, short, dry_run=dry_run,
+            )
+        except (RuntimeError, ValueError) as exc:
+            print(f"  error: {exc}", file=sys.stderr)
+            print(f"  {scope} skipped; no files written for this scope")
+            failed.append(scope)
+            continue
+        overall_juans += stats["juans"]
+        overall_removed += stats["removed"]
+        for line in stats["lines"]:
+            print(line)
+
+    verb = "would remove" if dry_run else "removed"
+    print(
+        f"{verb} {overall_removed} voice marker(s) "
+        f"across {overall_juans} juan file(s)"
+    )
+    if failed:
+        print(
+            f"skipped {len(failed)} scope(s) due to errors: "
+            f"{', '.join(failed)}",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def _process_one_remove(
+    juan_dir: Path, manifest_path: Path, text_id: str, short: str | None,
+    *, dry_run: bool,
+) -> dict:
+    """Strip every voice marker from juan files under ``juan_dir`` and
+    refresh ``manifest_path``. Returns a stats dict
+    ``{"juans": N, "removed": K, "lines": [...]}``.
+
+    ``short=None`` selects the master scope; otherwise matches only the
+    juans tagged with that edition's short id.
+    """
+    juan_entries: list[tuple[int, Path]] = []
+    for entry in sorted(juan_dir.iterdir()):
+        if not entry.is_file():
+            continue
+        name = entry.name
+        if name.endswith(".manifest.yaml") or name.endswith(".ann.yaml"):
+            continue
+        m = _JUAN_RE.match(name)
+        if not m or m.group("text_id") != text_id:
+            continue
+        if m.group("short") != short:
+            continue
+        juan_entries.append((int(m.group("seq")), entry))
+    juan_entries.sort(key=lambda t: t[0])
+
+    if not juan_entries:
+        raise RuntimeError(f"no juan files found under {juan_dir}")
+
+    lines: list[str] = []
+    total_removed = 0
+    pending: list[tuple[Path, dict, str]] = []
+
+    for seq, juan_path in juan_entries:
+        data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
+
+        juan_removed = 0
+        for bucket_name in _BUCKETS:
+            bucket = data.get(bucket_name)
+            if not isinstance(bucket, dict):
+                continue
+            markers = bucket.get("markers")
+            if not isinstance(markers, list):
+                continue
+            kept: list = []
+            for m in markers:
+                if isinstance(m, dict) and m.get("type") == "voice":
+                    juan_removed += 1
+                    continue
+                kept.append(m)
+            if len(kept) != len(markers):
+                bucket["markers"] = [marker_to_flow(m) for m in kept]
+
+        if juan_removed == 0:
+            lines.append(f"  juan {seq:03d}: no voice markers to remove")
+            continue
+
+        total_removed += juan_removed
+        lines.append(
+            f"  juan {seq:03d}: removed {juan_removed} voice marker(s)"
+        )
+
+        new_hash = _juan_self_hash(data)
+        data["hash"] = new_hash
+        pending.append((juan_path, data, new_hash))
+
+    if not dry_run and pending:
+        for juan_path, data, _ in pending:
+            juan_path.write_text(dump(data), encoding="utf-8")
+        new_hashes = {
+            int(_JUAN_RE.match(p.name).group("seq")): h
+            for p, _, h in pending
+        }
+        _update_manifest(manifest_path, new_hashes)
+
+    return {
+        "juans": len(juan_entries),
+        "removed": total_removed,
+        "lines": lines,
+    }
+
+
+def _format_voice_counts(by_name: dict[str, int]) -> str:
+    """Render a per-name voice tally as ``"5 note + 3 root span(s)"``,
+    sorted by descending count then by name for tie-stability.
+    """
+    if not by_name:
+        return ""
+    items = sorted(by_name.items(), key=lambda p: (-p[1], p[0]))
+    inner = " + ".join(f"{count} {name}" for name, count in items)
+    return f"{inner} span(s)"
 
 
 def _derive_for_bucket(
@@ -325,25 +506,20 @@ def _derive_for_bucket(
 ) -> list[dict]:
     """Dispatch to the requested deriver(s) and return their merged output.
 
-    For ``--source all`` the indent deriver's per-name id counters are
-    given upper-case prefixes (``R``/``C``/``H``/``A``…) so they don't
-    collide with the paren deriver's ``r``/``c`` ids in the same bucket.
+    For ``--source all`` the two derivers' outputs are simply concatenated.
+    Their voice-name spaces are disjoint (paren → ``note``; indent →
+    ``root``/``commentary``/``head``/``attribution``), so same-name
+    overlaps are impossible by construction and their id prefixes
+    (``n`` vs ``r``/``c``/``h``/``a``) don't collide either.
     """
     if source == "parens":
         return derive_voice_markers(text_len, markers)
     if source == "indent":
         return derive_voice_markers_from_indent(text_len, markers)
     if source == "all":
-        parens_voices = derive_voice_markers(text_len, markers)
-        indent_voices = derive_voice_markers_from_indent(text_len, markers)
-        for v in indent_voices:
-            mid = v.get("id")
-            if isinstance(mid, str) and mid and mid[0].islower():
-                v["id"] = mid[0].upper() + mid[1:]
-            rt = v.get("responds-to")
-            if isinstance(rt, str) and rt and rt[0].islower():
-                v["responds-to"] = rt[0].upper() + rt[1:]
-        return list(parens_voices) + list(indent_voices)
+        return list(derive_voice_markers(text_len, markers)) + list(
+            derive_voice_markers_from_indent(text_len, markers)
+        )
     raise ValueError(f"unknown voice source: {source!r}")
 
 
