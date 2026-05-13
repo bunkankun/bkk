@@ -12,7 +12,7 @@ function formatCp(cp: number): string {
 const MODES: { id: ReadMode; label: string; enabled: boolean; tip: string }[] = [
   { id: "read", label: "Read", enabled: true, tip: "Read mode" },
   { id: "trans", label: "Trans", enabled: false, tip: "Translation mode (v2)" },
-  { id: "inspect", label: "Inspect", enabled: false, tip: "Inspection mode (v2)" },
+  { id: "inspect", label: "Inspect", enabled: true, tip: "Inspect mode (image + text)" },
 ];
 
 const LINE_MODES: { id: LineMode; label: string; tip: string }[] = [

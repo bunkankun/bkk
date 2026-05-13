@@ -39,6 +39,9 @@ interface RenderedChar {
   srcOffset: number | null;
   isPunct: boolean;
   isNewline: boolean;
+  // Zero-width anchor injected at a page-break marker's offset; observed by
+  // the page-anchor IntersectionObserver to drive Inspect-mode's ImagePanel.
+  pageAnchor?: { id: string; offset: number };
 }
 
 interface Block {
@@ -52,14 +55,22 @@ interface Block {
 const FALLBACK_LINE_HEIGHT = 38;
 const FALLBACK_CHARS_PER_LINE = 24;
 
-function estimateBlockHeight(charCount: number): number {
-  const lines = Math.max(1, Math.ceil(charCount / FALLBACK_CHARS_PER_LINE));
+function estimateBlockHeight(chars: RenderedChar[]): number {
+  let visible = 0;
+  for (const c of chars) {
+    if (c.pageAnchor) continue;
+    visible++;
+  }
+  if (visible === 0) return 0;
+  const lines = Math.max(1, Math.ceil(visible / FALLBACK_CHARS_PER_LINE));
   return lines * FALLBACK_LINE_HEIGHT;
 }
 
 // Build the rendered char stream: decode PUA refs, then inject punctuation
 // markers at their master_offset (skipping injection where the master text
-// already has punctuation at that position).
+// already has punctuation at that position). Page-break markers are also
+// injected here as zero-width anchor entries so the Inspect-mode observer
+// can track which page the user is currently reading.
 function buildRenderedChars(
   bodyText: string,
   markers: JuanMarker[],
@@ -67,27 +78,50 @@ function buildRenderedChars(
   const decoded = decodeKrRefs(bodyText);
   const chars = [...decoded];
 
-  type Inject = { offset: number; content: string };
-  const injects: Inject[] = [];
+  type PunctInject = { offset: number; content: string };
+  type PageInject = { offset: number; id: string };
+  const punctInjects: PunctInject[] = [];
+  const pageInjects: PageInject[] = [];
   for (const m of markers) {
-    if (m.type !== "punctuation") continue;
     const off = typeof m.offset === "number" ? m.offset : 0;
-    const raw = m.content;
-    if (typeof raw !== "string" || raw.length === 0) continue;
-    const here = chars[off];
-    if (here && PUNCT_RE.test(here)) continue;
-    injects.push({ offset: off, content: raw });
+    if (m.type === "punctuation") {
+      const raw = m.content;
+      if (typeof raw !== "string" || raw.length === 0) continue;
+      const here = chars[off];
+      if (here && PUNCT_RE.test(here)) continue;
+      punctInjects.push({ offset: off, content: raw });
+    } else if (m.type === "page-break") {
+      const id = typeof m.id === "string" ? m.id : "";
+      if (!id) continue;
+      pageInjects.push({ offset: off, id });
+    }
   }
-  injects.sort((a, b) => a.offset - b.offset);
+  punctInjects.sort((a, b) => a.offset - b.offset);
+  pageInjects.sort((a, b) => a.offset - b.offset);
 
   const out: RenderedChar[] = [];
-  let injectIdx = 0;
+  let punctIdx = 0;
+  let pageIdx = 0;
   for (let i = 0; i <= chars.length; i++) {
-    while (injectIdx < injects.length && injects[injectIdx].offset === i) {
-      for (const ch of [...injects[injectIdx].content]) {
+    // Page anchors first so they appear at the top of any cluster of
+    // injections — natural reading order makes "current page" track the
+    // newly-entered page before its punctuation/text.
+    while (pageIdx < pageInjects.length && pageInjects[pageIdx].offset === i) {
+      const p = pageInjects[pageIdx];
+      out.push({
+        ch: "",
+        srcOffset: null,
+        isPunct: false,
+        isNewline: false,
+        pageAnchor: { id: p.id, offset: p.offset },
+      });
+      pageIdx++;
+    }
+    while (punctIdx < punctInjects.length && punctInjects[punctIdx].offset === i) {
+      for (const ch of [...punctInjects[punctIdx].content]) {
         out.push({ ch, srcOffset: null, isPunct: true, isNewline: false });
       }
-      injectIdx++;
+      punctIdx++;
     }
     if (i === chars.length) break;
     const ch = chars[i];
@@ -132,7 +166,7 @@ function buildBlocks(
       startOffset: curStart,
       endOffset: curEnd,
       chars: cur,
-      estimatedHeight: estimateBlockHeight(cur.length),
+      estimatedHeight: estimateBlockHeight(cur),
     });
     cur = [];
   };
@@ -208,6 +242,19 @@ export function TextViewer({ textid, seq }: Props) {
         setJuan(j);
         setAnnotations(a);
         setManifest(m);
+        // Seed currentPage to the juan's first page-break so the image panel
+        // has something to show before the user scrolls.
+        const first = ((j.body?.markers ?? []) as JuanMarker[]).find(
+          (mk) => mk.type === "page-break" && typeof mk.id === "string",
+        );
+        if (first && typeof first.id === "string") {
+          workspace.setCurrentPage({
+            textid,
+            seq,
+            markerId: first.id,
+            offset: typeof first.offset === "number" ? first.offset : 0,
+          });
+        }
       })
       .catch((e) => {
         if (cancelled) return;
@@ -268,6 +315,7 @@ export function TextViewer({ textid, seq }: Props) {
   useEffect(() => {
     setVisibleBlocks(new Set([0]));
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    workspace.setCurrentPage(null);
   }, [textid, seq, lineMode]);
 
   // Mount IntersectionObserver after blocks render.
@@ -303,6 +351,47 @@ export function TextViewer({ textid, seq }: Props) {
     placeholders.forEach((el) => obs.observe(el));
     return () => obs.disconnect();
   }, [blocks]);
+
+  // Page-anchor observer: tracks the topmost page-break anchor in the upper
+  // ~15% of the scroll viewport and reports it as currentPage. Distinct from
+  // the block observer above (which uses a generous rootMargin for lazy
+  // mounting) — entangling the two would force a single rootMargin policy.
+  useEffect(() => {
+    const root = scrollRef.current;
+    const container = containerRef.current;
+    if (!root || !container) return;
+    const visible = new Map<Element, { id: string; offset: number }>();
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const el = e.target as HTMLElement;
+          if (e.isIntersecting) {
+            const id = el.dataset.pageId;
+            const off = Number(el.dataset.pageOffset);
+            if (!id || Number.isNaN(off)) continue;
+            visible.set(el, { id, offset: off });
+          } else {
+            visible.delete(el);
+          }
+        }
+        let best: { id: string; offset: number } | null = null;
+        for (const v of visible.values()) {
+          if (best == null || v.offset < best.offset) best = v;
+        }
+        if (best == null) return;
+        workspace.setCurrentPage({
+          textid,
+          seq,
+          markerId: best.id,
+          offset: best.offset,
+        });
+      },
+      { root, rootMargin: "0px 0px -85% 0px" },
+    );
+    const anchors = container.querySelectorAll<HTMLElement>(".page-anchor");
+    anchors.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, [blocks, visibleBlocks, textid, seq]);
 
   // Consume pendingHighlight from a search-result click: ensure the block
   // containing the target offset is mounted, then scroll + flash on next paint.
@@ -516,6 +605,17 @@ function BlockView({
       data-block-end={block.endOffset}
     >
       {block.chars.map((rc, i) => {
+        if (rc.pageAnchor) {
+          return (
+            <span
+              key={i}
+              className="page-anchor"
+              data-page-id={rc.pageAnchor.id}
+              data-page-offset={rc.pageAnchor.offset}
+              aria-hidden="true"
+            />
+          );
+        }
         if (rc.isNewline) return <br key={i} />;
         if (rc.isPunct) {
           // Injected punctuation has no srcOffset; existing punct still has one

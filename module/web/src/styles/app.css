@@ -517,6 +517,105 @@ button {
   font-style: italic;
 }
 
+/* inspect mode: side-by-side TextViewer + ImagePanel inside one workspace pane */
+.ws-split {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+.ws-split-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ws-split-right {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-pan);
+  border-left: 1px solid var(--bdr);
+}
+
+/* page-break anchors: invisible but observable */
+.page-anchor {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* image panel ------------------------------------------------- */
+.image-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.image-panel-toolbar {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--bdr);
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--t2);
+  flex-shrink: 0;
+}
+.image-panel-toolbar .ipb {
+  background: transparent;
+  border: 1px solid var(--bdr);
+  color: var(--t2);
+  width: 24px;
+  height: 22px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: var(--fm);
+}
+.image-panel-toolbar .ipb:hover:not(:disabled) {
+  background: var(--bg-tab);
+  color: var(--t1);
+}
+.image-panel-toolbar .ipb:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.image-panel-label {
+  font-family: var(--fm);
+  color: var(--t1);
+  flex-shrink: 0;
+}
+.image-panel-spacer {
+  flex: 1;
+}
+.image-panel-counter {
+  color: var(--t3);
+}
+.image-panel-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a10;
+  position: relative;
+}
+.image-panel-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.image-panel-status {
+  color: var(--t3);
+  font-size: 12px;
+  font-style: italic;
+  position: absolute;
+}
+
 /* char info bar */
 .cib {
   border-top: 1px solid var(--bdr);

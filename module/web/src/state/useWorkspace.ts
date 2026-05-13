@@ -29,6 +29,13 @@ export interface PendingHighlight {
   length: number;
 }
 
+export interface CurrentPage {
+  textid: string;
+  seq: number;
+  markerId: string;
+  offset: number;
+}
+
 export interface SelectionRange {
   textid: string;
   seq: number;
@@ -74,20 +81,28 @@ export interface WorkspaceState {
   search: SearchState;
   // a search-result span the TextViewer should scroll to + flash, then clear.
   pendingHighlight: PendingHighlight | null;
+  // the page-break the user is currently viewing in Inspect mode; drives the
+  // ImagePanel. Updated by TextViewer's page-anchor IntersectionObserver
+  // and by ImagePanel's prev/next toolbar.
+  currentPage: CurrentPage | null;
   // user-tunable read-mode display preferences (persisted in localStorage).
   readPrefs: { lineMode: LineMode };
   // user-tunable panel widths, persisted in localStorage. The handle
   // between activity-bar and left panel adjusts `left`; the one between
-  // workspace and right panel adjusts `right`.
-  panelWidths: { left: number; right: number };
+  // workspace and right panel adjusts `right`; the inspect-mode splitter
+  // between TextViewer and ImagePanel adjusts `inspect`.
+  panelWidths: { left: number; right: number; inspect: number };
 }
 
 const READ_PREFS_KEY = "bkk.readPrefs";
 const PANEL_WIDTHS_KEY = "bkk.panelWidths";
 const DEFAULT_LEFT_WIDTH = 240;
 const DEFAULT_RIGHT_WIDTH = 360;
+const DEFAULT_INSPECT_WIDTH = 480;
 export const PANEL_MIN_WIDTH = 180;
 export const PANEL_MAX_WIDTH = 600;
+const INSPECT_MIN_WIDTH = 220;
+const INSPECT_MAX_WIDTH = 1200;
 
 function loadReadPrefs(): { lineMode: LineMode } {
   if (typeof window === "undefined") return { lineMode: "paragraph" };
@@ -111,29 +126,41 @@ function saveReadPrefs(prefs: { lineMode: LineMode }): void {
   }
 }
 
-function clampWidth(n: unknown, fallback: number): number {
+type PanelSide = "left" | "right" | "inspect";
+
+function clampWidth(n: unknown, fallback: number, side: PanelSide): number {
   if (typeof n !== "number" || !Number.isFinite(n)) return fallback;
-  return Math.max(PANEL_MIN_WIDTH, Math.min(PANEL_MAX_WIDTH, Math.round(n)));
+  const min = side === "inspect" ? INSPECT_MIN_WIDTH : PANEL_MIN_WIDTH;
+  const max = side === "inspect" ? INSPECT_MAX_WIDTH : PANEL_MAX_WIDTH;
+  return Math.max(min, Math.min(max, Math.round(n)));
 }
 
-function loadPanelWidths(): { left: number; right: number } {
-  if (typeof window === "undefined") {
-    return { left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH };
-  }
+function loadPanelWidths(): { left: number; right: number; inspect: number } {
+  const fallback = {
+    left: DEFAULT_LEFT_WIDTH,
+    right: DEFAULT_RIGHT_WIDTH,
+    inspect: DEFAULT_INSPECT_WIDTH,
+  };
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(PANEL_WIDTHS_KEY);
-    if (!raw) return { left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH };
+    if (!raw) return fallback;
     const parsed = JSON.parse(raw);
     return {
-      left: clampWidth(parsed?.left, DEFAULT_LEFT_WIDTH),
-      right: clampWidth(parsed?.right, DEFAULT_RIGHT_WIDTH),
+      left: clampWidth(parsed?.left, DEFAULT_LEFT_WIDTH, "left"),
+      right: clampWidth(parsed?.right, DEFAULT_RIGHT_WIDTH, "right"),
+      inspect: clampWidth(parsed?.inspect, DEFAULT_INSPECT_WIDTH, "inspect"),
     };
   } catch {
-    return { left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH };
+    return fallback;
   }
 }
 
-function savePanelWidths(widths: { left: number; right: number }): void {
+function savePanelWidths(widths: {
+  left: number;
+  right: number;
+  inspect: number;
+}): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(PANEL_WIDTHS_KEY, JSON.stringify(widths));
@@ -179,6 +206,7 @@ let state: WorkspaceState = {
     response: null,
   },
   pendingHighlight: null,
+  currentPage: null,
   readPrefs: loadReadPrefs(),
   panelWidths: loadPanelWidths(),
 };
@@ -273,6 +301,22 @@ export const workspace = {
     state = { ...state, selection: sel };
     notify();
   },
+  setCurrentPage(p: CurrentPage | null) {
+    const cur = state.currentPage;
+    if (
+      (p == null && cur == null) ||
+      (p != null &&
+        cur != null &&
+        p.textid === cur.textid &&
+        p.seq === cur.seq &&
+        p.markerId === cur.markerId &&
+        p.offset === cur.offset)
+    ) {
+      return;
+    }
+    state = { ...state, currentPage: p };
+    notify();
+  },
   selectBundle(textid: string) {
     // Reset juan + selection when changing bundle.
     const pane: PaneLeaf = {
@@ -286,6 +330,7 @@ export const workspace = {
       activeTextid: textid,
       activeSeq: null,
       selection: null,
+      currentPage: null,
       activity: "texts",
       pane,
     };
@@ -316,6 +361,7 @@ export const workspace = {
       activeTextid: textid,
       activeSeq: seq,
       selection: null,
+      currentPage: null,
       pane,
     };
     notify();
@@ -372,6 +418,7 @@ export const workspace = {
       activeTextid: hit.textid,
       activeSeq: hit.juan_seq,
       selection: null,
+      currentPage: null,
       pane,
       pendingHighlight: {
         textid: hit.textid,
@@ -393,8 +440,8 @@ export const workspace = {
     saveReadPrefs(readPrefs);
     notify();
   },
-  setPanelWidth(side: "left" | "right", width: number) {
-    const next = clampWidth(width, state.panelWidths[side]);
+  setPanelWidth(side: PanelSide, width: number) {
+    const next = clampWidth(width, state.panelWidths[side], side);
     if (next === state.panelWidths[side]) return;
     const panelWidths = { ...state.panelWidths, [side]: next };
     state = { ...state, panelWidths };

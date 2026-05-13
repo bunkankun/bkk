@@ -89,9 +89,18 @@ export interface ManifestEdition {
   [k: string]: unknown;
 }
 
+export interface ManifestIiifEntry {
+  info_url_pattern?: string;
+  manifest_url?: string;
+  canvas_pattern?: string;
+}
+
 export interface ManifestMetadata {
   title?: string;
   edition?: ManifestEdition;
+  base_edition?: string;
+  image_base_urls?: { [editionShort: string]: string };
+  iiif?: { [editionShort: string]: ManifestIiifEntry };
   [k: string]: unknown;
 }
 
