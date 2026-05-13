@@ -1,0 +1,29 @@
+kind: bkk.recipe/v1
+pins:
+  - name: text
+    role: base
+    textid: KR3a0001
+
+datasets:
+  voices:
+    from: text
+    collect: markers
+    where:
+      type: voice
+    include_text: true
+    context: 12
+
+render:
+  format: markdown
+  template: |
+    # Voices in {{ pins.text.label }}
+
+    {% for v in datasets.voices %}
+    ## {{ v.name }} {{ v.id }}
+
+    - location: {{ v.textid }} {{ "%03d"|format(v.juan_seq) }}/{{ v.bucket }} @{{ v.offset }}+{{ v.length }}
+    - responds to: {{ v.responds_to or "—" }}
+
+    `{{ v.left }}【{{ v.text }}】{{ v.right }}`
+
+    {% endfor %}

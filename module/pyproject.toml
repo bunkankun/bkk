@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "BKK (Bunkankun) — bundle format, importer, exporter, index, validator, and HTTP server for premodern Chinese texts"
 requires-python = ">=3.10"
 dependencies = [
+    "Jinja2>=3.1",
     "lxml>=4.9",
     "PyYAML>=6.0",
     "requests>=2.28",

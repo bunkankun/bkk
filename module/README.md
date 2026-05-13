@@ -62,6 +62,7 @@ serve:
 | `index.corpus` | overrides `global.corpus` for `bkk index merge` |
 | `validate.tls_source` | overrides `global.tls_root` for `bkk validate --tls-source` |
 | `serve.*` | all `bkk serve` flags; also read from `BKK_*` env vars (env beats rc) |
+| `recipe.corpus` | corpus root for `bkk recipe render` |
 
 See `.bkkrc.sample` for the full list of supported keys with inline comments.
 

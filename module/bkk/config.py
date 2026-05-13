@@ -12,7 +12,10 @@ from pathlib import Path
 
 import yaml
 
-_VALID_SECTIONS = {"global", "import", "export", "index", "validate", "serve", "repair", "voice"}
+_VALID_SECTIONS = {
+    "global", "import", "export", "index", "validate", "serve", "repair",
+    "voice", "recipe",
+}
 
 _PATH_KEYS = frozenset(
     {"corpus", "tls_root", "krp_root", "in", "out", "output_dir",

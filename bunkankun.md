@@ -362,13 +362,55 @@ A recipe does **not** define an alignment language between its pins. If a transl
 
 This keeps the recipe format minimal and pushes alignment into the asset best placed to carry it. The same recipe can therefore be re-rendered with different alignment-aware tooling without any change to the recipe itself.
 
-#### What a recipe is silent about
+#### Composition recipes and render recipes
 
-A recipe carries no information about:
+Recipes have two valid levels. A **composition recipe** pins inputs and, optionally, selections. It is the minimal form used for fetching, citation, and reproducible assembly. A **render recipe** extends a composition recipe with named datasets and a template that tells a client how to stitch the resolved material into an output document.
 
-- **Output format.** PDF, plain text, EPUB, interactive web view — all are render-time concerns of the consumer. A recipe carries no templates and no formatting instructions.
-- **Authored prose.** A recipe is a composition asset, not a document. Discussion, introductions, and editorial commentary belong in their own bundles, which can then be pinned alongside the texts they discuss. The same recipe is reusable across rendering environments; the same prose is re-pinnable by other recipes.
-- **Rendering hints.** Intent within a composition is expressed by the role string. A consumer may use the role to choose a rendering, but the recipe does not instruct it.
+This keeps the fetch boundary explicit while allowing common scholarly and maintenance workflows — reading lists, inspection reports, teaching handouts, formatted quotation sheets — to be described in the same reproducible object that names their sources.
+
+In a render recipe, pins may carry a **name** in addition to their role. The name is local to the recipe and is used by datasets and templates. The role remains the semantic place of the asset in the composition; the name is the handle by which the recipe refers to that pin.
+
+A render recipe may declare **datasets**. A dataset is extracted from one named pin after the pin has been resolved, verified, and selected. The initial dataset vocabulary is deliberately small: a recipe may collect markers from a pin, filter them by marker fields, and optionally include the text covered by range markers together with surrounding context.
+
+Rendering is expressed with a constrained Jinja-style template. The template receives only the resolved pins, declared datasets, non-fatal errors, and the resolved recipe. It does not receive filesystem, shell, import, or host-language access. Output formats are an open vocabulary, but Markdown is the first defined target.
+
+Example:
+
+```yaml
+kind: bkk.recipe/v1
+pins:
+  - name: text
+    role: base
+    textid: KR3a0001
+    selection:
+      juan: 1
+
+datasets:
+  voices:
+    from: text
+    collect: markers
+    where:
+      type: voice
+    include_text: true
+    context: 12
+
+render:
+  format: markdown
+  template: |
+    # Voices in {{ pins.text.label }}
+
+    {% for v in datasets.voices %}
+    ## {{ v.name }} {{ v.id }}
+
+    - location: {{ v.textid }} {{ v.juan_seq }}/{{ v.bucket }} @{{ v.offset }}+{{ v.length }}
+    - responds to: {{ v.responds_to or "—" }}
+
+    `{{ v.left }}【{{ v.text }}】{{ v.right }}`
+
+    {% endfor %}
+```
+
+The dataset and rendering vocabularies are intentionally client-facing. They do not alter the pinned assets, their hashes, or the semantics of marker data; they describe a derived presentation of resolved content.
 
 #### Recipe as request
 
