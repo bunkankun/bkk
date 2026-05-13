@@ -63,6 +63,7 @@ serve:
 | `validate.tls_source` | overrides `global.tls_root` for `bkk validate --tls-source` |
 | `serve.*` | all `bkk serve` flags; also read from `BKK_*` env vars (env beats rc) |
 | `recipe.corpus` | corpus root for `bkk recipe render` |
+| `info.corpus` / `info.index` | overrides for `bkk info` (fall back to `global.corpus` and `index.out`) |
 
 See `.bkkrc.sample` for the full list of supported keys with inline comments.
 
@@ -346,3 +347,41 @@ Tradeoff: schemas are easier to read and edit by non-Python contributors
 and travel well as a public spec, but they cannot express constraints that
 need a second file's content. Treat them as a complement to the Python
 rules, not a replacement.
+
+## Info
+
+`bkk info` prints a quick orientation summary: where the corpus and index
+live, how many bundles are present, what the index contains, and which
+`.bkkrc` files / sections are currently in effect.
+
+### CLI
+
+```
+bkk info                          # corpus + index + config summary
+bkk info --corpus PATH            # inspect a different corpus
+bkk info --index PATH             # point at a non-default .bkkx
+bkk info --bundles                # append a per-bundle table
+bkk info --prefix KR1a            # filter the bundle table; implies --bundles
+bkk info --json                   # machine-readable output
+```
+
+Defaults follow the usual chain: `--corpus` falls back to `[info].corpus`
+then `[global].corpus`; `--index` falls back to `[info].index` then
+`[index].out` then `<corpus>/_corpus.bkkx`.
+
+The output is split into three (or four, with `--bundles`) sections:
+
+- **corpus** — path, bundle count, breakdown by 3-char section prefix
+  (`KR1`, `KR3`, …).
+- **index** — schema version, on-disk size, per-table row counts
+  (`bundle`, `juan`, `bucket`, `witness`, `variant`, `voice_range`, `toc`,
+  `trigram`), available voices, and how many per-bundle `.bkkx` files are
+  stale relative to their sources.
+- **config** — the `.bkkrc` files that contributed (low → high precedence)
+  and the merged values for the `global`, `info`, and `index` sections.
+- **bundles** (optional) — one row per bundle with juan / bucket / witness
+  counts pulled from the merged index. When no merged index exists, only
+  textid and editions (parsed from each manifest) are shown.
+
+Exit code is `0` on success; `2` if neither `--corpus` nor a corpus default
+is available.

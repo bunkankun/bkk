@@ -10,6 +10,7 @@ Routes ``bkk <subcommand> ...`` to the matching sub-package CLI:
     bkk repair   ...   -> bkk.repair.cli:run
     bkk voice    ...   -> bkk.voice.cli:run
     bkk recipe   ...   -> bkk.recipe.cli:run
+    bkk info     ...   -> bkk.info.cli:run
 
 The dispatcher parses only the first positional (the subcommand name); every
 remaining argument is forwarded verbatim to the sub-CLI so each one keeps its
@@ -68,6 +69,11 @@ def _load_recipe() -> SubCommand:
     return run
 
 
+def _load_info() -> SubCommand:
+    from bkk.info.cli import run
+    return run
+
+
 SUBCOMMANDS: dict[str, tuple[Callable[[], SubCommand], str]] = {
     "import":   (_load_importer,  "import an external source (TLS, KRP) into a BKK bundle"),
     "export":   (_load_exporter,  "export bundles via a recipe to TEI/etc."),
@@ -77,6 +83,7 @@ SUBCOMMANDS: dict[str, tuple[Callable[[], SubCommand], str]] = {
     "repair":   (_load_repair,    "repair a bundle (e.g. rebuild manifests from juan files)"),
     "voice":    (_load_voice,     "derive voice markers from (...) punctuation in a bundle"),
     "recipe":   (_load_recipe,    "render recipe templates"),
+    "info":     (_load_info,      "show corpus, index, and config summary"),
 }
 
 # Aliases so familiar verbs work too.

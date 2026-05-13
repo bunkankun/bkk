@@ -14,7 +14,7 @@ import yaml
 
 _VALID_SECTIONS = {
     "global", "import", "export", "index", "validate", "serve", "repair",
-    "voice", "recipe",
+    "voice", "recipe", "info",
 }
 
 _PATH_KEYS = frozenset(
@@ -52,6 +52,11 @@ def _resolve_section_paths(section: dict, rc_dir: Path) -> dict:
         else:
             result[k] = v
     return result
+
+
+def rc_files() -> list[Path]:
+    """Public accessor for the .bkkrc files that ``load_rc()`` would consume."""
+    return _collect_rc_files()
 
 
 def load_rc() -> dict:

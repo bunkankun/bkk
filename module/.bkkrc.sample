@@ -8,7 +8,8 @@
 # Precedence (lowest → highest): .bkkrc < env vars < CLI flags
 #
 # Supported sections: global, import, export, index, validate, serve,
-# repair, voice. Unknown section names cause bkk to exit with an error.
+# repair, voice, recipe, info. Unknown section names cause bkk to exit
+# with an error.
 #
 # Path values are resolved relative to the file that defines them.
 # ~ is expanded.  Relative paths without ~ are made absolute from the
@@ -75,6 +76,12 @@ export:
 index:
 #   corpus: /data/bkk/corpus     # override global.corpus for `bkk index merge`
 #   out: /data/bkk/_corpus.bkkx  # merged .bkkx output path for `bkk index merge`
+#                                # (default: <corpus>/_corpus.bkkx)
+
+# ── Info defaults ──────────────────────────────────────────────────────────
+info:
+#   corpus: /data/bkk/corpus     # override global.corpus for `bkk info`
+#   index: /data/bkk/_corpus.bkkx # override [index].out for `bkk info` lookups
 #                                # (default: <corpus>/_corpus.bkkx)
 
 # ── Validate defaults ──────────────────────────────────────────────────────
