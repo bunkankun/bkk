@@ -47,11 +47,10 @@ def _require_admin(request: Request) -> AppState:
 
 
 def _bundle_dir_or_404(state: AppState, textid: str):
-    bundle = state.corpus_root / textid
-    manifest = bundle / f"{textid}.manifest.yaml"
-    if not manifest.exists():
+    rec = state.cache.lookup(textid)
+    if rec is None:
         raise errors.bundle_not_found(textid)
-    return bundle
+    return rec.bundle_dir
 
 
 def _accepted(job: Job) -> JSONResponse:

@@ -17,6 +17,7 @@ from fastapi import APIRouter, Path as PathParam, Request
 
 from .. import _examples as ex
 from .. import errors
+from ..state import AppState
 from ..schemas import (
     AnnotationForm,
     AnnotationOut,
@@ -31,11 +32,12 @@ from . import texts as texts_router
 router = APIRouter(tags=["annotations"])
 
 
-def _ann_path(corpus_root: Path, textid: str, seq: int) -> Path | None:
+def _ann_path(state: AppState, textid: str, seq: int) -> Path | None:
     """Return the first existing ``*_{seq:03d}.ann.yaml`` for the bundle."""
-    bundle = corpus_root / textid
-    if not bundle.is_dir():
+    rec = state.cache.lookup(textid)
+    if rec is None:
         raise errors.bundle_not_found(textid)
+    bundle = rec.bundle_dir
     seq_str = f"{seq:03d}"
     direct = bundle / f"{textid}_{seq_str}.ann.yaml"
     if direct.exists():
@@ -134,7 +136,7 @@ def get_juan_annotations(
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
 ) -> list[AnnotationOut]:
     state = request.app.state.bkk
-    path = _ann_path(state.corpus_root, textid, seq)
+    path = _ann_path(state, textid, seq)
     if path is None:
         return []
     return _load_annotations(path)

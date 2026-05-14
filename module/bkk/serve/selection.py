@@ -22,6 +22,8 @@ from typing import Any, Callable
 import yaml
 from fastapi import HTTPException
 
+from bkk.index.merge import find_bundle
+
 from . import errors
 
 VALID_BUCKETS = ("front", "body", "back")
@@ -36,29 +38,41 @@ class JuanSlice:
     markers: list[dict[str, Any]]
 
 
-def load_juan(corpus_root: Path, textid: str, seq: int) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Return ``(manifest, juan)`` dicts for ``(textid, seq)``."""
-    bundle = corpus_root / textid
-    manifest_path = bundle / f"{textid}.manifest.yaml"
-    if not manifest_path.exists():
-        raise errors.bundle_not_found(textid)
-    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+def load_juan_file(
+    bundle_dir: Path, manifest: dict[str, Any], textid: str, seq: int
+) -> dict[str, Any]:
+    """Read the juan YAML for ``seq`` given an already-loaded ``manifest``.
+
+    Splits out the juan read from the manifest read so callers that already
+    hold a parsed manifest (e.g. via :class:`CorpusCache`) can skip re-parsing
+    it for every request.
+    """
     parts = (manifest.get("assets") or {}).get("parts") or []
     entry = next((p for p in parts if p.get("seq") == seq), None)
     if entry is None:
         raise errors.juan_not_found(textid, seq)
-    juan_path = bundle / entry["filename"]
+    juan_path = bundle_dir / entry["filename"]
     if not juan_path.exists():
         raise errors.juan_not_found(textid, seq)
-    juan = yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
+    return yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
+
+
+def load_juan(corpus_root: Path, textid: str, seq: int) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return ``(manifest, juan)`` dicts for ``(textid, seq)``."""
+    bundle = find_bundle(corpus_root, textid)
+    if bundle is None:
+        raise errors.bundle_not_found(textid)
+    manifest_path = bundle / f"{textid}.manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    juan = load_juan_file(bundle, manifest, textid, seq)
     return manifest, juan
 
 
 def load_manifest(corpus_root: Path, textid: str) -> dict[str, Any]:
-    bundle = corpus_root / textid
-    manifest_path = bundle / f"{textid}.manifest.yaml"
-    if not manifest_path.exists():
+    bundle = find_bundle(corpus_root, textid)
+    if bundle is None:
         raise errors.bundle_not_found(textid)
+    manifest_path = bundle / f"{textid}.manifest.yaml"
     return yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
 
 

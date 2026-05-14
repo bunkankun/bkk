@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-import yaml
 from fastapi import APIRouter, Path as PathParam, Query, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
-from bkk.index.merge import discover_bundles
-
 from .. import _examples as ex
 from .. import errors
+from ..resolver import BundleRecord
 from ..schemas import (
     BundleAsset,
     BundleAssetsResponse,
@@ -21,21 +18,17 @@ from ..schemas import (
     EditionInfo,
     JuanSliceOut,
 )
+from ..state import AppState
 from .. import selection
 
 router = APIRouter(prefix="/bundles", tags=["bundles"])
 
 
-def _load_yaml(path: Path) -> dict[str, Any]:
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-
-
-def _bundle_dir(corpus_root: Path, textid: str) -> Path:
-    bundle = corpus_root / textid
-    manifest = bundle / f"{textid}.manifest.yaml"
-    if not manifest.exists():
+def _record(state: AppState, textid: str) -> BundleRecord:
+    rec = state.cache.lookup(textid)
+    if rec is None:
         raise errors.bundle_not_found(textid)
-    return bundle
+    return rec
 
 
 def _summary_from_manifest(textid: str, manifest: dict[str, Any]) -> BundleSummary:
@@ -66,20 +59,13 @@ def list_bundles(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ) -> BundleListResponse:
-    state = request.app.state.bkk
-    bundle_dirs = discover_bundles(state.corpus_root, prefix=prefix)
-    total = len(bundle_dirs)
-    page = bundle_dirs[offset:offset + limit]
-    summaries: list[BundleSummary] = []
-    for bd in page:
-        manifest_path = bd / f"{bd.name}.manifest.yaml"
-        try:
-            manifest = _load_yaml(manifest_path)
-        except yaml.YAMLError:
-            # Surface the bundle in the listing with empty metadata rather than
-            # 500ing the whole list call when a single manifest is malformed.
-            manifest = {}
-        summaries.append(_summary_from_manifest(bd.name, manifest))
+    state: AppState = request.app.state.bkk
+    records = state.cache.get().records
+    if prefix:
+        records = [r for r in records if r.textid.startswith(prefix)]
+    total = len(records)
+    page = records[offset:offset + limit]
+    summaries = [_summary_from_manifest(r.textid, r.manifest) for r in page]
     return BundleListResponse(
         bundles=summaries, total=total, offset=offset, limit=limit
     )
@@ -91,10 +77,8 @@ def list_bundles(
     summary="Bundle summary (textid, canonical id, title, editions)",
 )
 def get_bundle(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> BundleSummary:
-    state = request.app.state.bkk
-    bundle = _bundle_dir(state.corpus_root, textid)
-    manifest = _load_yaml(bundle / f"{textid}.manifest.yaml")
-    return _summary_from_manifest(textid, manifest)
+    rec = _record(request.app.state.bkk, textid)
+    return _summary_from_manifest(rec.textid, rec.manifest)
 
 
 @router.get(
@@ -103,15 +87,18 @@ def get_bundle(request: Request, textid: str = PathParam(..., openapi_examples=e
     summary="Full master manifest for the bundle",
 )
 def get_manifest(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> dict[str, Any]:
-    state = request.app.state.bkk
-    bundle = _bundle_dir(state.corpus_root, textid)
-    manifest = _load_yaml(bundle / f"{textid}.manifest.yaml")
+    state: AppState = request.app.state.bkk
+    rec = _record(state, textid)
+    manifest = rec.manifest
     override = state.config.image_base_urls
-    if override:
-        metadata = manifest.setdefault("metadata", {})
-        existing = metadata.get("image_base_urls") or {}
-        metadata["image_base_urls"] = {**existing, **override}
-    return manifest
+    if not override:
+        return manifest
+    # Don't mutate the cached manifest; rebuild only the touched subtrees.
+    metadata = dict(manifest.get("metadata") or {})
+    existing = dict(metadata.get("image_base_urls") or {})
+    existing.update(override)
+    metadata["image_base_urls"] = existing
+    return {**manifest, "metadata": metadata}
 
 
 @router.get(
@@ -120,24 +107,9 @@ def get_manifest(request: Request, textid: str = PathParam(..., openapi_examples
     summary="List of juan declared in the manifest's assets.parts",
 )
 def list_juan(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> list[dict[str, Any]]:
-    state = request.app.state.bkk
-    bundle = _bundle_dir(state.corpus_root, textid)
-    manifest = _load_yaml(bundle / f"{textid}.manifest.yaml")
-    parts = (manifest.get("assets") or {}).get("parts") or []
+    rec = _record(request.app.state.bkk, textid)
+    parts = (rec.manifest.get("assets") or {}).get("parts") or []
     return list(parts)
-
-
-def _juan_path(corpus_root: Path, textid: str, seq: int) -> Path:
-    bundle = _bundle_dir(corpus_root, textid)
-    manifest = _load_yaml(bundle / f"{textid}.manifest.yaml")
-    parts = (manifest.get("assets") or {}).get("parts") or []
-    entry = next((p for p in parts if p.get("seq") == seq), None)
-    if entry is None:
-        raise errors.juan_not_found(textid, seq)
-    juan_path = bundle / entry["filename"]
-    if not juan_path.exists():
-        raise errors.juan_not_found(textid, seq)
-    return juan_path
 
 
 @router.get(
@@ -150,8 +122,8 @@ def get_juan(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
 ) -> dict[str, Any]:
-    state = request.app.state.bkk
-    return _load_yaml(_juan_path(state.corpus_root, textid, seq))
+    rec = _record(request.app.state.bkk, textid)
+    return selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
 
 
 VALID_BUCKETS = ("front", "body", "back")
@@ -200,7 +172,7 @@ def get_juan_slice(
         openapi_examples=ex.SLICE_TOC,
     ),
 ) -> JuanSliceOut:
-    state = request.app.state.bkk
+    rec = _record(request.app.state.bkk, textid)
     forms_used = sum(
         1 for f in (from_ or to, offset is not None or length is not None, toc) if f
     )
@@ -211,13 +183,10 @@ def get_juan_slice(
         )
 
     if toc is not None:
-        manifest = selection.load_manifest(state.corpus_root, textid)
-
         def _loader(s: int) -> dict[str, Any]:
-            _, j = selection.load_juan(state.corpus_root, textid, s)
-            return j
+            return selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, s)
 
-        sl = selection.slice_by_toc(manifest, _loader, toc)
+        sl = selection.slice_by_toc(rec.manifest, _loader, toc)
         if sl.juan_seq != seq:
             raise errors.bad_request(
                 "toc_seq_mismatch",
@@ -226,7 +195,7 @@ def get_juan_slice(
                 toc_seq=sl.juan_seq,
             )
     else:
-        _, juan = selection.load_juan(state.corpus_root, textid, seq)
+        juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
         if from_ is not None or to is not None:
             if not (from_ and to):
                 raise errors.bad_request(
@@ -269,8 +238,8 @@ def get_juan_bucket(
         raise errors.bad_request(
             "bad_bucket", bucket=bucket, valid=list(VALID_BUCKETS)
         )
-    state = request.app.state.bkk
-    juan = _load_yaml(_juan_path(state.corpus_root, textid, seq))
+    rec = _record(request.app.state.bkk, textid)
+    juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
     return juan.get(bucket) or {}
 
 
@@ -289,8 +258,8 @@ def get_juan_bucket_text(
         raise errors.bad_request(
             "bad_bucket", bucket=bucket, valid=list(VALID_BUCKETS)
         )
-    state = request.app.state.bkk
-    juan = _load_yaml(_juan_path(state.corpus_root, textid, seq))
+    rec = _record(request.app.state.bkk, textid)
+    juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
     body = juan.get(bucket) or {}
     text = body.get("text") if isinstance(body, dict) else ""
     return PlainTextResponse(text or "", media_type="text/plain; charset=utf-8")
@@ -329,8 +298,8 @@ def get_juan_bucket_markers(
         raise errors.bad_request(
             "bad_bucket", bucket=bucket, valid=list(VALID_BUCKETS)
         )
-    state = request.app.state.bkk
-    juan = _load_yaml(_juan_path(state.corpus_root, textid, seq))
+    rec = _record(request.app.state.bkk, textid)
+    juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
     body = juan.get(bucket) or {}
     markers = body.get("markers") or [] if isinstance(body, dict) else []
     out: list[dict[str, Any]] = []
@@ -361,15 +330,13 @@ def _asset_entries(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 def list_assets(
     request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)
 ) -> BundleAssetsResponse:
-    state = request.app.state.bkk
-    bundle = _bundle_dir(state.corpus_root, textid)
-    manifest = _load_yaml(bundle / f"{textid}.manifest.yaml")
+    rec = _record(request.app.state.bkk, textid)
     out: list[BundleAsset] = []
-    for entry in _asset_entries(manifest):
+    for entry in _asset_entries(rec.manifest):
         name = entry.get("filename") or entry.get("name")
         if not isinstance(name, str):
             continue
-        path = bundle / name
+        path = rec.bundle_dir / name
         size = path.stat().st_size if path.exists() else None
         out.append(
             BundleAsset(
@@ -392,12 +359,10 @@ def get_asset(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     name: str = PathParam(..., openapi_examples=ex.ASSET_NAME),
 ) -> Response:
-    state = request.app.state.bkk
-    bundle = _bundle_dir(state.corpus_root, textid)
-    manifest = _load_yaml(bundle / f"{textid}.manifest.yaml")
+    rec = _record(request.app.state.bkk, textid)
     declared = {
         entry.get("filename") or entry.get("name")
-        for entry in _asset_entries(manifest)
+        for entry in _asset_entries(rec.manifest)
     }
     if name not in declared:
         raise errors.bad_request(
@@ -405,7 +370,7 @@ def get_asset(
         )
     if "/" in name or ".." in name:
         raise errors.bad_request("bad_asset_name", name=name)
-    path = bundle / name
+    path = rec.bundle_dir / name
     if not path.exists() or not path.is_file():
         raise errors.bad_request(
             "asset_missing_on_disk", textid=textid, name=name

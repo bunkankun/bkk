@@ -68,6 +68,23 @@ def discover_bundles(
     return out
 
 
+def find_bundle(corpus_root: Path | str, textid: str) -> Path | None:
+    """Return the bundle directory for ``textid`` under any supported layout,
+    or ``None`` if no bundle with that textid exists.
+
+    Tries the flat-layout fast path first, then falls back to a depth-bounded
+    walk via :func:`discover_bundles`.
+    """
+    corpus_root = Path(corpus_root)
+    flat = corpus_root / textid
+    if (flat / f"{textid}.manifest.yaml").exists():
+        return flat
+    for bd in discover_bundles(corpus_root, prefix=textid):
+        if bd.name == textid:
+            return bd
+    return None
+
+
 def is_stale(bundle_dir: Path, bkkx_path: Path) -> bool:
     """Return True iff ``bkkx_path`` is missing, has the wrong schema version,
     or is older than any source file."""

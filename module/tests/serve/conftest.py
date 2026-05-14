@@ -27,9 +27,15 @@ def write_bundle(
     references: list[dict] | None = None,
     extra_files: dict[str, str] | None = None,
     manifest_hash: str | None = None,
+    subdir: str | Path | None = None,
 ) -> Path:
-    """Write a single-juan synthetic bundle and return its directory."""
-    bundle_dir = corpus_root / textid
+    """Write a single-juan synthetic bundle and return its directory.
+
+    ``subdir``, if given, places the bundle at ``corpus_root/subdir/textid``
+    instead of ``corpus_root/textid`` — used to exercise non-flat layouts.
+    """
+    parent = corpus_root / subdir if subdir else corpus_root
+    bundle_dir = parent / textid
     bundle_dir.mkdir(parents=True)
 
     markers = [{"type": "variant", **v} for v in (variants or [])]

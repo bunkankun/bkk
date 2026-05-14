@@ -229,16 +229,17 @@ class CorpusCache:
             self._last_check = time.monotonic()
             return self._snapshot
 
+    def lookup(self, textid: str) -> BundleRecord | None:
+        """Return the cached :class:`BundleRecord` for ``textid``, or ``None``."""
+        return self.get().by_textid.get(textid)
+
     def _is_stale(self, snap: CorpusSnapshot) -> bool:
         # Cheap: stat each manifest we know about; rebuild on any mtime change.
         # A new manifest appearing or a tracked one disappearing is detected
-        # by a directory-listing mismatch on the bundle parents.
-        current_dirs = {p.name for p in self.corpus_root.iterdir() if p.is_dir()}
+        # by running the same discovery walk the snapshot itself used.
+        current_dirs = {bd.name for bd in discover_bundles(self.corpus_root)}
         snap_dirs = {r.bundle_dir.name for r in snap.records}
-        if current_dirs != snap_dirs and any(
-            (self.corpus_root / d / f"{d}.manifest.yaml").exists()
-            for d in current_dirs - snap_dirs
-        ):
+        if current_dirs != snap_dirs:
             return True
         for path, mtime in snap.mtimes.items():
             try:
