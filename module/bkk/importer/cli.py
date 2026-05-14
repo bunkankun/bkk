@@ -62,7 +62,7 @@ Cross-source co-existence (see ``docs/cross-source-merge.md``):
 - TLS owns the surface (root) edition. If a TLS bundle already exists
   at the destination, a subsequent KRP import merges in: documentary
   editions land under ``editions/<short>/``, the synthesized KRP master
-  is demoted to ``editions/master/`` (variant + witness page-break
+  is demoted to ``editions/krp/`` (variant + witness page-break
   markers retained), and the TLS root manifest's ``editions:`` list is
   extended.
 - TLS into an existing KRP bundle is rejected with a hard error. The
@@ -82,7 +82,10 @@ from .recipe import Recipe, load_recipe
 from .write.bundle import (
     write_bundle, write_krp_edition, write_krp_master, write_pua_map,
 )
-from .write.merge import extend_master_editions, inspect_existing_bundle
+from .write.merge import (
+    extend_master_editions, inspect_existing_bundle,
+    project_krp_apparatus_onto_tls,
+)
 
 
 class BundleConflictError(Exception):
@@ -720,7 +723,7 @@ def _import_one(
 
     If a TLS-sourced bundle already exists at ``<out_root>/<text-id>/``,
     the KRP master is demoted to a regular edition under
-    ``editions/master/`` and the existing TLS surface is preserved. The
+    ``editions/krp/`` and the existing TLS surface is preserved. The
     TLS master manifest's ``editions:`` list is extended with the new
     KRP edition shorts.
 
@@ -764,12 +767,12 @@ def _import_one(
     )
     if merge_into_tls:
         # Defensive: don't let a documentary edition collide with the
-        # demoted KRP master's ``master`` short.
+        # demoted KRP master's ``krp`` short.
         for bundle in documentary:
-            if bundle.edition_short == "master":
+            if bundle.edition_short == "krp":
                 raise BundleConflictError(
                     f"{text_id}: KRP recipe declares a documentary edition "
-                    f"with short 'master', which would collide with the "
+                    f"with short 'krp', which would collide with the "
                     f"demoted KRP master in merge mode. Rename the witness."
                 )
 
@@ -798,7 +801,7 @@ def _import_one(
     if master is not None:
         if merge_into_tls:
             # Demote: write the synthesized master as a regular edition
-            # under ``editions/master/``, preserving variant + witness
+            # under ``editions/krp/``, preserving variant + witness
             # page-break markers. PUA-map still belongs at the bundle root.
             if master.edition_short in protected:
                 raise BundleConflictError(
@@ -830,6 +833,24 @@ def _import_one(
         print(
             f"updated {existing.manifest_path.name}: editions list now "
             f"{[e.get('short') for e in final if isinstance(e, dict)]}"
+        )
+
+        # Project KRP master's apparatus (variants + witness page-breaks)
+        # onto the TLS surface so the reading text carries the union of
+        # every edition's apparatus, not just the TLS-side punctuation.
+        # The TLS surface keeps a single TLS-owned documentary edition;
+        # use its short to preserve the existing canonical_identifier.
+        surface_short = (
+            next(iter(existing.tls_owned_editions))
+            if existing.tls_owned_editions else "bkk"
+        )
+        proj = project_krp_apparatus_onto_tls(
+            out_root, text_id, surface_short, master, documentary,
+        )
+        print(
+            f"projected onto {text_id} surface: "
+            f"{proj['variants_added']} variants, "
+            f"{proj['page_breaks_added']} witness page-breaks"
         )
 
     if sample is not None and text_id:

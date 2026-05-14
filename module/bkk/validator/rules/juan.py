@@ -34,13 +34,19 @@ def run(ctx: ValidationContext) -> None:
     if not declared_shorts:
         allowed_master_editions = None
     else:
-        allowed_master_editions = declared_shorts | on_disk_shorts | {"master"}
+        allowed_master_editions = declared_shorts | on_disk_shorts | {"krp"}
 
     for lf in ctx.master_juans.values():
         _check_juan(ctx, lf, allowed_marker_editions=allowed_master_editions)
     for short, ed in ctx.editions.items():
+        # editions/krp/ is the demoted KRP master in a TLS+KRP merge — it
+        # legitimately carries page-break ids from every witness, so apply
+        # the same allowed-shorts set the master uses.
+        allowed = (
+            allowed_master_editions if short == "krp" else {short}
+        )
         for lf in ed.juans.values():
-            _check_juan(ctx, lf, allowed_marker_editions={short})
+            _check_juan(ctx, lf, allowed_marker_editions=allowed)
 
 
 def _declared_witness_shorts(ctx: ValidationContext) -> set[str]:

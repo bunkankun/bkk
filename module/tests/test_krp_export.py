@@ -220,12 +220,12 @@ def test_explicit_editions_master_keeps_subdir_layout(
     """Opt-in path: passing `editions:` retains the legacy per-edition subdir
     layout (and auxiliaries) so users who want the multi-edition view still
     have it."""
-    recipe = _make_recipe(tmp_path, bundle_dir, editions=["master", "WYG"])
+    recipe = _make_recipe(tmp_path, bundle_dir, editions=["krp", "WYG"])
     export_krp_from_recipe(recipe)
     out = recipe.output_dir
-    assert (out / "master" / f"{TEXT_ID}_001.txt").exists()
+    assert (out / "krp" / f"{TEXT_ID}_001.txt").exists()
     assert (out / "WYG" / f"{TEXT_ID}_001.txt").exists()
-    assert (out / "master" / "Readme.org").exists()
+    assert (out / "krp" / "Readme.org").exists()
     # Flattened root file is not produced when editions is explicit.
     assert not (out / f"{TEXT_ID}_001.txt").exists()
 

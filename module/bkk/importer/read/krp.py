@@ -745,7 +745,7 @@ def read_krp(recipe: Recipe) -> tuple[list[Bundle], Bundle | None]:
                 edition_label=None,
                 editions=master_editions,
             ),
-            edition_short="master",
+            edition_short="krp",
             source={"repository": "kanripo", "path": text_id},
             witnesses=list(ms.witnesses),
         )

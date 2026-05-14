@@ -113,12 +113,12 @@ def _bundle_from_manifest(
         edition_short = manifest_short
     elif "editions" in manifest:
         # KRP master: distinct edition, lists the documentary witnesses.
-        edition_short = "master"
+        edition_short = "krp"
     else:
         # TLS master: shares content with the sole documentary witness; use
         # that subdir name as the rendering hint.
         sole = _sole_edition_subdir(file_dir)
-        edition_short = sole if sole is not None else "master"
+        edition_short = sole if sole is not None else "krp"
 
     return Bundle(
         text_id=text_id,

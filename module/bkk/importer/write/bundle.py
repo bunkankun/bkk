@@ -509,7 +509,7 @@ def _krp_juan_metadata(bundle: Bundle, juan: Juan, is_master: bool) -> dict:
     if "title" in bundle.metadata:
         md["title"] = bundle.metadata["title"]
     edition_block: dict = {
-        "short": "master" if is_master else bundle.edition_short,
+        "short": "krp" if is_master else bundle.edition_short,
     }
     if not is_master and bundle.metadata.get("edition_label"):
         edition_block["label"] = bundle.metadata["edition_label"]
@@ -678,7 +678,7 @@ def write_krp_master(bundle: Bundle, out_root: Path) -> dict:
         bundle,
         bundle_root,
         filename_for=lambda seq: f"{text_id}_{seq:03d}.yaml",
-        slug="master",
+        slug="krp",
         is_master=True,
     )
 
@@ -703,7 +703,7 @@ def write_krp_master(bundle: Bundle, out_root: Path) -> dict:
 
     summary = {
         "text_id": text_id,
-        "edition": "master",
+        "edition": "krp",
         "out_root": str(bundle_root),
         "juans": [s for s, _, _ in juan_files],
     }

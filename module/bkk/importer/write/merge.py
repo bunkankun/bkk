@@ -16,6 +16,12 @@ This module provides the read-side detection helper plus the in-place
 update of the TLS master manifest's ``editions:`` list. The actual
 write-skipping is handled in ``write_krp_master`` / ``write_krp_edition``
 via the ``mode`` parameter they consult.
+
+A second projection step lifts the apparatus carried by the KRP master
+(variant markers + witness page-breaks) onto the TLS surface so that
+readers of the TLS reading text see the union of all witnesses. The
+projection reuses the same ``_attach_variants`` / ``_attach_witness_page_breaks``
+helpers the KRP reader applies within its own bundle.
 """
 
 from __future__ import annotations
@@ -28,6 +34,7 @@ from typing import Literal
 import yaml
 
 from ..hashing import manifest_hash
+from ..ir import Bundle
 from .yaml_writer import dump, marker_to_flow
 
 
@@ -185,3 +192,110 @@ def extend_master_editions(
     rebuilt["hash"] = manifest_hash(rebuilt)
     manifest_path.write_text(dump(rebuilt), encoding="utf-8")
     return current
+
+
+def project_krp_apparatus_onto_tls(
+    out_root: Path,
+    text_id: str,
+    surface_edition_short: str,
+    krp_master: Bundle | None,
+    krp_documentary: list[Bundle],
+) -> dict:
+    """Lift KRP apparatus onto the TLS surface juans during a merge.
+
+    For each KRP edition (documentary witnesses + the demoted master),
+    detect variants against the TLS reading text and inject witness
+    page-breaks at aligned offsets. The TLS surface juans at the bundle
+    root are rewritten with the union of their existing markers plus the
+    projected variant / page-break markers; the master manifest's
+    ``assets.parts`` hashes and self-hash are refreshed in place. Other
+    files (sidecar, ann files, documentary editions) are untouched.
+
+    ``surface_edition_short`` is the case-preserved short the TLS surface
+    juans were originally written with (so the rebuilt
+    ``canonical_identifier`` matches what was there before).
+
+    Returns ``{"variants_added": int, "page_breaks_added": int}`` to make
+    the projection observable from CLI logging and tests.
+    """
+    # Imports kept local: the helper pulls in the read-side variant /
+    # page-break logic and the per-juan bucket writers, neither of which
+    # the rest of this module needs.
+    from ...exporter.read_bundle import read_bundle
+    from ..classify import bucket_sections
+    from ..read.krp import _attach_variants, _attach_witness_page_breaks
+    from .bundle import (
+        _build_bucket, _build_juan_dict, _juan_self_hash,
+    )
+
+    bundle_root = out_root / text_id
+    manifest_path = bundle_root / f"{text_id}.manifest.yaml"
+
+    surface = read_bundle(bundle_root)
+
+    witnesses: list[tuple[str, dict[int, object]]] = []
+    for wb in krp_documentary:
+        witnesses.append(
+            (wb.edition_short, {wj.seq: wj for wj in wb.juans})
+        )
+    if krp_master is not None:
+        witnesses.append(
+            (krp_master.edition_short, {mj.seq: mj for mj in krp_master.juans})
+        )
+
+    def _count(markers_pred) -> int:
+        return sum(
+            1 for tj in surface.juans for sec in tj.sections
+            for m in sec.markers if markers_pred(m)
+        )
+
+    before_variants = _count(lambda m: m.type == "variant")
+    before_pbs = _count(lambda m: m.type == "page-break")
+
+    for tj in surface.juans:
+        for wshort, by_seq in witnesses:
+            wj = by_seq.get(tj.seq)
+            if wj is None:
+                continue
+            _attach_variants(tj, wj, wshort)
+            _attach_witness_page_breaks(tj, wj)
+
+    after_variants = _count(lambda m: m.type == "variant")
+    after_pbs = _count(lambda m: m.type == "page-break")
+
+    new_part_hashes: dict[int, str] = {}
+    for juan in surface.juans:
+        front_secs, body_secs, back_secs = bucket_sections(juan.sections)
+        sections_per_bucket = {
+            "front": front_secs, "body": body_secs, "back": back_secs,
+        }
+        bucket_dicts: dict[str, dict] = {}
+        for name, secs in sections_per_bucket.items():
+            bucket_dicts[name], _ = _build_bucket(secs, juan.annotations)
+        back_dict = bucket_dicts["back"] if back_secs else None
+
+        juan_dict = _build_juan_dict(
+            text_id, juan.seq, surface_edition_short,
+            bucket_dicts["front"], bucket_dicts["body"], back_dict,
+            surface.metadata,
+        )
+        juan_dict["hash"] = _juan_self_hash(juan_dict)
+        new_part_hashes[juan.seq] = juan_dict["hash"]
+
+        juan_filename = f"{text_id}_{juan.seq:03d}.yaml"
+        (bundle_root / juan_filename).write_text(
+            dump(juan_dict), encoding="utf-8"
+        )
+
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    for part in (manifest.get("assets") or {}).get("parts") or []:
+        seq = part.get("seq")
+        if seq in new_part_hashes:
+            part["hash"] = new_part_hashes[seq]
+    manifest["hash"] = manifest_hash(manifest)
+    manifest_path.write_text(dump(manifest), encoding="utf-8")
+
+    return {
+        "variants_added": after_variants - before_variants,
+        "page_breaks_added": after_pbs - before_pbs,
+    }

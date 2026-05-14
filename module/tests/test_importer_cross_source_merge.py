@@ -205,7 +205,7 @@ def test_cli_krp_merges_into_existing_tls(tmp_path: Path):
         e["short"] for e in (master_after.get("editions") or [])
         if isinstance(e, dict)
     }
-    assert "master" in new_shorts, "demoted KRP master should appear"
+    assert "krp" in new_shorts, "demoted KRP master should appear"
     # KR6q0053 KRP repo declares at least one witness in addition to master.
     assert len(new_shorts) >= 2
 
@@ -223,9 +223,32 @@ def test_cli_krp_merges_into_existing_tls(tmp_path: Path):
     # bundle root (not under editions/), even in merge mode. Some fixtures
     # contain no PUA codepoints, in which case no file is written.
     pua = bundle_root / "PUA-map.yaml"
-    assert not (bundle_root / "editions" / "master" / "PUA-map.yaml").exists()
+    assert not (bundle_root / "editions" / "krp" / "PUA-map.yaml").exists()
     if pua.exists():
         assert pua.is_file()
+
+    # Apparatus projection: the TLS surface juans should now carry variant
+    # markers and witness page-breaks lifted from the KRP master. The TLS
+    # original carried neither, so any presence of either is proof the
+    # projection ran.
+    surface_variant_count = 0
+    surface_pb_count = 0
+    for part in master_after.get("assets", {}).get("parts", []):
+        juan_path = bundle_root / part["filename"]
+        juan = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+        for bucket in ("front", "body", "back"):
+            b = juan.get(bucket) or {}
+            for m in b.get("markers") or []:
+                if m.get("type") == "variant":
+                    surface_variant_count += 1
+                elif m.get("type") == "page-break":
+                    surface_pb_count += 1
+    assert surface_variant_count > 0, (
+        "TLS surface should carry projected variant markers"
+    )
+    assert surface_pb_count > 0, (
+        "TLS surface should carry projected witness page-breaks"
+    )
 
 
 @fixtures_present

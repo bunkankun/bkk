@@ -117,15 +117,15 @@ def export_krp_from_recipe(recipe: Recipe) -> list[Path]:
             base_edition=base_edition, title=title, date=date,
             juan_filter=juan_filter,
         ))
-    if any(b.edition_short == "master" for b in selected):
-        readme_path = out_root / "master" / "Readme.org"
+    if any(b.edition_short == "krp" for b in selected):
+        readme_path = out_root / "krp" / "Readme.org"
         readme_path.write_text(
             _render_readme(master, editions_meta, base_edition, title,
                            date, juan_filter),
             encoding="utf-8",
         )
         written.append(readme_path)
-    documentary_selected = [b for b in selected if b.edition_short != "master"]
+    documentary_selected = [b for b in selected if b.edition_short != "krp"]
     written.extend(_write_data_files(
         documentary_selected, master.text_id, out_root, image_base_urls,
         juan_filter,
@@ -175,7 +175,7 @@ def _write_data_files(
 
 def _fallback_base_edition(bundles_by_short: dict[str, Bundle]) -> str:
     for short in sorted(bundles_by_short):
-        if short != "master":
+        if short != "krp":
             return short
     return ""
 
@@ -194,7 +194,7 @@ def _select_editions(bundles_by_short: dict[str, Bundle],
     elif recipe.shape == "single":
         wanted = [recipe.edition]
     else:
-        wanted = sorted(available, key=lambda s: (s != "master", s))
+        wanted = sorted(available, key=lambda s: (s != "krp", s))
 
     if recipe.shape == "single" and recipe.edition not in available:
         raise RecipeError(
