@@ -3,12 +3,14 @@
 *.log
 *.bkkx
 tmp/
-
+.bkkrc
+.codex
 *.py[cod]
 *.egg
 build
 htmlcov
 .claude
+.agents
 bkk.xpr
 import/.pytest_cache
 import/output
@@ -18,4 +20,7 @@ module/.pytest_cache
 module/output
 module/exports
 module/export
+module/input
+module/samples
 wip/*
+.pytest_cache

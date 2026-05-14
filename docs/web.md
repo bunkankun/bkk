@@ -1,4 +1,7 @@
-We want a one page web application that after loading interacts with the `bkk serve` backend via API calls.
+# Web frontend for BKK: Bunkankun
+
+
+This is a one page web application that after loading interacts with the `bkk serve` backend via API calls.
 
 Users will login with a GitHub ID.  In prod texts will also be loaded from GH account krp-yaml.  Users can clone them and edit -> PR.
 
