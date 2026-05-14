@@ -205,6 +205,10 @@ export interface SearchHit {
   left: string;
   match: string;
   right: string;
+  witness_left?: string;
+  witness_right?: string;
+  witness_left_variant_offset?: number;
+  witness_right_variant_end?: number;
   overlays: VariantOverlay[];
   toc_label?: string | null;
   recipe: Record<string, unknown>;

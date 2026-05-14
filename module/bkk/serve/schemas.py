@@ -66,6 +66,18 @@ class HitOut(BaseModel):
         "",
         description="KWIC right-context from the witness text (empty for master hits)",
     )
+    witness_left_variant_offset: int = Field(
+        0,
+        description="index within witness_left at which the variant content "
+                    "begins; chars before are master/identity (shared with the "
+                    "master line), chars after are variant interior",
+    )
+    witness_right_variant_end: int = Field(
+        0,
+        description="index within witness_right at which the variant content "
+                    "ends; chars before are variant interior, chars after are "
+                    "master/identity",
+    )
     overlays: list[VariantOverlayOut] = []
     toc_label: str | None = None
     voice: str = Field(

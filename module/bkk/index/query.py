@@ -193,12 +193,48 @@ class Index:
                 continue
             w_lo = max(0, pos - context)
             w_hi = pos + len(query) + context
+            # Extend the witness window outward across the variant boundary
+            # into adjacent identity segments by ANCHOR_PAD chars, so the
+            # witness KWIC always shows some master text framing the variant.
+            # That gives the eye a shared anchor with the master line above
+            # when the variant alone is wider than ``context``.
+            ANCHOR_PAD = 6
+            match_hi = pos + len(query)
+            v_left_w_start = None
+            v_right_w_end = None
+            for seg in segments:
+                if seg.is_variant and seg.w_start < match_hi and seg.w_end > pos:
+                    if v_left_w_start is None or seg.w_start < v_left_w_start:
+                        v_left_w_start = seg.w_start
+                    if v_right_w_end is None or seg.w_end > v_right_w_end:
+                        v_right_w_end = seg.w_end
+            if v_left_w_start is not None:
+                w_lo = min(w_lo, max(0, v_left_w_start - ANCHOR_PAD))
+            if v_right_w_end is not None:
+                w_hi = max(w_hi, min(len(wtext), v_right_w_end + ANCHOR_PAD))
+            witness_left = wtext[w_lo:pos]
+            witness_right = wtext[pos + len(query):w_hi]
+            # Boundary of the variant-interior portion within witness_left /
+            # witness_right, so callers can split anchor (master) from
+            # interior (variant) and optionally collapse the interior.
+            if v_left_w_start is not None:
+                w_left_var_off = max(0, v_left_w_start - w_lo)
+            else:
+                w_left_var_off = 0
+            if v_right_w_end is not None:
+                w_right_var_end = max(
+                    0, min(len(witness_right), v_right_w_end - (pos + len(query)))
+                )
+            else:
+                w_right_var_end = len(witness_right)
             hit = self._make_hit(
                 row["textid"], row["seq"], row["kind"], row["bucket_id"],
                 btext, m_off, m_len, label, query, context,
                 witness_text=wtext[pos:pos + len(query)],
-                witness_left=wtext[w_lo:pos],
-                witness_right=wtext[pos + len(query):w_hi],
+                witness_left=witness_left,
+                witness_right=witness_right,
+                witness_left_variant_offset=w_left_var_off,
+                witness_right_variant_end=w_right_var_end,
             )
             if _passes_voice_filter(hit, voices):
                 yield hit
@@ -207,6 +243,7 @@ class Index:
         self, textid, juan_seq, bucket_kind, bucket_id, bucket_text,
         m_off, m_len, matched_via, query, context, *, witness_text=None,
         witness_left="", witness_right="",
+        witness_left_variant_offset=0, witness_right_variant_end=0,
     ) -> Hit:
         win_lo = max(0, m_off - context)
         win_hi = m_off + m_len + context
@@ -228,6 +265,8 @@ class Index:
             voice_stack=voice_stack,
             witness_left=witness_left,
             witness_right=witness_right,
+            witness_left_variant_offset=witness_left_variant_offset,
+            witness_right_variant_end=witness_right_variant_end,
         )
 
     def _classify_voice(

@@ -124,9 +124,53 @@ def test_witness_kwic_for_long_replacement(tmp_path):
     assert h.master_length == 1
     assert h.match == "短"
     # Witness KWIC: drawn from the witness text, with 方便 actually in it.
+    # The window extends outward past the variant boundary into the master
+    # surroundings (前文/後文) so the witness line shares anchor chars with
+    # the master line.
     assert h.matched_text == "方便"
-    assert h.witness_left == "甲乙"
-    assert h.witness_right == "丙丁"
+    assert h.witness_left == "前文甲乙"
+    assert h.witness_right == "丙丁後文"
+    # Variant boundary offsets split anchor (master) from interior (variant).
+    assert h.witness_left_variant_offset == 2  # "前文" before, "甲乙" after
+    assert h.witness_right_variant_end == 2    # "丙丁" before, "後文" after
+
+
+def test_witness_kwic_anchor_extends_past_long_variant(tmp_path):
+    """When the variant is wider than ``context`` on its own, the witness
+    window still reaches a few chars into the surrounding master text so
+    the witness line shares anchor chars with the master line.
+    """
+    body = "前文短後文"
+    # Long variant: a 22-char reading replacing the single master char '短',
+    # with the query '方便' buried deep in the middle so a context=2 window
+    # would otherwise stay entirely inside the variant.
+    long_form = "A" * 10 + "方便" + "B" * 10
+    variants = [{"offset": 2, "length": 1, "content": "短", "TKD": long_form}]
+    bundle = _write_bundle(
+        tmp_path, "TEST_LONG_VAR_ANCHOR", body, variants,
+        editions=[{"short": "TKD", "label": "TKD"}],
+    )
+    bkkx = build_index(bundle)
+    with Index(bkkx) as ix:
+        hits = list(ix.search("方便", context=2))
+
+    assert len(hits) == 1
+    h = hits[0]
+    assert h.matched_via == "TKD"
+    # Witness left starts with '前文' (master anchor) followed by the
+    # variant prefix that fits before the match.
+    assert h.witness_left.startswith("前文")
+    assert h.witness_left.endswith("A" * 10)
+    # Witness right ends with '後文' (master anchor) preceded by the
+    # variant suffix.
+    assert h.witness_right.startswith("B" * 10)
+    assert h.witness_right.endswith("後文")
+    # The variant boundary offset splits the master anchor (前文/後文) from
+    # the variant interior (A…/B…) so the frontend can collapse the interior.
+    assert h.witness_left[:h.witness_left_variant_offset] == "前文"
+    assert h.witness_left[h.witness_left_variant_offset:] == "A" * 10
+    assert h.witness_right[:h.witness_right_variant_end] == "B" * 10
+    assert h.witness_right[h.witness_right_variant_end:] == "後文"
 
 
 def test_witness_kwic_empty_for_master_hit(tmp_path):

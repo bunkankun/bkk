@@ -228,6 +228,8 @@ def search(
                 right=h.right,
                 witness_left=h.witness_left,
                 witness_right=h.witness_right,
+                witness_left_variant_offset=h.witness_left_variant_offset,
+                witness_right_variant_end=h.witness_right_variant_end,
                 overlays=[
                     VariantOverlayOut(
                         master_offset=o.master_offset,

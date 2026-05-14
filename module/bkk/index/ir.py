@@ -40,6 +40,14 @@ class Hit:
     witness text for witness-mediated hits — useful when a long variant
     reading replaces a short master span and the master KWIC window
     doesn't itself contain the matched substring. Empty for master hits.
+
+    ``witness_left_variant_offset`` is the index within ``witness_left`` at
+    which the variant content begins (everything before it is master/identity
+    text — the same chars the master line shows). ``witness_right_variant_end``
+    is the index within ``witness_right`` at which the variant content ends.
+    Callers use these to split each side into ``anchor`` (master surroundings)
+    and ``interior`` (variant chars) and to optionally collapse the interior
+    for display.
     """
 
     textid: str
@@ -58,3 +66,5 @@ class Hit:
     voice_stack: tuple[str, ...]
     witness_left: str = ""
     witness_right: str = ""
+    witness_left_variant_offset: int = 0
+    witness_right_variant_end: int = 0

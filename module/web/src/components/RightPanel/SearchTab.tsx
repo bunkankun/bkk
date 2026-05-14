@@ -31,12 +31,41 @@ function trimRightContext(s: string, maxChars = 32): string {
   return s.slice(0, maxChars);
 }
 
+// Witness-line collapse: when the variant-interior portion (between the
+// master anchor and the match) is longer than COLLAPSE_THRESHOLD, hide the
+// bulk and keep WITNESS_NEAR_CHARS adjacent to the match. The hidden text
+// is exposed via the chip's title attribute for hover preview.
+const WITNESS_NEAR_CHARS = 4;
+const COLLAPSE_THRESHOLD = 6;
+
 function HitRow({ hit }: { hit: SearchHit }) {
   const witness = hit.matched_via !== "master" ? hit.matched_via : null;
   const left = trimLeftContext(hit.left);
   const right = trimRightContext(hit.right);
   const leftElided = left.length < hit.left.length;
   const rightElided = right.length < hit.right.length;
+  const wLeftRaw = hit.witness_left ?? "";
+  const wRightRaw = hit.witness_right ?? "";
+  const showWitnessLine = witness !== null && (wLeftRaw.length > 0 || wRightRaw.length > 0);
+  // Split each side into anchor (master/identity, shared with master line)
+  // and interior (variant chars). Trim only the anchor with the master-line
+  // trim helpers; collapse the interior when long.
+  const wLeftVarOff = Math.max(0, Math.min(wLeftRaw.length, hit.witness_left_variant_offset ?? 0));
+  const wRightVarEnd = Math.max(0, Math.min(wRightRaw.length, hit.witness_right_variant_end ?? 0));
+  const wLeftAnchorRaw = wLeftRaw.slice(0, wLeftVarOff);
+  const wLeftInterior = wLeftRaw.slice(wLeftVarOff);
+  const wLeftAnchor = trimLeftContext(wLeftAnchorRaw);
+  const wLeftAnchorElided = wLeftAnchor.length < wLeftAnchorRaw.length;
+  const wLeftCollapse = wLeftInterior.length > COLLAPSE_THRESHOLD;
+  const wLeftNear = wLeftCollapse ? wLeftInterior.slice(-WITNESS_NEAR_CHARS) : wLeftInterior;
+  const wLeftHidden = wLeftCollapse ? wLeftInterior.slice(0, -WITNESS_NEAR_CHARS) : "";
+  const wRightInterior = wRightRaw.slice(0, wRightVarEnd);
+  const wRightAnchorRaw = wRightRaw.slice(wRightVarEnd);
+  const wRightAnchor = trimRightContext(wRightAnchorRaw);
+  const wRightAnchorElided = wRightAnchor.length < wRightAnchorRaw.length;
+  const wRightCollapse = wRightInterior.length > COLLAPSE_THRESHOLD;
+  const wRightNear = wRightCollapse ? wRightInterior.slice(0, WITNESS_NEAR_CHARS) : wRightInterior;
+  const wRightHidden = wRightCollapse ? wRightInterior.slice(WITNESS_NEAR_CHARS) : "";
   return (
     <button
       type="button"
@@ -61,6 +90,27 @@ function HitRow({ hit }: { hit: SearchHit }) {
           {rightElided ? <span className="kwic-ell">…</span> : null}
         </span>
       </div>
+      {showWitnessLine && (
+        <div className="kwic-line kwic-line-witness">
+          <span className="kwic-left">
+            {wLeftAnchorElided ? <span className="kwic-ell">…</span> : null}
+            {wLeftAnchor}
+            {wLeftCollapse ? (
+              <span className="kwic-fold" title={wLeftHidden}>⟨…⟩</span>
+            ) : null}
+            {wLeftNear}
+          </span>
+          <mark className="kwic-match">{hit.matched_text}</mark>
+          <span className="kwic-right">
+            {wRightNear}
+            {wRightCollapse ? (
+              <span className="kwic-fold" title={wRightHidden}>⟨…⟩</span>
+            ) : null}
+            {wRightAnchor}
+            {wRightAnchorElided ? <span className="kwic-ell">…</span> : null}
+          </span>
+        </div>
+      )}
     </button>
   );
 }

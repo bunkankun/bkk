@@ -990,6 +990,32 @@ button {
   border-radius: 2px;
   font-weight: 600;
 }
+.kwic-line-witness {
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 1px;
+  opacity: 0.78;
+}
+.kwic-line-witness .kwic-left,
+.kwic-line-witness .kwic-right {
+  color: var(--t3);
+}
+.kwic-line-witness .kwic-match {
+  background: var(--amb-d);
+  color: var(--amb);
+}
+.kwic-fold {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 2px;
+  border: 1px dotted var(--bdr-l);
+  border-radius: 2px;
+  color: var(--t3);
+  cursor: help;
+  font-family: var(--fm);
+  font-size: 10px;
+  vertical-align: baseline;
+}
 .kwic-pager {
   display: flex;
   gap: 6px;
