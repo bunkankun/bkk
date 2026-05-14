@@ -99,6 +99,51 @@ def test_variant_only_character_finds_master_position(tmp_path):
     assert ("SBCK", "甞", 3) in overlays_w
 
 
+def test_witness_kwic_for_long_replacement(tmp_path):
+    """Witness hits whose match lives inside a long variant reading expose
+    KWIC drawn from the witness text, so callers can show where in the
+    variant reading the match actually sits.
+    """
+    body = "前文短後文"
+    # Witness TKD replaces the 1-char master span '短' with a longer reading
+    # whose only occurrence of '方便' is buried in the middle.
+    variants = [{"offset": 2, "length": 1, "content": "短", "TKD": "甲乙方便丙丁"}]
+    bundle = _write_bundle(
+        tmp_path, "TEST_LONG_VARIANT", body, variants,
+        editions=[{"short": "TKD", "label": "TKD"}],
+    )
+    bkkx = build_index(bundle)
+    with Index(bkkx) as ix:
+        hits = list(ix.search("方便", context=2))
+
+    assert len(hits) == 1
+    h = hits[0]
+    assert h.matched_via == "TKD"
+    # Master anchor: still the 1-char span that the variant replaces.
+    assert h.master_offset == 2
+    assert h.master_length == 1
+    assert h.match == "短"
+    # Witness KWIC: drawn from the witness text, with 方便 actually in it.
+    assert h.matched_text == "方便"
+    assert h.witness_left == "甲乙"
+    assert h.witness_right == "丙丁"
+
+
+def test_witness_kwic_empty_for_master_hit(tmp_path):
+    """Master-text hits have no witness KWIC."""
+    body = "ABCDEFGHIJ"
+    bundle = _write_bundle(tmp_path, "TEST_MASTER_KWIC", body, [],
+                           editions=[{"short": "X", "label": "x"}])
+    bkkx = build_index(bundle)
+    with Index(bkkx) as ix:
+        hits = list(ix.search("CDE", context=2))
+    assert len(hits) == 1
+    h = hits[0]
+    assert h.matched_via == "master"
+    assert h.witness_left == ""
+    assert h.witness_right == ""
+
+
 def test_witness_filter(tmp_path):
     body = "ABCDE"
     variants = [

@@ -35,6 +35,11 @@ class Hit:
     lists every fully-containing range's name, outermost → innermost, so
     callers can display a path like ``("commentary", "sound-gloss")``
     without re-querying.
+
+    ``witness_left``/``witness_right`` carry KWIC context drawn from the
+    witness text for witness-mediated hits — useful when a long variant
+    reading replaces a short master span and the master KWIC window
+    doesn't itself contain the matched substring. Empty for master hits.
     """
 
     textid: str
@@ -51,3 +56,5 @@ class Hit:
     toc_label: str | None
     voice: str
     voice_stack: tuple[str, ...]
+    witness_left: str = ""
+    witness_right: str = ""

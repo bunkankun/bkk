@@ -57,6 +57,15 @@ class HitOut(BaseModel):
     left: str
     match: str
     right: str
+    witness_left: str = Field(
+        "",
+        description="KWIC left-context from the witness text (empty for master hits); "
+                    "useful when a long variant reading replaces a short master span",
+    )
+    witness_right: str = Field(
+        "",
+        description="KWIC right-context from the witness text (empty for master hits)",
+    )
     overlays: list[VariantOverlayOut] = []
     toc_label: str | None = None
     voice: str = Field(

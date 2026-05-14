@@ -226,6 +226,8 @@ def search(
                 left=h.left,
                 match=h.match,
                 right=h.right,
+                witness_left=h.witness_left,
+                witness_right=h.witness_right,
                 overlays=[
                     VariantOverlayOut(
                         master_offset=o.master_offset,

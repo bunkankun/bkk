@@ -191,10 +191,14 @@ class Index:
             # the master-text scan and would render as a duplicate KWIC line.
             if btext[m_off:m_off + m_len] == query:
                 continue
+            w_lo = max(0, pos - context)
+            w_hi = pos + len(query) + context
             hit = self._make_hit(
                 row["textid"], row["seq"], row["kind"], row["bucket_id"],
                 btext, m_off, m_len, label, query, context,
                 witness_text=wtext[pos:pos + len(query)],
+                witness_left=wtext[w_lo:pos],
+                witness_right=wtext[pos + len(query):w_hi],
             )
             if _passes_voice_filter(hit, voices):
                 yield hit
@@ -202,6 +206,7 @@ class Index:
     def _make_hit(
         self, textid, juan_seq, bucket_kind, bucket_id, bucket_text,
         m_off, m_len, matched_via, query, context, *, witness_text=None,
+        witness_left="", witness_right="",
     ) -> Hit:
         win_lo = max(0, m_off - context)
         win_hi = m_off + m_len + context
@@ -221,6 +226,8 @@ class Index:
             toc_label=self._toc_label(textid, juan_seq, bucket_kind, m_off),
             voice=voice,
             voice_stack=voice_stack,
+            witness_left=witness_left,
+            witness_right=witness_right,
         )
 
     def _classify_voice(
