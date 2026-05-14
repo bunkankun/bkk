@@ -754,13 +754,20 @@ def read_krp(recipe: Recipe) -> tuple[list[Bundle], Bundle | None]:
         # witness in declaration order. Witness page-breaks land in the
         # master at aligned offsets so a master reader sees the page
         # transitions of every edition, each carrying its own image.
+        # Juans are paired by ``seq`` (not list position) — e.g. TKD ships
+        # an extra juan 0 holding the title alone, which would otherwise
+        # shift every subsequent witness juan against the master.
         for wshort in ms.witnesses:
             wbundle = next(
                 (b for b in documentary if b.edition_short == wshort), None,
             )
             if wbundle is None:
                 continue
-            for mj, wj in zip(master.juans, wbundle.juans):
+            witness_by_seq = {wj.seq: wj for wj in wbundle.juans}
+            for mj in master.juans:
+                wj = witness_by_seq.get(mj.seq)
+                if wj is None:
+                    continue
                 _attach_variants(mj, wj, wshort)
                 _attach_witness_page_breaks(mj, wj)
 
