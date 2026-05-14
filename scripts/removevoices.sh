@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Walk a bkk corpus root and run `bkk voice remove` on every text-id bundle.
+# Walk a bkk corpus root and run `bkk voice remove` on every text-id bundle
+# that actually carries voice markers.
 #
-# `bkk voice remove` is idempotent: a bundle with no voice markers prints
-# a per-juan "no voice markers to remove" line and exits 0, so reruns
-# are cheap.
+# Voice markers serialize as flow-style mappings (`{type: voice, ...}`) in
+# juan YAML files; bundles with none are skipped without invoking the CLI.
 
 set -euo pipefail
 
@@ -80,18 +80,44 @@ if (( ${#only[@]} )); then
     bundles=("${filtered[@]}")
 fi
 
-total=${#bundles[@]}
-if (( total == 0 )); then
+discovered=${#bundles[@]}
+if (( discovered == 0 )); then
     echo "no bundles found under $root" >&2
     exit 0
 fi
 
-echo "root:    $root"
-echo "dry-run: $dry_run"
-echo "bundles: $total"
+# Pre-filter: only keep bundles whose juan YAMLs contain a voice marker.
+# Markers are written in flow style as `{type: voice, ...}`, so a single
+# recursive grep per bundle is enough; -q exits on the first hit.
+to_process=()
+skipped=0
+for bundle in "${bundles[@]}"; do
+    if grep -rqE --include='*.yaml' \
+            --exclude='*.manifest.yaml' \
+            --exclude='*.ann.yaml' \
+            --exclude='*.source.yaml' \
+            'type:[[:space:]]*voice' "$bundle"; then
+        to_process+=("$bundle")
+    else
+        skipped=$((skipped + 1))
+    fi
+done
+
+bundles=("${to_process[@]}")
+total=${#bundles[@]}
+
+echo "root:      $root"
+echo "dry-run:   $dry_run"
+echo "discovered: $discovered"
+echo "skipped:   $skipped (no voice markers)"
+echo "to process: $total"
 
 if (( list_only )); then
     printf '  %s\n' "${bundles[@]}"
+    exit 0
+fi
+
+if (( total == 0 )); then
     exit 0
 fi
 
