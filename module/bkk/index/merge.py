@@ -21,14 +21,27 @@ from .schema import SCHEMA_VERSION, TABLES_DDL, create_heavy_indices
 log = logging.getLogger("bkk.index")
 
 
-def discover_bundles(corpus_root: Path | str, prefix: str | None = None) -> list[Path]:
+def discover_bundles(
+    corpus_root: Path | str,
+    prefix: str | None = None,
+    max_depth: int = 4,
+) -> list[Path]:
     """Return bundle directories under ``corpus_root``, sorted by textid.
 
-    A directory ``X/`` qualifies iff ``X/X.manifest.yaml`` exists. Both the
-    flat layout (``<corpus>/<text-id>/``) and the sectioned layout produced
-    by ``bkk import --by-section`` (``<corpus>/<section>/<text-id>/``) are
-    discovered: any subdirectory that doesn't itself look like a bundle is
-    probed one level deeper for sectioned bundles. Mixed corpora work too.
+    A directory ``X/`` qualifies iff ``X/X.manifest.yaml`` exists. Several
+    on-disk layouts are supported, up to ``max_depth`` levels under
+    ``corpus_root``:
+
+    - flat:               ``<corpus>/<text-id>/``                       (depth 1)
+    - sectioned:          ``<corpus>/<section>/<text-id>/``             (depth 2,
+      e.g. ``bkk import --by-section``)
+    - sub-sectioned:      ``<corpus>/<sub>/<section>/<text-id>/``       (depth 3,
+      e.g. the devcorpus layout with ``krp/<section>/<bundle>/``)
+
+    Any non-bundle directory is descended into until ``max_depth`` is reached;
+    bundle dirs are never descended into (their internal edition manifests
+    don't share their parent's basename, so they can't be mistaken for
+    nested bundles). Mixed corpora work too.
 
     ``prefix`` filters by the *leaf* (text-id) name, mirroring the importer's
     ``--section`` flag — so ``prefix="KR1a"`` matches bundle ids starting
@@ -36,25 +49,21 @@ def discover_bundles(corpus_root: Path | str, prefix: str | None = None) -> list
     """
     corpus_root = Path(corpus_root)
     out: list[Path] = []
-    for sub in sorted(corpus_root.iterdir()):
-        if not sub.is_dir():
-            continue
-        if (sub / f"{sub.name}.manifest.yaml").exists():
-            if prefix and not sub.name.startswith(prefix):
+
+    def walk(d: Path, depth: int) -> None:
+        if depth > max_depth:
+            return
+        for sub in sorted(d.iterdir()):
+            if not sub.is_dir():
                 continue
-            out.append(sub)
-            continue
-        # ``sub`` isn't a bundle itself; treat it as a possible section dir
-        # and probe one level deeper. Non-section folders (no nested
-        # bundles) yield nothing and are silently skipped.
-        for grand in sorted(sub.iterdir()):
-            if not grand.is_dir():
+            if (sub / f"{sub.name}.manifest.yaml").exists():
+                if prefix and not sub.name.startswith(prefix):
+                    continue
+                out.append(sub)
                 continue
-            if not (grand / f"{grand.name}.manifest.yaml").exists():
-                continue
-            if prefix and not grand.name.startswith(prefix):
-                continue
-            out.append(grand)
+            walk(sub, depth + 1)
+
+    walk(corpus_root, 1)
     out.sort(key=lambda p: p.name)
     return out
 

@@ -94,6 +94,22 @@ def test_discover_bundles_mixed_layout(tmp_path):
     ]
 
 
+def test_discover_bundles_three_level_layout(tmp_path):
+    """The devcorpus mixes a 2-level TLS layout with a 3-level KRP layout
+    (``krp/<section>/<bundle>/``). Discovery must descend deep enough to
+    find KRP bundles while still picking up the shallower TLS ones."""
+    _write_bundle(tmp_path / "krp" / "KR1a", "KR1a0001", "abc")
+    _write_bundle(tmp_path / "krp" / "KR1a", "KR1a0002", "def")
+    _write_bundle(tmp_path / "tls", "KR3fc058", "ghi")
+
+    assert [b.name for b in discover_bundles(tmp_path)] == [
+        "KR1a0001", "KR1a0002", "KR3fc058",
+    ]
+    assert [b.name for b in discover_bundles(tmp_path, prefix="KR1a")] == [
+        "KR1a0001", "KR1a0002",
+    ]
+
+
 def test_merge_unions_sectioned_bundles(tmp_path):
     """End-to-end: merge_bundles works on a sectioned corpus."""
     _write_bundle(tmp_path / "KR0a", "KR0a0001", "abcDEFghi")
