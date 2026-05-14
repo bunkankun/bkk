@@ -115,3 +115,8 @@ serve:
 #   web_dist: /path/to/dist      # directory containing the built SPA
 #   corpus: /data/bkk/corpus     # override global.corpus for serve only
 #   index: /data/bkk/_corpus.bkkx
+#   image_base_urls:             # per-edition image URL prefix, applied at the
+#     krp: https://kanripo.org/images/   # /manifest endpoint. Replaces the
+#     tls: https://example.org/tls/      # bundle-declared value for that edition;
+#                                        # editions not listed here keep the
+#                                        # bundle's value. Keyed by edition short.

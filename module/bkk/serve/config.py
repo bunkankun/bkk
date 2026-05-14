@@ -17,6 +17,7 @@ class ServeConfig:
     reload: bool = False
     upstream_repo: str | None = None
     web_dist: Path | None = None
+    image_base_urls: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_env(
@@ -72,6 +73,16 @@ class ServeConfig:
         env_repo = os.environ.get("BKK_UPSTREAM_REPO")
         upstream_repo = env_repo if env_repo is not None else rc.get("upstream_repo")
 
+        rc_image_base_urls = rc.get("image_base_urls") or {}
+        if not isinstance(rc_image_base_urls, dict) or not all(
+            isinstance(k, str) and isinstance(v, str)
+            for k, v in rc_image_base_urls.items()
+        ):
+            raise ValueError(
+                "image_base_urls must be a mapping of edition-short → URL string "
+                "(both keys and values must be strings)"
+            )
+
         return cls(
             corpus_root=root,
             index_path=index,
@@ -81,6 +92,7 @@ class ServeConfig:
             reload=False,
             upstream_repo=upstream_repo,
             web_dist=web_dist,
+            image_base_urls=dict(rc_image_base_urls),
         )
 
     def merge_cli(

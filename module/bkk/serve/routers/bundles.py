@@ -105,7 +105,13 @@ def get_bundle(request: Request, textid: str = PathParam(..., openapi_examples=e
 def get_manifest(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> dict[str, Any]:
     state = request.app.state.bkk
     bundle = _bundle_dir(state.corpus_root, textid)
-    return _load_yaml(bundle / f"{textid}.manifest.yaml")
+    manifest = _load_yaml(bundle / f"{textid}.manifest.yaml")
+    override = state.config.image_base_urls
+    if override:
+        metadata = manifest.setdefault("metadata", {})
+        existing = metadata.get("image_base_urls") or {}
+        metadata["image_base_urls"] = {**existing, **override}
+    return manifest
 
 
 @router.get(

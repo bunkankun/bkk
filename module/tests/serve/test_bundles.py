@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from bkk.serve import create_app
+from bkk.serve.config import ServeConfig
+
+from .conftest import write_bundle
+
 
 def test_root(client):
     r = client.get("/")
@@ -99,3 +108,69 @@ def test_get_juan_unknown_bundle(client):
     r = client.get("/bundles/TEST9999/juan/1")
     assert r.status_code == 404
     assert r.json()["error"] == "bundle_not_found"
+
+
+def test_get_manifest_image_base_urls_override(tmp_path: Path):
+    """ServeConfig.image_base_urls replaces bundle entries per-edition; unlisted editions are preserved."""
+    write_bundle(
+        tmp_path,
+        "IMGT0001",
+        "甲乙",
+        title="img test",
+        extra_metadata={
+            "image_base_urls": {
+                "krp": "https://old.example/krp/",
+                "tls": "https://old.example/tls/",
+            }
+        },
+    )
+    config = ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+        image_base_urls={"krp": "https://new.example/krp/"},
+    )
+    client = TestClient(create_app(config))
+
+    r = client.get("/bundles/IMGT0001/manifest")
+    assert r.status_code == 200
+    base_urls = r.json()["metadata"]["image_base_urls"]
+    assert base_urls["krp"] == "https://new.example/krp/"
+    assert base_urls["tls"] == "https://old.example/tls/"
+
+
+def test_get_manifest_image_base_urls_added_when_bundle_lacks_field(tmp_path: Path):
+    """When the bundle has no image_base_urls, the override is added verbatim."""
+    write_bundle(tmp_path, "IMGT0002", "甲", title="img test 2")
+    config = ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+        image_base_urls={"krp": "https://new.example/krp/"},
+    )
+    client = TestClient(create_app(config))
+
+    r = client.get("/bundles/IMGT0002/manifest")
+    assert r.status_code == 200
+    assert r.json()["metadata"]["image_base_urls"] == {
+        "krp": "https://new.example/krp/"
+    }
+
+
+def test_get_manifest_no_override_leaves_manifest_untouched(tmp_path: Path):
+    """With no override configured, bundle's image_base_urls passes through unchanged."""
+    write_bundle(
+        tmp_path,
+        "IMGT0003",
+        "甲",
+        title="img test 3",
+        extra_metadata={"image_base_urls": {"krp": "https://bundle.example/krp/"}},
+    )
+    config = ServeConfig(
+        corpus_root=tmp_path, index_path=tmp_path / "_corpus.bkkx"
+    )
+    client = TestClient(create_app(config))
+
+    r = client.get("/bundles/IMGT0003/manifest")
+    assert r.status_code == 200
+    assert r.json()["metadata"]["image_base_urls"] == {
+        "krp": "https://bundle.example/krp/"
+    }
