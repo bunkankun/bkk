@@ -199,9 +199,10 @@ def _find_tls_texts(in_root: Path, text_id: str) -> list[Path]:
                    key=lambda p: (len(p.parts), str(p)))
     if exact:
         if len(exact) > 1:
+            paths = "\n  ".join(str(p) for p in exact)
             print(
                 f"warning: multiple matches for {text_id}.xml under {base}; "
-                f"using {exact[0]}",
+                f"using {exact[0]}\n  {paths}",
                 file=sys.stderr,
             )
         return [exact[0]]
@@ -266,6 +267,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sample", type=Path, default=None,
                    help="optional sample tree to diff against; emits a "
                         "divergence-from-sample.md alongside the output")
+    p.add_argument("--update-ids", dest="update_ids", action="store_true",
+                   default=False,
+                   help="tls: when a file's <idno type=\"kanripo\"> differs "
+                        "from its filename stem, replace every occurrence of "
+                        "the provisional id in the XML before importing "
+                        "(default: off)")
     return p
 
 
@@ -467,15 +474,83 @@ def _skip_filter_tls_pairs(
     return kept
 
 
+def _rewrite_ids(path: Path, old_id: str, new_id: str) -> Path:
+    """Write a temp file with every occurrence of ``old_id`` replaced by
+    ``new_id``. Returns the temp path; caller must delete it when done."""
+    import os
+    import tempfile
+
+    content = path.read_text(encoding="utf-8", errors="replace")
+    fd, tmp_str = tempfile.mkstemp(suffix=path.suffix)
+    try:
+        os.close(fd)
+        tmp_path = Path(tmp_str)
+        tmp_path.write_text(content.replace(old_id, new_id), encoding="utf-8")
+    except Exception:
+        os.unlink(tmp_str)
+        raise
+    return tmp_path
+
+
+def _prepare_tls_xml(
+    text_xml: Path, text_id: str, *, update_ids: bool,
+) -> tuple[str, Path]:
+    """Return ``(canonical_id, effective_xml_path)`` for import.
+
+    When ``update_ids`` is True and the file's ``<idno type="kanripo">``
+    differs from ``text_id``, returns the canonical id and a rewritten temp
+    file. The caller must delete the temp file when done (it differs from
+    ``text_xml`` iff a rename happened).
+
+    When no renaming is needed, returns ``(text_id, text_xml)`` unchanged.
+    """
+    kanripo_id = _read_kanripo_idno(text_xml)
+    if not kanripo_id or kanripo_id == text_id or not update_ids:
+        return text_id, text_xml
+
+    print(
+        f"note: {text_id}: replacing provisional id with {kanripo_id} "
+        f"before import",
+        file=sys.stderr,
+    )
+    return kanripo_id, _rewrite_ids(text_xml, text_id, kanripo_id)
+
+
 def _import_one_tls(args, text_id: str, text_xml: Path,
                     *, sample: Path | None) -> str:
     """Run read+write for one TLS text. Returns the canonical text id
     (from the file's ``<idno type="kanripo">``) under which the bundle
     was written — same as ``text_id`` for normal texts, but the parent
     canonical id for letter-suffix split sub-files."""
+    # Annotation files are looked up by the provisional id (the filename stem).
     swl_xml = args.in_root / "tls-data" / "notes" / "swl" / f"{text_id}-ann.xml"
     doc_xml = args.in_root / "tls-data" / "notes" / "doc" / f"{text_id}-ann.xml"
-    bundle = read_tls(text_xml, swl_xml, doc_xml, text_id)
+
+    update_ids = getattr(args, "update_ids", False)
+    canonical_id, effective_xml = _prepare_tls_xml(
+        text_xml, text_id, update_ids=update_ids,
+    )
+    # When renaming, patch annotation files too: their <seg xml:id="...">
+    # attributes carry the provisional id and must match the rewritten body
+    # markers for annotations to be linked correctly.
+    renamed = effective_xml is not text_xml
+    effective_swl = (
+        _rewrite_ids(swl_xml, text_id, canonical_id)
+        if renamed and swl_xml.exists() else swl_xml
+    )
+    effective_doc = (
+        _rewrite_ids(doc_xml, text_id, canonical_id)
+        if renamed and doc_xml.exists() else doc_xml
+    )
+    try:
+        bundle = read_tls(effective_xml, effective_swl, effective_doc, canonical_id)
+    finally:
+        if renamed:
+            effective_xml.unlink(missing_ok=True)
+            if effective_swl is not swl_xml:
+                effective_swl.unlink(missing_ok=True)
+            if effective_doc is not doc_xml:
+                effective_doc.unlink(missing_ok=True)
 
     # Use the canonical id from the bundle (split sub-files collapse onto
     # the parent id) so all parts of one logical text share one section

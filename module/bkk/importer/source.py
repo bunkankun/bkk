@@ -130,9 +130,10 @@ def resolve_local_repo(in_root: Path, text_id: str) -> Path:
             f"no directory named {text_id!r} found under {in_root}"
         )
     if len(matches) > 1:
+        paths = "\n  ".join(str(p) for p in matches)
         print(
             f"warning: multiple matches for {text_id} under {in_root}; "
-            f"using {matches[0]}",
+            f"using {matches[0]}\n  {paths}",
             file=sys.stderr,
         )
     return matches[0]
