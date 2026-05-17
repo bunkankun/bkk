@@ -543,7 +543,12 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
         if renamed and doc_xml.exists() else doc_xml
     )
     try:
-        bundle = read_tls(effective_xml, effective_swl, effective_doc, canonical_id)
+        bundle = read_tls(
+            effective_xml, effective_swl, effective_doc, canonical_id,
+            source_xml=text_xml if renamed else None,
+            source_swl=swl_xml if renamed and effective_swl is not swl_xml else None,
+            source_doc=doc_xml if renamed and effective_doc is not doc_xml else None,
+        )
     finally:
         if renamed:
             effective_xml.unlink(missing_ok=True)

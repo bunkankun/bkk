@@ -151,7 +151,10 @@ def _to_tree(elem) -> dict:
 
 
 def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
-             text_id: str) -> Bundle:
+             text_id: str, *,
+             source_xml: Path | None = None,
+             source_swl: Path | None = None,
+             source_doc: Path | None = None) -> Bundle:
     """Read one TLS text and return its Bundle.
 
     ``swl_ann`` and ``doc_ann`` are optional; when present they are concatenated
@@ -202,7 +205,11 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
         "text_id": krp_id,
         "format": "tls-cbeta" if flavor == "cbeta" else "tls",
         "format_version": 1,
-        "source_files": _source_files(text_xml, swl_ann, doc_ann),
+        "source_files": _source_files(
+            source_xml or text_xml,
+            source_swl or swl_ann,
+            source_doc or doc_ann,
+        ),
         "tei": tei_info,
         "divs": divs_info,
         "markers": markers_info,
