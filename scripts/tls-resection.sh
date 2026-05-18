@@ -2,7 +2,7 @@
 # Reorganize a flat tls-out tree into a sectioned tree:
 #   KR3a0001  -> KR3a/KR3a0001/
 #   KR3e0001  -> KR3e/KR3e0001/
-#   KR3ea001  -> KR3e/KR3ea/KR3ea001/
+#   KR3ea001  -> KR3ea/KR3ea001/
 #
 # Dry-run by default. Pass --apply to actually move things.
 
@@ -20,9 +20,9 @@ for arg in "$@"; do
             cat <<EOF
 usage: $(basename "$0") [--apply] [-v] [ROOT]
 
-Reorganize tls-out so each text-id sits under its 4-char section, with an
-extra subdivision level when the 5th char is a letter (KR3ea001 ->
-KR3e/KR3ea/KR3ea001/).
+Reorganize tls-out so each text-id sits under its section: 4-char when
+the 5th char is a digit, 5-char when it is a letter (KR3ea001 ->
+KR3ea/KR3ea001/).
 
 Without --apply, prints planned moves and exits without touching anything.
 EOF
@@ -70,7 +70,7 @@ while IFS= read -r path; do
     fifth="${name:4:1}"
     if [[ "$fifth" =~ [a-z] ]]; then
         subdiv="${name:0:5}"
-        dest="$root/$section/$subdiv/$name"
+        dest="$root/$subdiv/$name"
     else
         dest="$root/$section/$name"
     fi

@@ -72,6 +72,7 @@ def convert(xml_path: Path) -> str:
     if body is None:
         raise SystemExit(f"error: no <body> element in {xml_path}")
     text = (body.text or "") + "".join(render(c) for c in body)
+    text = "".join(line.lstrip(" \t") for line in text.splitlines(keepends=True))
     if text and not text.endswith("\n"):
         text += "\n"
     return text
