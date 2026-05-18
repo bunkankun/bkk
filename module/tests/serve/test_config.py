@@ -27,6 +27,7 @@ def test_root_reports_no_upstream_repo_by_default(client: TestClient):
     body = client.get("/").json()
     assert body["service"] == "bkk-serve"
     assert body["upstream_repo"] is None
+    assert body["catalog_path"].endswith("_catalog.bkkc")
 
 
 def test_root_echoes_upstream_repo_when_set(corpus: Path):
@@ -38,6 +39,7 @@ def test_root_echoes_upstream_repo_when_set(corpus: Path):
 def test_from_env_reads_upstream_repo(corpus: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("BKK_UPSTREAM_REPO", "env-org/env-repo")
     monkeypatch.delenv("BKK_INDEX_PATH", raising=False)
+    monkeypatch.delenv("BKK_CATALOG_PATH", raising=False)
     monkeypatch.delenv("BKK_WEB_DIST", raising=False)
 
     config = ServeConfig.from_env(corpus_root=corpus)
@@ -47,6 +49,7 @@ def test_from_env_reads_upstream_repo(corpus: Path, monkeypatch: pytest.MonkeyPa
 def test_from_env_unset_yields_none(corpus: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("BKK_UPSTREAM_REPO", raising=False)
     monkeypatch.delenv("BKK_INDEX_PATH", raising=False)
+    monkeypatch.delenv("BKK_CATALOG_PATH", raising=False)
     monkeypatch.delenv("BKK_WEB_DIST", raising=False)
 
     config = ServeConfig.from_env(corpus_root=corpus)
@@ -56,6 +59,7 @@ def test_from_env_unset_yields_none(corpus: Path, monkeypatch: pytest.MonkeyPatc
 def test_cli_flag_overrides_env(corpus: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("BKK_UPSTREAM_REPO", "env-org/env-repo")
     monkeypatch.delenv("BKK_INDEX_PATH", raising=False)
+    monkeypatch.delenv("BKK_CATALOG_PATH", raising=False)
     monkeypatch.delenv("BKK_WEB_DIST", raising=False)
 
     args = build_parser().parse_args(["--upstream-repo", "cli-org/cli-repo"])
@@ -85,6 +89,7 @@ def test_web_dist_env_and_cli(corpus: Path, tmp_path: Path, monkeypatch: pytest.
 
     monkeypatch.setenv("BKK_WEB_DIST", str(web_a))
     monkeypatch.delenv("BKK_INDEX_PATH", raising=False)
+    monkeypatch.delenv("BKK_CATALOG_PATH", raising=False)
     monkeypatch.delenv("BKK_UPSTREAM_REPO", raising=False)
 
     base = ServeConfig.from_env(corpus_root=corpus)
@@ -92,3 +97,20 @@ def test_web_dist_env_and_cli(corpus: Path, tmp_path: Path, monkeypatch: pytest.
 
     config = base.merge_cli(web_dist=web_b)
     assert config.web_dist == web_b.resolve()
+
+
+def test_catalog_path_env_and_cli(corpus: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    env_catalog = tmp_path / "env.bkkc"
+    cli_catalog = tmp_path / "cli.bkkc"
+
+    monkeypatch.setenv("BKK_CATALOG_PATH", str(env_catalog))
+    monkeypatch.delenv("BKK_INDEX_PATH", raising=False)
+    monkeypatch.delenv("BKK_WEB_DIST", raising=False)
+    monkeypatch.delenv("BKK_UPSTREAM_REPO", raising=False)
+
+    base = ServeConfig.from_env(corpus_root=corpus)
+    assert base.catalog_path == env_catalog.resolve()
+
+    args = build_parser().parse_args(["--catalog", str(cli_catalog)])
+    config = base.merge_cli(catalog_path=args.catalog_path)
+    assert config.catalog_path == cli_catalog.resolve()

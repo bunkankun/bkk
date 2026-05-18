@@ -18,7 +18,8 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Path as PathParam, Request
 from fastapi.responses import JSONResponse
 
-from bkk.index import build_index, merge_bundles
+from bkk.index import build_catalog_index, build_index, merge_bundles
+from bkk.index.catalog import default_catalog_csv
 from bkk.validator import validate_bundle
 
 from fastapi import HTTPException
@@ -75,6 +76,15 @@ def _run_merge(jobs: JobRegistry, job_id: str, corpus_root, out_path):
         jobs.mark_error(job_id, exc)
 
 
+def _run_catalog_index(jobs: JobRegistry, job_id: str, corpus_root, csv_path, out_path):
+    jobs.mark_running(job_id)
+    try:
+        out = build_catalog_index(corpus_root, csv_path, out_path)
+        jobs.mark_done(job_id, {"catalog_path": str(out)})
+    except Exception as exc:
+        jobs.mark_error(job_id, exc)
+
+
 def _run_validate(jobs: JobRegistry, job_id: str, bundle_dir):
     jobs.mark_running(job_id)
     try:
@@ -113,6 +123,33 @@ def post_index_all(
     job = state.jobs.create(kind="merge", target=None)
     background.add_task(
         _run_merge, state.jobs, job.id, state.corpus_root, state.index_path,
+    )
+    return _accepted(job)
+
+
+@router.post(
+    "/catalog",
+    summary="Rebuild the corpus catalog index",
+)
+def post_catalog_index(
+    request: Request,
+    background: BackgroundTasks,
+    state: AppState = Depends(_require_admin),
+) -> JSONResponse:
+    csv_path = default_catalog_csv()
+    if csv_path is None:
+        raise errors.bad_request(
+            "catalog_frontmatter_missing",
+            reason="could not find catalog/frontmatter.csv from the current directory",
+        )
+    job = state.jobs.create(kind="catalog", target=None)
+    background.add_task(
+        _run_catalog_index,
+        state.jobs,
+        job.id,
+        state.corpus_root,
+        csv_path,
+        state.catalog_path,
     )
     return _accepted(job)
 

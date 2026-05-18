@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import threading
 import time
 import uuid
@@ -109,6 +110,10 @@ class AppState:
         return self.config.index_path
 
     @property
+    def catalog_path(self) -> Path | None:
+        return self.config.catalog_path
+
+    @property
     def cache(self) -> CorpusCache:
         if self._cache is None:
             self._cache = CorpusCache(self.corpus_root)
@@ -145,3 +150,14 @@ class AppState:
         if path is None:
             return None
         return Index(path)
+
+    def open_catalog(self) -> sqlite3.Connection | None:
+        """Open a read-only handle on the catalog index, or ``None`` if absent."""
+        path = self.catalog_path
+        if path is None or not path.exists():
+            return None
+        try:
+            return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        except sqlite3.DatabaseError as exc:
+            log.warning("catalog index unavailable at %s: %s", path, exc)
+            return None

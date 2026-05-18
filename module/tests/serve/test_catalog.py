@@ -7,10 +7,25 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from bkk.index import build_catalog_index
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
 
 from .conftest import write_bundle
+
+
+def _write_frontmatter(path: Path, rows: list[dict[str, str]]) -> Path:
+    fields = [
+        "id", "title", "titlePinyin", "titleEnglish",
+        "notBefore", "notAfter", "dzt_date",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        import csv
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key, "") for key in fields})
+    return path
 
 
 @pytest.fixture
@@ -141,3 +156,63 @@ def test_catalog_pagination(cat_client: TestClient):
     body2 = r2.json()
     assert body2["next_offset"] is None
     assert len(body2["matches"]) == 1
+
+
+def test_catalog_categories_use_bkkc_counts(tmp_path: Path):
+    write_bundle(tmp_path, "KR1h0001", "甲", title="Late", identifiers={"krp": "KR1h0001"})
+    write_bundle(tmp_path, "KR1h0002", "乙", title="Early", identifiers={"krp": "KR1h0002"})
+    csv_path = _write_frontmatter(
+        tmp_path / "frontmatter.csv",
+        [
+            {"id": "KR1", "title": "經部"},
+            {"id": "KR1h", "title": "四書類"},
+            {"id": "KR1h0001", "title": "晚書", "notBefore": "100", "notAfter": "100"},
+            {"id": "KR1h0002", "title": "早書", "notBefore": "1", "notAfter": "1"},
+        ],
+    )
+    catalog_path = build_catalog_index(tmp_path, csv_path, tmp_path / "_catalog.bkkc")
+    client = TestClient(create_app(ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+        catalog_path=catalog_path,
+    )))
+
+    body = client.get("/catalog/categories").json()
+    kr1 = next(cat for cat in body["categories"] if cat["code"] == "KR1")
+    kr1h = next(sub for sub in kr1["subcategories"] if sub["code"] == "KR1h")
+    assert kr1["bundle_count"] == 2
+    assert kr1h["bundle_count"] == 2
+
+
+def test_catalog_browse_uses_bkkc_for_category_sort_and_metadata(tmp_path: Path):
+    write_bundle(tmp_path, "KR1h0001", "甲", title="Late", identifiers={"krp": "KR1h0001"})
+    write_bundle(tmp_path, "KR1h0002", "乙", title="Early", identifiers={"krp": "KR1h0002"})
+    csv_path = _write_frontmatter(
+        tmp_path / "frontmatter.csv",
+        [
+            {"id": "KR1", "title": "經部"},
+            {"id": "KR1h", "title": "四書類"},
+            {
+                "id": "KR1h0001", "title": "晚書", "titlePinyin": "Wanshu",
+                "titleEnglish": "Late Book", "notBefore": "100", "notAfter": "100",
+            },
+            {
+                "id": "KR1h0002", "title": "早書", "titlePinyin": "Zaoshu",
+                "titleEnglish": "Early Book", "notBefore": "1", "notAfter": "1",
+            },
+        ],
+    )
+    catalog_path = build_catalog_index(tmp_path, csv_path, tmp_path / "_catalog.bkkc")
+    client = TestClient(create_app(ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+        catalog_path=catalog_path,
+    )))
+
+    body = client.get("/catalog", params={"tags.kr-categories": "KR1h"}).json()
+
+    assert body["total"] == 2
+    assert [m["textid"] for m in body["matches"]] == ["KR1h0002", "KR1h0001"]
+    assert body["matches"][0]["title"] == "早書"
+    assert body["matches"][0]["metadata"]["index_date"] == 1
+    assert body["matches"][0]["metadata"]["title_pinyin"] == "Zaoshu"

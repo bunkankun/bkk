@@ -11,6 +11,7 @@ from pathlib import Path
 class ServeConfig:
     corpus_root: Path
     index_path: Path
+    catalog_path: Path | None = None
     host: str = "127.0.0.1"
     port: int = 8000
     admin_token: str | None = None
@@ -18,6 +19,12 @@ class ServeConfig:
     upstream_repo: str | None = None
     web_dist: Path | None = None
     image_base_urls: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.catalog_path is None:
+            object.__setattr__(
+                self, "catalog_path", self.corpus_root / "_catalog.bkkc"
+            )
 
     @classmethod
     def from_env(
@@ -51,6 +58,15 @@ class ServeConfig:
             index = Path(rc_index).resolve()
         else:
             index = root / "_corpus.bkkx"
+
+        env_catalog = os.environ.get("BKK_CATALOG_PATH")
+        rc_catalog = rc.get("catalog")
+        if env_catalog:
+            catalog: Path | None = Path(env_catalog).resolve()
+        elif rc_catalog:
+            catalog = Path(rc_catalog).resolve()
+        else:
+            catalog = root / "_catalog.bkkc"
 
         env_web_dist = os.environ.get("BKK_WEB_DIST")
         rc_web_dist = rc.get("web_dist")
@@ -86,6 +102,7 @@ class ServeConfig:
         return cls(
             corpus_root=root,
             index_path=index,
+            catalog_path=catalog,
             host=host,
             port=port,
             admin_token=admin_token,
@@ -100,6 +117,7 @@ class ServeConfig:
         *,
         corpus_root: Path | str | None = None,
         index_path: Path | str | None = None,
+        catalog_path: Path | str | None = None,
         host: str | None = None,
         port: int | None = None,
         admin_token: str | None = None,
@@ -113,6 +131,8 @@ class ServeConfig:
             updates["corpus_root"] = Path(corpus_root).resolve()
         if index_path is not None:
             updates["index_path"] = Path(index_path).resolve()
+        if catalog_path is not None:
+            updates["catalog_path"] = Path(catalog_path).resolve()
         if host is not None:
             updates["host"] = host
         if port is not None:

@@ -10,8 +10,12 @@ readings that intersect it.
 """
 
 from .build import build_index
+from .catalog import build_catalog_index
 from .ir import Hit, VariantOverlay
 from .merge import merge_bundles
 from .query import Index
 
-__all__ = ["Index", "Hit", "VariantOverlay", "build_index", "merge_bundles"]
+__all__ = [
+    "Index", "Hit", "VariantOverlay",
+    "build_index", "build_catalog_index", "merge_bundles",
+]

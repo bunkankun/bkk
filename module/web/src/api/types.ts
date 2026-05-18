@@ -229,6 +229,7 @@ export interface ServerInfo {
   version?: string;
   corpus_root?: string;
   index_path?: string;
+  catalog_path?: string;
   upstream_repo?: string | null;
   docs?: string;
   openapi?: string;

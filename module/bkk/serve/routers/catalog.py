@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import functools
 import re
+import sqlite3
 from collections import Counter
 from importlib.resources import files
 from typing import Any
@@ -20,6 +21,7 @@ from pydantic import BaseModel
 
 from bkk.serve import _examples as ex, errors
 from bkk.serve.catalog import FILTERS, CatalogService, _kr_categories
+from bkk.serve.state import AppState
 from bkk.serve.schemas import (
     CatalogMatchOut,
     CatalogResponse,
@@ -77,12 +79,7 @@ def _natural_key(code: str) -> tuple[int, str]:
 )
 def categories(request: Request) -> CategoriesResponse:
     state = request.app.state.bkk
-    snap = state.cache.get()
-
-    counts: Counter[str] = Counter()
-    for rec in snap.records:
-        for code in _kr_categories(rec):
-            counts[code] += 1
+    counts, counts_are_descendant = _category_counts(state)
 
     yaml_data = _load_kr_categories()
     grouped: dict[str, list[str]] = {}
@@ -111,7 +108,10 @@ def categories(request: Request) -> CategoriesResponse:
             )
             for sub in sub_codes
         ]
-        descendant_count = counts.get(top, 0) + sum(n.bundle_count for n in sub_list)
+        if counts_are_descendant:
+            descendant_count = counts.get(top, sum(n.bundle_count for n in sub_list))
+        else:
+            descendant_count = counts.get(top, 0) + sum(n.bundle_count for n in sub_list)
         out.append(
             TopCategory(
                 code=top,
@@ -170,6 +170,10 @@ def browse(request: Request) -> CatalogResponse:
             allowed=service.whitelist(),
         )
 
+    indexed = _browse_catalog_index(state, filters, limit=limit, offset=offset)
+    if indexed is not None:
+        return indexed
+
     page = service.query(filters, limit=limit, offset=offset)
 
     matches: list[CatalogMatchOut] = []
@@ -212,6 +216,128 @@ def browse(request: Request) -> CatalogResponse:
         offset=offset,
         limit=limit,
         next_offset=page.next_offset,
+        filters_applied=filters,
+        matches=matches,
+        recipe={"pins": [p.model_dump(exclude_none=True) for p in pins]},
+    )
+
+
+def _category_counts(state: AppState) -> tuple[Counter[str], bool]:
+    conn = state.open_catalog()
+    if conn is not None:
+        try:
+            rows = conn.execute(
+                "SELECT code, descendant_bundle_count FROM catalog_section"
+            ).fetchall()
+            return Counter({code: count for code, count in rows}), True
+        except sqlite3.DatabaseError:
+            pass
+        finally:
+            conn.close()
+
+    snap = state.cache.get()
+    counts: Counter[str] = Counter()
+    for rec in snap.records:
+        for code in _kr_categories(rec):
+            counts[code] += 1
+    return counts, False
+
+
+def _browse_catalog_index(
+    state: AppState,
+    filters: dict[str, list[str]],
+    *,
+    limit: int,
+    offset: int,
+) -> CatalogResponse | None:
+    if any(key != "tags.kr-categories" for key in filters):
+        return None
+    wanted = {
+        value.strip()
+        for value in filters.get("tags.kr-categories", [])
+        if value and value.strip()
+    }
+
+    conn = state.open_catalog()
+    if conn is None:
+        return None
+    conn.row_factory = sqlite3.Row
+    try:
+        params: list[Any] = []
+        where = ""
+        if wanted:
+            placeholders = ",".join("?" for _ in wanted)
+            where = f"WHERE section_code IN ({placeholders})"
+            params.extend(sorted(wanted))
+
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM catalog_bundle {where}", params
+        ).fetchone()[0]
+        rows = conn.execute(
+            "SELECT * FROM catalog_bundle "
+            f"{where} "
+            "ORDER BY index_date, textid LIMIT ? OFFSET ?",
+            [*params, limit, offset],
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return None
+    finally:
+        conn.close()
+
+    snap = state.cache.get()
+    matches: list[CatalogMatchOut] = []
+    pins: list[RecipePin] = []
+    for row in rows:
+        rec = snap.by_textid.get(row["textid"])
+        title = row["title"] or (rec.title if rec is not None else None)
+        canonical_identifier = (
+            rec.canonical_identifier if rec is not None else row["canonical_identifier"]
+        )
+        manifest_hash = rec.manifest_hash if rec is not None else row["manifest_hash"]
+        edition_short = rec.edition_short if rec is not None else None
+        base_edition = rec.base_edition if rec is not None else None
+        metadata = {
+            "tags.kr-categories": [row["section_code"]],
+            "section_code": row["section_code"],
+            "title_pinyin": row["title_pinyin"],
+            "title_english": row["title_english"],
+            "not_before": row["not_before"],
+            "not_after": row["not_after"],
+            "dzt_date": row["dzt_date"],
+            "index_date": row["index_date"],
+            "index_date_source": row["index_date_source"],
+        }
+        matches.append(
+            CatalogMatchOut(
+                textid=row["textid"],
+                canonical_identifier=canonical_identifier,
+                title=title,
+                edition_short=edition_short,
+                base_edition=base_edition,
+                metadata={k: v for k, v in metadata.items() if v is not None},
+            )
+        )
+        pins.append(
+            RecipePin(
+                role="match",
+                canonical_identifier=canonical_identifier,
+                textid=row["textid"],
+                hash=manifest_hash,
+                metadata={
+                    "title": title,
+                    "edition_short": edition_short,
+                    "base_edition": base_edition,
+                    "index_date": row["index_date"],
+                },
+            )
+        )
+
+    next_off = offset + limit if offset + limit < total else None
+    return CatalogResponse(
+        total=total,
+        offset=offset,
+        limit=limit,
+        next_offset=next_off,
         filters_applied=filters,
         matches=matches,
         recipe={"pins": [p.model_dump(exclude_none=True) for p in pins]},

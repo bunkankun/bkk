@@ -3,6 +3,8 @@
 Subcommands::
 
     python -m bkk.index build <bundle_dir> [--out PATH]
+    python -m bkk.index catalog <corpus> [--csv PATH] [--out PATH]
+                                         [--prefix KR3a]
     python -m bkk.index merge <corpus> [--out PATH] [--prefix KR3a]
                                        [--rebuild | --no-build]
     python -m bkk.index search <bkkx_path> <query> [--context N]
@@ -17,6 +19,7 @@ import argparse
 from pathlib import Path
 
 from .build import build_index
+from .catalog import build_catalog_index, default_catalog_csv
 from .ir import Hit
 from .merge import merge_bundles
 from .query import Index
@@ -47,6 +50,19 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--no-build", action="store_true",
                      help="error if any per-bundle .bkkx is missing or stale")
 
+    pc = sub.add_parser("catalog", help="build a .bkkc catalog index for a corpus")
+    pc.add_argument("corpus", type=Path, nargs="?", default=None,
+                    help="corpus directory (or set global.corpus in .bkkrc)")
+    pc.add_argument("--csv", type=Path, default=None, dest="csv_path",
+                    help="frontmatter CSV path "
+                         "(default: nearest catalog/frontmatter.csv)")
+    pc.add_argument("--out", type=Path, default=None,
+                    help="catalog .bkkc output path "
+                         "(default: <corpus>/_catalog.bkkc)")
+    pc.add_argument("--prefix", default=None,
+                    help="restrict to bundles whose textid starts with PREFIX "
+                         "(e.g. KR3a)")
+
     ps = sub.add_parser("search", help="run a KWIC query against a .bkkx index")
     ps.add_argument("index_path", type=Path)
     ps.add_argument("query")
@@ -73,13 +89,24 @@ def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.cmd == "merge":
+    if args.cmd in ("merge", "catalog"):
         if args.corpus is None:
             args.corpus = idx.get("corpus") or g.get("corpus")
         if args.corpus is None:
             parser.error("corpus is required (or set global.corpus in .bkkrc)")
+    if args.cmd == "merge":
         if args.out is None:
             args.out = Path(idx.get("out") or args.corpus / "_corpus.bkkx")
+    if args.cmd == "catalog":
+        if args.out is None:
+            args.out = args.corpus / "_catalog.bkkc"
+        if args.csv_path is None:
+            args.csv_path = default_catalog_csv()
+        if args.csv_path is None:
+            parser.error(
+                "--csv is required (could not find catalog/frontmatter.csv "
+                "from the current directory or its parents)"
+            )
 
     if args.cmd == "build":
         path = build_index(args.bundle_dir, args.out)
@@ -91,6 +118,10 @@ def run(argv: list[str] | None = None) -> int:
             prefix=args.prefix, rebuild=args.rebuild, no_build=args.no_build,
             progress=True,
         )
+        print(f"wrote {path}")
+        return 0
+    if args.cmd == "catalog":
+        path = build_catalog_index(args.corpus, args.csv_path, args.out, prefix=args.prefix)
         print(f"wrote {path}")
         return 0
     if args.cmd == "search":

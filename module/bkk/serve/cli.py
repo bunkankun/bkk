@@ -2,7 +2,7 @@
 
 Usage::
 
-    bkk-serve --corpus <dir> [--index PATH] [--host H] [--port N]
+    bkk-serve --corpus <dir> [--index PATH] [--catalog PATH] [--host H] [--port N]
               [--admin-token TOKEN] [--reload]
               [--upstream-repo ORG/REPO] [--web-dist PATH]
 """
@@ -29,6 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--index", type=Path, default=None,
                    help="merged .bkkx index path "
                         "(default: <corpus>/_corpus.bkkx, built on startup if missing)")
+    p.add_argument("--catalog", type=Path, default=None, dest="catalog_path",
+                   help="catalog .bkkc index path "
+                        "(default: <corpus>/_catalog.bkkc)")
     p.add_argument("--host", default=None, help="bind address (default: 127.0.0.1)")
     p.add_argument("--port", type=int, default=None, help="port (default: 8000)")
     p.add_argument("--admin-token", default=None,
@@ -56,6 +59,7 @@ def run(argv: list[str] | None = None) -> int:
     config = base.merge_cli(
         corpus_root=args.corpus,
         index_path=args.index,
+        catalog_path=args.catalog_path,
         host=args.host,
         port=args.port,
         admin_token=args.admin_token,
@@ -72,6 +76,8 @@ def run(argv: list[str] | None = None) -> int:
         # values on each reload cycle.
         os.environ["BKK_CORPUS_ROOT"] = str(config.corpus_root)
         os.environ["BKK_INDEX_PATH"] = str(config.index_path)
+        if config.catalog_path is not None:
+            os.environ["BKK_CATALOG_PATH"] = str(config.catalog_path)
         os.environ["BKK_HOST"] = config.host
         os.environ["BKK_PORT"] = str(config.port)
         if config.admin_token is not None:

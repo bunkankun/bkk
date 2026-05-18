@@ -44,6 +44,7 @@ Open <http://127.0.0.1:8000>. FastAPI serves the built SPA at `/` and the API at
 |---------------------------|-----------------------|-------|
 | `--corpus PATH`           | `BKK_CORPUS_ROOT`     | required; bundle root |
 | `--index PATH`            | `BKK_INDEX_PATH`      | merged `.bkkx`; default `<corpus>/_corpus.bkkx` |
+| `--catalog PATH`          | `BKK_CATALOG_PATH`    | catalog `.bkkc`; default `<corpus>/_catalog.bkkc` |
 | `--host` / `--port`       | `BKK_HOST` / `BKK_PORT` | default `127.0.0.1:8000` |
 | `--admin-token TOKEN`     | `BKK_ADMIN_TOKEN`     | bearer required for `/admin/*`; if unset, admin is open |
 | `--reload`                | —                     | dev only; enables auto-reload + CORS for `:5173` |

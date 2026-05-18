@@ -202,6 +202,23 @@ source so they remain unique in the merged file. The merged artifact
 carries a `bundle` provenance table (textid, editions, source path,
 sha256 of the source `.bkkx`).
 
+### Catalog index
+
+```
+python -m bkk.index catalog <corpus> [--csv PATH] [--out PATH]   # default: <corpus>/_catalog.bkkc
+                                [--prefix KR3a]
+```
+
+Builds a lightweight companion SQLite catalog artifact (`.bkkc`) from
+`catalog/frontmatter.csv` and the bundles currently present in the corpus.
+It stores one row per available bundle with normalized `not_before`,
+`not_after`, optional `dzt_date`, and a precalculated `index_date` for
+frontend sorting/search ranking. If `dzt_date` contains multiple years,
+the catalog index applies the same midpoint / wide-range rule used for
+`not_before` and `not_after`. It also stores section rows with direct and
+descendant bundle counts. When `--csv` is omitted, the CLI looks for the
+nearest `catalog/frontmatter.csv` from the current directory upward.
+
 ### Search
 
 ```
