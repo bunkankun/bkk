@@ -273,6 +273,11 @@ def build_parser() -> argparse.ArgumentParser:
                         "from its filename stem, replace every occurrence of "
                         "the provisional id in the XML before importing "
                         "(default: off)")
+    p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                   default=False,
+                   help="tls: resolve and print the bundle names that would "
+                        "be written (with --update-ids remapping applied) "
+                        "without writing anything")
     return p
 
 
@@ -341,6 +346,9 @@ def _run_tls(args) -> int:
     if not pairs:
         print("error: no texts found to import", file=sys.stderr)
         return 2
+
+    if getattr(args, "dry_run", False):
+        return _dry_run_tls(args, pairs)
 
     # --on-exists skip: drop any text whose TLS bundle already exists on
     # disk before we prompt, so the bulk-confirm prompt only lists the
@@ -439,6 +447,22 @@ def _resolve_tls_targets(args) -> list[tuple[str, Path]]:
             continue
         pairs.append((tid, matches[0]))
     return pairs
+
+
+def _dry_run_tls(args, pairs: list[tuple[str, Path]]) -> int:
+    """Print the bundle names that would be written, without writing anything."""
+    update_ids = getattr(args, "update_ids", False)
+    for text_id, text_xml in pairs:
+        canonical_id, effective_xml = _prepare_tls_xml(
+            text_xml, text_id, update_ids=update_ids,
+        )
+        if effective_xml is not text_xml:
+            effective_xml.unlink(missing_ok=True)
+        if canonical_id != text_id:
+            print(f"{text_id} → {canonical_id}")
+        else:
+            print(canonical_id)
+    return 0
 
 
 def _skip_filter_tls_pairs(
