@@ -93,10 +93,9 @@ the consumer.
 ## Multiple pins
 
 A recipe can declare any number of pins, each with its own selection, and bind
-a dataset to each. The example below pins a base text and a narrow commentary
-slice of the same textid, collects `variant` markers from each, and renders
-both into a single Markdown report. A ready-to-run version lives at
-[module/recipes/multi-pin-inspection.yaml](../module/recipes/multi-pin-inspection.yaml).
+a dataset to each. The example below pins a base text and a commentary slice
+of the same textid, collects voice markers from each, and renders both into a
+single Markdown report.
 
 ```yaml
 kind: bkk.recipe/v1
@@ -111,66 +110,53 @@ pins:
     textid: KR3a0001
     selection:
       juan: 1
-      from: KR3a0001_SBCK_001-1a02
-      to: KR3a0001_WYG_001-1b
+      from: "002-3a"
+      to: "002-7b"
 
 datasets:
-  root_variants:
+  root_voices:
     from: root
     collect: markers
     where:
-      type: variant
+      type: voice
     include_text: true
-    context: 4
-  comm_variants:
+    context: 8
+  comm_voices:
     from: comm
     collect: markers
     where:
-      type: variant
+      type: voice
     include_text: true
-    context: 4
+    context: 8
 
 render:
   format: markdown
   template: |
-    # {{ pins.root.label }} — variants report
+    # {{ pins.root.label }} — voices report
 
-    ## Root pin (`{{ pins.root.role }}` — {{ pins.root.textid }}, juan {{ pins.root.selection.juan }})
-    {% for v in datasets.root_variants %}
-    - @{{ v.offset }}+{{ v.length }} `{{ v.left }}【{{ v.text }}】{{ v.right }}` → WYG: `{{ v.get('WYG') or '—' }}`
+    ## Root ({{ pins.root.textid }})
+    {% for v in datasets.root_voices %}
+    - {{ v.id }} @{{ v.offset }}+{{ v.length }} `{{ v.left }}[{{ v.text }}]{{ v.right }}`
     {% endfor %}
 
-    ## Commentary pin (`{{ pins.comm.role }}` — {{ pins.comm.textid }}, {{ pins.comm.selection.from }} → {{ pins.comm.selection.to }})
-    {% for v in datasets.comm_variants %}
-    - @{{ v.offset }}+{{ v.length }} `{{ v.left }}【{{ v.text }}】{{ v.right }}` → WYG: `{{ v.get('WYG') or '—' }}`
+    ## Commentary ({{ pins.comm.textid }}, {{ pins.comm.selection.from }}–{{ pins.comm.selection.to }})
+    {% for v in datasets.comm_voices %}
+    - {{ v.id }} @{{ v.offset }}+{{ v.length }} `{{ v.left }}[{{ v.text }}]{{ v.right }}`
     {% endfor %}
 ```
 
-Rendered output (truncated — the root pin produces many more lines than the
-narrow commentary slice):
+Rendered output (shape — values depend on the corpus):
 
 ```markdown
-# 孔子家語 — variants report
+# 周易 — voices report
 
-## Root pin (`base` — KR3a0001, juan 1)
-- @34+0 `食如禮年【】五十異食` → WYG: `十`
-- @35+1 `如禮年五【十】異食也强` → WYG: `—`
-- @67+1 `拾遺器不【雕】偽無文飾` → WYG: `彫`
-- @72+2 `偽無文飾【雕畫】不詐偽為` → WYG: `—`
-…
+## Root (KR3a0001)
+- v_001 @42+6 `…前文[彖曰乾元亨利]後文…`
+- v_002 @93+4 `…前文[文言曰]後文…`
 
-## Commentary pin (`commentary` — KR3a0001, KR3a0001_SBCK_001-1a02 → KR3a0001_WYG_001-1b)
-- @34+0 `食如禮年【】五十異食` → WYG: `十`
-- @35+1 `如禮年五【十】異食也强` → WYG: `—`
-- @67+1 `拾遺器不【雕】偽無文飾` → WYG: `彫`
-…
+## Commentary (KR3a0001, 002-3a–002-7b)
+- v_017 @588+5 `…前文[孔氏曰也]後文…`
 ```
-
-The commentary pin shares the same `textid` as root but narrows to offsets
-0–116 of juan 1, so its variant list is a subset of the root pin's. Marker
-IDs in `from` / `to` are full IDs as they appear in the bucket's `markers`
-list. Jinja runs with strict undefined values, so use `v.get('FIELD')` or a
-`default` filter for optional marker fields like edition labels.
 
 Notes:
 
