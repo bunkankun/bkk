@@ -62,6 +62,12 @@ def _check_referenced_files(ctx: ValidationContext) -> None:
                 "ANN_FILE_MISSING", "error", lf.rel,
                 f"annotation file referenced by manifest (seq={seq}) is missing",
             )
+    for seq, lf in ctx.marker_assets.items():
+        if not lf.exists:
+            ctx.report.add(
+                "MARKER_ASSET_MISSING", "error", lf.rel,
+                f"marker asset referenced by manifest (seq={seq}) is missing",
+            )
 
 
 def _check_orphan_juans(ctx: ValidationContext) -> None:
@@ -129,6 +135,12 @@ def _check_editions(ctx: ValidationContext) -> None:
                 ctx.report.add(
                     "JUAN_FILE_MISSING", "error", lf.rel,
                     f"edition juan file referenced (short={short}, seq={seq}) is missing",
+                )
+        for seq, lf in ed.marker_assets.items():
+            if not lf.exists:
+                ctx.report.add(
+                    "MARKER_ASSET_MISSING", "error", lf.rel,
+                    f"edition marker asset referenced (short={short}, seq={seq}) is missing",
                 )
         # Coverage: edition seq set must equal master seq set.
         ed_seqs = set(ed.juans.keys())

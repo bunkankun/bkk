@@ -5,8 +5,12 @@ from __future__ import annotations
 import unicodedata
 
 from ..context import ValidationContext, LoadedFile
+from bkk.marker_assets import (
+    STRUCTURAL_MARKER_TYPES,
+    VALID_BUCKETS,
+    effective_markers_for_bucket,
+)
 
-VALID_BUCKETS = ("front", "body", "back")
 KNOWN_MARKER_TYPES = {
     "page-break", "line-break", "indent", "punctuation", "paragraph-break",
     "comment", "head", "variant", "voice",
@@ -16,7 +20,7 @@ KNOWN_MARKER_TYPES = {
 }
 
 REQUIRED_JUAN_KEYS = ("canonical_identifier", "seq", "body", "metadata", "hash")
-REQUIRED_BUCKET_KEYS = ("text", "hash", "markers")
+REQUIRED_BUCKET_KEYS = ("text", "hash")
 
 
 def run(ctx: ValidationContext) -> None:
@@ -37,7 +41,18 @@ def run(ctx: ValidationContext) -> None:
         allowed_master_editions = declared_shorts | on_disk_shorts | {"krp"}
 
     for lf in ctx.master_juans.values():
-        _check_juan(ctx, lf, allowed_marker_editions=allowed_master_editions)
+        seq = lf.data.get("seq") if isinstance(lf.data, dict) else None
+        marker_asset = (
+            ctx.marker_assets.get(seq).data
+            if isinstance(seq, int)
+            and ctx.marker_assets.get(seq) is not None
+            and isinstance(ctx.marker_assets[seq].data, dict)
+            else None
+        )
+        _check_juan(
+            ctx, lf, marker_asset=marker_asset,
+            allowed_marker_editions=allowed_master_editions,
+        )
     for short, ed in ctx.editions.items():
         # editions/krp/ is the demoted KRP master in a TLS+KRP merge — it
         # legitimately carries page-break ids from every witness, so apply
@@ -46,7 +61,18 @@ def run(ctx: ValidationContext) -> None:
             allowed_master_editions if short == "krp" else {short}
         )
         for lf in ed.juans.values():
-            _check_juan(ctx, lf, allowed_marker_editions=allowed)
+            seq = lf.data.get("seq") if isinstance(lf.data, dict) else None
+            marker_asset = (
+                ed.marker_assets.get(seq).data
+                if isinstance(seq, int)
+                and ed.marker_assets.get(seq) is not None
+                and isinstance(ed.marker_assets[seq].data, dict)
+                else None
+            )
+            _check_juan(
+                ctx, lf, marker_asset=marker_asset,
+                allowed_marker_editions=allowed,
+            )
 
 
 def _declared_witness_shorts(ctx: ValidationContext) -> set[str]:
@@ -60,6 +86,7 @@ def _declared_witness_shorts(ctx: ValidationContext) -> set[str]:
 
 def _check_juan(
     ctx: ValidationContext, lf: LoadedFile, *,
+    marker_asset: dict | None,
     allowed_marker_editions: set[str] | None,
 ) -> None:
     if not lf.exists:
@@ -105,13 +132,14 @@ def _check_juan(
     for bucket_name in bucket_keys_present:
         _check_bucket(
             ctx, lf, allowed_marker_editions=allowed_marker_editions,
-            bucket_name=bucket_name,
+            bucket_name=bucket_name, marker_asset=marker_asset,
         )
 
 
 def _check_bucket(
     ctx: ValidationContext, lf: LoadedFile, *,
     allowed_marker_editions: set[str] | None, bucket_name: str,
+    marker_asset: dict | None,
 ) -> None:
     bucket = lf.data.get(bucket_name)
     if not isinstance(bucket, dict):
@@ -141,9 +169,24 @@ def _check_bucket(
 
     _check_hash_format(ctx, lf, f"{bucket_name}.hash", bucket.get("hash"))
 
-    markers = bucket.get("markers")
-    if not isinstance(markers, list):
-        return
+    markers = effective_markers_for_bucket(lf.data, bucket_name, marker_asset)
+    inline_markers = bucket.get("markers")
+    if inline_markers is not None and not isinstance(inline_markers, list):
+        ctx.report.add(
+            "JUAN_REQUIRED_KEYS", "error", lf.rel,
+            f"bucket '{bucket_name}'.markers is not a list",
+        )
+    elif isinstance(inline_markers, list):
+        for i, marker in enumerate(inline_markers):
+            if (
+                isinstance(marker, dict)
+                and marker.get("type") not in STRUCTURAL_MARKER_TYPES
+            ):
+                ctx.report.add(
+                    "JUAN_INLINE_MARKER_BULKY", "warning", lf.rel,
+                    f"{bucket_name}.markers[{i}] type '{marker.get('type')}' should normally live in a marker asset",
+                )
+                break
     _check_markers(
         ctx, lf, allowed_marker_editions=allowed_marker_editions,
         bucket_name=bucket_name, text=text, markers=markers,

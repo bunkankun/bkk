@@ -15,17 +15,28 @@ the Report then collapses any repeats in the same file).
 from __future__ import annotations
 
 from ..context import ValidationContext, LoadedFile
+from bkk.marker_assets import effective_markers_for_bucket
 
 
 def run(ctx: ValidationContext) -> None:
     for lf in ctx.master_juans.values():
-        _check_juan(ctx, lf)
+        seq = lf.data.get("seq") if isinstance(lf.data, dict) else None
+        asset_lf = ctx.marker_assets.get(seq) if isinstance(seq, int) else None
+        _check_juan(
+            ctx, lf,
+            asset_lf.data if asset_lf is not None and isinstance(asset_lf.data, dict) else None,
+        )
     for ed in ctx.editions.values():
         for lf in ed.juans.values():
-            _check_juan(ctx, lf)
+            seq = lf.data.get("seq") if isinstance(lf.data, dict) else None
+            asset_lf = ed.marker_assets.get(seq) if isinstance(seq, int) else None
+            _check_juan(
+                ctx, lf,
+                asset_lf.data if asset_lf is not None and isinstance(asset_lf.data, dict) else None,
+            )
 
 
-def _check_juan(ctx: ValidationContext, lf: LoadedFile) -> None:
+def _check_juan(ctx: ValidationContext, lf: LoadedFile, marker_asset: dict | None) -> None:
     if not lf.exists or lf.parse_error is not None:
         return
     if not isinstance(lf.data, dict):
@@ -34,9 +45,7 @@ def _check_juan(ctx: ValidationContext, lf: LoadedFile) -> None:
         bucket = lf.data.get(bucket_name)
         if not isinstance(bucket, dict):
             continue
-        markers = bucket.get("markers")
-        if not isinstance(markers, list):
-            continue
+        markers = effective_markers_for_bucket(lf.data, bucket_name, marker_asset)
         _check_bucket(ctx, lf, bucket_name, markers)
 
 

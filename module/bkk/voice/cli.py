@@ -52,6 +52,7 @@ import yaml
 
 from bkk.importer.hashing import manifest_hash, sha256_jcs, ZERO_HASH
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
+from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 
 from .derive import derive_voice_markers
 from .derive_indent import derive_voice_markers_from_indent
@@ -228,6 +229,9 @@ def _run_add(bundle: str, out_root, *, source: str, force: bool, dry_run: bool) 
     if failed:
         print(f"skipped {len(failed)} scope(s) due to errors: {', '.join(failed)}", file=sys.stderr)
         return 1
+    if not dry_run and overall_by_name:
+        from bkk.repair.markers import externalize_markers
+        externalize_markers(bundle_dir, dry_run=False)
     return 0
 
 
@@ -259,6 +263,9 @@ def _process_one(
 
     if not juan_entries:
         raise RuntimeError(f"no juan files found under {juan_dir}")
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(manifest, dict):
+        raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
 
     lines: list[str] = []
     total_by_name: dict[str, int] = {}
@@ -270,6 +277,7 @@ def _process_one(
         data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
+        data = hydrate_juan_markers(data, load_marker_asset(juan_dir, manifest, seq))
 
         existing = _existing_voice_count(data)
         if existing and not force:
@@ -403,6 +411,9 @@ def _run_remove(bundle: str, out_root, *, dry_run: bool) -> int:
             file=sys.stderr,
         )
         return 1
+    if not dry_run and overall_removed:
+        from bkk.repair.markers import externalize_markers
+        externalize_markers(bundle_dir, dry_run=False)
     return 0
 
 
@@ -434,6 +445,9 @@ def _process_one_remove(
 
     if not juan_entries:
         raise RuntimeError(f"no juan files found under {juan_dir}")
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(manifest, dict):
+        raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
 
     lines: list[str] = []
     total_removed = 0
@@ -443,6 +457,7 @@ def _process_one_remove(
         data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
+        data = hydrate_juan_markers(data, load_marker_asset(juan_dir, manifest, seq))
 
         juan_removed = 0
         for bucket_name in _BUCKETS:
@@ -594,6 +609,10 @@ def _update_manifest(manifest_path: Path, new_hashes: dict[int, str]) -> None:
             entry["hash"] = new_hashes[seq]
         new_parts.append(marker_to_flow(entry))
     data["assets"]["parts"] = new_parts
+    # Voice operations hydrate external markers into the physical juan before
+    # editing. Clear stale marker-asset declarations; the follow-up
+    # externalize pass rebuilds them from the edited effective marker lists.
+    data["assets"].pop("markers", None)
     data["hash"] = manifest_hash(data)
     manifest_path.write_text(dump(data), encoding="utf-8")
 

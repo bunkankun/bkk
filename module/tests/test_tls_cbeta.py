@@ -112,6 +112,16 @@ def _load(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+def _load_hydrated(bundle_dir: Path, seq: int) -> dict:
+    from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
+
+    manifest = _load(bundle_dir / f"{KRP_ID}.manifest.yaml")
+    juan = _load(bundle_dir / f"{KRP_ID}_{seq:03d}.yaml")
+    return hydrate_juan_markers(
+        juan, load_marker_asset(bundle_dir, manifest, seq),
+    )
+
+
 def test_two_juans_emitted(cbeta_out_root: Path):
     """Pre-juan content → ``_000.yaml``, juan-1 body → ``_001.yaml``."""
     assert (cbeta_out_root / f"{KRP_ID}_000.yaml").exists()
@@ -129,7 +139,7 @@ def test_pre_juan_content_in_front_bucket(cbeta_out_root: Path):
 def test_byline_seg_lives_in_juan_001(cbeta_out_root: Path):
     """The first body seg of juan 1 (a ``<byline>`` child) must land in
     ``_001.yaml`` — verifies the permissive walker reaches into byline."""
-    juan = _load(cbeta_out_root / f"{KRP_ID}_001.yaml")
+    juan = _load_hydrated(cbeta_out_root, 1)
     body_marker_ids = {m["id"] for m in juan["body"]["markers"]}
     assert f"{TEI_ID}_CBETA_001-0834a14.s1" in body_marker_ids
 

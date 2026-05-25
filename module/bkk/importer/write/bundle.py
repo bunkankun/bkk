@@ -26,6 +26,11 @@ from ..classify import bucket_sections
 from ..hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
 from ..ir import Annotation, Bundle, Juan, Marker, Section
 from .yaml_writer import dump, marker_to_flow
+from bkk.marker_assets import (
+    build_marker_asset,
+    marker_asset_filename,
+    split_inline_external_markers,
+)
 
 
 # ---------- helpers ---------------------------------------------------------
@@ -82,7 +87,9 @@ def _resolve_ann_offset(ann: Annotation, seg_offsets: dict[str, int]) -> int | N
 def _build_bucket(
     sections: list[Section],
     annotations: list[Annotation],
-) -> tuple[dict, list[tuple[Annotation, int]]]:
+    *,
+    keep_marker_ids: set[str] | None = None,
+) -> tuple[dict, list[dict], list[tuple[Annotation, int]]]:
     """Build the per-bucket dict (text/hash/markers) plus the list of
     ``(annotation, resolved_offset)`` for annotations that fell in this
     bucket."""
@@ -113,9 +120,14 @@ def _build_bucket(
     bucket = {
         "text": text,
         "hash": sha256_text(text) if text else ZERO_HASH,
-        "markers": [_marker_dict(m) for m in markers_sorted],
     }
-    return bucket, bucket_anns
+    marker_dicts = [_marker_dict(m) for m in markers_sorted]
+    inline, external = split_inline_external_markers(
+        marker_dicts, keep_ids=keep_marker_ids,
+    )
+    if inline:
+        bucket["markers"] = inline
+    return bucket, external, bucket_anns
 
 
 def _build_juan_dict(
@@ -277,6 +289,7 @@ def build_manifest(
     edition_short: str | None,           # None → master manifest
     juan_files: list[tuple[int, str, str]],   # (seq, filename, juan_self_hash)
     ann_files: list[tuple[int, str]],         # TLS-only; KRP passes []
+    marker_files: list[tuple[int, str, str]] | None,
     toc: list[dict],
     metadata: dict,
     *,
@@ -298,6 +311,16 @@ def build_manifest(
         assets["annotations"] = [
             marker_to_flow({"seq": seq, "role": "tls:ann", "filename": fn})
             for seq, fn in ann_files
+        ]
+    if marker_files:
+        assets["markers"] = [
+            marker_to_flow({
+                "seq": seq,
+                "role": "markers",
+                "filename": fn,
+                "hash": h,
+            })
+            for seq, fn, h in marker_files
         ]
 
     md = dict(metadata)
@@ -386,6 +409,8 @@ def write_bundle(bundle: Bundle, out_root: Path) -> dict:
 
     juan_edition_files: list[tuple[int, str, str]] = []
     juan_master_files: list[tuple[int, str, str]] = []
+    marker_edition_files: list[tuple[int, str, str]] = []
+    marker_master_files: list[tuple[int, str, str]] = []
     ann_files: list[tuple[int, str]] = []
     toc_master: list[dict] = []
     toc_edition: list[dict] = []
@@ -395,12 +420,24 @@ def write_bundle(bundle: Bundle, out_root: Path) -> dict:
         sections_per_bucket = {
             "front": front_secs, "body": body_secs, "back": back_secs,
         }
+        juan_toc = _build_toc(sections_per_bucket, juan)
+        keep_marker_ids = {
+            entry.get("ref", {}).get("marker_id")
+            for entry in juan_toc
+            if isinstance(entry, dict)
+            and isinstance(entry.get("ref"), dict)
+            and isinstance(entry["ref"].get("marker_id"), str)
+        }
 
         bucket_dicts: dict[str, dict] = {}
+        external_markers_by_bucket: dict[str, list[dict]] = {}
         bucket_anns_by_bucket: dict[str, list[tuple[Annotation, int]]] = {}
         for name, secs in sections_per_bucket.items():
-            bdict, banns = _build_bucket(secs, juan.annotations)
+            bdict, external, banns = _build_bucket(
+                secs, juan.annotations, keep_marker_ids=keep_marker_ids,
+            )
             bucket_dicts[name] = bdict
+            external_markers_by_bucket[name] = external
             bucket_anns_by_bucket[name] = banns
 
         back_dict = bucket_dicts["back"] if back_secs else None
@@ -430,6 +467,34 @@ def write_bundle(bundle: Bundle, out_root: Path) -> dict:
             (juan.seq, master_juan_filename, edition_juan_hash)
         )
 
+        # Marker assets (one per juan per manifest root).
+        if any(external_markers_by_bucket.values()):
+            edition_marker_asset = build_marker_asset(
+                text_id, juan.seq, edition_short, external_markers_by_bucket,
+            )
+            edition_marker_filename = marker_asset_filename(
+                text_id, juan.seq, edition_short,
+            )
+            (edition_root / "assets").mkdir(parents=True, exist_ok=True)
+            (edition_root / edition_marker_filename).write_text(
+                dump(edition_marker_asset), encoding="utf-8",
+            )
+            marker_edition_files.append(
+                (juan.seq, edition_marker_filename, edition_marker_asset["hash"])
+            )
+
+            master_marker_asset = build_marker_asset(
+                text_id, juan.seq, None, external_markers_by_bucket,
+            )
+            master_marker_filename = marker_asset_filename(text_id, juan.seq, None)
+            (bundle_root / "assets").mkdir(parents=True, exist_ok=True)
+            (bundle_root / master_marker_filename).write_text(
+                dump(master_marker_asset), encoding="utf-8",
+            )
+            marker_master_files.append(
+                (juan.seq, master_marker_filename, master_marker_asset["hash"])
+            )
+
         # Annotation file (master only, per plan).
         if juan.annotations:
             ann_dict = _build_ann_file(
@@ -440,12 +505,13 @@ def write_bundle(bundle: Bundle, out_root: Path) -> dict:
             ann_files.append((juan.seq, ann_filename))
 
         # TOC entries — one per section, computed offsets per spec.
-        toc_edition.extend(_build_toc(sections_per_bucket, juan))
-        toc_master.extend(_build_toc(sections_per_bucket, juan))
+        toc_edition.extend(juan_toc)
+        toc_master.extend(juan_toc)
 
     # ---- edition manifest ----
     edition_manifest = build_manifest(
-        text_id, edition_short, juan_edition_files, [], toc_edition,
+        text_id, edition_short, juan_edition_files, [], marker_edition_files,
+        toc_edition,
         bundle.metadata,
     )
     edition_manifest["hash"] = manifest_hash(edition_manifest)
@@ -456,7 +522,8 @@ def write_bundle(bundle: Bundle, out_root: Path) -> dict:
 
     # ---- master manifest ----
     master_manifest = build_manifest(
-        text_id, None, juan_master_files, ann_files, toc_master, bundle.metadata,
+        text_id, None, juan_master_files, ann_files, marker_master_files,
+        toc_master, bundle.metadata,
     )
     master_manifest["hash"] = manifest_hash(master_manifest)
     master_manifest_filename = f"{text_id}.manifest.yaml"
@@ -580,9 +647,10 @@ def _write_krp_juans(
     filename_for: Callable[[int], str],
     slug: str,
     is_master: bool,
-) -> tuple[list[tuple[int, str, str]], list[dict]]:
-    """Write juan files for a KRP bundle. Returns (juan_files, toc_entries)."""
+) -> tuple[list[tuple[int, str, str]], list[tuple[int, str, str]], list[dict]]:
+    """Write juan and marker-asset files for a KRP bundle."""
     juan_files: list[tuple[int, str, str]] = []
+    marker_files: list[tuple[int, str, str]] = []
     toc: list[dict] = []
     for juan in bundle.juans:
         front_secs, body_secs, back_secs = bucket_sections(juan.sections)
@@ -590,10 +658,42 @@ def _write_krp_juans(
             "front": front_secs, "body": body_secs, "back": back_secs,
         }
 
+        # TOC: one entry per titled section, span = [bucket, start, end] in
+        # the bucket's text stream (end exclusive — next section start, or
+        # len(text) for the last section in a bucket). Front-bucket entries
+        # are skipped: the front matter (頭注 / opening indent) repeats the
+        # body's title and adds no navigation value.
+        juan_toc: list[dict] = []
+        for bucket_name, secs in sections_per_bucket.items():
+            if bucket_name == "front":
+                continue
+            cursor = 0
+            for sec in secs:
+                start = cursor
+                end = cursor + len(sec.text)
+                cursor = end
+                if not sec.head_text:
+                    continue
+                juan_toc.append(_build_krp_toc_entry(
+                    juan.seq, sec.head_text, sec.head_marker_id,
+                    bucket_name, start, end,
+                ))
+        keep_marker_ids = {
+            entry.get("ref", {}).get("marker_id")
+            for entry in juan_toc
+            if isinstance(entry, dict)
+            and isinstance(entry.get("ref"), dict)
+            and isinstance(entry["ref"].get("marker_id"), str)
+        }
+
         bucket_dicts: dict[str, dict] = {}
+        external_markers_by_bucket: dict[str, list[dict]] = {}
         for name, secs in sections_per_bucket.items():
-            bdict, _ = _build_bucket(secs, juan.annotations)
+            bdict, external, _ = _build_bucket(
+                secs, juan.annotations, keep_marker_ids=keep_marker_ids,
+            )
             bucket_dicts[name] = bdict
+            external_markers_by_bucket[name] = external
 
         back_dict = bucket_dicts["back"] if back_secs else None
         juan_md = _krp_juan_metadata(bundle, juan, is_master)
@@ -609,27 +709,23 @@ def _write_krp_juans(
         (juan_dir / filename).write_text(dump(juan_dict), encoding="utf-8")
         juan_files.append((juan.seq, filename, juan_hash))
 
-        # TOC: one entry per titled section, span = [bucket, start, end] in
-        # the bucket's text stream (end exclusive — next section start, or
-        # len(text) for the last section in a bucket). Front-bucket entries
-        # are skipped: the front matter (頭注 / opening indent) repeats the
-        # body's title and adds no navigation value.
-        for bucket_name, secs in sections_per_bucket.items():
-            if bucket_name == "front":
-                continue
-            cursor = 0
-            for sec in secs:
-                start = cursor
-                end = cursor + len(sec.text)
-                cursor = end
-                if not sec.head_text:
-                    continue
-                toc.append(_build_krp_toc_entry(
-                    juan.seq, sec.head_text, sec.head_marker_id,
-                    bucket_name, start, end,
-                ))
+        if any(external_markers_by_bucket.values()):
+            asset_short = None if is_master else bundle.edition_short
+            marker_asset = build_marker_asset(
+                bundle.text_id, juan.seq, asset_short, external_markers_by_bucket,
+            )
+            marker_filename = marker_asset_filename(
+                bundle.text_id, juan.seq, asset_short,
+            )
+            (juan_dir / "assets").mkdir(parents=True, exist_ok=True)
+            (juan_dir / marker_filename).write_text(
+                dump(marker_asset), encoding="utf-8",
+            )
+            marker_files.append((juan.seq, marker_filename, marker_asset["hash"]))
 
-    return juan_files, toc
+        toc.extend(juan_toc)
+
+    return juan_files, marker_files, toc
 
 
 def write_krp_edition(bundle: Bundle, out_root: Path) -> dict:
@@ -641,7 +737,7 @@ def write_krp_edition(bundle: Bundle, out_root: Path) -> dict:
     edition_root = bundle_root / "editions" / short
     edition_root.mkdir(parents=True, exist_ok=True)
 
-    juan_files, toc = _write_krp_juans(
+    juan_files, marker_files, toc = _write_krp_juans(
         bundle,
         edition_root,
         filename_for=lambda seq: f"{text_id}_{seq:03d}-{short}.yaml",
@@ -651,7 +747,7 @@ def write_krp_edition(bundle: Bundle, out_root: Path) -> dict:
 
     manifest = build_manifest(
         text_id, edition_short=short,
-        juan_files=juan_files, ann_files=[], toc=toc,
+        juan_files=juan_files, ann_files=[], marker_files=marker_files, toc=toc,
         metadata=bundle.metadata, entity_encoding=True,
     )
     manifest["hash"] = manifest_hash(manifest)
@@ -674,7 +770,7 @@ def write_krp_master(bundle: Bundle, out_root: Path) -> dict:
     bundle_root = out_root / text_id
     bundle_root.mkdir(parents=True, exist_ok=True)
 
-    juan_files, toc = _write_krp_juans(
+    juan_files, marker_files, toc = _write_krp_juans(
         bundle,
         bundle_root,
         filename_for=lambda seq: f"{text_id}_{seq:03d}.yaml",
@@ -684,7 +780,7 @@ def write_krp_master(bundle: Bundle, out_root: Path) -> dict:
 
     manifest = build_manifest(
         text_id, edition_short=None,
-        juan_files=juan_files, ann_files=[], toc=toc,
+        juan_files=juan_files, ann_files=[], marker_files=marker_files, toc=toc,
         metadata=bundle.metadata, entity_encoding=True,
     )
     manifest["hash"] = manifest_hash(manifest)

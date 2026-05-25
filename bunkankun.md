@@ -36,7 +36,9 @@ The archival format is mainly for text data of premodern Chinese. Texts used to 
 
 A **juan** file has a `front`, a `body`, and a `back`; only the body must be non-empty, the others are optional and need not be present if empty. Additional metadata fields are available. The text elements of the body and back may be subdivided where appropriate. A typical front contains an opening line that locates the juan in a larger collection, the title of the text, the sequential number of the juan, and an attribution naming persons and roles with respect to the body. The back contains a closing line. The placement of prefaces, postfaces, colophons, and similar paratextual material is open: such material may go into the body or be separated out into front or back, at the discretion of the project applying the format.
 
-The body has one text element that holds the canonical character content of the whole juan. Space characters, punctuation, line breaks, and similar content are not present in this stream — they are extracted into a **markers** object that follows the text element. A marker has at minimum a **type** and an **offset**; further fields are optional and typically include **id**, **content**, and additional structured information appropriate to the marker's type. The set of marker types is open; a small core vocabulary is defined separately.
+The body has one text element that holds the canonical character content of the whole juan. Space characters, punctuation, line breaks, and similar content are not present in this stream — they are extracted into the juan's logical **marker collection**. A marker has at minimum a **type** and an **offset**; further fields are optional and typically include **id**, **content**, and additional structured information appropriate to the marker's type. The set of marker types is open; a small core vocabulary is defined separately.
+
+Markers may be stored in two physical locations. A bucket may carry an inline `markers` list for structural markers that are useful when inspecting the juan by itself. Most markers may instead be stored in a per-juan marker asset under the bundle's `assets/` directory and pinned from the manifest. Consumers treat inline markers and marker-asset markers as one logical collection, sorted by offset. This keeps juan files compact while preserving the same text-addressing model.
 
 One text can be represented in several editions, they can be made accessible through the 'master' edition of the text or a recipe can adress them directly. 
 
@@ -143,6 +145,8 @@ A marker that names a witness does not include the witness's content. The refere
 
 Markers are the mechanism by which information that has been removed from the text stream during canonicalization, or that annotates the text stream from outside it, is reattached to specific positions in the canonical text.
 
+The logical marker collection for a bucket is assembled from the bucket's inline `markers` list, if present, plus the matching list in the juan's marker asset, if the manifest declares one. Inline markers are therefore a storage convenience, not a separate semantic class. When both locations contain markers, consumers merge them by offset and preserve source order for markers with the same offset.
+
 Markers come in two shapes. **Point markers** apply at a single position; they carry an `offset` alone. **Range markers** apply to a slice of the text stream; they carry an additional `length` field, and apply to the slice `[offset, offset + length)`. The shape is fixed by the marker type. The `length` field mirrors the codepoint-slice form already used in the recipe-selection vocabulary (§"Selection").
 
 Every marker carries the following required fields:
@@ -151,9 +155,58 @@ Every marker carries the following required fields:
 - **offset:** the codepoint position in the canonical text stream where the marker begins.
 - **length:** the codepoint span of the marker. Present on range-typed markers, absent on point-typed.
 
-Optional fields are defined per marker type and may include **id**, **content**, **note**, **responds-to** (an id referring to another marker, used by markers that comment on or extend another marker), and structured fields specific to the type. A marker carrying an `id` may be referenced from elsewhere; ids are local to the juan unless qualified.
+Optional fields are defined per marker type and may include **id**, **content**, **note**, **responds-to** (an id referring to another marker, used by markers that comment on or extend another marker), and structured fields specific to the type. A marker carrying an `id` may be referenced from elsewhere; ids are local to the juan unless qualified. Id uniqueness is checked over the assembled logical marker collection, not merely over one physical file.
 
 The set of marker types is open. A small **core vocabulary** is defined for layout, structural, voicing, and substitution markers: page break, line break, indent, punctuation, paragraph break, register divider, head, comment, and substitution are point-typed; voice (§"Voices") is range-typed. Projects may extend the set for their own purposes; a marker type that is not in the core vocabulary should be namespaced by the project introducing it.
+
+By default, structural and navigation-critical markers remain inline: `tls:head`, `tls:div-start`, `tls:div-end`, `cbeta:juan-start`, `cbeta:juan-end`, `cbeta:mulu`, and any marker directly referenced by the table of contents. Layout markers, punctuation, page and line breaks, voice markers, variant markers, substitution markers, comments, and other bulky project markers normally live in the marker asset. This default is a packaging policy rather than a semantic restriction; old bundles with inline markers remain valid.
+
+#### Marker assets
+
+A marker asset is a local bundle asset holding the externalized markers for one juan. It is not a reference asset: it is not shared across bundles and it has no independent version lineage. It belongs to the bundle version that declares it and is pinned by the manifest hash chain.
+
+A marker asset carries:
+
+- **canonical_identifier:** the stable identifier of this marker asset.
+- **seq:** the juan sequence number.
+- **markers:** a mapping from bucket name to marker list: `front`, `body`, and `back`.
+- **hash:** the hash of the marker asset as a whole.
+
+For example, a juan may keep only a TOC-referenced heading marker inline:
+
+```yaml
+body:
+  text: 甲乙丙
+  hash: sha256:...
+  markers:
+    - {type: tls:head, offset: 0, content: 卷一, id: KR0x_T_001-h}
+```
+
+The manifest then pins the external marker file:
+
+```yaml
+assets:
+  parts:
+    - {seq: 1, filename: KR0x_001.yaml, hash: sha256:...}
+  markers:
+    - {seq: 1, role: markers, filename: assets/KR0x_001.markers.yaml, hash: sha256:...}
+```
+
+And the marker asset supplies the remaining bucket markers:
+
+```yaml
+canonical_identifier: bkk:krp/KR0x/bkk/v1/markers/1
+seq: 1
+markers:
+  front: []
+  body:
+    - {type: punctuation, offset: 1, content: 、}
+    - {type: line-break, offset: 3}
+  back: []
+hash: sha256:...
+```
+
+The logical `body` marker collection is the inline `tls:head` marker plus the two markers from `assets/KR0x_001.markers.yaml`.
 
 #### Substitution markers
 
@@ -243,6 +296,7 @@ A manifest carries the following **optional** fields, used when applicable:
 - **witness_tables:** witness tables used by markers in the bundle, each with its canonical identifier and hash.
 - **table_of_contents:** a structured listing that points into the juan files, used for navigation.
 - **metadata:** descriptive metadata pertaining to the whole text — title, attributions, dates, relationships to other works. These fields are not structural and are not used for resolution or verification, but they *are* read by catalogs to support browsing (see §"Catalog browsing"). A project's consistency in field naming and shape across its manifests directly determines how useful catalog queries against its bundles will be.
+- **markers:** per-juan marker asset files, each entry carrying the juan sequence number, `role: markers`, a filename under the local `assets/` directory, and a hash.
 - **other_assets:** assets that are part of the bundle but are neither juan files nor reference assets — scanned page images, alignment data, supplementary apparatus. Each entry carries an identifier, a type, and a hash.
 
 The manifest is the only place in a bundle where the bundle is named as a whole. Juan files identify themselves by position and content; reference assets identify themselves by their own identifiers. The manifest binds them.

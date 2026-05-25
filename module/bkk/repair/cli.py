@@ -1,8 +1,6 @@
 """Command-line entry point for ``bkk repair``.
 
-Currently exposes one operation: ``manifest <bundle-dir-or-text-id>``,
-which rebuilds the master and every per-edition manifest from the juan
-YAML files present on disk.
+Exposes repair operations for manifests and marker storage.
 
     python -m bkk repair manifest <out-root>/<text-id>/
     python -m bkk repair manifest <text-id>     # resolved via .bkkrc
@@ -38,6 +36,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="bundle output root used to resolve a bare text-id "
              "(overrides repair.out / import.out / global.corpus)",
     )
+
+    px = sub.add_parser(
+        "externalize-markers",
+        help="move bulky inline juan markers into per-juan assets/*.markers.yaml files",
+    )
+    px.add_argument(
+        "bundle", type=str,
+        help="bundle directory, or a bare text-id resolved against "
+             "repair.out / import.out / global.corpus from .bkkrc",
+    )
+    px.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help="bundle output root used to resolve a bare text-id "
+             "(overrides repair.out / import.out / global.corpus)",
+    )
+    px.add_argument(
+        "--dry-run", action="store_true",
+        help="report the migration without writing juans, marker assets, or manifests",
+    )
     return p
 
 
@@ -58,8 +75,11 @@ def run(argv: list[str] | None = None) -> int:
             or rc.get("global", {}).get("corpus")
         )
 
-    # ``op`` is the only required subcommand and argparse rejects others.
-    return _run_manifest(args.bundle, out_root)
+    if args.op == "manifest":
+        return _run_manifest(args.bundle, out_root)
+    if args.op == "externalize-markers":
+        return _run_externalize_markers(args.bundle, out_root, dry_run=args.dry_run)
+    return 2
 
 
 def _resolve_bundle_dir(bundle: str, out_root: Path | None) -> Path:
@@ -101,6 +121,28 @@ def _run_manifest(bundle: str, out_root: Path | None) -> int:
             f"rebuilt editions/{ed['edition']}/{ed['manifest']}: "
             f"{ed['parts']} parts, {ed['toc']} TOC entries"
         )
+    return 0
+
+
+def _run_externalize_markers(
+    bundle: str, out_root: Path | None, *, dry_run: bool,
+) -> int:
+    try:
+        bundle_dir = _resolve_bundle_dir(bundle, out_root)
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    from .markers import externalize_markers
+    summary = externalize_markers(bundle_dir, dry_run=dry_run)
+    prefix = "would externalize" if dry_run else "externalized"
+    for scope in summary["scopes"]:
+        print(
+            f"{prefix} {scope['manifest']}: "
+            f"moved {scope['moved']} markers, kept {scope['kept']} inline"
+        )
+        for line in scope["lines"]:
+            print(f"  {line}")
     return 0
 
 

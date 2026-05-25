@@ -23,6 +23,7 @@ import yaml
 from fastapi import HTTPException
 
 from bkk.index.merge import find_bundle
+from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 
 from . import errors
 
@@ -54,7 +55,12 @@ def load_juan_file(
     juan_path = bundle_dir / entry["filename"]
     if not juan_path.exists():
         raise errors.juan_not_found(textid, seq)
-    return yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
+    juan = yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
+    if isinstance(juan, dict):
+        return hydrate_juan_markers(
+            juan, load_marker_asset(bundle_dir, manifest, seq),
+        )
+    return {}
 
 
 def load_juan(corpus_root: Path, textid: str, seq: int) -> tuple[dict[str, Any], dict[str, Any]]:

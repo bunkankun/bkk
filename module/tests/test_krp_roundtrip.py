@@ -21,6 +21,7 @@ from bkk.importer.pua import PUA_BASE, PUA_END, codepoint_to_kr
 from bkk.importer.read.krp import _load_imglist, _parse_juan_text, read_krp
 from bkk.importer.recipe import load_recipe
 from bkk.importer.write.bundle import write_krp_edition, write_krp_master
+from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -50,6 +51,14 @@ def _load(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+def _load_hydrated(bundle_dir: Path, seq: int) -> dict:
+    manifest = _load(bundle_dir / f"{TEXT_ID}.manifest.yaml")
+    juan = _load(bundle_dir / f"{TEXT_ID}_{seq:03d}.yaml")
+    return hydrate_juan_markers(
+        juan, load_marker_asset(bundle_dir, manifest, seq),
+    )
+
+
 def test_juan_text_nonempty(out_root: Path):
     juan = _load(out_root / f"{TEXT_ID}_001.yaml")
     assert juan["body"]["text"]
@@ -64,7 +73,8 @@ def test_text_hash_recomputes(out_root: Path):
 
 def test_marker_offsets_in_range(out_root: Path):
     for juan_path in sorted(out_root.glob(f"{TEXT_ID}_*.yaml")):
-        juan = _load(juan_path)
+        seq = int(juan_path.stem.rsplit("_", 1)[1])
+        juan = _load_hydrated(out_root, seq)
         for bucket in ("front", "body"):
             if bucket not in juan:
                 continue
@@ -103,7 +113,8 @@ def test_page_break_ids_resolve_to_imglist(out_root: Path):
     )
     assert imglist, "imglist should not be empty"
     for juan_path in sorted(out_root.glob(f"{TEXT_ID}_*.yaml")):
-        juan = _load(juan_path)
+        seq = int(juan_path.stem.rsplit("_", 1)[1])
+        juan = _load_hydrated(out_root, seq)
         for bucket in ("front", "body"):
             if bucket not in juan:
                 continue

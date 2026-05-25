@@ -21,6 +21,7 @@ from bkk.importer.write.merge import (
     extend_master_editions,
     inspect_existing_bundle,
 )
+from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -236,6 +237,10 @@ def test_cli_krp_merges_into_existing_tls(tmp_path: Path):
     for part in master_after.get("assets", {}).get("parts", []):
         juan_path = bundle_root / part["filename"]
         juan = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+        juan = hydrate_juan_markers(
+            juan,
+            load_marker_asset(bundle_root, master_after, part["seq"]),
+        )
         for bucket in ("front", "body", "back"):
             b = juan.get(bucket) or {}
             for m in b.get("markers") or []:

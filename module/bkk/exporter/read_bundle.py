@@ -17,6 +17,8 @@ from pathlib import Path
 
 import yaml
 
+from bkk.marker_assets import load_marker_asset, hydrate_juan_markers
+
 from ..importer.ir import Annotation, Bundle, Juan, Marker, Section
 
 
@@ -81,6 +83,9 @@ def _bundle_from_manifest(
         seq = part["seq"]
         juan_data = yaml.safe_load(
             (file_dir / part["filename"]).read_text(encoding="utf-8")
+        )
+        juan_data = hydrate_juan_markers(
+            juan_data, load_marker_asset(file_dir, manifest, seq),
         )
         sections = _sections_from_juan(juan_data, toc_by_juan.get(seq, {}))
 

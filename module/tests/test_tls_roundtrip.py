@@ -19,6 +19,7 @@ from bkk.importer.diverge import diff_trees, render_report
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
 from bkk.importer.read.tls import read_tls
 from bkk.importer.write.bundle import write_bundle
+from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -47,6 +48,14 @@ def _load(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+def _load_hydrated(bundle_dir: Path, seq: int) -> dict:
+    manifest = _load(bundle_dir / f"{TEXT_ID}.manifest.yaml")
+    juan = _load(bundle_dir / f"{TEXT_ID}_{seq:03d}.yaml")
+    return hydrate_juan_markers(
+        juan, load_marker_asset(bundle_dir, manifest, seq),
+    )
+
+
 def test_juan_text_nonempty(out_root: Path):
     juan = _load(out_root / f"{TEXT_ID}_001.yaml")
     assert juan["front"]["text"]
@@ -60,7 +69,7 @@ def test_text_hash_recomputes(out_root: Path):
 
 
 def test_marker_offsets_in_range(out_root: Path):
-    juan = _load(out_root / f"{TEXT_ID}_001.yaml")
+    juan = _load_hydrated(out_root, 1)
     for bucket_name in ("front", "body"):
         bucket = juan[bucket_name]
         text_len = len(bucket["text"])

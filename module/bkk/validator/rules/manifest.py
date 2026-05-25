@@ -5,12 +5,15 @@ from __future__ import annotations
 import re
 
 from ..context import ValidationContext, LoadedFile
+from bkk.marker_assets import (
+    VALID_BUCKETS,
+    effective_markers_for_bucket,
+    marker_asset_hash,
+)
 
 HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 KNOWN_CHARSET_IDS = {"bkk:charset/cjk-v1"}
 KNOWN_ENCODING_IDS = {"bkk:encoding/kanripo-pua-v1"}
-VALID_BUCKETS = ("front", "body", "back")
-
 REQUIRED_MASTER_KEYS = (
     "canonical_identifier",
     "canonical_location",
@@ -56,6 +59,7 @@ def _check_manifest(
     _check_charset_encoding(ctx, lf)
     _check_hash_format(ctx, lf, "hash", data.get("hash"))
     _check_assets_parts(ctx, lf, edition_short)
+    _check_assets_markers(ctx, lf, edition_short)
     _check_toc(ctx, lf, edition_short)
     _check_metadata_edition(ctx, lf, kind, edition_short)
 
@@ -189,6 +193,85 @@ def _check_assets_parts(
                     )
 
 
+def _check_assets_markers(
+    ctx: ValidationContext, lf: LoadedFile, edition_short: str | None,
+) -> None:
+    assets = lf.data.get("assets")
+    if not isinstance(assets, dict):
+        return
+    markers = assets.get("markers")
+    if markers is None:
+        return
+    if not isinstance(markers, list):
+        ctx.report.add(
+            "MANIFEST_REQUIRED_KEYS", "error", lf.rel,
+            "assets.markers is not a list",
+        )
+        return
+    seen: dict[int, int] = {}
+    part_seqs = {
+        p.get("seq")
+        for p in assets.get("parts") or []
+        if isinstance(p, dict) and isinstance(p.get("seq"), int)
+    }
+    for i, entry in enumerate(markers):
+        if not isinstance(entry, dict):
+            ctx.report.add(
+                "MANIFEST_REQUIRED_KEYS", "error", lf.rel,
+                f"assets.markers[{i}] is not a mapping",
+            )
+            continue
+        seq = entry.get("seq")
+        if not isinstance(seq, int):
+            ctx.report.add(
+                "MANIFEST_REQUIRED_KEYS", "error", lf.rel,
+                f"assets.markers[{i}].seq is missing or not an int",
+            )
+            continue
+        if seq in seen:
+            ctx.report.add(
+                "ASSETS_MARKERS_SEQ_UNIQUE", "error", lf.rel,
+                f"duplicate seq {seq} at assets.markers[{i}] (also at [{seen[seq]}])",
+            )
+        seen[seq] = i
+        if seq not in part_seqs:
+            ctx.report.add(
+                "ASSETS_MARKERS_SEQ_MATCHES_PART", "error", lf.rel,
+                f"assets.markers[{i}] seq={seq} has no matching assets.parts entry",
+            )
+        filename = entry.get("filename")
+        if not isinstance(filename, str):
+            ctx.report.add(
+                "MANIFEST_REQUIRED_KEYS", "error", lf.rel,
+                f"assets.markers[{i}].filename is missing or not a string",
+            )
+        elif not filename.startswith("assets/") or not filename.endswith(".markers.yaml"):
+            ctx.report.add(
+                "ASSETS_MARKERS_FILENAME", "error", lf.rel,
+                f"assets.markers[{i}].filename '{filename}' should be assets/*.markers.yaml",
+            )
+        _check_hash_format(ctx, lf, f"assets.markers[{i}].hash", entry.get("hash"))
+
+        asset_lf = (
+            ctx.editions[edition_short].marker_assets.get(seq)
+            if edition_short and edition_short in ctx.editions
+            else ctx.marker_assets.get(seq)
+        )
+        if asset_lf is None or not asset_lf.exists or not isinstance(asset_lf.data, dict):
+            continue
+        if asset_lf.data.get("seq") != seq:
+            ctx.report.add(
+                "MARKER_ASSET_SEQ_MATCHES_MANIFEST", "error", asset_lf.rel,
+                f"marker asset seq={asset_lf.data.get('seq')} does not match manifest seq={seq}",
+            )
+        actual_hash = marker_asset_hash(asset_lf.data)
+        if isinstance(entry.get("hash"), str) and entry["hash"] != actual_hash:
+            ctx.report.add(
+                "MARKER_ASSET_HASH_MATCHES", "error", asset_lf.rel,
+                f"marker asset hash {actual_hash} does not match manifest hash {entry['hash']}",
+            )
+
+
 def _check_toc(
     ctx: ValidationContext, lf: LoadedFile, edition_short: str | None,
 ) -> None:
@@ -301,7 +384,17 @@ def _juan_has_marker_id(
         bucket_obj = juan_lf.data.get(bucket)
         if not isinstance(bucket_obj, dict):
             continue
-        for m in bucket_obj.get("markers") or []:
+        marker_lf = (
+            ctx.editions[edition_short].marker_assets.get(seq)
+            if edition_short and edition_short in ctx.editions
+            else ctx.marker_assets.get(seq)
+        )
+        marker_asset = (
+            marker_lf.data
+            if marker_lf is not None and isinstance(marker_lf.data, dict)
+            else None
+        )
+        for m in effective_markers_for_bucket(juan_lf.data, bucket, marker_asset):
             if isinstance(m, dict) and m.get("id") == marker_id:
                 return True
     return False

@@ -25,6 +25,7 @@ import yaml
 from bkk.importer.hashing import manifest_hash
 from bkk.importer.write.bundle import build_manifest
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
+from bkk.marker_assets import effective_markers_for_bucket, marker_asset_hash
 
 
 _JUAN_RE = re.compile(
@@ -68,7 +69,8 @@ def _rebuild_master(bundle_dir: Path, text_id: str) -> dict:
 
     juans = _collect_juans(bundle_dir, text_id, edition_short=None)
     anns = _collect_anns(bundle_dir, text_id)
-    toc = _toc_from_juans(juans)
+    marker_assets, marker_asset_data = _collect_marker_assets(bundle_dir)
+    toc = _toc_from_juans(juans, marker_asset_data)
 
     metadata = _carry_over_metadata(existing, is_edition=False)
     parts = [(seq, fname, h) for seq, fname, h, _ in juans]
@@ -78,6 +80,7 @@ def _rebuild_master(bundle_dir: Path, text_id: str) -> dict:
         edition_short=None,
         juan_files=parts,
         ann_files=anns,
+        marker_files=marker_assets,
         toc=toc,
         metadata=metadata,
         entity_encoding="entity_encoding" in existing,
@@ -97,7 +100,8 @@ def _rebuild_edition(edition_dir: Path, text_id: str, short: str) -> dict:
     existing = _load_existing(manifest_path)
 
     juans = _collect_juans(edition_dir, text_id, edition_short=short)
-    toc = _toc_from_juans(juans)
+    marker_assets, marker_asset_data = _collect_marker_assets(edition_dir)
+    toc = _toc_from_juans(juans, marker_asset_data)
 
     metadata = _carry_over_metadata(existing, is_edition=True)
     parts = [(seq, fname, h) for seq, fname, h, _ in juans]
@@ -107,6 +111,7 @@ def _rebuild_edition(edition_dir: Path, text_id: str, short: str) -> dict:
         edition_short=short,
         juan_files=parts,
         ann_files=[],
+        marker_files=marker_assets,
         toc=toc,
         metadata=metadata,
         entity_encoding="entity_encoding" in existing,
@@ -200,21 +205,44 @@ def _collect_anns(bundle_dir: Path, text_id: str) -> list[tuple[int, str]]:
     return out
 
 
+def _collect_marker_assets(
+    bundle_dir: Path,
+) -> tuple[list[tuple[int, str, str]], dict[int, dict]]:
+    out: list[tuple[int, str, str]] = []
+    by_seq: dict[int, dict] = {}
+    assets_dir = bundle_dir / "assets"
+    if not assets_dir.is_dir():
+        return out, by_seq
+    for entry in sorted(assets_dir.glob("*.markers.yaml")):
+        data = yaml.safe_load(entry.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            continue
+        seq = data.get("seq")
+        if not isinstance(seq, int):
+            continue
+        out.append((seq, str(entry.relative_to(bundle_dir)), marker_asset_hash(data)))
+        by_seq[seq] = data
+    out.sort(key=lambda t: t[0])
+    return out, by_seq
+
+
 # ---------- TOC reconstruction ----------------------------------------------
 
 
 def _toc_from_juans(
     juans: list[tuple[int, str, str, dict]],
+    marker_assets: dict[int, dict],
 ) -> list[dict]:
     toc: list[dict] = []
     for seq, _fn, _h, data in juans:
         flavor = ((data.get("metadata") or {}).get("flavor"))
+        marker_asset = marker_assets.get(seq)
         for bucket_name in ("front", "body", "back"):
             bucket = data.get(bucket_name)
             if not isinstance(bucket, dict):
                 continue
             text = bucket.get("text") or ""
-            markers = bucket.get("markers") or []
+            markers = effective_markers_for_bucket(data, bucket_name, marker_asset)
             if flavor == "cbeta":
                 toc.extend(_toc_cbeta_bucket(seq, bucket_name, text, markers))
             else:

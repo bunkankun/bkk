@@ -38,6 +38,7 @@ class EditionFiles:
     dir: Path
     manifest: LoadedFile
     juans: dict[int, LoadedFile] = field(default_factory=dict)
+    marker_assets: dict[int, LoadedFile] = field(default_factory=dict)
 
 
 @dataclass
@@ -47,6 +48,7 @@ class ValidationContext:
     report: Report
     master_manifest: LoadedFile
     master_juans: dict[int, LoadedFile] = field(default_factory=dict)
+    marker_assets: dict[int, LoadedFile] = field(default_factory=dict)
     annotations: dict[int, LoadedFile] = field(default_factory=dict)
     pua_map: LoadedFile | None = None
     editions: dict[str, EditionFiles] = field(default_factory=dict)
@@ -98,6 +100,15 @@ def load_context(
                 ctx.annotations[seq] = _load_yaml(
                     bundle_dir, bundle_dir / fname,
                 )
+        for marker_asset in assets.get("markers") or []:
+            if not isinstance(marker_asset, dict):
+                continue
+            seq = marker_asset.get("seq")
+            fname = marker_asset.get("filename")
+            if isinstance(seq, int) and isinstance(fname, str):
+                ctx.marker_assets[seq] = _load_yaml(
+                    bundle_dir, bundle_dir / fname,
+                )
 
     # PUA-map (optional).
     pua_path = bundle_dir / "PUA-map.yaml"
@@ -124,6 +135,15 @@ def load_context(
                     fname = part.get("filename")
                     if isinstance(seq, int) and isinstance(fname, str):
                         ed.juans[seq] = _load_yaml(
+                            bundle_dir, sub / fname,
+                        )
+                for marker_asset in assets.get("markers") or []:
+                    if not isinstance(marker_asset, dict):
+                        continue
+                    seq = marker_asset.get("seq")
+                    fname = marker_asset.get("filename")
+                    if isinstance(seq, int) and isinstance(fname, str):
+                        ed.marker_assets[seq] = _load_yaml(
                             bundle_dir, sub / fname,
                         )
             ctx.editions[short] = ed

@@ -227,6 +227,7 @@ def project_krp_apparatus_onto_tls(
     from .bundle import (
         _build_bucket, _build_juan_dict, _juan_self_hash,
     )
+    from bkk.marker_assets import build_marker_asset, marker_asset_filename, toc_marker_ids
 
     bundle_root = out_root / text_id
     manifest_path = bundle_root / f"{text_id}.manifest.yaml"
@@ -264,14 +265,21 @@ def project_krp_apparatus_onto_tls(
     after_pbs = _count(lambda m: m.type == "page-break")
 
     new_part_hashes: dict[int, str] = {}
+    new_marker_files: list[tuple[int, str, str]] = []
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     for juan in surface.juans:
         front_secs, body_secs, back_secs = bucket_sections(juan.sections)
         sections_per_bucket = {
             "front": front_secs, "body": body_secs, "back": back_secs,
         }
+        keep_marker_ids = toc_marker_ids(manifest, juan.seq)
         bucket_dicts: dict[str, dict] = {}
+        external_markers_by_bucket: dict[str, list[dict]] = {}
         for name, secs in sections_per_bucket.items():
-            bucket_dicts[name], _ = _build_bucket(secs, juan.annotations)
+            bucket_dicts[name], external, _ = _build_bucket(
+                secs, juan.annotations, keep_marker_ids=keep_marker_ids,
+            )
+            external_markers_by_bucket[name] = external
         back_dict = bucket_dicts["back"] if back_secs else None
 
         juan_dict = _build_juan_dict(
@@ -286,12 +294,31 @@ def project_krp_apparatus_onto_tls(
         (bundle_root / juan_filename).write_text(
             dump(juan_dict), encoding="utf-8"
         )
+        if any(external_markers_by_bucket.values()):
+            marker_asset = build_marker_asset(
+                text_id, juan.seq, None, external_markers_by_bucket,
+            )
+            marker_filename = marker_asset_filename(text_id, juan.seq, None)
+            (bundle_root / "assets").mkdir(parents=True, exist_ok=True)
+            (bundle_root / marker_filename).write_text(
+                dump(marker_asset), encoding="utf-8",
+            )
+            new_marker_files.append((juan.seq, marker_filename, marker_asset["hash"]))
 
-    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     for part in (manifest.get("assets") or {}).get("parts") or []:
         seq = part.get("seq")
         if seq in new_part_hashes:
             part["hash"] = new_part_hashes[seq]
+    if new_marker_files:
+        manifest.setdefault("assets", {})["markers"] = [
+            marker_to_flow({
+                "seq": seq,
+                "role": "markers",
+                "filename": filename,
+                "hash": hash_value,
+            })
+            for seq, filename, hash_value in new_marker_files
+        ]
     manifest["hash"] = manifest_hash(manifest)
     manifest_path.write_text(dump(manifest), encoding="utf-8")
 

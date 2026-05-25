@@ -6,6 +6,7 @@ import re
 import uuid
 
 from ..context import ValidationContext, LoadedFile
+from bkk.marker_assets import effective_markers_for_bucket
 
 VALID_BUCKETS = ("front", "body", "back")
 ISO_TIMESTAMP_RE = re.compile(
@@ -75,7 +76,13 @@ def _check_ann_file(
 
     # Look up the juan markers we need to resolve seg_ids.
     juan_lf = ctx.master_juans.get(seq)
-    seg_offsets, seg_buckets = _build_seg_index(juan_lf)
+    marker_lf = ctx.marker_assets.get(seq)
+    marker_asset = (
+        marker_lf.data
+        if marker_lf is not None and isinstance(marker_lf.data, dict)
+        else None
+    )
+    seg_offsets, seg_buckets = _build_seg_index(juan_lf, marker_asset)
 
     annotations = data.get("annotations") or []
     if not isinstance(annotations, list):
@@ -157,6 +164,7 @@ def _check_ann_file(
 
 def _build_seg_index(
     juan_lf: LoadedFile | None,
+    marker_asset: dict | None,
 ) -> tuple[dict[str, int] | None, dict[str, str]]:
     """Return (seg_offsets_by_id, seg_bucket_by_id).
 
@@ -171,7 +179,7 @@ def _build_seg_index(
         bucket = juan_lf.data.get(bucket_name)
         if not isinstance(bucket, dict):
             continue
-        for m in bucket.get("markers") or []:
+        for m in effective_markers_for_bucket(juan_lf.data, bucket_name, marker_asset):
             if not isinstance(m, dict):
                 continue
             mid = m.get("id")

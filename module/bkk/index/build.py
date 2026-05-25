@@ -11,6 +11,8 @@ from pathlib import Path
 
 import yaml
 
+from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
+
 from .schema import DDL, SCHEMA_VERSION
 from .witness import apply_witness
 
@@ -72,6 +74,10 @@ def build_index(bundle_dir: Path | str, out_path: Path | str | None = None) -> P
             seq = part["seq"]
             juan_path = bundle_dir / part["filename"]
             juan = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+            if isinstance(juan, dict):
+                juan = hydrate_juan_markers(
+                    juan, load_marker_asset(bundle_dir, manifest, seq),
+                )
             cur.execute(
                 "INSERT INTO juan(textid, seq, hash) VALUES (?,?,?)",
                 (textid, seq, juan.get("hash")),

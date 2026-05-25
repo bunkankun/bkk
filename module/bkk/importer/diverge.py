@@ -182,6 +182,25 @@ def diff_trees(sample_root: Path, ours_root: Path) -> list[Divergence]:
     all_keys = sorted(set(sample_files.keys()) | set(ours_files.keys()), key=str)
     for rel in all_keys:
         if rel not in sample_files:
+            if str(rel).startswith("assets/") and rel.name.endswith(".markers.yaml"):
+                out.append(Divergence(
+                    file=str(rel), path="", kind="extra-key",
+                    status="expected",
+                    note="new-format marker asset absent from legacy sample",
+                ))
+                continue
+            if (
+                len(rel.parts) >= 3
+                and rel.parts[0] == "editions"
+                and rel.parts[2] == "assets"
+                and rel.name.endswith(".markers.yaml")
+            ):
+                out.append(Divergence(
+                    file=str(rel), path="", kind="extra-key",
+                    status="expected",
+                    note="new-format marker asset absent from legacy sample",
+                ))
+                continue
             out.append(Divergence(file=str(rel), path="", kind="extra-key",
                                   status="unexpected",
                                   note="present in output, missing in sample"))

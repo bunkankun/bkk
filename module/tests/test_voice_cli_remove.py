@@ -18,6 +18,7 @@ import yaml
 
 from bkk.importer.hashing import manifest_hash, sha256_jcs, ZERO_HASH
 from bkk.importer.write.yaml_writer import dump
+from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 from bkk.voice.cli import _process_one_remove, _run_remove
 
 
@@ -92,19 +93,24 @@ def test_remove_strips_voices_and_refreshes_hashes(tmp_path: Path) -> None:
     reloaded = yaml.safe_load(
         (bundle / f"{TEXT_ID}_001.yaml").read_text(encoding="utf-8")
     )
+    mf = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    reloaded = hydrate_juan_markers(
+        reloaded, load_marker_asset(bundle, mf, 1),
+    )
     markers = reloaded["body"]["markers"]
     assert all(m.get("type") != "voice" for m in markers)
     # Non-voice marker is preserved.
     assert any(m.get("type") == "punctuation" for m in markers)
-    # Juan self-hash is consistent with the rewritten content.
-    expected = _self_hash(reloaded)
-    assert reloaded["hash"] == expected
-
-    # Manifest's parts entry tracks the new juan hash.
-    mf = yaml.safe_load(
-        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    # Juan self-hash is consistent with the rewritten physical content.
+    physical = yaml.safe_load(
+        (bundle / f"{TEXT_ID}_001.yaml").read_text(encoding="utf-8")
     )
-    assert mf["assets"]["parts"][0]["hash"] == expected
+    physical_expected = _self_hash(physical)
+    assert physical["hash"] == physical_expected
+    # Manifest's parts entry tracks the new juan hash.
+    assert mf["assets"]["parts"][0]["hash"] == physical_expected
     # And the manifest's own self-hash agrees.
     assert mf["hash"] == manifest_hash(mf)
 
