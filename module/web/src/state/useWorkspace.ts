@@ -12,11 +12,36 @@ export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
 export type SearchTarget = "fulltext" | "dictionary" | "translations";
 export type LineMode = "paragraph" | "phrase";
+export type SearchFacetKind =
+  | "category"
+  | "witness"
+  | "voice"
+  | "leftChar"
+  | "rightChar"
+  | "leftBigram"
+  | "rightBigram"
+  | "aroundBinom";
+
+export interface SearchFilters {
+  textid: string | null;
+  category: string[];
+  categoryDescendants: boolean;
+  dateBefore: number | null;
+  dateAfter: number | null;
+  witness: string[];
+  voice: string[];
+  leftChar: string[];
+  rightChar: string[];
+  leftBigram: string[];
+  rightBigram: string[];
+  aroundBinom: string[];
+}
 
 export interface SearchState {
   query: string;
   target: SearchTarget;
   sort: SearchSort;
+  filters: SearchFilters;
   status: "idle" | "loading" | "ok" | "error";
   error: string | null;
   response: SearchResponse | null;
@@ -201,6 +226,20 @@ let state: WorkspaceState = {
     query: "",
     target: "fulltext",
     sort: "match",
+    filters: {
+      textid: null,
+      category: [],
+      categoryDescendants: true,
+      dateBefore: null,
+      dateAfter: null,
+      witness: [],
+      voice: [],
+      leftChar: [],
+      rightChar: [],
+      leftBigram: [],
+      rightBigram: [],
+      aroundBinom: [],
+    },
     status: "idle",
     error: null,
     response: null,
@@ -214,11 +253,21 @@ let state: WorkspaceState = {
 // monotonically increasing run id so an in-flight stale request can't clobber
 // a newer one when the user submits twice quickly.
 let searchRunId = 0;
+let searchAbort: AbortController | null = null;
+
+function cancelSearchRequest(): void {
+  searchRunId++;
+  searchAbort?.abort();
+  searchAbort = null;
+}
 
 async function runSearchInternal(offset: number): Promise<void> {
-  const { query, target, sort } = state.search;
+  const { query, target, sort, filters } = state.search;
   if (!query.trim() || target !== "fulltext") return;
-  const runId = ++searchRunId;
+  cancelSearchRequest();
+  const runId = searchRunId;
+  const controller = new AbortController();
+  searchAbort = controller;
   state = {
     ...state,
     search: { ...state.search, status: "loading", error: null },
@@ -226,8 +275,27 @@ async function runSearchInternal(offset: number): Promise<void> {
   };
   notify();
   try {
-    const response = await searchCorpus({ q: query, sort, offset });
+    const response = await searchCorpus({
+      q: query,
+      sort,
+      offset,
+      textid: filters.textid ?? undefined,
+      witness: filters.witness,
+      voice: filters.voice,
+      category: filters.category,
+      categoryDescendants: filters.categoryDescendants,
+      dateBefore: filters.dateBefore ?? undefined,
+      dateAfter: filters.dateAfter ?? undefined,
+      pivotTextid: state.activeTextid ?? undefined,
+      leftChar: filters.leftChar,
+      rightChar: filters.rightChar,
+      leftBigram: filters.leftBigram,
+      rightBigram: filters.rightBigram,
+      aroundBinom: filters.aroundBinom,
+      signal: controller.signal,
+    });
     if (runId !== searchRunId) return;
+    searchAbort = null;
     state = {
       ...state,
       search: { ...state.search, status: "ok", error: null, response },
@@ -235,6 +303,8 @@ async function runSearchInternal(offset: number): Promise<void> {
     notify();
   } catch (e) {
     if (runId !== searchRunId) return;
+    searchAbort = null;
+    if (e instanceof DOMException && e.name === "AbortError") return;
     state = {
       ...state,
       search: {
@@ -251,6 +321,29 @@ const listeners = new Set<() => void>();
 
 function notify() {
   for (const l of listeners) l();
+}
+
+function toggled(values: string[], value: string): string[] {
+  return values.includes(value)
+    ? values.filter((v) => v !== value)
+    : [...values, value];
+}
+
+function resetSearchFilters(filters: SearchFilters): SearchFilters {
+  return {
+    ...filters,
+    textid: null,
+    category: [],
+    dateBefore: null,
+    dateAfter: null,
+    witness: [],
+    voice: [],
+    leftChar: [],
+    rightChar: [],
+    leftBigram: [],
+    rightBigram: [],
+    aroundBinom: [],
+  };
 }
 
 function subscribe(l: () => void) {
@@ -371,25 +464,111 @@ export const workspace = {
     notify();
   },
   setSearchQuery(query: string) {
-    state = { ...state, search: { ...state.search, query } };
+    cancelSearchRequest();
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        query,
+        filters: resetSearchFilters(state.search.filters),
+        status: "idle",
+        error: null,
+        response: null,
+      },
+    };
     notify();
   },
   setSearchTarget(target: SearchTarget) {
-    state = { ...state, search: { ...state.search, target } };
+    cancelSearchRequest();
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        target,
+        filters: resetSearchFilters(state.search.filters),
+        status: "idle",
+        error: null,
+        response: null,
+      },
+    };
     notify();
   },
   setSearchSort(sort: SearchSort) {
-    state = { ...state, search: { ...state.search, sort } };
+    cancelSearchRequest();
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        sort,
+        filters: resetSearchFilters(state.search.filters),
+        status: "idle",
+        error: null,
+        response: null,
+      },
+    };
     notify();
   },
+  setSearchTextid(textid: string | null) {
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        filters: { ...state.search.filters, textid },
+      },
+    };
+    notify();
+    return runSearchInternal(0);
+  },
+  toggleSearchFacet(kind: SearchFacetKind, value: string) {
+    const filters = state.search.filters;
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        filters: { ...filters, [kind]: toggled(filters[kind], value) },
+      },
+    };
+    notify();
+    return runSearchInternal(0);
+  },
+  setSearchDateFilter(which: "before" | "after", value: number | null) {
+    const key = which === "before" ? "dateBefore" : "dateAfter";
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        filters: { ...state.search.filters, [key]: value },
+      },
+    };
+    notify();
+    return runSearchInternal(0);
+  },
+  clearSearchFilters() {
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        filters: resetSearchFilters(state.search.filters),
+      },
+    };
+    notify();
+    return runSearchInternal(0);
+  },
   runSearch() {
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        filters: resetSearchFilters(state.search.filters),
+      },
+    };
     return runSearchInternal(0);
   },
   runSearchAt(offset: number) {
     return runSearchInternal(offset);
   },
   clearSearch() {
-    searchRunId++;
+    cancelSearchRequest();
     state = {
       ...state,
       search: {

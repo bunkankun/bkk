@@ -899,6 +899,150 @@ button {
 .kwic-sort {
   color: var(--amb);
 }
+.kwic-clear-filters {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--amb);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.kwic-clear-filters:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.kwic-clear-filters:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.kwic-empty-reset {
+  margin-top: 10px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--amb);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--amb);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.kwic-empty-reset:hover:not(:disabled) {
+  background: var(--amb-d);
+}
+.kwic-facets {
+  padding: 8px 10px 9px;
+  border-bottom: 1px solid var(--bdr-l);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.kwic-facet-group {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+.kwic-facet-label {
+  color: var(--t3);
+  font-size: 10px;
+  line-height: 22px;
+  font-family: var(--fm);
+  text-transform: uppercase;
+}
+.kwic-facet-values {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.kwic-facet-chip {
+  min-height: 22px;
+  max-width: 100%;
+  padding: 0 6px;
+  border: 1px solid var(--bdr-l);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+.kwic-facet-chip:hover:not(:disabled) {
+  background: var(--hov);
+  color: var(--t1);
+}
+.kwic-facet-chip.on {
+  border-color: var(--amb);
+  background: var(--amb-d);
+  color: var(--amb);
+}
+.kwic-facet-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.kwic-facet-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kwic-facet-count {
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 10px;
+}
+.kwic-date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.kwic-date-row label {
+  min-width: 0;
+  height: 22px;
+  border: 1px solid var(--bdr-l);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  color: var(--t3);
+}
+.kwic-date-row input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--t2);
+  font: inherit;
+  font-size: 11px;
+}
+.kwic-date-pivots {
+  grid-column: 2;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.kwic-date-pivots button {
+  height: 21px;
+  padding: 0 6px;
+  border: 1px solid var(--bdr-l);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+}
+.kwic-date-pivots button:hover:not(:disabled) {
+  background: var(--hov);
+  color: var(--t1);
+}
 .kwic-row {
   display: block;
   width: 100%;

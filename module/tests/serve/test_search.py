@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from bkk.index.catalog import build_catalog_index
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
 
@@ -77,6 +78,56 @@ def test_search_pagination(client):
     assert body["limit"] == 1
     assert body["offset"] == 0
     assert len(body["hits"]) <= 1
+
+
+def test_search_category_and_date_filters_use_catalog_index(tmp_path: Path):
+    write_bundle(tmp_path, "KR1a0001", "甲乙丙", title="early")
+    write_bundle(tmp_path, "KR3b0001", "丁甲戊", title="late")
+    csv_path = tmp_path / "frontmatter.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "id,title,titlePinyin,titleEnglish,notBefore,notAfter,dzt_date",
+                "KR1,經部,jing,Jing,,,",
+                "KR1a,易類,yi,Yi,,,",
+                "KR3,子部,zi,Zi,,,",
+                "KR3b,儒家類,ru,Ru,,,",
+                "KR1a0001,early,,,100,100,",
+                "KR3b0001,late,,,900,900,",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    catalog_path = build_catalog_index(tmp_path, csv_path, tmp_path / "_catalog.bkkc")
+    config = ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+        catalog_path=catalog_path,
+    )
+    client = TestClient(create_app(config))
+
+    r = client.get(
+        "/search",
+        params={"q": "甲", "category": "KR1", "date_before": "500"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    assert body["hits"][0]["textid"] == "KR1a0001"
+    categories = {v["value"]: v for v in body["facets"]["category"]}
+    assert categories["KR1"]["selected"] is True
+    assert categories["KR1a"]["count"] == 1
+    assert body["facets"]["date"]["max"] == 100
+
+
+def test_search_context_facets_filter_and_count(client):
+    r = client.get("/search", params={"q": "丙", "left_char": "乙"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] >= 1
+    assert all(h["left"].endswith("乙") for h in body["hits"])
+    left_values = {v["value"]: v for v in body["facets"]["left_char"]}
+    assert left_values["乙"]["selected"] is True
 
 
 # ---------------------------------------------------------------- sort modes

@@ -118,17 +118,44 @@ export async function searchCorpus(params: {
   sort: SearchSort;
   textid?: string;
   witness?: string[];
+  voice?: string[];
+  category?: string[];
+  categoryDescendants?: boolean;
+  dateBefore?: number;
+  dateAfter?: number;
+  pivotTextid?: string;
+  leftChar?: string[];
+  rightChar?: string[];
+  leftBigram?: string[];
+  rightBigram?: string[];
+  aroundBinom?: string[];
   context?: number;
   limit?: number;
   offset?: number;
+  signal?: AbortSignal;
 }): Promise<SearchResponse> {
   const q = new URLSearchParams();
   q.set("q", params.q);
   q.set("sort", params.sort);
   if (params.textid) q.set("textid", params.textid);
   if (params.witness) for (const w of params.witness) q.append("witness", w);
+  if (params.voice) for (const v of params.voice) q.append("voice", v);
+  if (params.category) for (const c of params.category) q.append("category", c);
+  if (params.categoryDescendants != null) {
+    q.set("category_descendants", String(params.categoryDescendants));
+  }
+  if (params.dateBefore != null) q.set("date_before", String(params.dateBefore));
+  if (params.dateAfter != null) q.set("date_after", String(params.dateAfter));
+  if (params.pivotTextid) q.set("pivot_textid", params.pivotTextid);
+  if (params.leftChar) for (const v of params.leftChar) q.append("left_char", v);
+  if (params.rightChar) for (const v of params.rightChar) q.append("right_char", v);
+  if (params.leftBigram) for (const v of params.leftBigram) q.append("left_bigram", v);
+  if (params.rightBigram) for (const v of params.rightBigram) q.append("right_bigram", v);
+  if (params.aroundBinom) for (const v of params.aroundBinom) q.append("around_binom", v);
   if (params.context != null) q.set("context", String(params.context));
   if (params.limit != null) q.set("limit", String(params.limit));
   if (params.offset != null) q.set("offset", String(params.offset));
-  return fetchJson<SearchResponse>(`${apiBase}/search?${q.toString()}`);
+  return fetchJson<SearchResponse>(`${apiBase}/search?${q.toString()}`, {
+    signal: params.signal,
+  });
 }

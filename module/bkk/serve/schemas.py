@@ -97,12 +97,42 @@ class HitOut(BaseModel):
     )
 
 
+class SearchFacetValue(BaseModel):
+    value: str
+    label: str | None = None
+    count: int
+    selected: bool = False
+
+
+class SearchDateFacets(BaseModel):
+    min: int | None = None
+    max: int | None = None
+    current_textid: str | None = None
+    current_text_date: int | None = None
+    before_count: int | None = None
+    after_count: int | None = None
+
+
+class SearchFacets(BaseModel):
+    textid: list[SearchFacetValue] = Field(default_factory=list)
+    category: list[SearchFacetValue] = Field(default_factory=list)
+    witness: list[SearchFacetValue] = Field(default_factory=list)
+    voice: list[SearchFacetValue] = Field(default_factory=list)
+    left_char: list[SearchFacetValue] = Field(default_factory=list)
+    right_char: list[SearchFacetValue] = Field(default_factory=list)
+    left_bigram: list[SearchFacetValue] = Field(default_factory=list)
+    right_bigram: list[SearchFacetValue] = Field(default_factory=list)
+    around_binom: list[SearchFacetValue] = Field(default_factory=list)
+    date: SearchDateFacets = Field(default_factory=SearchDateFacets)
+
+
 class SearchResponse(BaseModel):
     query: str
     total: int
     offset: int
     limit: int
     sort: str
+    facets: SearchFacets = Field(default_factory=SearchFacets)
     hits: list[HitOut]
 
 

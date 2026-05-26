@@ -208,7 +208,38 @@ export interface SearchHit {
   witness_right_variant_end?: number;
   overlays: VariantOverlay[];
   toc_label?: string | null;
+  voice: string;
+  voice_stack: string[];
   recipe: Record<string, unknown>;
+}
+
+export interface SearchFacetValue {
+  value: string;
+  label?: string | null;
+  count: number;
+  selected: boolean;
+}
+
+export interface SearchDateFacets {
+  min?: number | null;
+  max?: number | null;
+  current_textid?: string | null;
+  current_text_date?: number | null;
+  before_count?: number | null;
+  after_count?: number | null;
+}
+
+export interface SearchFacets {
+  textid: SearchFacetValue[];
+  category: SearchFacetValue[];
+  witness: SearchFacetValue[];
+  voice: SearchFacetValue[];
+  left_char: SearchFacetValue[];
+  right_char: SearchFacetValue[];
+  left_bigram: SearchFacetValue[];
+  right_bigram: SearchFacetValue[];
+  around_binom: SearchFacetValue[];
+  date: SearchDateFacets;
 }
 
 export interface SearchResponse {
@@ -217,6 +248,7 @@ export interface SearchResponse {
   offset: number;
   limit: number;
   sort: SearchSort;
+  facets?: SearchFacets;
   hits: SearchHit[];
 }
 

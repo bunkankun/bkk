@@ -1,5 +1,6 @@
-import type { SearchHit } from "../../api/types";
+import type { SearchFacetValue, SearchFacets, SearchHit } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
+import type { SearchFacetKind, SearchFilters } from "../../state/useWorkspace";
 
 const PAGE_SIZE = 50;
 
@@ -37,6 +38,189 @@ function trimRightContext(s: string, maxChars = 32): string {
 // is exposed via the chip's title attribute for hover preview.
 const WITNESS_NEAR_CHARS = 4;
 const COLLAPSE_THRESHOLD = 6;
+
+const EMPTY_FACETS: SearchFacets = {
+  textid: [],
+  category: [],
+  witness: [],
+  voice: [],
+  left_char: [],
+  right_char: [],
+  left_bigram: [],
+  right_bigram: [],
+  around_binom: [],
+  date: {},
+};
+
+function normalizeFacets(facets: SearchFacets | undefined): SearchFacets {
+  return {
+    textid: facets?.textid ?? [],
+    category: facets?.category ?? [],
+    witness: facets?.witness ?? [],
+    voice: facets?.voice ?? [],
+    left_char: facets?.left_char ?? [],
+    right_char: facets?.right_char ?? [],
+    left_bigram: facets?.left_bigram ?? [],
+    right_bigram: facets?.right_bigram ?? [],
+    around_binom: facets?.around_binom ?? [],
+    date: facets?.date ?? {},
+  };
+}
+
+function hasAnyFilter(filters: SearchFilters): boolean {
+  return Boolean(
+    filters.textid ||
+      filters.category.length ||
+      filters.dateBefore != null ||
+      filters.dateAfter != null ||
+      filters.witness.length ||
+      filters.voice.length ||
+      filters.leftChar.length ||
+      filters.rightChar.length ||
+      filters.leftBigram.length ||
+      filters.rightBigram.length ||
+      filters.aroundBinom.length,
+  );
+}
+
+function FacetGroup({
+  label,
+  values,
+  kind,
+  disabled,
+}: {
+  label: string;
+  values: SearchFacetValue[];
+  kind: SearchFacetKind;
+  disabled: boolean;
+}) {
+  if (values.length === 0) return null;
+  return (
+    <div className="kwic-facet-group">
+      <div className="kwic-facet-label">{label}</div>
+      <div className="kwic-facet-values">
+        {values.map((v) => (
+          <button
+            key={v.value}
+            type="button"
+            className={`kwic-facet-chip${v.selected ? " on" : ""}`}
+            disabled={disabled}
+            onClick={() => void workspace.toggleSearchFacet(kind, v.value)}
+            title={v.label ?? v.value}
+          >
+            <span className="kwic-facet-value">{v.value}</span>
+            <span className="kwic-facet-count">{v.count}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TextFacetGroup({
+  values,
+  selected,
+  disabled,
+}: {
+  values: SearchFacetValue[];
+  selected: string | null;
+  disabled: boolean;
+}) {
+  if (values.length === 0) return null;
+  return (
+    <div className="kwic-facet-group">
+      <div className="kwic-facet-label">Text</div>
+      <div className="kwic-facet-values">
+        {values.map((v) => (
+          <button
+            key={v.value}
+            type="button"
+            className={`kwic-facet-chip${v.value === selected ? " on" : ""}`}
+            disabled={disabled}
+            onClick={() => void workspace.setSearchTextid(v.value === selected ? null : v.value)}
+            title={v.label ? `${v.value} · ${v.label}` : v.value}
+          >
+            <span className="kwic-facet-value">{v.value}</span>
+            <span className="kwic-facet-count">{v.count}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DateFacet({
+  before,
+  after,
+  currentTextid,
+  currentDate,
+  min,
+  max,
+  disabled,
+}: {
+  before: number | null;
+  after: number | null;
+  currentTextid?: string | null;
+  currentDate?: number | null;
+  min?: number | null;
+  max?: number | null;
+  disabled: boolean;
+}) {
+  const setYear = (which: "before" | "after", raw: string) => {
+    const trimmed = raw.trim();
+    const value = trimmed === "" ? null : Number(trimmed);
+    if (value == null || Number.isFinite(value)) {
+      void workspace.setSearchDateFilter(which, value);
+    }
+  };
+  return (
+    <div className="kwic-facet-group">
+      <div className="kwic-facet-label">Date</div>
+      <div className="kwic-date-row">
+        <label>
+          <span>&lt;</span>
+          <input
+            type="number"
+            value={before ?? ""}
+            disabled={disabled}
+            placeholder={max != null ? String(max) : "year"}
+            onChange={(e) => setYear("before", e.target.value)}
+          />
+        </label>
+        <label>
+          <span>&gt;</span>
+          <input
+            type="number"
+            value={after ?? ""}
+            disabled={disabled}
+            placeholder={min != null ? String(min) : "year"}
+            onChange={(e) => setYear("after", e.target.value)}
+          />
+        </label>
+      </div>
+      {currentTextid && currentDate != null ? (
+        <div className="kwic-date-pivots">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => void workspace.setSearchDateFilter("before", currentDate)}
+            title={`Before ${currentTextid} (${currentDate})`}
+          >
+            before current
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => void workspace.setSearchDateFilter("after", currentDate)}
+            title={`After ${currentTextid} (${currentDate})`}
+          >
+            after current
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function HitRow({ hit }: { hit: SearchHit }) {
   const witness = hit.matched_via !== "master" ? hit.matched_via : null;
@@ -120,6 +304,7 @@ export function SearchTab() {
   const error = useWorkspace((s) => s.search.error);
   const response = useWorkspace((s) => s.search.response);
   const query = useWorkspace((s) => s.search.query);
+  const filters = useWorkspace((s) => s.search.filters);
 
   if (status === "idle") {
     return <div className="rc empty">Enter a query in the menu bar to search.</div>;
@@ -134,13 +319,31 @@ export function SearchTab() {
     return <div className="rc empty">No results.</div>;
   }
   if (response.total === 0) {
-    return <div className="rc empty">No matches for “{query}”.</div>;
+    const filtered = hasAnyFilter(filters);
+    return (
+      <div className="rc empty">
+        <div>No matches for “{query}”.</div>
+        {filtered ? (
+          <button
+            type="button"
+            className="kwic-empty-reset"
+            disabled={status === "loading"}
+            onClick={() => void workspace.clearSearchFilters()}
+          >
+            Reset facets
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
   const start = response.offset + 1;
   const end = Math.min(response.offset + response.limit, response.total);
   const hasPrev = response.offset > 0;
   const hasNext = response.offset + response.limit < response.total;
+  const facets = response.facets ? normalizeFacets(response.facets) : EMPTY_FACETS;
+  const disabled = status === "loading";
+  const filtered = hasAnyFilter(filters);
 
   const goPage = async (nextOffset: number) => {
     // Bounded reuse: re-run the search with a new offset. Cheapest path —
@@ -156,6 +359,80 @@ export function SearchTab() {
           {start}–{end} of {response.total} for “{response.query}”
         </span>
         <span className="kwic-sort">· {response.sort}</span>
+        {filtered ? (
+          <button
+            type="button"
+            className="kwic-clear-filters"
+            disabled={disabled}
+            onClick={() => void workspace.clearSearchFilters()}
+          >
+            clear facets
+          </button>
+        ) : null}
+      </div>
+      <div className="kwic-facets">
+        <TextFacetGroup
+          values={facets.textid}
+          selected={filters.textid}
+          disabled={disabled}
+        />
+        <FacetGroup
+          label="Category"
+          values={facets.category}
+          kind="category"
+          disabled={disabled}
+        />
+        <DateFacet
+          before={filters.dateBefore}
+          after={filters.dateAfter}
+          currentTextid={facets.date.current_textid}
+          currentDate={facets.date.current_text_date}
+          min={facets.date.min}
+          max={facets.date.max}
+          disabled={disabled}
+        />
+        <FacetGroup
+          label="Witness"
+          values={facets.witness}
+          kind="witness"
+          disabled={disabled}
+        />
+        <FacetGroup
+          label="Voice"
+          values={facets.voice}
+          kind="voice"
+          disabled={disabled}
+        />
+        <FacetGroup
+          label="Left"
+          values={facets.left_char}
+          kind="leftChar"
+          disabled={disabled}
+        />
+        <FacetGroup
+          label="Right"
+          values={facets.right_char}
+          kind="rightChar"
+          disabled={disabled}
+        />
+        <FacetGroup
+          label="Left 2"
+          values={facets.left_bigram}
+          kind="leftBigram"
+          disabled={disabled}
+        />
+        <FacetGroup
+          label="Right 2"
+          values={facets.right_bigram}
+          kind="rightBigram"
+          disabled={disabled}
+        />
+        <FacetGroup
+          label="Binom"
+          values={facets.around_binom}
+          kind="aroundBinom"
+          disabled={disabled}
+        />
       </div>
       {response.hits.map((h, i) => (
         <HitRow key={`${h.textid}:${h.juan_seq}:${h.master_offset}:${i}`} hit={h} />
