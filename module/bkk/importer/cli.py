@@ -32,6 +32,13 @@ KRP invocation::
     # legacy recipe-driven path (overrides everything else)
     python -m bkk.importer --format krp --recipe <recipe.yaml>
 
+Direct CBETA invocation::
+
+    # select by CBETA old_id, write under the mapped KR id
+    python -m bkk.importer --format cbeta --in <cbeta-xml-root> \\
+                           --mapping catalog/KRtoCBETA-mapping.csv \\
+                           --text-id J01nA001 --out <out>
+
 Translation invocation::
 
     # every translation file under <in>/tls-data/translations/
@@ -72,6 +79,7 @@ Cross-source co-existence (see ``docs/cross-source-merge.md``):
 from __future__ import annotations
 
 import argparse
+import csv
 import re
 import sys
 from pathlib import Path
@@ -217,8 +225,8 @@ def _find_tls_texts(in_root: Path, text_id: str) -> list[Path]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk.importer")
-    p.add_argument("--format", choices=["tls", "krp", "translation"], default=None,
-                   help="source format: tls, krp, or translation "
+    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation"], default=None,
+                   help="source format: tls, krp, cbeta, or translation "
                         "(required; or set import.format in .bkkrc)")
     p.add_argument("--recipe", type=Path, default=None,
                    help="recipe YAML pinning per-text knobs (krp); when given, "
@@ -232,6 +240,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "<out>/<text-id>/, or <out>/<section>/<text-id>/ "
                         "with --by-section)")
     p.add_argument("--text-id", default=None, help="single text id (e.g. KR6q0053)")
+    p.add_argument("--mapping", dest="mapping_csv", type=Path, default=None,
+                   help="cbeta: CSV mapping old_id to kr_id "
+                        "(default: cbeta.mapping in .bkkrc)")
     p.add_argument("--lang", default=None,
                    help="translation: filter to one BCP-47 language tag "
                         "(e.g. en, fr); applies only to --format translation")
@@ -243,7 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="slice output by KR sub-section: bundles land under "
                         "<out>/<section>/<text-id>/ (e.g. KR6d/KR6d0001/) so "
                         "large corpora don't crowd a single directory; "
-                        "applies to both --format tls and --format krp")
+                        "applies to tls, krp, and cbeta formats")
     p.add_argument("--github", dest="github_user", default=None,
                    help=f"krp: github user/org to fetch from "
                         f"(default {_DEFAULT_GITHUB_USER!r} when --in is unset)")
@@ -286,6 +297,7 @@ def run(argv: list[str] | None = None) -> int:
     rc = load_rc()
     g = rc.get("global", {})
     imp = rc.get("import", {})
+    cbeta = rc.get("cbeta", {})
 
     parser = build_parser()
     defaults: dict = {}
@@ -295,10 +307,12 @@ def run(argv: list[str] | None = None) -> int:
         ("out", "out_root"), ("format", "format"), ("cache_dir", "cache_dir"),
         ("github", "github_user"), ("master_branch", "master_branch"),
         ("imglist_branch", "imglist_branch"), ("lang", "lang"),
-        ("on_exists", "on_exists"),
+        ("on_exists", "on_exists"), ("mapping", "mapping_csv"),
     ]:
         if rc_key in imp:
             defaults[dest] = imp[rc_key]
+    if "mapping" in cbeta and "mapping_csv" not in defaults:
+        defaults["mapping_csv"] = cbeta["mapping"]
     if imp.get("by_section"):
         defaults["by_section"] = True
     if g.get("skip_confirm") or imp.get("skip_confirm"):
@@ -310,9 +324,19 @@ def run(argv: list[str] | None = None) -> int:
 
     # If --in wasn't supplied by rc or CLI, derive it from the resolved format.
     if args.in_root is None and "in" not in imp and args.format is not None:
-        root_key = "krp_root" if args.format == "krp" else "tls_root"
-        if root_key in g:
-            args.in_root = g[root_key]
+        if args.format == "krp":
+            root_key = "krp_root"
+            if root_key in g:
+                args.in_root = g[root_key]
+        elif args.format == "cbeta":
+            if "root" in cbeta:
+                args.in_root = cbeta["root"]
+            elif "cbeta_root" in g:
+                args.in_root = g["cbeta_root"]
+        else:
+            root_key = "tls_root"
+            if root_key in g:
+                args.in_root = g[root_key]
 
     if args.format is None:
         parser.error("--format is required (or set import.format in .bkkrc)")
@@ -321,6 +345,8 @@ def run(argv: list[str] | None = None) -> int:
         return _run_tls(args)
     if args.format == "krp":
         return _run_krp(args)
+    if args.format == "cbeta":
+        return _run_cbeta(args)
     if args.format == "translation":
         return _run_translation(args)
     print(f"error: unknown format {args.format!r}", file=sys.stderr)
@@ -625,6 +651,253 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
     if sample is not None:
         _emit_divergence(sample, Path(summary["out_root"]), effective_out)
     return bundle.text_id
+
+
+# ---------- CBETA direct ----------------------------------------------------
+
+
+def _run_cbeta(args) -> int:
+    """Dispatch the direct CBETA path.
+
+    The selector is CBETA's ``old_id`` from ``KRtoCBETA-mapping.csv``; the
+    output bundle is written under the mapped ``kr_id``. The reader is the
+    same CBETA-aware TEI parser used by the TLS path, but source resolution
+    comes straight from a CBETA XML tree.
+    """
+    if args.in_root is None or args.out_root is None:
+        print("error: --in and --out are required for --format cbeta",
+              file=sys.stderr)
+        return 2
+    if args.mapping_csv is None:
+        print("error: --mapping is required for --format cbeta "
+              "(or set cbeta.mapping in .bkkrc)", file=sys.stderr)
+        return 2
+
+    try:
+        rows = _load_cbeta_mapping(args.mapping_csv)
+        pairs = _resolve_cbeta_targets(args, rows)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if not pairs:
+        print("error: no texts found to import", file=sys.stderr)
+        return 2
+
+    if _on_exists_skip(args) and args.text_id is None:
+        pairs = _skip_filter_cbeta_pairs(args, pairs)
+        if not pairs:
+            print("nothing to import: all discovered texts already exist.",
+                  file=sys.stderr)
+            return 0
+
+    if len(pairs) > 1 and not args.yes:
+        if not _confirm_bulk([(row["kr_id"], path) for row, path in pairs]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    for row, text_xml in pairs:
+        try:
+            _import_one_cbeta(
+                args, row, text_xml,
+                sample=args.sample if len(pairs) == 1 else None,
+            )
+        except Exception as exc:  # noqa: BLE001
+            label = row.get("old_id") or row.get("kr_id") or text_xml.name
+            print(f"error importing {label}: {exc}", file=sys.stderr)
+            rc = 1
+    return rc
+
+
+def _load_cbeta_mapping(mapping_csv: Path) -> list[dict[str, str]]:
+    if not mapping_csv.is_file():
+        raise FileNotFoundError(f"mapping CSV not found: {mapping_csv}")
+    rows: list[dict[str, str]] = []
+    with mapping_csv.open(newline="", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        required = {"kr_id", "old_id"}
+        missing = required - set(reader.fieldnames or [])
+        if missing:
+            raise ValueError(
+                f"{mapping_csv}: missing required column(s) "
+                f"{sorted(missing)!r}"
+            )
+        for raw in reader:
+            row = {k: (v or "").strip() for k, v in raw.items()}
+            kr_id = row.get("kr_id", "")
+            old_id = row.get("old_id", "")
+            if not kr_id or kr_id.startswith("#") or not old_id:
+                continue
+            rows.append(row)
+    return rows
+
+
+def _resolve_cbeta_targets(
+    args, rows: list[dict[str, str]],
+) -> list[tuple[dict[str, str], Path]]:
+    if args.text_id is not None:
+        needle = args.text_id.strip()
+        matches = [
+            r for r in rows
+            if r.get("old_id") == needle or r.get("kr_id") == needle
+        ]
+        if not matches:
+            raise ValueError(
+                f"{needle!r} not found as old_id or kr_id in "
+                f"{args.mapping_csv}"
+            )
+        if len(matches) > 1:
+            raise ValueError(
+                f"{needle!r} maps to multiple rows in {args.mapping_csv}"
+            )
+        row = matches[0]
+        return [(row, _find_cbeta_text(args.in_root, row["old_id"]))]
+
+    selected = rows
+    if args.section:
+        selected = [
+            r for r in rows
+            if r.get("kr_id", "").startswith(args.section)
+            or r.get("kr_subsection") == args.section
+        ]
+
+    pairs: list[tuple[dict[str, str], Path]] = []
+    for row in selected:
+        try:
+            pairs.append((row, _find_cbeta_text(args.in_root, row["old_id"])))
+        except FileNotFoundError as exc:
+            print(f"warning: skipping {row['old_id']}: {exc}",
+                  file=sys.stderr)
+    return pairs
+
+
+def _cbeta_collection(old_id: str) -> str:
+    m = re.match(r"^([A-Za-z]+)", old_id)
+    return m.group(1) if m else old_id[:1]
+
+
+def _cbeta_volume(old_id: str) -> str:
+    m = re.match(r"^([A-Za-z]+\d+)", old_id)
+    return m.group(1) if m else old_id
+
+
+def _find_cbeta_text(in_root: Path, old_id: str) -> Path:
+    """Derive the common CBETA XML path for ``old_id``.
+
+    CBETA trees conventionally group files by collection letter:
+    ``<root>/<collection>/<volume>/<old_id>.xml`` (for example
+    ``xml-p5/B/B10/B10n0049.xml``). We check that derived path first, then
+    common wrapper directories, older collection-only layouts, and finally a
+    recursive fallback.
+    """
+    collection = _cbeta_collection(old_id)
+    volume = _cbeta_volume(old_id)
+    filename = f"{old_id}.xml"
+    candidates = [
+        in_root / collection / volume / filename,
+        in_root / "xml" / collection / volume / filename,
+        in_root / "CBETA_XML" / collection / volume / filename,
+        in_root / collection / filename,
+        in_root / "xml" / collection / filename,
+        in_root / "CBETA_XML" / collection / filename,
+        in_root / filename,
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            return cand
+
+    matches = sorted(
+        in_root.rglob(filename),
+        key=lambda p: (len(p.parts), str(p)),
+    )
+    if not matches:
+        raise FileNotFoundError(
+            f"{filename} not found under {in_root} "
+            f"(derived path {collection}/{volume}/{filename})"
+        )
+    if len(matches) > 1:
+        paths = "\n  ".join(str(p) for p in matches)
+        print(
+            f"warning: multiple matches for {filename} under {in_root}; "
+            f"using {matches[0]}\n  {paths}",
+            file=sys.stderr,
+        )
+    return matches[0]
+
+
+def _skip_filter_cbeta_pairs(
+    args, pairs: list[tuple[dict[str, str], Path]],
+) -> list[tuple[dict[str, str], Path]]:
+    kept: list[tuple[dict[str, str], Path]] = []
+    skipped = 0
+    for row, text_xml in pairs:
+        kr_id = row["kr_id"]
+        effective_out = _effective_out_root(
+            args.out_root, kr_id, args.by_section,
+        )
+        existing = inspect_existing_bundle(effective_out, kr_id)
+        if existing.state == "tls":
+            bundle_dir = (
+                existing.manifest_path.parent if existing.manifest_path
+                else effective_out / kr_id
+            )
+            _report_skipped(bundle_dir, kind="cbeta", label=row["old_id"])
+            skipped += 1
+            continue
+        kept.append((row, text_xml))
+    if skipped:
+        print(
+            f"skipped {skipped} text(s) (already imported)",
+            file=sys.stderr,
+        )
+    return kept
+
+
+def _import_one_cbeta(
+    args, row: dict[str, str], text_xml: Path, *, sample: Path | None,
+) -> str:
+    kr_id = row["kr_id"]
+    old_id = row["old_id"]
+
+    from .read.cbeta import read_cbeta
+
+    bundle = read_cbeta(text_xml, row)
+
+    effective_out = _effective_out_root(args.out_root, kr_id, args.by_section)
+    existing = inspect_existing_bundle(effective_out, kr_id)
+    if existing.state == "krp":
+        bundle_dir = existing.manifest_path.parent
+        raise BundleConflictError(
+            f"{kr_id}: a KRP-sourced bundle already exists at "
+            f"{bundle_dir}. CBETA imports must precede KRP. "
+            f"Remedy: remove {bundle_dir} and re-import CBETA first, "
+            f"then KRP."
+        )
+    if existing.state == "unknown":
+        bundle_dir = existing.manifest_path.parent
+        raise BundleConflictError(
+            f"{kr_id}: a bundle already exists at {bundle_dir} but its "
+            f"source can't be classified. Inspect manually or run "
+            f"`bkk repair manifest {bundle_dir}` and retry."
+        )
+    if existing.state == "tls" and _on_exists_skip(args):
+        bundle_dir = (
+            existing.manifest_path.parent if existing.manifest_path
+            else effective_out / kr_id
+        )
+        _report_skipped(bundle_dir, kind="cbeta", label=old_id)
+        return ""
+
+    summary = write_bundle(bundle, effective_out)
+    print(
+        f"wrote {len(summary['juans'])} juan(s) for {summary['text_id']} "
+        f"from CBETA {old_id} under {summary['out_root']}"
+    )
+
+    if sample is not None:
+        _emit_divergence(sample, Path(summary["out_root"]), effective_out)
+    return kr_id
 
 
 # ---------- KRP --------------------------------------------------------------

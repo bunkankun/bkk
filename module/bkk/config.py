@@ -14,12 +14,14 @@ import yaml
 
 _VALID_SECTIONS = {
     "global", "import", "export", "index", "validate", "serve", "repair",
-    "voice", "recipe", "info",
+    "voice", "recipe", "info", "cbeta",
 }
 
 _PATH_KEYS = frozenset(
     {"corpus", "tls_root", "krp_root", "in", "out", "output_dir",
-     "cache_dir", "tls_source", "web_dist", "index", "catalog"}
+     "cache_dir", "tls_source", "web_dist", "index", "catalog",
+     "cbeta_root",
+     "root", "mapping"}
 )
 
 

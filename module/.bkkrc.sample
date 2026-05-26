@@ -7,7 +7,7 @@
 #
 # Precedence (lowest → highest): .bkkrc < env vars < CLI flags
 #
-# Supported sections: global, import, export, index, validate, serve,
+# Supported sections: global, import, cbeta, export, index, validate, serve,
 # repair, voice, recipe, info. Unknown section names cause bkk to exit
 # with an error.
 #
@@ -34,13 +34,16 @@ global:
 #   krp_root: /data/krp           # Kanripo mirror (parent of <id>/ clones)
 #                                 #   → bkk import --in  (when format=krp)
 #
+#   cbeta_root: /data/cbeta/CBETA_XML # CBETA XML tree
+#                                 #   → bkk import --in  (when format=cbeta)
+#
 #   skip_confirm: true            # skip bulk-operation confirmation prompts
 #                                 #   → bkk import --yes
 #                                 #   → bkk export --yes
 
 # ── Import defaults ────────────────────────────────────────────────────────
 import:
-#   format: krp                   # source format: tls | krp | translation
+#   format: krp                   # source format: tls | krp | cbeta | translation
 #                                 # also determines which global root feeds --in
 #                                 # (translation reads from <in>/tls-data/translations/)
 #
@@ -62,6 +65,11 @@ import:
 #   imglist_branch: _data        # branch carrying imglist + imginfo (krp)
 #   lang: en                     # translation: filter to one BCP-47 language tag
 #   skip_confirm: true           # override global.skip_confirm for import only
+
+# ── Direct CBETA import defaults ───────────────────────────────────────────
+cbeta:
+#   root: /data/cbeta/CBETA_XML
+#   mapping: catalog/KRtoCBETA-mapping.csv
 
 # ── Export defaults ────────────────────────────────────────────────────────
 export:
