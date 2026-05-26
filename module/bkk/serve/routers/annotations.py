@@ -34,7 +34,7 @@ router = APIRouter(tags=["annotations"])
 
 def _ann_path(state: AppState, textid: str, seq: int) -> Path | None:
     """Return the first existing ``*_{seq:03d}.ann.yaml`` for the bundle."""
-    rec = state.cache.lookup(textid)
+    rec = state.lookup_bundle(textid)
     if rec is None:
         raise errors.bundle_not_found(textid)
     bundle = rec.bundle_dir

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
+from bkk.serve.state import AppState
 
 from .conftest import write_bundle
 
@@ -96,6 +97,29 @@ def test_get_juan(client):
     juan = r.json()
     assert juan["seq"] == 1
     assert juan["body"]["text"] == "甲乙丙丁戊己庚辛壬癸"
+
+
+def test_direct_bundle_lookup_does_not_build_corpus_cache(tmp_path: Path):
+    write_bundle(tmp_path, "FAST0001", "甲乙", title="Fast path")
+    state = AppState(ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+    ))
+
+    class ExplodingCache:
+        def lookup(self, textid: str):
+            raise AssertionError(f"unexpected full cache lookup for {textid}")
+
+        def get(self):
+            raise AssertionError("unexpected full cache build")
+
+    state._cache = ExplodingCache()
+
+    rec = state.lookup_bundle("FAST0001")
+
+    assert rec is not None
+    assert rec.textid == "FAST0001"
+    assert rec.title == "Fast path"
 
 
 def test_get_juan_not_found(client):

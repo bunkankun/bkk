@@ -17,7 +17,7 @@ from typing import Any
 
 import yaml
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from bkk.serve import _examples as ex, errors
 from bkk.serve.catalog import FILTERS, CatalogService, _kr_categories
@@ -36,14 +36,11 @@ class CategoryNode(BaseModel):
     label: str
     zh: str
     bundle_count: int
-
-
-class TopCategory(CategoryNode):
-    subcategories: list[CategoryNode]
+    subcategories: list["CategoryNode"] = Field(default_factory=list)
 
 
 class CategoriesResponse(BaseModel):
-    categories: list[TopCategory]
+    categories: list[CategoryNode]
 
 
 @functools.lru_cache(maxsize=1)
@@ -82,46 +79,72 @@ def categories(request: Request) -> CategoriesResponse:
     counts, counts_are_descendant = _category_counts(state)
 
     yaml_data = _load_kr_categories()
-    grouped: dict[str, list[str]] = {}
+    catalog_sections = _catalog_sections(state)
+    for code, info in catalog_sections.items():
+        yaml_data.setdefault(code, info)
+    children_by_parent: dict[str | None, list[str]] = {}
     top_codes: list[str] = []
+    all_codes = set(yaml_data)
     for code in yaml_data:
         m = _TOP_RE.match(code)
         if not m:
             continue
-        top, suffix = m.group(1), m.group(2)
-        if not suffix:
+        if not m.group(2):
             top_codes.append(code)
-            grouped.setdefault(top, [])
-        else:
-            grouped.setdefault(top, []).append(code)
+        parent = _parent_category_code(code, all_codes)
+        children_by_parent.setdefault(parent, []).append(code)
 
-    out: list[TopCategory] = []
-    for top in sorted(top_codes, key=_natural_key):
-        info = yaml_data[top]
-        sub_codes = sorted(grouped.get(top, []), key=_natural_key)
-        sub_list = [
-            CategoryNode(
-                code=sub,
-                label=yaml_data[sub].get("label", sub),
-                zh=yaml_data[sub].get("zh", sub),
-                bundle_count=counts.get(sub, 0),
-            )
-            for sub in sub_codes
-        ]
+    def build_node(code: str) -> CategoryNode:
+        info = yaml_data[code]
+        child_codes = sorted(children_by_parent.get(code, []), key=_natural_key)
+        children = [build_node(child) for child in child_codes]
         if counts_are_descendant:
-            descendant_count = counts.get(top, sum(n.bundle_count for n in sub_list))
+            bundle_count = counts.get(code, sum(n.bundle_count for n in children))
         else:
-            descendant_count = counts.get(top, 0) + sum(n.bundle_count for n in sub_list)
-        out.append(
-            TopCategory(
-                code=top,
-                label=info.get("label", top),
-                zh=info.get("zh", top),
-                bundle_count=descendant_count,
-                subcategories=sub_list,
-            )
+            bundle_count = counts.get(code, 0) + sum(n.bundle_count for n in children)
+        return CategoryNode(
+            code=code,
+            label=info.get("label", code),
+            zh=info.get("zh", code),
+            bundle_count=bundle_count,
+            subcategories=children,
         )
+
+    out = [build_node(top) for top in sorted(top_codes, key=_natural_key)]
     return CategoriesResponse(categories=out)
+
+
+def _catalog_sections(state: AppState) -> dict[str, dict[str, str]]:
+    conn = state.open_catalog()
+    if conn is None:
+        return {}
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT code, title, title_english, title_pinyin FROM catalog_section"
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return {}
+    finally:
+        conn.close()
+
+    out: dict[str, dict[str, str]] = {}
+    for row in rows:
+        title = row["title"] or row["code"]
+        label = row["title_english"] or row["title_pinyin"] or title
+        out[row["code"]] = {"label": label, "zh": title}
+    return out
+
+
+def _parent_category_code(code: str, codes: set[str]) -> str | None:
+    candidates = [
+        other
+        for other in codes
+        if other != code and len(other) < len(code) and code.startswith(other)
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=len)
 
 
 def _parse_query(
@@ -284,18 +307,12 @@ def _browse_catalog_index(
     finally:
         conn.close()
 
-    snap = state.cache.get()
     matches: list[CatalogMatchOut] = []
     pins: list[RecipePin] = []
     for row in rows:
-        rec = snap.by_textid.get(row["textid"])
-        title = row["title"] or (rec.title if rec is not None else None)
-        canonical_identifier = (
-            rec.canonical_identifier if rec is not None else row["canonical_identifier"]
-        )
-        manifest_hash = rec.manifest_hash if rec is not None else row["manifest_hash"]
-        edition_short = rec.edition_short if rec is not None else None
-        base_edition = rec.base_edition if rec is not None else None
+        title = row["title"]
+        canonical_identifier = row["canonical_identifier"]
+        manifest_hash = row["manifest_hash"]
         metadata = {
             "tags.kr-categories": [row["section_code"]],
             "section_code": row["section_code"],
@@ -312,8 +329,6 @@ def _browse_catalog_index(
                 textid=row["textid"],
                 canonical_identifier=canonical_identifier,
                 title=title,
-                edition_short=edition_short,
-                base_edition=base_edition,
                 metadata={k: v for k, v in metadata.items() if v is not None},
             )
         )
@@ -325,8 +340,6 @@ def _browse_catalog_index(
                 hash=manifest_hash,
                 metadata={
                     "title": title,
-                    "edition_short": edition_short,
-                    "base_edition": base_edition,
                     "index_date": row["index_date"],
                 },
             )

@@ -21,6 +21,8 @@ import type {
 
 export const apiBase = import.meta.env.DEV ? "/api" : "";
 
+const manifestCache = new Map<string, Promise<Manifest>>();
+
 export class ApiError extends Error {
   status: number;
   body: unknown;
@@ -80,7 +82,16 @@ export async function getCategories(): Promise<CategoriesResponse> {
 }
 
 export async function getManifest(textid: string): Promise<Manifest> {
-  return fetchJson<Manifest>(`${apiBase}/bundles/${encodeURIComponent(textid)}/manifest`);
+  const cached = manifestCache.get(textid);
+  if (cached) return cached;
+  const request = fetchJson<Manifest>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/manifest`,
+  ).catch((e) => {
+    manifestCache.delete(textid);
+    throw e;
+  });
+  manifestCache.set(textid, request);
+  return request;
 }
 
 export async function getJuanList(textid: string): Promise<ManifestPart[]> {

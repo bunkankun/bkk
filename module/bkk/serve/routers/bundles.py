@@ -25,7 +25,7 @@ router = APIRouter(prefix="/bundles", tags=["bundles"])
 
 
 def _record(state: AppState, textid: str) -> BundleRecord:
-    rec = state.cache.lookup(textid)
+    rec = state.lookup_bundle(textid)
     if rec is None:
         raise errors.bundle_not_found(textid)
     return rec

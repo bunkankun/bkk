@@ -11,11 +11,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
+
 from bkk.index import Index, merge_bundles
+from bkk.index.merge import find_bundle
 
 from .catalog import CatalogService
 from .config import ServeConfig
-from .resolver import CorpusCache, IdentifierResolver
+from .resolver import BundleRecord, CorpusCache, IdentifierResolver
 
 log = logging.getLogger("bkk.serve")
 
@@ -99,6 +102,7 @@ class AppState:
     _index_built: bool = False
     _index_error: str | None = None
     _cache: CorpusCache | None = field(default=None, repr=False)
+    _bundle_records: dict[str, BundleRecord] = field(default_factory=dict, repr=False)
     jobs: JobRegistry = field(default_factory=JobRegistry, repr=False)
 
     @property
@@ -161,3 +165,36 @@ class AppState:
         except sqlite3.DatabaseError as exc:
             log.warning("catalog index unavailable at %s: %s", path, exc)
             return None
+
+    def lookup_bundle(self, textid: str) -> BundleRecord | None:
+        """Return one bundle by textid without building the full corpus snapshot."""
+        cached = self._bundle_records.get(textid)
+        if cached is not None:
+            try:
+                if cached.manifest_path.stat().st_mtime == cached.mtime:
+                    return cached
+            except FileNotFoundError:
+                pass
+            self._bundle_records.pop(textid, None)
+
+        bundle_dir = find_bundle(self.corpus_root, textid)
+        if bundle_dir is None:
+            return None
+        manifest_path = bundle_dir / f"{textid}.manifest.yaml"
+        try:
+            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+        except Exception as exc:
+            log.warning("bundle manifest unavailable at %s: %s", manifest_path, exc)
+            return None
+        if not isinstance(manifest, dict):
+            log.warning("bundle manifest is not a mapping: %s", manifest_path)
+            return None
+        rec = BundleRecord(
+            textid=textid,
+            bundle_dir=bundle_dir,
+            manifest_path=manifest_path,
+            manifest=manifest,
+            mtime=manifest_path.stat().st_mtime,
+        )
+        self._bundle_records[textid] = rec
+        return rec

@@ -45,14 +45,11 @@ export interface CategoryNode {
   label: string;
   zh: string;
   bundle_count: number;
-}
-
-export interface TopCategory extends CategoryNode {
   subcategories: CategoryNode[];
 }
 
 export interface CategoriesResponse {
-  categories: TopCategory[];
+  categories: CategoryNode[];
 }
 
 // Manifest is a passthrough dict — type the parts we actually read.

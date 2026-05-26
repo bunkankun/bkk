@@ -4,7 +4,6 @@ import type {
   CatalogMatch,
   CategoriesResponse,
   CategoryNode,
-  TopCategory,
 } from "../../api/types";
 import { workspace, useWorkspace } from "../../state/useWorkspace";
 
@@ -84,10 +83,13 @@ export function Catalog() {
       else next.add(code);
       return next;
     });
+    const shouldFetch =
+      subLoads[code]?.status !== "ok" && subLoads[code]?.status !== "loading";
     setSubLoads((prev) => {
       if (prev[code]?.status === "ok" || prev[code]?.status === "loading") return prev;
       return { ...prev, [code]: { status: "loading" } };
     });
+    if (!shouldFetch) return;
     getCatalog({
       limit: 200,
       filters: { "tags.kr-categories": [code] },
@@ -104,7 +106,7 @@ export function Catalog() {
           [code]: { status: "error", error: String(e) },
         }));
       });
-  }, []);
+  }, [subLoads]);
 
   const filterNeedle = filter.trim();
   const filteredSubLoads = useMemo(() => {
@@ -150,7 +152,8 @@ export function Catalog() {
       {cats.categories.map((top) => (
         <CategoryRow
           key={top.code}
-          top={top}
+          node={top}
+          depth={0}
           isOpen={openTops.has(top.code)}
           openSubs={openSubs}
           subLoads={filteredSubLoads}
@@ -164,7 +167,8 @@ export function Catalog() {
 }
 
 interface CategoryRowProps {
-  top: TopCategory;
+  node: CategoryNode;
+  depth: number;
   isOpen: boolean;
   openSubs: Set<string>;
   subLoads: Record<string, SubLoadState>;
@@ -174,27 +178,29 @@ interface CategoryRowProps {
 }
 
 function CategoryRow(p: CategoryRowProps) {
-  const { top, isOpen } = p;
-  const empty = top.bundle_count === 0;
+  const { node, depth, isOpen } = p;
+  const empty = node.bundle_count === 0;
   return (
     <div>
       <div
         className={`cat-top${empty ? " cat-empty" : ""}`}
-        onClick={() => !empty && p.onToggleTop(top.code)}
-        title={top.label}
+        onClick={() => !empty && p.onToggleTop(node.code)}
+        title={node.label}
       >
         <span className="cat-caret">{empty ? "·" : isOpen ? "▾" : "▸"}</span>
-        <span className="cat-zh">{top.zh}</span>
-        <span className="cat-code">{top.code}</span>
-        <span className="cat-count">{top.bundle_count}</span>
+        <span className="cat-zh">{node.zh}</span>
+        <span className="cat-code">{node.code}</span>
+        <span className="cat-count">{node.bundle_count}</span>
       </div>
       {isOpen &&
-        top.subcategories.map((sub) => (
-          <SubRow
+        node.subcategories.map((sub) => (
+          <CategoryNodeRow
             key={sub.code}
-            sub={sub}
+            node={sub}
+            depth={depth + 1}
             isOpen={p.openSubs.has(sub.code)}
-            load={p.subLoads[sub.code]}
+            openSubs={p.openSubs}
+            subLoads={p.subLoads}
             activeTextid={p.activeTextid}
             onToggle={p.onToggleSub}
           />
@@ -203,28 +209,54 @@ function CategoryRow(p: CategoryRowProps) {
   );
 }
 
-interface SubRowProps {
-  sub: CategoryNode;
+interface CategoryNodeRowProps {
+  node: CategoryNode;
+  depth: number;
   isOpen: boolean;
-  load: SubLoadState | undefined;
+  openSubs: Set<string>;
+  subLoads: Record<string, SubLoadState>;
   activeTextid: string | null;
   onToggle: (code: string) => void;
 }
 
-function SubRow({ sub, isOpen, load, activeTextid, onToggle }: SubRowProps) {
-  const empty = sub.bundle_count === 0;
+function CategoryNodeRow({
+  node,
+  depth,
+  isOpen,
+  openSubs,
+  subLoads,
+  activeTextid,
+  onToggle,
+}: CategoryNodeRowProps) {
+  const empty = node.bundle_count === 0;
+  const load = subLoads[node.code];
+  const indent = 14 + depth * 14;
   return (
     <div>
       <div
         className={`cat-sub${empty ? " cat-empty" : ""}`}
-        onClick={() => !empty && onToggle(sub.code)}
-        title={sub.label}
+        style={{ paddingLeft: indent }}
+        onClick={() => !empty && onToggle(node.code)}
+        title={node.label}
       >
         <span className="cat-caret">{empty ? "·" : isOpen ? "▾" : "▸"}</span>
-        <span className="cat-zh">{sub.zh}</span>
-        <span className="cat-code">{sub.code}</span>
-        <span className="cat-count">{sub.bundle_count}</span>
+        <span className="cat-zh">{node.zh}</span>
+        <span className="cat-code">{node.code}</span>
+        <span className="cat-count">{node.bundle_count}</span>
       </div>
+      {isOpen &&
+        node.subcategories.map((child) => (
+          <CategoryNodeRow
+            key={child.code}
+            node={child}
+            depth={depth + 1}
+            isOpen={openSubs.has(child.code)}
+            openSubs={openSubs}
+            subLoads={subLoads}
+            activeTextid={activeTextid}
+            onToggle={onToggle}
+          />
+        ))}
       {isOpen && load?.status === "loading" && (
         <div className="empty">Loading…</div>
       )}
@@ -239,6 +271,7 @@ function SubRow({ sub, isOpen, load, activeTextid, onToggle }: SubRowProps) {
           <div
             key={m.textid}
             className={`list-item cat-bundle${m.textid === activeTextid ? " on" : ""}`}
+            style={{ paddingLeft: indent + 24 }}
             onClick={() => workspace.selectBundle(m.textid)}
             title={m.canonical_identifier ?? m.textid}
           >
