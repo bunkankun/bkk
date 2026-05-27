@@ -34,6 +34,7 @@ from ..ir import Annotation, Bundle, Juan, Marker, Section
 TEI_NS = "http://www.tei-c.org/ns/1.0"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 TLS_NS = "http://hxwd.org/ns/1.0"
+CB_NS = "http://www.cbeta.org/ns/1.0"
 
 _NS = {"tei": TEI_NS, "xml": XML_NS, "tls": TLS_NS}
 
@@ -44,6 +45,11 @@ _NS_PREFIXES = {
     TEI_NS: "",
     XML_NS: "xml",
     TLS_NS: "tls",
+    CB_NS: "cb",
+}
+
+_XML_ELEMENT_MARKER_EXCLUDED_NAMES = {
+    "pb", "lb", "head", "seg", "tls:head", "tls:seg",
 }
 
 
@@ -119,6 +125,45 @@ def _attrs_to_dict(attrib) -> dict:
     return out
 
 
+def normalize_xml_element_names(raw) -> set[str]:
+    """Return normalized element names configured for ``xml-element`` markers."""
+    if raw is None:
+        return set()
+    if isinstance(raw, str):
+        raw = [part.strip() for part in raw.split(",")]
+    if not isinstance(raw, (list, tuple, set)):
+        return set()
+    names = {str(item).strip() for item in raw if str(item).strip()}
+    return names - _XML_ELEMENT_MARKER_EXCLUDED_NAMES
+
+
+def _xml_element_name(el) -> str:
+    return _qname_to_str(el.tag)
+
+
+def _xml_element_is_registered(el, xml_elements: set[str]) -> bool:
+    if not xml_elements:
+        return False
+    name = _xml_element_name(el)
+    local = etree.QName(el).localname
+    return name in xml_elements or local in xml_elements
+
+
+def _xml_element_marker(el, offset: int, role: str, *,
+                        seen_ids: dict[str, int]) -> Marker:
+    raw_id = _xmlid(el)
+    mid, id_extras = _dedup_id(
+        raw_id if role == "open" else f"{raw_id}_end" if raw_id else "",
+        seen_ids,
+    )
+    extras = {"name": _xml_element_name(el), "role": role}
+    attrs = _attrs_to_dict(el.attrib)
+    if attrs:
+        extras["attrs"] = attrs
+    extras.update(id_extras)
+    return Marker(type="xml-element", offset=offset, id=mid, extras=extras)
+
+
 def _to_tree(elem) -> dict:
     """Recursively convert an lxml element to a serializable dict tree.
 
@@ -154,7 +199,8 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
              text_id: str, *,
              source_xml: Path | None = None,
              source_swl: Path | None = None,
-             source_doc: Path | None = None) -> Bundle:
+             source_doc: Path | None = None,
+             xml_elements=None) -> Bundle:
     """Read one TLS text and return its Bundle.
 
     ``swl_ann`` and ``doc_ann`` are optional; when present they are concatenated
@@ -165,7 +211,7 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
     in both the Kanripo and TLS corpora.
     """
     (sections, divs_info, markers_info, tei_info, parse_errors,
-     flavor) = _parse_text(text_xml, text_id)
+     flavor) = _parse_text(text_xml, text_id, xml_elements=xml_elements)
     if parse_errors:
         print(f"warning: {text_id}: {len(parse_errors)} XML error(s) in "
               f"{text_xml.name}; continuing with recovery",
@@ -637,7 +683,7 @@ def _derive_edition_short(sections: list, text_id: str) -> str:
 
 
 def _parse_text(
-    path: Path, text_id: str,
+    path: Path, text_id: str, *, xml_elements=None,
 ) -> tuple[list[Section], dict, dict, dict, list[dict], str]:
     """Parse the text XML.
 
@@ -676,13 +722,16 @@ def _parse_text(
     flavor = "cbeta" if body.find(f".//{_q('juan')}") is not None else "classic"
 
     seen_ids: dict[str, int] = {}
+    xml_element_names = normalize_xml_element_names(xml_elements)
     if flavor == "cbeta":
         edition = _scan_edition_from_body(body, text_id) or "CBETA"
         sections, divs_info, markers_info = _parse_body_cbeta(
-            body, seen_ids, text_id, edition,
+            body, seen_ids, text_id, edition, xml_element_names,
         )
     else:
-        sections, divs_info, markers_info = _parse_body_classic(body, seen_ids)
+        sections, divs_info, markers_info = _parse_body_classic(
+            body, seen_ids, xml_element_names,
+        )
 
     tei_info: dict = {}
     if etree.QName(root).localname == "TEI":
@@ -696,7 +745,9 @@ def _parse_text(
     return sections, divs_info, markers_info, tei_info, parse_errors, flavor
 
 
-def _parse_body_classic(body, seen_ids: dict[str, int]) -> tuple[
+def _parse_body_classic(
+    body, seen_ids: dict[str, int], xml_elements: set[str] | None = None,
+) -> tuple[
     list[Section], dict, dict,
 ]:
     """Walk a classic-TLS ``<body>``: each top-level ``<div>`` becomes one
@@ -706,7 +757,7 @@ def _parse_body_classic(body, seen_ids: dict[str, int]) -> tuple[
     markers_info: dict = {}
     for div in body.iterfind(_q("div")):
         section, juan_entry, marker_entries, nested_div_entries = (
-            _section_from_div(div, seen_ids)
+            _section_from_div(div, seen_ids, xml_elements or set())
         )
         sections.append(section)
         if section.head_marker_id:
@@ -751,6 +802,7 @@ def _normalize_juan_n(raw: str) -> str:
 
 def _parse_body_cbeta(
     body, seen_ids: dict[str, int], text_id: str, edition: str,
+    xml_elements: set[str] | None = None,
 ) -> tuple[list[Section], dict, dict]:
     """Walk a CBETA-flavor ``<body>``.
 
@@ -769,6 +821,7 @@ def _parse_body_cbeta(
         "mulu_indexes": {},     # juan_label -> next 1-based mulu index
         "text_id": text_id,
         "edition": edition,
+        "xml_elements": xml_elements or set(),
     }
     leading_markers: list[Marker] = []
     leading_markers_info: dict = {}
@@ -898,6 +951,13 @@ def _walk_cbeta_div_children(
         if not isinstance(child.tag, str):
             continue
         tag = etree.QName(child).localname
+        registered_xml_element = _xml_element_is_registered(
+            child, state.get("xml_elements", set()),
+        )
+        if registered_xml_element:
+            markers.append(_xml_element_marker(
+                child, offset(), "open", seen_ids=seen_ids,
+            ))
         # Close any open div-level seg run before non-seg/non-pb/non-lb
         # siblings. <pb> and <lb> alone do not break a run; segs continue
         # or extend it.
@@ -920,7 +980,8 @@ def _walk_cbeta_div_children(
             head_text_start = offset()
             if inner_seg is not None:
                 head_sink = _make_sink(text_buf, markers, offset,
-                                       markers_info, seen_ids, in_head=True)
+                                       markers_info, seen_ids, in_head=True,
+                                       xml_elements=state.get("xml_elements"))
                 _walk_seg_inline(inner_seg, head_sink)
             head_text_str = "".join(text_buf)[head_text_start:]
             if "head_attrs" not in div_entry:
@@ -992,26 +1053,30 @@ def _walk_cbeta_div_children(
                     markers_info[mid] = {"type": "cbeta:juan-end", "attrs": attrs}
         elif tag == "p":
             p_xmlid = _xmlid(child)
-            p_open_id, p_open_extras = _dedup_id(p_xmlid, seen_ids)
-            open_extras = dict(p_open_extras)
-            open_extras["role"] = "open"
-            markers.append(Marker(type="paragraph-break", offset=offset(),
-                                  content="", id=p_open_id, extras=open_extras))
+            if not registered_xml_element:
+                p_open_id, p_open_extras = _dedup_id(p_xmlid, seen_ids)
+                open_extras = dict(p_open_extras)
+                open_extras["role"] = "open"
+                markers.append(Marker(type="paragraph-break", offset=offset(),
+                                      content="", id=p_open_id, extras=open_extras))
             p_attrs = _attrs_to_dict(child.attrib)
             if p_attrs:
                 div_entry.setdefault("p_attrs", []).append(p_attrs)
             _walk_cbeta_inline_children(
                 child, text_buf, markers, markers_info, offset, seen_ids,
+                state.get("xml_elements", set()),
             )
             p_close_raw = f"{p_xmlid}_end" if p_xmlid else ""
-            p_close_id, p_close_extras = _dedup_id(p_close_raw, seen_ids)
-            close_extras = dict(p_close_extras)
-            close_extras["role"] = "close"
-            markers.append(Marker(type="paragraph-break", offset=offset(),
-                                  content="", id=p_close_id, extras=close_extras))
+            if not registered_xml_element:
+                p_close_id, p_close_extras = _dedup_id(p_close_raw, seen_ids)
+                close_extras = dict(p_close_extras)
+                close_extras["role"] = "close"
+                markers.append(Marker(type="paragraph-break", offset=offset(),
+                                      content="", id=p_close_id, extras=close_extras))
         elif tag == "seg":
             _emit_seg_with_run(child, div_run_state, text_buf, markers,
-                               offset, markers_info, seen_ids)
+                               offset, markers_info, seen_ids,
+                               xml_elements=state.get("xml_elements", set()))
         elif tag == "div":
             nested_id = _div_marker_id(child)
             nested_entry: dict = {}
@@ -1048,6 +1113,10 @@ def _walk_cbeta_div_children(
         # docNumber, anchor, note, g and other stray elements at div
         # level: ignored. (Inline <g>/<note> are handled by _emit_seg from
         # within seg children.)
+        if registered_xml_element:
+            markers.append(_xml_element_marker(
+                child, offset(), "close", seen_ids=seen_ids,
+            ))
     # Close any open div-level run at end of container.
     _close_seg_run(div_run_state, markers, offset)
 
@@ -1055,6 +1124,7 @@ def _walk_cbeta_div_children(
 def _walk_cbeta_inline_children(
     parent, text_buf: list[str], markers: list[Marker],
     markers_info: dict, offset, seen_ids: dict[str, int],
+    xml_elements: set[str] | None = None,
 ):
     """Walk children of a ``<p>``-like element, emitting ``<seg>`` content
     and ``<pb>`` markers; everything else is ignored at this level.
@@ -1069,9 +1139,17 @@ def _walk_cbeta_inline_children(
         if not isinstance(child.tag, str):
             continue
         tag = etree.QName(child).localname
+        registered_xml_element = _xml_element_is_registered(
+            child, xml_elements or set(),
+        )
+        if registered_xml_element:
+            markers.append(_xml_element_marker(
+                child, offset(), "open", seen_ids=seen_ids,
+            ))
         if tag == "seg":
             _emit_seg_with_run(child, run_state, text_buf, markers,
-                               offset, markers_info, seen_ids)
+                               offset, markers_info, seen_ids,
+                               xml_elements=xml_elements)
         elif tag == "pb":
             raw_id = _xmlid(child)
             mid, id_extras = _dedup_id(raw_id, seen_ids)
@@ -1088,10 +1166,17 @@ def _walk_cbeta_inline_children(
         elif tag == "lb":
             _emit_lb(child, markers, offset, seen_ids)
         # <anchor>, etc.: ignored.
+        if registered_xml_element:
+            markers.append(_xml_element_marker(
+                child, offset(), "close", seen_ids=seen_ids,
+            ))
     _close_seg_run(run_state, markers, offset)
 
 
-def _section_from_div(div, seen_ids: dict[str, int] | None = None) -> tuple[Section, dict, dict, dict]:
+def _section_from_div(
+    div, seen_ids: dict[str, int] | None = None,
+    xml_elements: set[str] | None = None,
+) -> tuple[Section, dict, dict, dict]:
     """Walk a top-level <div>, producing a Section with section-local offsets,
     plus a juan_div_entry, markers_info, and nested_divs_info for round-trip.
 
@@ -1104,6 +1189,7 @@ def _section_from_div(div, seen_ids: dict[str, int] | None = None) -> tuple[Sect
     """
     if seen_ids is None:
         seen_ids = {}
+    xml_elements = xml_elements or set()
     text_buf: list[str] = []
     markers: list[Marker] = []
     markers_info: dict = {}
@@ -1122,6 +1208,7 @@ def _section_from_div(div, seen_ids: dict[str, int] | None = None) -> tuple[Sect
     _walk_div_children(
         div, text_buf, markers, markers_info, nested_divs_info,
         offset, juan_div_entry, head_state, seen_ids, is_outermost=True,
+        xml_elements=xml_elements,
     )
 
     section = Section(
@@ -1137,7 +1224,8 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                        markers_info: dict, nested_divs_info: dict,
                        offset, div_entry: dict, head_state: dict,
                        seen_ids: dict[str, int], is_outermost: bool,
-                       depth: int = 1):
+                       depth: int = 1,
+                       xml_elements: set[str] | None = None):
     """Walk one ``<div>``'s children, appending text and markers in document
     order. ``div_entry`` collects attrs (head_attrs / head_inner_seg_attrs /
     p_attrs) for *this* div. ``head_state`` tracks the section-level head
@@ -1150,6 +1238,13 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
         if not isinstance(child.tag, str):  # skip comments / PIs
             continue
         tag = etree.QName(child).localname
+        registered_xml_element = _xml_element_is_registered(
+            child, xml_elements or set(),
+        )
+        if registered_xml_element:
+            markers.append(_xml_element_marker(
+                child, offset(), "open", seen_ids=seen_ids,
+            ))
         if tag == "pb":
             raw_id = _xmlid(child)
             mid, id_extras = _dedup_id(raw_id, seen_ids)
@@ -1169,7 +1264,8 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
             head_text_start = offset()
             if inner_seg is not None:
                 head_sink = _make_sink(text_buf, markers, offset,
-                                       markers_info, seen_ids, in_head=True)
+                                       markers_info, seen_ids, in_head=True,
+                                       xml_elements=xml_elements)
                 _walk_seg_inline(inner_seg, head_sink)
             head_text_str = "".join(text_buf)[head_text_start:]
             if "head_attrs" not in div_entry:
@@ -1185,11 +1281,12 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                 head_state["id"] = seg_id
         elif tag == "p":
             p_xmlid = _xmlid(child)
-            p_open_id, p_open_extras = _dedup_id(p_xmlid, seen_ids)
-            open_extras = dict(p_open_extras)
-            open_extras["role"] = "open"
-            markers.append(Marker(type="paragraph-break", offset=offset(),
-                                  content="", id=p_open_id, extras=open_extras))
+            if not registered_xml_element:
+                p_open_id, p_open_extras = _dedup_id(p_xmlid, seen_ids)
+                open_extras = dict(p_open_extras)
+                open_extras["role"] = "open"
+                markers.append(Marker(type="paragraph-break", offset=offset(),
+                                      content="", id=p_open_id, extras=open_extras))
             p_attrs = _attrs_to_dict(child.attrib)
             if p_attrs:
                 div_entry.setdefault("p_attrs", []).append(p_attrs)
@@ -1200,7 +1297,8 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                 seg_tag = etree.QName(seg).localname
                 if seg_tag == "seg":
                     _emit_seg_with_run(seg, run_state, text_buf, markers,
-                                       offset, markers_info, seen_ids)
+                                       offset, markers_info, seen_ids,
+                                       xml_elements=xml_elements)
                 elif seg_tag == "pb":
                     # <pb> does NOT break a typed-seg run.
                     raw_id = _xmlid(seg)
@@ -1214,7 +1312,8 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                     # Inline-note at p-level: break run, emit brackets.
                     _close_seg_run(run_state, markers, offset)
                     note_sink = _make_sink(text_buf, markers, offset,
-                                           markers_info, seen_ids)
+                                           markers_info, seen_ids,
+                                           xml_elements=xml_elements)
                     _emit_inline_note(seg, note_sink)
                 elif seg_tag == "lb":
                     # <lb> does NOT break a typed-seg run (same as pb).
@@ -1222,11 +1321,12 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                 # other inline tags ignored for now
             _close_seg_run(run_state, markers, offset)
             p_close_raw = f"{p_xmlid}_end" if p_xmlid else ""
-            p_close_id, p_close_extras = _dedup_id(p_close_raw, seen_ids)
-            close_extras = dict(p_close_extras)
-            close_extras["role"] = "close"
-            markers.append(Marker(type="paragraph-break", offset=offset(),
-                                  content="", id=p_close_id, extras=close_extras))
+            if not registered_xml_element:
+                p_close_id, p_close_extras = _dedup_id(p_close_raw, seen_ids)
+                close_extras = dict(p_close_extras)
+                close_extras["role"] = "close"
+                markers.append(Marker(type="paragraph-break", offset=offset(),
+                                      content="", id=p_close_id, extras=close_extras))
         elif tag == "div":
             nested_id = _div_marker_id(child)
             nested_entry: dict = {}
@@ -1245,6 +1345,7 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                 child, text_buf, markers, markers_info, nested_divs_info,
                 offset, nested_entry, head_state, seen_ids,
                 is_outermost=False, depth=nested_level,
+                xml_elements=xml_elements,
             )
             markers.append(Marker(type="tls:div-end", offset=offset(),
                                   content="", id=nested_id))
@@ -1252,6 +1353,10 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                 nested_divs_info[nested_id] = nested_entry
         # Non-element nodes (text/tail) between siblings are ignored —
         # whitespace-only in TLS sources.
+        if registered_xml_element:
+            markers.append(_xml_element_marker(
+                child, offset(), "close", seen_ids=seen_ids,
+            ))
 
 
 def _div_head_text(div) -> str:
@@ -1321,13 +1426,15 @@ def _attrs_minus(elem, drop: tuple[str, ...]) -> dict:
 
 def _make_sink(text_buf: list[str], markers: list[Marker], offset_fn,
                markers_info: dict, seen_ids: dict[str, int],
-               *, in_head: bool = False) -> dict:
+               *, in_head: bool = False,
+               xml_elements: set[str] | None = None) -> dict:
     return {
         "text_buf": text_buf,
         "markers": markers,
         "offset": offset_fn,
         "markers_info": markers_info,
         "seen_ids": seen_ids,
+        "xml_elements": xml_elements or set(),
         "in_head": in_head,
         # When True, _append_text_filtered emits markers as usual but
         # suppresses text appends. Used inside heads' inline notes so the
@@ -1419,6 +1526,13 @@ def _walk_seg_inline(seg, sink: dict) -> None:
         if not isinstance(child.tag, str):
             continue
         tag = etree.QName(child).localname
+        registered_xml_element = _xml_element_is_registered(
+            child, sink.get("xml_elements", set()),
+        )
+        if registered_xml_element:
+            sink["markers"].append(_xml_element_marker(
+                child, sink["offset"](), "open", seen_ids=sink["seen_ids"],
+            ))
         if tag == "c":
             sink["markers"].append(Marker(
                 type="punctuation", offset=sink["offset"](),
@@ -1442,20 +1556,26 @@ def _walk_seg_inline(seg, sink: dict) -> None:
             # Unknown inline element: keep its text as plain content.
             # Non-inline notes, CBETA <g>, <date>, etc. land here.
             _append_text_filtered(child.text or "", sink)
+        if registered_xml_element:
+            sink["markers"].append(_xml_element_marker(
+                child, sink["offset"](), "close", seen_ids=sink["seen_ids"],
+            ))
         _append_text_filtered(child.tail or "", sink)
 
 
 def _emit_seg(seg, text_buf: list[str], markers: list[Marker], offset_fn,
-              markers_info: dict, seen_ids: dict[str, int]):
+              markers_info: dict, seen_ids: dict[str, int],
+              *, xml_elements: set[str] | None = None):
     raw_id = _xmlid(seg)
     seg_id, id_extras = _dedup_id(raw_id, seen_ids)
     _emit_seg_body(seg, seg_id, id_extras, text_buf, markers, offset_fn,
-                   markers_info, seen_ids)
+                   markers_info, seen_ids, xml_elements=xml_elements)
 
 
 def _emit_seg_body(seg, seg_id: str, id_extras: dict, text_buf: list[str],
                    markers: list[Marker], offset_fn, markers_info: dict,
-                   seen_ids: dict[str, int]):
+                   seen_ids: dict[str, int],
+                   *, xml_elements: set[str] | None = None):
     """Emit the per-seg ``tls:seg`` point marker plus the seg's content,
     given a precomputed deduped ``seg_id``. Split out so the run-folding
     state machine can dedup the seg id once (for use on
@@ -1465,7 +1585,10 @@ def _emit_seg_body(seg, seg_id: str, id_extras: dict, text_buf: list[str],
     attrs = _attrs_minus(seg, ("xml:id",))
     if seg_id and attrs:
         markers_info[seg_id] = {"type": "tls:seg", "attrs": attrs}
-    sink = _make_sink(text_buf, markers, offset_fn, markers_info, seen_ids)
+    sink = _make_sink(
+        text_buf, markers, offset_fn, markers_info, seen_ids,
+        xml_elements=xml_elements,
+    )
     _walk_seg_inline(seg, sink)
 
 
@@ -1511,7 +1634,8 @@ def _close_seg_run(state: dict, markers: list[Marker], offset_fn) -> None:
 
 def _emit_seg_with_run(seg, state: dict, text_buf: list[str],
                        markers: list[Marker], offset_fn,
-                       markers_info: dict, seen_ids: dict[str, int]) -> None:
+                       markers_info: dict, seen_ids: dict[str, int],
+                       *, xml_elements: set[str] | None = None) -> None:
     """Emit one ``<seg>`` while maintaining typed-seg run-folding state.
 
     Same emission shape as ``_emit_seg`` (``tls:seg`` point marker +
@@ -1547,7 +1671,7 @@ def _emit_seg_with_run(seg, state: dict, text_buf: list[str],
         state["run_member_ids"] = [seg_id]
 
     _emit_seg_body(seg, seg_id, id_extras, text_buf, markers, offset_fn,
-                   markers_info, seen_ids)
+                   markers_info, seen_ids, xml_elements=xml_elements)
 
 
 def _parse_annotations(path: Path,

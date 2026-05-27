@@ -16,6 +16,7 @@ import yaml
 from bkk.importer.cli import _find_tls_texts
 from bkk.importer.ir import Marker, Section
 from bkk.importer.read.tls import (
+    _parse_text,
     _split_sections_into_cbeta_juans,
     read_tls,
 )
@@ -84,6 +85,41 @@ def test_no_pre_juan_content_skips_000_group():
 
     assert [lbl for lbl, _ in groups] == ["001"]
     assert groups[0][1][0].text == "body"
+
+
+def test_classic_tls_emits_configured_xml_element_markers(tmp_path: Path):
+    xml = tmp_path / "KR9x0001.xml"
+    xml.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xml:id="KR9x0001">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title>Test</title></titleStmt>
+      <publicationStmt><p/></publicationStmt>
+      <sourceDesc><p><idno type="kanripo">KR9x0001</idno></p></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div>
+        <head><seg xml:id="KR9x0001_T_001-h">題</seg></head>
+        <p xml:id="p1" rend="test"><seg xml:id="KR9x0001_T_001-1a.1">甲乙</seg></p>
+      </div>
+    </body>
+  </text>
+</TEI>
+""",
+        encoding="utf-8",
+    )
+
+    sections, *_ = _parse_text(xml, "KR9x0001", xml_elements=["p"])
+
+    markers = [m for m in sections[0].markers if m.type == "xml-element"]
+    assert [(m.offset, m.extras["name"], m.extras["role"]) for m in markers] == [
+        (1, "p", "open"),
+        (3, "p", "close"),
+    ]
+    assert all(m.type != "paragraph-break" for m in sections[0].markers)
 
 
 # ---------- end-to-end CBETA importer + manifest ---------------------------

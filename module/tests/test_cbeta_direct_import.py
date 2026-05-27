@@ -110,6 +110,49 @@ def test_direct_reader_adds_apparatus_variants_from_back(tmp_path: Path):
     assert bundle.witnesses == ["底本"]
 
 
+def test_direct_reader_emits_configured_xml_element_markers(tmp_path: Path):
+    xml = tmp_path / "T01n0001.xml"
+    xml.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"
+     xmlns:cb="http://www.cbeta.org/ns/1.0"
+     xml:id="T01n0001">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title xml:lang="zh-Hant">測試經</title></titleStmt>
+      <publicationStmt><p/></publicationStmt>
+      <sourceDesc><p/></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <cb:juan fun="open" n="1"/>
+      <p xml:id="p1" rend="test">甲乙</p>
+    </body>
+  </text>
+</TEI>
+""",
+        encoding="utf-8",
+    )
+
+    bundle = read_cbeta(
+        xml,
+        {"kr_id": "KR9x0001", "old_id": "T01n0001", "title": ""},
+        xml_elements=["p"],
+    )
+
+    markers = [
+        marker for marker in bundle.juans[0].sections[0].markers
+        if marker.type == "xml-element"
+    ]
+    assert [(m.offset, m.extras["name"], m.extras["role"]) for m in markers] == [
+        (0, "p", "open"),
+        (2, "p", "close"),
+    ]
+    assert markers[0].id == "p1"
+    assert markers[0].extras["attrs"] == {"xml:id": "p1", "rend": "test"}
+
+
 def test_cli_imports_old_id_to_mapped_kr_id(tmp_path: Path):
     cbeta_root = tmp_path / "cbeta"
     target = cbeta_root / "X" / "X63" / SOURCE_XML.name

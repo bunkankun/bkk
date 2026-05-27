@@ -52,6 +52,9 @@ import:
 #
 #   out: /data/bkk/out            # output root (bundles written under <out>/<id>/;
 #                                 #  translations land under <out>/translations/<stem>/)
+#   xml_elements:
+#     - p                       # XML source elements emitted as xml-element markers
+#     - lg                      # repeat names as needed; pb/lb/head/seg stay specialized
 #
 #   by_section: true              # slice output by KR sub-section: bundles
 #                                 # land under <out>/<section>/<id>/ (e.g.

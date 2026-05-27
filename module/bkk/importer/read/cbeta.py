@@ -17,7 +17,14 @@ from lxml import etree
 
 from ..charset import is_allowed_body_char
 from ..ir import Bundle, Juan, Marker, Section
-from .tls import XML_NS, _attrs_to_dict, _qname_to_str
+from .tls import (
+    XML_NS,
+    _attrs_to_dict,
+    _qname_to_str,
+    _xml_element_is_registered,
+    _xml_element_marker,
+    normalize_xml_element_names,
+)
 
 
 TEI_NS = "http://www.tei-c.org/ns/1.0"
@@ -83,7 +90,10 @@ def _append_text(text: str, text_buf: list[str], markers: list[Marker]) -> None:
 
 
 class _DirectReader:
-    def __init__(self, kr_id: str, old_id: str, edition: str):
+    def __init__(
+        self, kr_id: str, old_id: str, edition: str, *,
+        xml_elements=None,
+    ):
         self.kr_id = kr_id
         self.old_id = old_id
         self.edition = edition
@@ -95,6 +105,7 @@ class _DirectReader:
         self.mulu_indexes: dict[str, int] = {}
         self.seen_ids: dict[str, int] = {}
         self.anchor_offsets: dict[str, tuple[str, int]] = {}
+        self.xml_elements = normalize_xml_element_names(xml_elements)
 
     def offset(self) -> int:
         return sum(len(p) for p in self.text_buf)
@@ -255,6 +266,13 @@ class _DirectReader:
                 continue
             tag = _local(child)
             ns = etree.QName(child).namespace
+            registered_xml_element = _xml_element_is_registered(
+                child, self.xml_elements,
+            )
+            if registered_xml_element:
+                self.markers.append(_xml_element_marker(
+                    child, self.offset(), "open", seen_ids=self.seen_ids,
+                ))
             if tag == "pb" and ns == TEI_NS:
                 self.emit_pb(child)
             elif tag == "lb" and ns == TEI_NS:
@@ -273,6 +291,10 @@ class _DirectReader:
             else:
                 self.append_text(child.text or "")
                 self.walk(child)
+            if registered_xml_element:
+                self.markers.append(_xml_element_marker(
+                    child, self.offset(), "close", seen_ids=self.seen_ids,
+                ))
             self.append_text(child.tail or "")
 
 
@@ -396,7 +418,7 @@ def _derive_edition(tree, old_id: str) -> str:
     return "CBETA"
 
 
-def read_cbeta(text_xml: Path, row: dict[str, str]) -> Bundle:
+def read_cbeta(text_xml: Path, row: dict[str, str], *, xml_elements=None) -> Bundle:
     kr_id = row["kr_id"]
     old_id = row["old_id"]
     tree = etree.parse(str(text_xml), etree.XMLParser(recover=True))
@@ -405,7 +427,7 @@ def read_cbeta(text_xml: Path, row: dict[str, str]) -> Bundle:
         raise ValueError(f"no <body> element in {text_xml}")
 
     edition = _derive_edition(tree, old_id)
-    reader = _DirectReader(kr_id, old_id, edition)
+    reader = _DirectReader(kr_id, old_id, edition, xml_elements=xml_elements)
     reader.walk(body)
     reader.finish_juan()
     wit_map = _witness_map(tree)

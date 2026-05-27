@@ -243,6 +243,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mapping", dest="mapping_csv", type=Path, default=None,
                    help="cbeta: CSV mapping old_id to kr_id "
                         "(default: cbeta.mapping in .bkkrc)")
+    p.add_argument("--xml-element", dest="xml_elements", action="append",
+                   default=None,
+                   help="xml import: element name to emit as an xml-element "
+                        "marker; repeatable, or set import.xml_elements "
+                        "in .bkkrc")
     p.add_argument("--lang", default=None,
                    help="translation: filter to one BCP-47 language tag "
                         "(e.g. en, fr); applies only to --format translation")
@@ -308,6 +313,7 @@ def run(argv: list[str] | None = None) -> int:
         ("github", "github_user"), ("master_branch", "master_branch"),
         ("imglist_branch", "imglist_branch"), ("lang", "lang"),
         ("on_exists", "on_exists"), ("mapping", "mapping_csv"),
+        ("xml_elements", "xml_elements"),
     ]:
         if rc_key in imp:
             defaults[dest] = imp[rc_key]
@@ -598,6 +604,7 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
             source_xml=text_xml if renamed else None,
             source_swl=swl_xml if renamed and effective_swl is not swl_xml else None,
             source_doc=doc_xml if renamed and effective_doc is not doc_xml else None,
+            xml_elements=getattr(args, "xml_elements", None),
         )
     finally:
         if renamed:
@@ -862,7 +869,9 @@ def _import_one_cbeta(
 
     from .read.cbeta import read_cbeta
 
-    bundle = read_cbeta(text_xml, row)
+    bundle = read_cbeta(
+        text_xml, row, xml_elements=getattr(args, "xml_elements", None),
+    )
 
     effective_out = _effective_out_root(args.out_root, kr_id, args.by_section)
     existing = inspect_existing_bundle(effective_out, kr_id)

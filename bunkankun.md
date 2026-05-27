@@ -159,6 +159,8 @@ Optional fields are defined per marker type and may include **id**, **content**,
 
 The set of marker types is open. A small **core vocabulary** is defined for layout, structural, voicing, and substitution markers: page break, line break, indent, punctuation, paragraph break, register divider, head, comment, and substitution are point-typed; voice (§"Voices") is range-typed. Projects may extend the set for their own purposes; a marker type that is not in the core vocabulary should be namespaced by the project introducing it.
 
+XML-based imports may emit a generic point marker for source elements whose presence should be preserved but whose semantics are not otherwise modeled by the core importer. This marker has **type** `xml-element` and carries the required fields **offset**, **name**, and **role**. The **name** field records the source element name, using the same prefix form used elsewhere in source metadata, and **role** is normally `open` or `close`. Additional fields may be present, for example **id** or an **attrs** mapping of source attributes. Page and line breaks, `tls:head`, and `tls:seg` remain represented by their specialized markers and are not emitted as `xml-element` markers.
+
 By default, structural and navigation-critical markers remain inline: `tls:head`, `tls:div-start`, `tls:div-end`, `cbeta:juan-start`, `cbeta:juan-end`, `cbeta:mulu`, and any marker directly referenced by the table of contents. Layout markers, punctuation, page and line breaks, voice markers, variant markers, substitution markers, comments, and other bulky project markers normally live in the marker asset. This default is a packaging policy rather than a semantic restriction; old bundles with inline markers remain valid.
 
 #### Marker assets

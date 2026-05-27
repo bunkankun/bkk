@@ -340,6 +340,7 @@ def build_manifest(
             "identifier": "bkk:charset/cjk-v1",
             "hash": ZERO_HASH,  # TODO bkk-cjk-v1
         },
+        "metadata": md,
     }
     if entity_encoding:
         manifest["entity_encoding"] = {
@@ -352,7 +353,6 @@ def build_manifest(
         manifest["editions"] = [marker_to_flow(e) for e in editions_list]
     manifest["assets"] = assets
     manifest["table_of_contents"] = toc
-    manifest["metadata"] = md
     manifest["hash"] = ZERO_HASH
     return manifest
 
