@@ -97,6 +97,70 @@ class JobRegistry:
 
 
 @dataclass
+class UserSession:
+    id: str
+    login: str
+    name: str | None
+    avatar_url: str | None
+    html_url: str | None
+    access_token: str
+    workspace: dict[str, Any]
+    created_at: float = field(default_factory=time.time)
+
+    def public_dict(self) -> dict[str, Any]:
+        return {
+            "login": self.login,
+            "name": self.name,
+            "avatar_url": self.avatar_url,
+            "html_url": self.html_url,
+            "workspace": self.workspace,
+        }
+
+
+class SessionRegistry:
+    """Thread-safe in-memory GitHub login sessions."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._sessions: dict[str, UserSession] = {}
+
+    def create(
+        self,
+        *,
+        login: str,
+        name: str | None,
+        avatar_url: str | None,
+        html_url: str | None,
+        access_token: str,
+        workspace: dict[str, Any],
+    ) -> UserSession:
+        session = UserSession(
+            id=uuid.uuid4().hex,
+            login=login,
+            name=name,
+            avatar_url=avatar_url,
+            html_url=html_url,
+            access_token=access_token,
+            workspace=workspace,
+        )
+        with self._lock:
+            self._sessions[session.id] = session
+        return session
+
+    def get(self, session_id: str | None) -> UserSession | None:
+        if not session_id:
+            return None
+        with self._lock:
+            return self._sessions.get(session_id)
+
+    def delete(self, session_id: str | None) -> None:
+        if not session_id:
+            return
+        with self._lock:
+            self._sessions.pop(session_id, None)
+
+
+@dataclass
 class AppState:
     config: ServeConfig
     _index_built: bool = False
@@ -104,6 +168,7 @@ class AppState:
     _cache: CorpusCache | None = field(default=None, repr=False)
     _bundle_records: dict[str, BundleRecord] = field(default_factory=dict, repr=False)
     jobs: JobRegistry = field(default_factory=JobRegistry, repr=False)
+    sessions: SessionRegistry = field(default_factory=SessionRegistry, repr=False)
 
     @property
     def corpus_root(self) -> Path:

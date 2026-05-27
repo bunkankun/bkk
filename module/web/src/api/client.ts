@@ -9,6 +9,7 @@
 
 import type {
   Annotation,
+  AuthSession,
   CatalogResponse,
   CategoriesResponse,
   Juan,
@@ -17,6 +18,9 @@ import type {
   SearchResponse,
   SearchSort,
   ServerInfo,
+  WorkspaceFile,
+  WorkspaceFileList,
+  WorkspaceWriteResult,
 } from "./types";
 
 export const apiBase = import.meta.env.DEV ? "/api" : "";
@@ -58,6 +62,55 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export async function getServerInfo(): Promise<ServerInfo> {
   return fetchJson<ServerInfo>(`${apiBase}/server-info`);
+}
+
+export async function getAuthSession(): Promise<AuthSession> {
+  return fetchJson<AuthSession>(`${apiBase}/auth/session`);
+}
+
+export function startGithubLogin(): void {
+  window.location.assign(`${apiBase}/auth/github/start`);
+}
+
+export async function logout(): Promise<void> {
+  await fetchJson<{ ok: boolean }>(`${apiBase}/auth/logout`, { method: "POST" });
+}
+
+function workspacePath(path: string): string {
+  return path
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
+export async function listWorkspaceFiles(prefix = ""): Promise<WorkspaceFileList> {
+  const q = new URLSearchParams();
+  if (prefix) q.set("prefix", prefix);
+  const qs = q.toString();
+  return fetchJson<WorkspaceFileList>(
+    `${apiBase}/workspace/files${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function getWorkspaceFile(path: string): Promise<WorkspaceFile> {
+  return fetchJson<WorkspaceFile>(
+    `${apiBase}/workspace/files/${workspacePath(path)}`,
+  );
+}
+
+export async function putWorkspaceFile(params: {
+  path: string;
+  content: string;
+  sha?: string;
+}): Promise<WorkspaceWriteResult> {
+  return fetchJson<WorkspaceWriteResult>(
+    `${apiBase}/workspace/files/${workspacePath(params.path)}`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: params.content, sha: params.sha }),
+    },
+  );
 }
 
 export async function getCatalog(params?: {

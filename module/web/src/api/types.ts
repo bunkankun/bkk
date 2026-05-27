@@ -263,3 +263,49 @@ export interface ServerInfo {
   docs?: string;
   openapi?: string;
 }
+
+export interface WorkspaceInfo {
+  repo: string;
+  html_url: string;
+  branch: string;
+  private: boolean;
+}
+
+export interface WorkspaceFileEntry {
+  path: string;
+  name?: string;
+  type?: string;
+  sha?: string;
+  size?: number;
+}
+
+export interface WorkspaceFileList {
+  prefix: string;
+  files: WorkspaceFileEntry[];
+}
+
+export interface WorkspaceFile {
+  path: string;
+  sha?: string;
+  content: string;
+  encoding: "utf-8";
+}
+
+export interface WorkspaceWriteResult {
+  path: string;
+  sha?: string | null;
+  commit?: unknown;
+}
+
+export interface AuthUser {
+  login: string;
+  name?: string | null;
+  avatar_url?: string | null;
+  html_url?: string | null;
+  workspace: WorkspaceInfo;
+}
+
+export interface AuthSession {
+  authenticated: boolean;
+  user: AuthUser | null;
+}

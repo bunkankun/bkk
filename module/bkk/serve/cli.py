@@ -45,6 +45,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--web-dist", type=Path, default=None,
                    help="directory containing the built SPA to mount at / "
                         "(default: $BKK_WEB_DIST)")
+    p.add_argument("--github-client-id", default=None,
+                   help="GitHub OAuth app client id (default: $BKK_GITHUB_CLIENT_ID)")
+    p.add_argument("--github-client-secret", default=None,
+                   help="GitHub OAuth app client secret (default: $BKK_GITHUB_CLIENT_SECRET)")
+    p.add_argument("--github-callback-url", default=None,
+                   help="OAuth callback URL registered with GitHub "
+                        "(default: <server-origin>/auth/github/callback)")
+    p.add_argument("--workspace-template-repo", default=None,
+                   help="template repo for first-login workspaces "
+                        "(default: bunkankun/BKK-Workspace)")
+    p.add_argument("--workspace-repo-name", default=None,
+                   help="workspace repo name created under each user "
+                        "(default: BKK-Workspace)")
     return p
 
 
@@ -66,6 +79,11 @@ def run(argv: list[str] | None = None) -> int:
         reload=args.reload or None,
         upstream_repo=args.upstream_repo,
         web_dist=args.web_dist,
+        github_client_id=args.github_client_id,
+        github_client_secret=args.github_client_secret,
+        github_callback_url=args.github_callback_url,
+        workspace_template_repo=args.workspace_template_repo,
+        workspace_repo_name=args.workspace_repo_name,
     )
 
     import uvicorn
@@ -86,6 +104,14 @@ def run(argv: list[str] | None = None) -> int:
             os.environ["BKK_UPSTREAM_REPO"] = config.upstream_repo
         if config.web_dist is not None:
             os.environ["BKK_WEB_DIST"] = str(config.web_dist)
+        if config.github_client_id is not None:
+            os.environ["BKK_GITHUB_CLIENT_ID"] = config.github_client_id
+        if config.github_client_secret is not None:
+            os.environ["BKK_GITHUB_CLIENT_SECRET"] = config.github_client_secret
+        if config.github_callback_url is not None:
+            os.environ["BKK_GITHUB_CALLBACK_URL"] = config.github_callback_url
+        os.environ["BKK_WORKSPACE_TEMPLATE_REPO"] = config.workspace_template_repo
+        os.environ["BKK_WORKSPACE_REPO_NAME"] = config.workspace_repo_name
         uvicorn.run(
             "bkk.serve.cli:app_factory",
             factory=True,

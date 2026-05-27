@@ -107,6 +107,7 @@ function RightPanel() {
 export function App() {
   useEffect(() => {
     let cancelled = false;
+    void workspace.loadAuthSession();
     getServerInfo()
       .then((info) => {
         if (cancelled) return;

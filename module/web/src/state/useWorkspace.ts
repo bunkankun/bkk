@@ -4,8 +4,21 @@
 // shape to grow into a pane tree later.
 
 import { useSyncExternalStore } from "react";
-import { getManifest, searchCorpus } from "../api/client";
-import type { SearchHit, SearchResponse, SearchSort } from "../api/types";
+import {
+  ApiError,
+  getAuthSession,
+  getWorkspaceFile,
+  getManifest,
+  logout as logoutRequest,
+  putWorkspaceFile,
+  searchCorpus,
+} from "../api/client";
+import type {
+  AuthSession,
+  SearchHit,
+  SearchResponse,
+  SearchSort,
+} from "../api/types";
 
 export type Activity = "texts" | "catalog";
 export type RightTab = "annotations" | "chat" | "search";
@@ -45,6 +58,16 @@ export interface SearchState {
   status: "idle" | "loading" | "ok" | "error";
   error: string | null;
   response: SearchResponse | null;
+}
+
+export interface SearchHistoryEntry {
+  id: string;
+  query: string;
+  target: SearchTarget;
+  sort: SearchSort;
+  filters: SearchFilters;
+  pivotTextid: string | null;
+  createdAt: string;
 }
 
 export interface PendingHighlight {
@@ -103,10 +126,16 @@ export interface WorkspaceState {
   readMode: ReadMode;
   // info from GET /api/info (loaded once at startup).
   serverInfo: { upstream_repo?: string | null; version?: string } | null;
+  auth: {
+    status: "unknown" | "loading" | "authenticated" | "anonymous" | "error";
+    error: string | null;
+    session: AuthSession | null;
+  };
   // v1 has a single leaf; kept so PaneTree.tsx can later host splits.
   pane: PaneLeaf;
   // search slice; ephemeral (no URL persistence in v1).
   search: SearchState;
+  searchHistory: SearchHistoryEntry[];
   // a search-result span the TextViewer should scroll to + flash, then clear.
   pendingHighlight: PendingHighlight | null;
   // the page-break the user is currently viewing in Inspect mode; drives the
@@ -120,6 +149,10 @@ export interface WorkspaceState {
   // workspace and right panel adjusts `right`; the inspect-mode splitter
   // between TextViewer and ImagePanel adjusts `inspect`.
   panelWidths: { left: number; right: number; inspect: number };
+  persistence: {
+    status: "idle" | "loading" | "saving" | "error";
+    error: string | null;
+  };
 }
 
 const READ_PREFS_KEY = "bkk.readPrefs";
@@ -131,6 +164,9 @@ export const PANEL_MIN_WIDTH = 180;
 export const PANEL_MAX_WIDTH = 600;
 const INSPECT_MIN_WIDTH = 220;
 const INSPECT_MAX_WIDTH = 1200;
+const SEARCH_HISTORY_PATH = "searches/history.json";
+const SESSION_PATH = "settings/session.json";
+const MAX_SEARCH_HISTORY = 50;
 
 function loadReadPrefs(): { lineMode: LineMode } {
   if (typeof window === "undefined") return { lineMode: "paragraph" };
@@ -219,6 +255,11 @@ let state: WorkspaceState = {
   rightTab: "annotations",
   readMode: "read",
   serverInfo: null,
+  auth: {
+    status: "unknown",
+    error: null,
+    session: null,
+  },
   pane: {
     kind: "leaf",
     id: "root",
@@ -247,16 +288,22 @@ let state: WorkspaceState = {
     error: null,
     response: null,
   },
+  searchHistory: [],
   pendingHighlight: null,
   currentPage: null,
   readPrefs: loadReadPrefs(),
   panelWidths: loadPanelWidths(),
+  persistence: { status: "idle", error: null },
 };
 
 // monotonically increasing run id so an in-flight stale request can't clobber
 // a newer one when the user submits twice quickly.
 let searchRunId = 0;
 let searchAbort: AbortController | null = null;
+const workspaceFileShas: Record<string, string | undefined> = {};
+let sessionSaveTimer: number | null = null;
+let historySaveTimer: number | null = null;
+let restoredSessionOnce = false;
 
 function cancelSearchRequest(): void {
   searchRunId++;
@@ -304,6 +351,15 @@ async function runSearchInternal(offset: number): Promise<void> {
       search: { ...state.search, status: "ok", error: null, response },
     };
     notify();
+    if (offset === 0) {
+      rememberSearch({
+        query,
+        target,
+        sort,
+        filters,
+        pivotTextid: state.activeTextid,
+      });
+    }
   } catch (e) {
     if (runId !== searchRunId) return;
     searchAbort = null;
@@ -347,6 +403,254 @@ function resetSearchFilters(filters: SearchFilters): SearchFilters {
     rightBigram: [],
     aroundBinom: [],
   };
+}
+
+function cloneSearchFilters(filters: SearchFilters): SearchFilters {
+  return {
+    textid: filters.textid,
+    category: [...filters.category],
+    categoryDescendants: filters.categoryDescendants,
+    dateBefore: filters.dateBefore,
+    dateAfter: filters.dateAfter,
+    witness: [...filters.witness],
+    voice: [...filters.voice],
+    leftChar: [...filters.leftChar],
+    rightChar: [...filters.rightChar],
+    leftBigram: [...filters.leftBigram],
+    rightBigram: [...filters.rightBigram],
+    aroundBinom: [...filters.aroundBinom],
+  };
+}
+
+function isNotFound(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 404;
+}
+
+async function readWorkspaceJson<T>(path: string): Promise<T | null> {
+  try {
+    const file = await getWorkspaceFile(path);
+    workspaceFileShas[path] = file.sha;
+    return JSON.parse(file.content) as T;
+  } catch (e) {
+    if (isNotFound(e)) return null;
+    throw e;
+  }
+}
+
+async function writeWorkspaceJson(path: string, value: unknown): Promise<void> {
+  const result = await putWorkspaceFile({
+    path,
+    content: `${JSON.stringify(value, null, 2)}\n`,
+    sha: workspaceFileShas[path],
+  });
+  workspaceFileShas[path] = result.sha ?? undefined;
+}
+
+function validSearchHistoryEntry(value: unknown): SearchHistoryEntry | null {
+  if (typeof value !== "object" || value == null) return null;
+  const rec = value as Partial<SearchHistoryEntry>;
+  if (
+    typeof rec.id !== "string" ||
+    typeof rec.query !== "string" ||
+    !["fulltext", "dictionary", "translations"].includes(String(rec.target)) ||
+    typeof rec.sort !== "string" ||
+    typeof rec.createdAt !== "string" ||
+    typeof rec.filters !== "object" ||
+    rec.filters == null
+  ) {
+    return null;
+  }
+  return rec as SearchHistoryEntry;
+}
+
+function scheduleSessionSave(): void {
+  if (state.auth.status !== "authenticated") return;
+  if (typeof window === "undefined") return;
+  if (sessionSaveTimer != null) window.clearTimeout(sessionSaveTimer);
+  sessionSaveTimer = window.setTimeout(() => {
+    sessionSaveTimer = null;
+    void saveSessionState();
+  }, 2500);
+}
+
+function scheduleHistorySave(): void {
+  if (state.auth.status !== "authenticated") return;
+  if (typeof window === "undefined") return;
+  if (historySaveTimer != null) window.clearTimeout(historySaveTimer);
+  historySaveTimer = window.setTimeout(() => {
+    historySaveTimer = null;
+    void saveSearchHistory();
+  }, 1000);
+}
+
+function rememberSearch(params: {
+  query: string;
+  target: SearchTarget;
+  sort: SearchSort;
+  filters: SearchFilters;
+  pivotTextid: string | null;
+}): void {
+  const q = params.query.trim();
+  if (!q) return;
+  const entry: SearchHistoryEntry = {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    query: q,
+    target: params.target,
+    sort: params.sort,
+    filters: cloneSearchFilters(params.filters),
+    pivotTextid: params.pivotTextid,
+    createdAt: new Date().toISOString(),
+  };
+  const deduped = state.searchHistory.filter(
+    (item) =>
+      !(item.query === entry.query && item.target === entry.target && item.sort === entry.sort),
+  );
+  state = {
+    ...state,
+    searchHistory: [entry, ...deduped].slice(0, MAX_SEARCH_HISTORY),
+  };
+  notify();
+  scheduleHistorySave();
+}
+
+async function saveSearchHistory(): Promise<void> {
+  if (state.auth.status !== "authenticated") return;
+  state = { ...state, persistence: { status: "saving", error: null } };
+  notify();
+  try {
+    await writeWorkspaceJson(SEARCH_HISTORY_PATH, {
+      version: 1,
+      entries: state.searchHistory,
+      updatedAt: new Date().toISOString(),
+    });
+    state = { ...state, persistence: { status: "idle", error: null } };
+    notify();
+  } catch (e) {
+    state = {
+      ...state,
+      persistence: {
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+      },
+    };
+    notify();
+  }
+}
+
+async function saveSessionState(): Promise<void> {
+  if (state.auth.status !== "authenticated") return;
+  state = { ...state, persistence: { status: "saving", error: null } };
+  notify();
+  try {
+    await writeWorkspaceJson(SESSION_PATH, {
+      version: 1,
+      activeTextid: state.activeTextid,
+      activeSeq: state.activeSeq,
+      currentPage: state.currentPage,
+      readMode: state.readMode,
+      rightTab: state.rightTab,
+      readPrefs: state.readPrefs,
+      panelWidths: state.panelWidths,
+      updatedAt: new Date().toISOString(),
+    });
+    state = { ...state, persistence: { status: "idle", error: null } };
+    notify();
+  } catch (e) {
+    state = {
+      ...state,
+      persistence: {
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+      },
+    };
+    notify();
+  }
+}
+
+async function loadWorkspacePersistence(): Promise<void> {
+  if (state.auth.status !== "authenticated") return;
+  state = { ...state, persistence: { status: "loading", error: null } };
+  notify();
+  try {
+    const [historyDoc, sessionDoc] = await Promise.all([
+      readWorkspaceJson<{ entries?: unknown[] }>(SEARCH_HISTORY_PATH),
+      readWorkspaceJson<{
+        activeTextid?: unknown;
+        activeSeq?: unknown;
+        currentPage?: unknown;
+        readMode?: unknown;
+        rightTab?: unknown;
+      }>(SESSION_PATH),
+    ]);
+    const entries = Array.isArray(historyDoc?.entries)
+      ? historyDoc.entries
+          .map(validSearchHistoryEntry)
+          .filter((item): item is SearchHistoryEntry => item != null)
+          .slice(0, MAX_SEARCH_HISTORY)
+      : [];
+    state = {
+      ...state,
+      searchHistory: entries,
+      persistence: { status: "idle", error: null },
+    };
+    notify();
+    if (!restoredSessionOnce && sessionDoc != null) {
+      restoredSessionOnce = true;
+      const activeTextid =
+        typeof sessionDoc.activeTextid === "string" ? sessionDoc.activeTextid : null;
+      const activeSeq =
+        typeof sessionDoc.activeSeq === "number" ? sessionDoc.activeSeq : null;
+      const currentPage =
+        typeof sessionDoc.currentPage === "object" && sessionDoc.currentPage != null
+          ? (sessionDoc.currentPage as Partial<CurrentPage>)
+          : null;
+      const readMode =
+        sessionDoc.readMode === "inspect" ||
+        sessionDoc.readMode === "trans" ||
+        sessionDoc.readMode === "read"
+          ? sessionDoc.readMode
+          : state.readMode;
+      const rightTab =
+        sessionDoc.rightTab === "chat" ||
+        sessionDoc.rightTab === "search" ||
+        sessionDoc.rightTab === "annotations"
+          ? sessionDoc.rightTab
+          : state.rightTab;
+      state = { ...state, readMode, rightTab };
+      notify();
+      if (activeTextid != null && activeSeq != null) {
+        workspace.openJuan(activeTextid, activeSeq);
+        if (
+          currentPage != null &&
+          currentPage.textid === activeTextid &&
+          currentPage.seq === activeSeq &&
+          typeof currentPage.bucket === "string" &&
+          typeof currentPage.offset === "number"
+        ) {
+          state = {
+            ...state,
+            pendingHighlight: {
+              textid: activeTextid,
+              seq: activeSeq,
+              bucket: currentPage.bucket,
+              offset: currentPage.offset,
+              length: 1,
+            },
+          };
+          notify();
+        }
+      }
+    }
+  } catch (e) {
+    state = {
+      ...state,
+      persistence: {
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+      },
+    };
+    notify();
+  }
 }
 
 function subscribe(l: () => void) {
@@ -412,6 +716,7 @@ export const workspace = {
     }
     state = { ...state, currentPage: p };
     notify();
+    scheduleSessionSave();
   },
   selectBundle(textid: string) {
     // Reset juan + selection when changing bundle.
@@ -431,6 +736,7 @@ export const workspace = {
       pane,
     };
     notify();
+    scheduleSessionSave();
     // Fire-and-forget: auto-open the first part so body text appears in
     // parallel with the TOC instead of waiting for a TOC click.
     void getManifest(textid)
@@ -459,11 +765,60 @@ export const workspace = {
       selection: null,
       currentPage: null,
       pane,
+      activity: "texts",
     };
     notify();
+    scheduleSessionSave();
   },
   setServerInfo(info: WorkspaceState["serverInfo"]) {
     state = { ...state, serverInfo: info };
+    notify();
+  },
+  async loadAuthSession() {
+    state = {
+      ...state,
+      auth: { ...state.auth, status: "loading", error: null },
+    };
+    notify();
+    try {
+      const session = await getAuthSession();
+      state = {
+        ...state,
+        auth: {
+          status: session.authenticated ? "authenticated" : "anonymous",
+          error: null,
+          session,
+        },
+      };
+      notify();
+      if (session.authenticated) void loadWorkspacePersistence();
+    } catch (e) {
+      state = {
+        ...state,
+        auth: {
+          status: "error",
+          error: e instanceof Error ? e.message : String(e),
+          session: null,
+        },
+      };
+      notify();
+    }
+  },
+  async logout() {
+    await logoutRequest();
+    state = {
+      ...state,
+      auth: {
+        status: "anonymous",
+        error: null,
+        session: { authenticated: false, user: null },
+      },
+      searchHistory: [],
+      activeTextid: null,
+      activeSeq: null,
+      currentPage: null,
+      pane: { kind: "leaf", id: state.pane.id, tabs: [], activeTabId: null },
+    };
     notify();
   },
   setSearchQuery(query: string) {
@@ -570,6 +925,24 @@ export const workspace = {
   runSearchAt(offset: number) {
     return runSearchInternal(offset);
   },
+  useSearchHistoryEntry(entry: SearchHistoryEntry) {
+    cancelSearchRequest();
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        query: entry.query,
+        target: entry.target,
+        sort: entry.sort,
+        filters: cloneSearchFilters(entry.filters),
+        status: "idle",
+        error: null,
+        response: null,
+      },
+    };
+    notify();
+    return runSearchInternal(0);
+  },
   clearSearch() {
     cancelSearchRequest();
     state = {
@@ -583,6 +956,7 @@ export const workspace = {
       },
     };
     notify();
+    scheduleSessionSave();
   },
   openHit(hit: SearchHit) {
     const tabId = `${hit.textid}:${hit.juan_seq}`;
@@ -622,6 +996,7 @@ export const workspace = {
     state = { ...state, readPrefs };
     saveReadPrefs(readPrefs);
     notify();
+    scheduleSessionSave();
   },
   setPanelWidth(side: PanelSide, width: number) {
     const next = clampWidth(width, state.panelWidths[side], side);
@@ -630,5 +1005,6 @@ export const workspace = {
     state = { ...state, panelWidths };
     savePanelWidths(panelWidths);
     notify();
+    scheduleSessionSave();
   },
 };

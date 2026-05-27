@@ -19,6 +19,11 @@ class ServeConfig:
     upstream_repo: str | None = None
     web_dist: Path | None = None
     image_base_urls: dict[str, str] = field(default_factory=dict)
+    github_client_id: str | None = None
+    github_client_secret: str | None = None
+    github_callback_url: str | None = None
+    workspace_template_repo: str = "bunkankun/BKK-Workspace"
+    workspace_repo_name: str = "BKK-Workspace"
 
     def __post_init__(self) -> None:
         if self.catalog_path is None:
@@ -89,6 +94,41 @@ class ServeConfig:
         env_repo = os.environ.get("BKK_UPSTREAM_REPO")
         upstream_repo = env_repo if env_repo is not None else rc.get("upstream_repo")
 
+        env_github_client_id = os.environ.get("BKK_GITHUB_CLIENT_ID")
+        github_client_id = (
+            env_github_client_id
+            if env_github_client_id is not None
+            else rc.get("github_client_id")
+        )
+
+        env_github_client_secret = os.environ.get("BKK_GITHUB_CLIENT_SECRET")
+        github_client_secret = (
+            env_github_client_secret
+            if env_github_client_secret is not None
+            else rc.get("github_client_secret")
+        )
+
+        env_github_callback_url = os.environ.get("BKK_GITHUB_CALLBACK_URL")
+        github_callback_url = (
+            env_github_callback_url
+            if env_github_callback_url is not None
+            else rc.get("github_callback_url")
+        )
+
+        env_workspace_template = os.environ.get("BKK_WORKSPACE_TEMPLATE_REPO")
+        workspace_template_repo = (
+            env_workspace_template
+            if env_workspace_template is not None
+            else rc.get("workspace_template_repo", "bunkankun/BKK-Workspace")
+        )
+
+        env_workspace_repo_name = os.environ.get("BKK_WORKSPACE_REPO_NAME")
+        workspace_repo_name = (
+            env_workspace_repo_name
+            if env_workspace_repo_name is not None
+            else rc.get("workspace_repo_name", "BKK-Workspace")
+        )
+
         rc_image_base_urls = rc.get("image_base_urls") or {}
         if not isinstance(rc_image_base_urls, dict) or not all(
             isinstance(k, str) and isinstance(v, str)
@@ -110,6 +150,11 @@ class ServeConfig:
             upstream_repo=upstream_repo,
             web_dist=web_dist,
             image_base_urls=dict(rc_image_base_urls),
+            github_client_id=github_client_id,
+            github_client_secret=github_client_secret,
+            github_callback_url=github_callback_url,
+            workspace_template_repo=workspace_template_repo,
+            workspace_repo_name=workspace_repo_name,
         )
 
     def merge_cli(
@@ -124,6 +169,11 @@ class ServeConfig:
         reload: bool | None = None,
         upstream_repo: str | None = None,
         web_dist: Path | str | None = None,
+        github_client_id: str | None = None,
+        github_client_secret: str | None = None,
+        github_callback_url: str | None = None,
+        workspace_template_repo: str | None = None,
+        workspace_repo_name: str | None = None,
     ) -> "ServeConfig":
         """Return a copy with any non-``None`` argument overriding the field."""
         updates: dict = {}
@@ -145,4 +195,14 @@ class ServeConfig:
             updates["upstream_repo"] = upstream_repo
         if web_dist is not None:
             updates["web_dist"] = Path(web_dist).resolve()
+        if github_client_id is not None:
+            updates["github_client_id"] = github_client_id
+        if github_client_secret is not None:
+            updates["github_client_secret"] = github_client_secret
+        if github_callback_url is not None:
+            updates["github_callback_url"] = github_callback_url
+        if workspace_template_repo is not None:
+            updates["workspace_template_repo"] = workspace_template_repo
+        if workspace_repo_name is not None:
+            updates["workspace_repo_name"] = workspace_repo_name
         return replace(self, **updates)

@@ -11,12 +11,14 @@ from . import errors
 from .config import ServeConfig
 from .routers import admin as admin_router
 from .routers import annotations as annotations_router
+from .routers import auth as auth_router
 from .routers import bundles as bundles_router
 from .routers import catalog as catalog_router
 from .routers import recipes as recipes_router
 from .routers import redirects as redirects_router
 from .routers import search as search_router
 from .routers import texts as texts_router
+from .routers import workspace as workspace_router
 from .state import AppState
 from .static import mount_spa
 
@@ -46,6 +48,8 @@ def create_app(config: ServeConfig) -> FastAPI:
             {"name": "catalog", "description": "Browse the corpus with curated metadata filters."},
             {"name": "search", "description": "Variant-aware KWIC search across the corpus."},
             {"name": "recipes", "description": "Recipe-as-request: assemble pinned slices."},
+            {"name": "auth", "description": "GitHub login and per-user BKK workspace setup."},
+            {"name": "workspace", "description": "GitHub-backed user workspace files."},
             {"name": "admin", "description": "Maintenance: rebuild indexes, validate bundles."},
             {"name": "redirects", "description": "Cross-tree convenience redirects."},
             {"name": "meta", "description": "Server health and configuration."},
@@ -75,6 +79,8 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(catalog_router.router)
     app.include_router(search_router.router)
     app.include_router(recipes_router.router)
+    app.include_router(auth_router.router)
+    app.include_router(workspace_router.router)
     app.include_router(admin_router.router)
     app.include_router(redirects_router.router)
 

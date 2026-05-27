@@ -21,6 +21,7 @@ export function SearchBar() {
   const target = useWorkspace((s) => s.search.target);
   const sort = useWorkspace((s) => s.search.sort);
   const status = useWorkspace((s) => s.search.status);
+  const history = useWorkspace((s) => s.searchHistory);
 
   const canSubmit = query.trim().length > 0 && target === "fulltext";
 
@@ -39,7 +40,13 @@ export function SearchBar() {
         value={query}
         onChange={(e) => workspace.setSearchQuery(e.target.value)}
         aria-label="Search query"
+        list="bkk-search-history"
       />
+      <datalist id="bkk-search-history">
+        {history.map((entry) => (
+          <option key={entry.id} value={entry.query} />
+        ))}
+      </datalist>
       <select
         className="mb-select"
         value={target}
