@@ -20,6 +20,13 @@ import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
 const PHRASE_END_RE = /[。！？；]/;
 const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
+const BUCKETS = ["front", "body", "back"] as const;
+
+type BucketName = (typeof BUCKETS)[number];
+
+function isBucketName(value: unknown): value is BucketName {
+  return typeof value === "string" && (BUCKETS as readonly string[]).includes(value);
+}
 
 function isPua(cp: number): boolean {
   return (
@@ -45,6 +52,7 @@ interface RenderedChar {
 }
 
 interface Block {
+  bucket: BucketName;
   // half-open [startOffset, endOffset) over the *original* master text.
   startOffset: number;
   endOffset: number;
@@ -139,6 +147,7 @@ function buildRenderedChars(
 //   paragraph: split on `paragraph-break` markers; fall back to literal `\n`.
 //   phrase:    split on `tls:seg` markers; fall back to phrase-ending punct.
 function buildBlocks(
+  bucket: BucketName,
   chars: RenderedChar[],
   markers: JuanMarker[],
   lineMode: LineMode,
@@ -163,6 +172,7 @@ function buildBlocks(
   const flush = () => {
     if (cur.length === 0) return;
     blocks.push({
+      bucket,
       startOffset: curStart,
       endOffset: curEnd,
       chars: cur,
@@ -205,6 +215,23 @@ function buildBlocks(
   return blocks;
 }
 
+function hasBucketText(juan: Juan, bucket: BucketName): boolean {
+  const text = juan[bucket]?.text;
+  return typeof text === "string" && text.length > 0;
+}
+
+function firstPageMarker(
+  juan: Juan,
+): { bucket: BucketName; marker: JuanMarker } | null {
+  for (const bucket of BUCKETS) {
+    const marker = ((juan[bucket]?.markers ?? []) as JuanMarker[]).find(
+      (mk) => mk.type === "page-break" && typeof mk.id === "string",
+    );
+    if (marker) return { bucket, marker };
+  }
+  return null;
+}
+
 interface Props {
   textid: string;
   seq: number;
@@ -222,6 +249,7 @@ export function TextViewer({ textid, seq }: Props) {
   const [flashOffsets, setFlashOffsets] = useState<{ start: number; end: number } | null>(
     null,
   );
+  const [flashBucket, setFlashBucket] = useState<BucketName | null>(null);
   // Identity of the pendingHighlight we have already flashed for, so the
   // layout effect can re-run safely (deps include `blocks` + `visibleBlocks`)
   // without scheduling a second scroll/flash for the same target.
@@ -244,15 +272,14 @@ export function TextViewer({ textid, seq }: Props) {
         setManifest(m);
         // Seed currentPage to the juan's first page-break so the image panel
         // has something to show before the user scrolls.
-        const first = ((j.body?.markers ?? []) as JuanMarker[]).find(
-          (mk) => mk.type === "page-break" && typeof mk.id === "string",
-        );
-        if (first && typeof first.id === "string") {
+        const first = firstPageMarker(j);
+        if (first && typeof first.marker.id === "string") {
           workspace.setCurrentPage({
             textid,
             seq,
-            markerId: first.id,
-            offset: typeof first.offset === "number" ? first.offset : 0,
+            bucket: first.bucket,
+            markerId: first.marker.id,
+            offset: typeof first.marker.offset === "number" ? first.marker.offset : 0,
           });
         }
       })
@@ -265,39 +292,54 @@ export function TextViewer({ textid, seq }: Props) {
     };
   }, [textid, seq]);
 
-  const markers = useMemo<JuanMarker[]>(
-    () => (juan?.body?.markers ?? []) as JuanMarker[],
+  const bucketViews = useMemo(
+    () =>
+      juan
+        ? BUCKETS.filter((bucket) => hasBucketText(juan, bucket)).map((bucket) => ({
+            bucket,
+            text: juan[bucket]?.text ?? "",
+            markers: (juan[bucket]?.markers ?? []) as JuanMarker[],
+          }))
+        : [],
     [juan],
   );
 
   // Sorted list of id-bearing markers, used to resolve a selection's
   // anchorMarkerId via binary search.
   const idMarkers = useMemo(() => {
-    const list: { offset: number; id: string }[] = [];
-    for (const m of markers) {
-      const id = typeof m.id === "string" ? m.id.trim() : "";
-      if (!id) continue;
-      const off = typeof m.offset === "number" ? m.offset : 0;
-      list.push({ offset: off, id });
+    const byBucket = new Map<BucketName, { offset: number; id: string }[]>();
+    for (const view of bucketViews) {
+      const list: { offset: number; id: string }[] = [];
+      for (const m of view.markers) {
+        const id = typeof m.id === "string" ? m.id.trim() : "";
+        if (!id) continue;
+        const off = typeof m.offset === "number" ? m.offset : 0;
+        list.push({ offset: off, id });
+      }
+      list.sort((a, b) => a.offset - b.offset);
+      byBucket.set(view.bucket, list);
     }
-    list.sort((a, b) => a.offset - b.offset);
-    return list;
-  }, [markers]);
+    return byBucket;
+  }, [bucketViews]);
 
-  const renderedChars = useMemo(
-    () => (juan?.body?.text ? buildRenderedChars(juan.body.text, markers) : []),
-    [juan, markers],
+  const blocksByBucket = useMemo(
+    () =>
+      bucketViews.map((view) => ({
+        bucket: view.bucket,
+        blocks: buildBlocks(
+          view.bucket,
+          buildRenderedChars(view.text, view.markers),
+          view.markers,
+          lineMode,
+          [...decodeKrRefs(view.text)].length,
+        ),
+      })),
+    [bucketViews, lineMode],
   );
 
   const blocks = useMemo(
-    () =>
-      buildBlocks(
-        renderedChars,
-        markers,
-        lineMode,
-        juan?.body?.text ? [...decodeKrRefs(juan.body.text)].length : 0,
-      ),
-    [renderedChars, markers, lineMode, juan],
+    () => blocksByBucket.flatMap((view) => view.blocks),
+    [blocksByBucket],
   );
 
   const annIndex = useMemo(
@@ -360,7 +402,7 @@ export function TextViewer({ textid, seq }: Props) {
     const root = scrollRef.current;
     const container = containerRef.current;
     if (!root || !container) return;
-    const visible = new Map<Element, { id: string; offset: number }>();
+    const visible = new Map<Element, { id: string; offset: number; bucket: BucketName }>();
     const obs = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -368,20 +410,28 @@ export function TextViewer({ textid, seq }: Props) {
           if (e.isIntersecting) {
             const id = el.dataset.pageId;
             const off = Number(el.dataset.pageOffset);
-            if (!id || Number.isNaN(off)) continue;
-            visible.set(el, { id, offset: off });
+            const bucket = el.dataset.bucket;
+            if (!id || Number.isNaN(off) || !isBucketName(bucket)) continue;
+            visible.set(el, { id, offset: off, bucket });
           } else {
             visible.delete(el);
           }
         }
-        let best: { id: string; offset: number } | null = null;
+        let best: { id: string; offset: number; bucket: BucketName } | null = null;
         for (const v of visible.values()) {
-          if (best == null || v.offset < best.offset) best = v;
+          if (
+            best == null ||
+            BUCKETS.indexOf(v.bucket) < BUCKETS.indexOf(best.bucket) ||
+            (v.bucket === best.bucket && v.offset < best.offset)
+          ) {
+            best = v;
+          }
         }
         if (best == null) return;
         workspace.setCurrentPage({
           textid,
           seq,
+          bucket: best.bucket,
           markerId: best.id,
           offset: best.offset,
         });
@@ -400,12 +450,16 @@ export function TextViewer({ textid, seq }: Props) {
       pending == null ||
       pending.textid !== textid ||
       pending.seq !== seq ||
+      !isBucketName(pending.bucket) ||
       blocks.length === 0
     ) {
       return;
     }
     const targetIdx = blocks.findIndex(
-      (b) => pending.offset >= b.startOffset && pending.offset < b.endOffset,
+      (b) =>
+        b.bucket === pending.bucket &&
+        pending.offset >= b.startOffset &&
+        pending.offset < b.endOffset,
     );
     if (targetIdx < 0) {
       workspace.consumeHighlight();
@@ -424,6 +478,7 @@ export function TextViewer({ textid, seq }: Props) {
       pending == null ||
       pending.textid !== textid ||
       pending.seq !== seq ||
+      !isBucketName(pending.bucket) ||
       containerRef.current == null
     ) {
       return;
@@ -435,11 +490,12 @@ export function TextViewer({ textid, seq }: Props) {
     const start = pending.offset;
     const end = pending.offset + Math.max(1, pending.length);
     const target = containerRef.current.querySelector<HTMLElement>(
-      `span[data-offset="${start}"]`,
+      `span[data-bucket="${pending.bucket}"][data-offset="${start}"]`,
     );
     if (!target) return;
     lastFlashedRef.current = pending;
     target.scrollIntoView({ block: "center", behavior: "smooth" });
+    setFlashBucket(pending.bucket);
     setFlashOffsets({ start, end });
     workspace.consumeHighlight();
   }, [pending, textid, seq, visibleBlocks, blocks]);
@@ -448,19 +504,26 @@ export function TextViewer({ textid, seq }: Props) {
   // its cleanup can't nuke the timer when unrelated deps change.
   useEffect(() => {
     if (flashOffsets == null) return;
-    const timer = window.setTimeout(() => setFlashOffsets(null), 15000);
+    const timer = window.setTimeout(() => {
+      setFlashOffsets(null);
+      setFlashBucket(null);
+    }, 15000);
     return () => window.clearTimeout(timer);
   }, [flashOffsets]);
 
   const resolveAnchor = useCallback(
-    (offset: number): { anchorMarkerId: string | null; anchorOffset: number } => {
+    (
+      bucket: BucketName,
+      offset: number,
+    ): { anchorMarkerId: string | null; anchorOffset: number } => {
       // Largest idMarkers entry with offset <= the selection start.
+      const markers = idMarkers.get(bucket) ?? [];
       let lo = 0;
-      let hi = idMarkers.length - 1;
+      let hi = markers.length - 1;
       let bestIdx = -1;
       while (lo <= hi) {
         const mid = (lo + hi) >> 1;
-        if (idMarkers[mid].offset <= offset) {
+        if (markers[mid].offset <= offset) {
           bestIdx = mid;
           lo = mid + 1;
         } else {
@@ -468,7 +531,7 @@ export function TextViewer({ textid, seq }: Props) {
         }
       }
       if (bestIdx < 0) return { anchorMarkerId: null, anchorOffset: offset };
-      const m = idMarkers[bestIdx];
+      const m = markers[bestIdx];
       return { anchorMarkerId: m.id, anchorOffset: offset - m.offset };
     },
     [idMarkers],
@@ -487,13 +550,16 @@ export function TextViewer({ textid, seq }: Props) {
     const range = sel.getRangeAt(0);
     if (!containerRef.current.contains(range.commonAncestorContainer)) return;
 
-    const spans = containerRef.current.querySelectorAll<HTMLElement>(
-      "span[data-offset]",
-    );
+    const spans = containerRef.current.querySelectorAll<HTMLElement>("span[data-offset]");
+    let bucket: BucketName | null = null;
     const offsets: number[] = [];
     const selChars: string[] = [];
     spans.forEach((sp) => {
       if (!range.intersectsNode(sp)) return;
+      const spanBucket = sp.dataset.bucket;
+      if (!isBucketName(spanBucket)) return;
+      if (bucket == null) bucket = spanBucket;
+      if (spanBucket !== bucket) return;
       const off = Number(sp.dataset.offset);
       if (Number.isNaN(off)) return;
       const ch = sp.textContent ?? "";
@@ -507,12 +573,14 @@ export function TextViewer({ textid, seq }: Props) {
       workspace.setSelection(null);
       return;
     }
+    if (bucket == null) return;
     const start = Math.min(...offsets);
     const end = Math.max(...offsets) + 1;
-    const anchor = resolveAnchor(start);
+    const anchor = resolveAnchor(bucket, start);
     workspace.setSelection({
       textid,
       seq,
+      bucket,
       start,
       end,
       chars: selChars,
@@ -547,18 +615,29 @@ export function TextViewer({ textid, seq }: Props) {
         </h2>
       </div>
       <div className={`tv-body tv-body-${lineMode}`} ref={containerRef}>
-        {blocks.map((b, idx) => (
-          <BlockView
-            key={idx}
-            blockIdx={idx}
-            block={b}
-            visible={visibleBlocks.has(idx)}
-            annIndex={annIndex}
-            flashOffsets={flashOffsets}
-            textid={textid}
-            seq={seq}
-            resolveAnchor={resolveAnchor}
-          />
+        {blocksByBucket.map((view) => (
+          <section className={`tv-bucket tv-bucket-${view.bucket}`} key={view.bucket}>
+            {view.bucket !== "body" ? (
+              <div className="tv-bucket-label">{view.bucket}</div>
+            ) : null}
+            {view.blocks.map((b) => {
+              const idx = blocks.indexOf(b);
+              return (
+                <BlockView
+                  key={`${b.bucket}:${idx}`}
+                  blockIdx={idx}
+                  block={b}
+                  visible={visibleBlocks.has(idx)}
+                  annIndex={annIndex}
+                  flashOffsets={flashOffsets}
+                  flashBucket={flashBucket}
+                  textid={textid}
+                  seq={seq}
+                  resolveAnchor={resolveAnchor}
+                />
+              );
+            })}
+          </section>
         ))}
       </div>
     </div>
@@ -571,9 +650,11 @@ interface BlockViewProps {
   visible: boolean;
   annIndex: ReturnType<typeof buildAnnotationIndex>;
   flashOffsets: { start: number; end: number } | null;
+  flashBucket: BucketName | null;
   textid: string;
   seq: number;
   resolveAnchor: (
+    bucket: BucketName,
     offset: number,
   ) => { anchorMarkerId: string | null; anchorOffset: number };
 }
@@ -584,6 +665,7 @@ function BlockView({
   visible,
   annIndex,
   flashOffsets,
+  flashBucket,
   textid,
   seq,
   resolveAnchor,
@@ -610,6 +692,7 @@ function BlockView({
             <span
               key={i}
               className="page-anchor"
+              data-bucket={block.bucket}
               data-page-id={rc.pageAnchor.id}
               data-page-offset={rc.pageAnchor.offset}
               aria-hidden="true"
@@ -628,15 +711,19 @@ function BlockView({
         }
         const off = rc.srcOffset!;
         const anns = annIndex.byOffset.get(off);
-        const has = anns && anns.length > 0;
+        const has = block.bucket === "body" && anns && anns.length > 0;
         const flashing =
-          flashOffsets != null && off >= flashOffsets.start && off < flashOffsets.end;
+          flashOffsets != null &&
+          flashBucket === block.bucket &&
+          off >= flashOffsets.start &&
+          off < flashOffsets.end;
         const cls = `${has ? "ch has-ann" : "ch"}${flashing ? " kwic-flash" : ""}`;
         const title = has ? anns!.map(annTooltip).join(" / ") : undefined;
         return (
           <span
             key={i}
             className={cls}
+            data-bucket={block.bucket}
             data-offset={off}
             title={title}
             onMouseEnter={() => workspace.setHover(rc.ch)}
@@ -646,10 +733,11 @@ function BlockView({
               // mouseUp's getSelection() path handle multi-char selections.
               const sel = window.getSelection();
               if (sel && !sel.isCollapsed) return;
-              const anchor = resolveAnchor(off);
+              const anchor = resolveAnchor(block.bucket, off);
               workspace.setSelection({
                 textid,
                 seq,
+                bucket: block.bucket,
                 start: off,
                 end: off + 1,
                 chars: [rc.ch],

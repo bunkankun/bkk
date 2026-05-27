@@ -255,12 +255,13 @@ function HitRow({ hit }: { hit: SearchHit }) {
       type="button"
       className="kwic-row"
       onClick={() => workspace.openHit(hit)}
-      title={`${hit.textid} · juan ${hit.juan_seq} · @${hit.master_offset}`}
+      title={`${hit.textid} · juan ${hit.juan_seq} · ${hit.bucket} @${hit.master_offset}`}
     >
       <div className="kwic-meta">
         {hit.toc_label ? <span className="kwic-label">{hit.toc_label}</span> : null}
         <span className="kwic-textid">{hit.textid}</span>
         <span className="kwic-juan">juan {hit.juan_seq}</span>
+        {hit.bucket !== "body" ? <span className="kwic-chip">{hit.bucket}</span> : null}
         {witness ? <span className="kwic-chip">{witness}</span> : null}
       </div>
       <div className="kwic-line">

@@ -58,12 +58,14 @@ export function AnnotationsTab() {
 
   // Filter by selection if present.
   let visible = anns;
-  if (sel && sel.textid === textid && sel.seq === seq) {
+  if (sel && sel.textid === textid && sel.seq === seq && sel.bucket === "body") {
     visible = anns.filter((a) => a.offset >= sel.start && a.offset < sel.end);
+  } else if (sel && sel.textid === textid && sel.seq === seq) {
+    visible = [];
   }
 
   const refString = sel
-    ? `${sel.textid}:${sel.anchorMarkerId ?? `@${sel.start}`}${
+    ? `${sel.textid}:${sel.bucket}:${sel.anchorMarkerId ?? `@${sel.start}`}${
         sel.anchorOffset > 0 ? `+${sel.anchorOffset}` : ""
       }`
     : null;
@@ -89,10 +91,10 @@ export function AnnotationsTab() {
         <>
           <div className="sel-summary">{sel.chars.join("")}</div>
           <div className="sel-meta">
-            <span title={`master_offset [${sel.start}, ${sel.end})`}>
+            <span title={`${sel.bucket} master_offset [${sel.start}, ${sel.end})`}>
               {sel.anchorMarkerId
-                ? `@ ${sel.anchorMarkerId}${sel.anchorOffset > 0 ? ` + ${sel.anchorOffset}` : ""}`
-                : `@ offset ${sel.start}`}
+                ? `${sel.bucket} @ ${sel.anchorMarkerId}${sel.anchorOffset > 0 ? ` + ${sel.anchorOffset}` : ""}`
+                : `${sel.bucket} @ offset ${sel.start}`}
             </span>
             <span>{sel.chars.length} char</span>
             <button

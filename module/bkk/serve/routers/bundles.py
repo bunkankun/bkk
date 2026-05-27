@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, Path as PathParam, Query, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
@@ -89,7 +91,12 @@ def get_bundle(request: Request, textid: str = PathParam(..., openapi_examples=e
 def get_manifest(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> dict[str, Any]:
     state: AppState = request.app.state.bkk
     rec = _record(state, textid)
-    manifest = rec.manifest
+    return _manifest_with_image_overrides(rec.manifest, state)
+
+
+def _manifest_with_image_overrides(
+    manifest: dict[str, Any], state: AppState,
+) -> dict[str, Any]:
     override = state.config.image_base_urls
     if not override:
         return manifest
@@ -99,6 +106,35 @@ def get_manifest(request: Request, textid: str = PathParam(..., openapi_examples
     existing.update(override)
     metadata["image_base_urls"] = existing
     return {**manifest, "metadata": metadata}
+
+
+def _image_base_url(
+    manifest: dict[str, Any], edition: str,
+) -> str | None:
+    metadata = manifest.get("metadata") or {}
+    bases = metadata.get("image_base_urls") or {}
+    if not isinstance(bases, dict):
+        return None
+    for key in (edition, edition.lower(), edition.upper()):
+        value = bases.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _local_file_image_path(base_url: str, image_path: str) -> Path | None:
+    parsed = urlparse(base_url)
+    if parsed.scheme != "file":
+        return None
+    if parsed.netloc not in ("", "localhost"):
+        return None
+    base = Path(unquote(parsed.path)).resolve()
+    target = (base / image_path).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        raise errors.bad_request("bad_image_path", image_path=image_path)
+    return target
 
 
 @router.get(
@@ -315,6 +351,36 @@ def get_juan_bucket_markers(
             continue
         out.append(m)
     return out
+
+
+@router.get(
+    "/{textid}/images/{edition}/{image_path:path}",
+    response_class=Response,
+    summary="Fetch a local file-backed page image declared by image_base_urls",
+)
+def get_local_image(
+    request: Request,
+    textid: str = PathParam(..., openapi_examples=ex.TEXTID),
+    edition: str = PathParam(..., description="KRP page-break edition short id"),
+    image_path: str = PathParam(..., description="image path from the page-break marker"),
+) -> Response:
+    state: AppState = request.app.state.bkk
+    rec = _record(state, textid)
+    manifest = _manifest_with_image_overrides(rec.manifest, state)
+    base_url = _image_base_url(manifest, edition)
+    if base_url is None:
+        raise errors.bad_request("image_base_url_not_declared", textid=textid, edition=edition)
+    path = _local_file_image_path(base_url, image_path)
+    if path is None:
+        raise errors.bad_request("image_base_url_not_file", textid=textid, edition=edition)
+    if not path.exists() or not path.is_file():
+        raise errors.bad_request(
+            "image_missing_on_disk",
+            textid=textid,
+            edition=edition,
+            image_path=image_path,
+        )
+    return FileResponse(path)
 
 
 def _asset_entries(manifest: dict[str, Any]) -> list[dict[str, Any]]:

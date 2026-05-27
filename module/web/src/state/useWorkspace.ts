@@ -50,6 +50,7 @@ export interface SearchState {
 export interface PendingHighlight {
   textid: string;
   seq: number;
+  bucket: string;
   offset: number;
   length: number;
 }
@@ -57,6 +58,7 @@ export interface PendingHighlight {
 export interface CurrentPage {
   textid: string;
   seq: number;
+  bucket: string;
   markerId: string;
   offset: number;
 }
@@ -64,6 +66,7 @@ export interface CurrentPage {
 export interface SelectionRange {
   textid: string;
   seq: number;
+  bucket: string;
   // master_offset range, half-open: [start, end)
   start: number;
   end: number;
@@ -602,6 +605,7 @@ export const workspace = {
       pendingHighlight: {
         textid: hit.textid,
         seq: hit.juan_seq,
+        bucket: hit.bucket,
         offset: hit.master_offset,
         length: hit.master_length,
       },

@@ -110,3 +110,52 @@ def test_get_asset_not_declared(assets_client: TestClient):
     r = assets_client.get("/bundles/AST0001/assets/secrets.txt")
     assert r.status_code == 400
     assert r.json()["error"] == "asset_not_declared"
+
+
+def test_get_local_file_backed_image(tmp_path: Path):
+    image_root = tmp_path / "images"
+    image_path = image_root / "WYG0015" / "WYG0015-0754c.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    write_bundle(
+        tmp_path,
+        "IMG0001",
+        "甲乙丙",
+        extra_metadata={"image_base_urls": {"WYG": image_root.as_uri() + "/"}},
+    )
+    client = TestClient(
+        create_app(
+            ServeConfig(
+                corpus_root=tmp_path,
+                index_path=tmp_path / "_corpus.bkkx",
+            )
+        )
+    )
+
+    r = client.get("/bundles/IMG0001/images/WYG/WYG0015/WYG0015-0754c.png")
+    assert r.status_code == 200
+    assert r.content == b"\x89PNG\r\n\x1a\n"
+
+
+def test_get_local_file_backed_image_rejects_traversal(tmp_path: Path):
+    image_root = tmp_path / "images"
+    image_root.mkdir()
+    write_bundle(
+        tmp_path,
+        "IMG0002",
+        "甲乙丙",
+        extra_metadata={"image_base_urls": {"WYG": image_root.as_uri() + "/"}},
+    )
+    client = TestClient(
+        create_app(
+            ServeConfig(
+                corpus_root=tmp_path,
+                index_path=tmp_path / "_corpus.bkkx",
+            )
+        )
+    )
+
+    r = client.get("/bundles/IMG0002/images/WYG/%2E%2E/secret.png")
+    assert r.status_code == 400
+    assert r.json()["error"] == "bad_image_path"

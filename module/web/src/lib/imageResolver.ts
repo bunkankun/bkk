@@ -16,6 +16,8 @@
 // `{ kind: "none" }` for that branch until OpenSeadragon is wired in.
 
 import type { Manifest } from "../api/types";
+import { apiBase } from "../api/client";
+import { parseMarkerId } from "./markers";
 
 export interface PageBreak {
   id: string;
@@ -33,22 +35,44 @@ function joinUrl(base: string, rel: string): string {
   return `${b}/${r}`;
 }
 
+function encodeImagePath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+function localImageUrl(textid: string, edition: string, image: string): string {
+  return `${apiBase}/bundles/${encodeURIComponent(textid)}/images/${encodeURIComponent(
+    edition,
+  )}/${encodeImagePath(image)}`;
+}
+
 export function resolveImage(
   page: PageBreak,
   manifest: Manifest | null,
   editionShort: string | null,
+  textid?: string,
 ): ImageSpec {
   if (!manifest) return { kind: "none", reason: "no manifest" };
   const meta = manifest.metadata ?? {};
+  const pageEdition = parseMarkerId(page.id)?.edition ?? null;
   const edition =
+    pageEdition ??
     editionShort ??
     (typeof meta.base_edition === "string" ? meta.base_edition : null);
   if (!edition) return { kind: "none", reason: "no edition" };
 
   if (typeof page.image === "string" && page.image.length > 0) {
     const bases = meta.image_base_urls;
-    const base = bases ? bases[edition.toLowerCase()] : undefined;
+    const base = bases
+      ? bases[edition] ?? bases[edition.toLowerCase()] ?? bases[edition.toUpperCase()]
+      : undefined;
     if (typeof base === "string" && base.length > 0) {
+      if (base.startsWith("file:") && textid) {
+        return {
+          kind: "direct",
+          url: localImageUrl(textid, edition, page.image),
+          pageId: page.id,
+        };
+      }
       return { kind: "direct", url: joinUrl(base, page.image), pageId: page.id };
     }
   }

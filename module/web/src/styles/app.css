@@ -461,6 +461,23 @@ button {
 .tv-block {
   display: block;
 }
+.tv-bucket + .tv-bucket {
+  margin-top: 24px;
+}
+.tv-bucket-label {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--bdr-l);
+  border-radius: 4px;
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  user-select: none;
+}
 .tv-body-paragraph .tv-block {
   margin-bottom: 0.5em;
 }
@@ -583,10 +600,25 @@ button {
   opacity: 0.35;
   cursor: default;
 }
+.image-panel-toolbar .ipb.zoom-reset {
+  width: 42px;
+  font-size: 10px;
+}
 .image-panel-label {
   font-family: var(--fm);
   color: var(--t1);
   flex-shrink: 0;
+}
+.image-panel-edition {
+  max-width: 160px;
+  min-width: 72px;
+  height: 22px;
+  border: 1px solid var(--bdr);
+  border-radius: 3px;
+  background: var(--bg-pan);
+  color: var(--t2);
+  font: inherit;
+  font-size: 11px;
 }
 .image-panel-spacer {
   flex: 1;
@@ -603,11 +635,28 @@ button {
   background: #0a0a10;
   position: relative;
 }
+.image-panel-body.zoomed {
+  align-items: flex-start;
+  justify-content: flex-start;
+  cursor: grab;
+  user-select: none;
+}
+.image-panel-body.zoomed.panning {
+  cursor: grabbing;
+}
 .image-panel-img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  margin: auto;
   display: block;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+.image-panel-body.zoomed .image-panel-img {
+  flex: 0 0 auto;
+  margin: 0;
+  pointer-events: none;
 }
 .image-panel-status {
   color: var(--t3);
