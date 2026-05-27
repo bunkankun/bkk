@@ -13,6 +13,7 @@ import yaml
 
 from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 from bkk.importer.cli import _find_cbeta_text, run
+from bkk.importer.read.cbeta import read_cbeta
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -42,6 +43,71 @@ def test_cbeta_filename_derives_from_old_id(tmp_path: Path):
     target.write_text("<TEI/>", encoding="utf-8")
 
     assert _find_cbeta_text(root, "B10n0049") == target
+
+
+def test_direct_reader_adds_apparatus_variants_from_back(tmp_path: Path):
+    xml = tmp_path / "T01n0001.xml"
+    xml.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"
+     xmlns:cb="http://www.cbeta.org/ns/1.0"
+     xml:id="T01n0001">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title xml:lang="zh-Hant">測試經</title></titleStmt>
+      <publicationStmt><p/></publicationStmt>
+      <sourceDesc><p/></sourceDesc>
+    </fileDesc>
+    <encodingDesc>
+      <tagsDecl>
+        <namespace name="http://www.tei-c.org/ns/1.0">
+          <tagUsage gi="rdg">
+            <listWit>
+              <witness xml:id="wit.cbeta">【CB】</witness>
+              <witness xml:id="wit.orig">【底本】</witness>
+            </listWit>
+          </tagUsage>
+        </namespace>
+      </tagsDecl>
+    </encodingDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <cb:juan fun="open" n="1"/>
+      <p>甲<anchor xml:id="beg0001"/>乙<anchor xml:id="end0001"/>丙</p>
+    </body>
+    <back>
+      <cb:div type="apparatus">
+        <app from="#beg0001" to="#end0001">
+          <lem wit="#wit.cbeta">乙</lem>
+          <rdg wit="#wit.orig">二</rdg>
+        </app>
+      </cb:div>
+    </back>
+  </text>
+</TEI>
+""",
+        encoding="utf-8",
+    )
+
+    bundle = read_cbeta(
+        xml,
+        {
+            "kr_id": "KR9x0001",
+            "old_id": "T01n0001",
+            "title": "",
+        },
+    )
+
+    markers = bundle.juans[0].sections[0].markers
+    variant = next(marker for marker in markers if marker.type == "variant")
+    assert variant.offset == 1
+    assert variant.content == "乙"
+    assert variant.extras == {"length": 1, "底本": "二"}
+    assert bundle.metadata["editions"] == [
+        {"short": "底本", "label": "底本", "source_xml_id": "wit.orig"}
+    ]
+    assert bundle.witnesses == ["底本"]
 
 
 def test_cli_imports_old_id_to_mapped_kr_id(tmp_path: Path):

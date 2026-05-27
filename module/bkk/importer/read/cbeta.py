@@ -40,6 +40,14 @@ def _local(el) -> str:
     return etree.QName(el).localname
 
 
+def _strip_ref(raw: str) -> str:
+    return raw[1:] if raw.startswith("#") else raw
+
+
+def _reading_text(el) -> str:
+    return unicodedata.normalize("NFC", "".join(el.itertext()).strip())
+
+
 def _normalize_juan_n(raw: str) -> str:
     if not raw:
         return "001"
@@ -86,6 +94,7 @@ class _DirectReader:
         self.juans: list[Juan] = []
         self.mulu_indexes: dict[str, int] = {}
         self.seen_ids: dict[str, int] = {}
+        self.anchor_offsets: dict[str, tuple[str, int]] = {}
 
     def offset(self) -> int:
         return sum(len(p) for p in self.text_buf)
@@ -211,6 +220,35 @@ class _DirectReader:
                 extras=extras,
             ))
 
+    def record_anchor(self, el) -> None:
+        xml_id = _xmlid(el)
+        if xml_id.startswith(("beg", "end")):
+            self.anchor_offsets[xml_id] = (self.current_label, self.offset())
+
+    def attach_variant(
+        self,
+        *,
+        label: str,
+        offset: int,
+        length: int,
+        lemma: str,
+        readings: dict[str, str],
+    ) -> None:
+        for juan in self.juans:
+            if juan.seq == _juan_seq(label):
+                break
+        else:
+            return
+        if not juan.sections:
+            return
+        juan.sections[0].markers.append(Marker(
+            type="variant",
+            offset=offset,
+            content=lemma,
+            id="",
+            extras={"length": length, **readings},
+        ))
+
     def walk(self, el) -> None:
         for child in el.iterchildren():
             if not isinstance(child.tag, str):
@@ -225,6 +263,8 @@ class _DirectReader:
                 self.emit_mulu(child)
             elif tag == "juan" and ns == CB_NS:
                 self.emit_juan(child)
+            elif tag == "anchor" and ns == TEI_NS:
+                self.record_anchor(child)
             elif tag == "caesura":
                 self.markers.append(Marker(
                     type="punctuation", offset=self.offset(),
@@ -271,6 +311,81 @@ def _source_info_header(tree) -> dict:
     return out
 
 
+def _juan_seq(label: str) -> int:
+    try:
+        return int(label)
+    except ValueError:
+        return 0
+
+
+def _wit_label(witness_el) -> str:
+    raw = _reading_text(witness_el)
+    return raw.strip("【】[]()（）").strip() or _strip_ref(_xmlid(witness_el))
+
+
+def _witness_map(tree) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for wit in tree.findall(f".//{_q('witness')}"):
+        xml_id = _xmlid(wit)
+        if xml_id:
+            out[xml_id] = _wit_label(wit)
+    return out
+
+
+def _wit_keys(raw: str, wit_map: dict[str, str]) -> list[str]:
+    out: list[str] = []
+    for token in raw.split():
+        ref = _strip_ref(token)
+        out.append(wit_map.get(ref, ref))
+    return out
+
+
+def _attach_apparatus_variants(
+    tree,
+    reader: _DirectReader,
+    wit_map: dict[str, str],
+) -> list[dict]:
+    used_witnesses: dict[str, dict] = {}
+    for app in tree.findall(f".//{_q('back')}//{_q('app')}"):
+        from_id = _strip_ref(app.get("from", ""))
+        to_id = _strip_ref(app.get("to", ""))
+        if not from_id or not to_id:
+            continue
+        start = reader.anchor_offsets.get(from_id)
+        end = reader.anchor_offsets.get(to_id)
+        if start is None or end is None or start[0] != end[0]:
+            continue
+
+        lem = app.find(_q("lem"))
+        if lem is None:
+            continue
+        lemma = _reading_text(lem)
+        readings: dict[str, str] = {}
+        for rdg in app.findall(_q("rdg")):
+            reading = _reading_text(rdg)
+            for key in _wit_keys(rdg.get("wit", ""), wit_map):
+                if not key:
+                    continue
+                readings[key] = reading
+                used_witnesses.setdefault(key, {"short": key})
+
+        if not readings:
+            continue
+        reader.attach_variant(
+            label=start[0],
+            offset=start[1],
+            length=max(0, end[1] - start[1]),
+            lemma=lemma,
+            readings=readings,
+        )
+
+    for xml_id, label in wit_map.items():
+        if label in used_witnesses:
+            used_witnesses[label]["label"] = label
+            used_witnesses[label]["source_xml_id"] = xml_id
+    return list(used_witnesses.values())
+
+
 def _derive_edition(tree, old_id: str) -> str:
     pb = tree.find(f".//{_q('body')}//{_q('pb')}")
     if pb is not None and pb.get("ed"):
@@ -293,6 +408,8 @@ def read_cbeta(text_xml: Path, row: dict[str, str]) -> Bundle:
     reader = _DirectReader(kr_id, old_id, edition)
     reader.walk(body)
     reader.finish_juan()
+    wit_map = _witness_map(tree)
+    variant_editions = _attach_apparatus_variants(tree, reader, wit_map)
 
     identifiers = {
         "krp": kr_id,
@@ -310,6 +427,8 @@ def read_cbeta(text_xml: Path, row: dict[str, str]) -> Bundle:
         "identifiers": identifiers,
         "source": source,
     }
+    if variant_editions:
+        metadata["editions"] = variant_editions
 
     source_info = {
         "text_id": kr_id,
@@ -331,4 +450,5 @@ def read_cbeta(text_xml: Path, row: dict[str, str]) -> Bundle:
         edition_short=edition,
         source=source,
         source_info=source_info,
+        witnesses=[e["short"] for e in variant_editions],
     )
