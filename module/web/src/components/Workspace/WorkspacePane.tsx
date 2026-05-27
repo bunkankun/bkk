@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { getManifest } from "../../api/client";
 import { setResizing, useWorkspace, workspace } from "../../state/useWorkspace";
 import { CharInfoBar } from "../CharInfoBar";
 import { ImagePanel } from "./ImagePanel";
@@ -40,10 +42,36 @@ export function WorkspacePane() {
   const pane = useWorkspace((s) => s.pane);
   const readMode = useWorkspace((s) => s.readMode);
   const inspectWidth = useWorkspace((s) => s.panelWidths.inspect);
+  const [titles, setTitles] = useState<Record<string, string>>({});
   const activeTab =
     pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0] ?? null;
 
   const showInspect = readMode === "inspect" && activeTab != null;
+
+  useEffect(() => {
+    let cancelled = false;
+    const missing = [...new Set(pane.tabs.map((t) => t.textid))].filter(
+      (textid) => titles[textid] == null,
+    );
+    if (missing.length === 0) return;
+    Promise.all(
+      missing.map((textid) =>
+        getManifest(textid)
+          .then((m) => [textid, m.metadata?.title ?? textid] as const)
+          .catch(() => [textid, textid] as const),
+      ),
+    ).then((entries) => {
+      if (cancelled) return;
+      setTitles((prev) => {
+        const next = { ...prev };
+        for (const [textid, title] of entries) next[textid] = title;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pane.tabs, titles]);
 
   return (
     <div className="wp">
@@ -64,8 +92,9 @@ export function WorkspacePane() {
           <button
             key={t.id}
             className={`tab${t.id === activeTab?.id ? " on" : ""}`}
+            title={`${titles[t.textid] ?? t.textid} · ${t.textid} · 卷 ${t.seq}`}
           >
-            {t.textid} · juan {t.seq}
+            {titles[t.textid] ?? t.textid} · {t.textid} · 卷 {t.seq}
           </button>
         ))}
       </div>

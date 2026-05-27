@@ -8,7 +8,7 @@ import {
 } from "react";
 import { getAnnotations, getJuan, getManifest } from "../../api/client";
 import type { Annotation, Juan, JuanMarker, Manifest } from "../../api/types";
-import { decodeKrRefs } from "../../lib/pua";
+import { krRefToChar } from "../../lib/pua";
 import {
   isResizing,
   useWorkspace,
@@ -44,6 +44,9 @@ interface RenderedChar {
   // The original master_offset this char carries; null for chars injected
   // from a punctuation marker (they don't index into annotations).
   srcOffset: number | null;
+  // Half-open end offset in the original master text. This differs from
+  // srcOffset + 1 when a rendered PUA char comes from an `&KRnnn;` ref.
+  srcEndOffset: number | null;
   isPunct: boolean;
   isNewline: boolean;
   // Zero-width anchor injected at a page-break marker's offset; observed by
@@ -58,10 +61,49 @@ interface Block {
   endOffset: number;
   chars: RenderedChar[];
   estimatedHeight: number;
+  tagName: "div" | "p";
 }
 
 const FALLBACK_LINE_HEIGHT = 38;
 const FALLBACK_CHARS_PER_LINE = 24;
+const KR_REF_START_RE = /^&KR(\d+);/;
+
+interface SourceChar {
+  ch: string;
+  srcOffset: number;
+  srcEndOffset: number;
+}
+
+function decodeKrRefsWithOffsets(text: string): SourceChar[] {
+  const rawChars = [...text];
+  const out: SourceChar[] = [];
+  let i = 0;
+  while (i < rawChars.length) {
+    const rest = rawChars.slice(i, i + 16).join("");
+    const match = rest.match(KR_REF_START_RE);
+    if (match) {
+      out.push({
+        ch: krRefToChar(match[1]),
+        srcOffset: i,
+        srcEndOffset: i + [...match[0]].length,
+      });
+      i += [...match[0]].length;
+      continue;
+    }
+    out.push({ ch: rawChars[i], srcOffset: i, srcEndOffset: i + 1 });
+    i++;
+  }
+  return out;
+}
+
+function isParagraphBoundaryMarker(m: JuanMarker): boolean {
+  if (m.type === "paragraph-break") {
+    return m.role === "open" || m.role == null;
+  }
+  if (m.type !== "xml-element") return false;
+  const name = typeof m.name === "string" ? m.name : "";
+  return (name === "p" || name.endsWith(":p")) && m.role === "open";
+}
 
 function estimateBlockHeight(chars: RenderedChar[]): number {
   let visible = 0;
@@ -83,8 +125,9 @@ function buildRenderedChars(
   bodyText: string,
   markers: JuanMarker[],
 ): RenderedChar[] {
-  const decoded = decodeKrRefs(bodyText);
-  const chars = [...decoded];
+  const chars = decodeKrRefsWithOffsets(bodyText);
+  const bodyLength = [...bodyText].length;
+  const charAtOffset = new Map(chars.map((c) => [c.srcOffset, c.ch]));
 
   type PunctInject = { offset: number; content: string };
   type PageInject = { offset: number; id: string };
@@ -95,7 +138,7 @@ function buildRenderedChars(
     if (m.type === "punctuation") {
       const raw = m.content;
       if (typeof raw !== "string" || raw.length === 0) continue;
-      const here = chars[off];
+      const here = charAtOffset.get(off);
       if (here && PUNCT_RE.test(here)) continue;
       punctInjects.push({ offset: off, content: raw });
     } else if (m.type === "page-break") {
@@ -110,7 +153,8 @@ function buildRenderedChars(
   const out: RenderedChar[] = [];
   let punctIdx = 0;
   let pageIdx = 0;
-  for (let i = 0; i <= chars.length; i++) {
+  let charIdx = 0;
+  for (let i = 0; i <= bodyLength; i++) {
     // Page anchors first so they appear at the top of any cluster of
     // injections — natural reading order makes "current page" track the
     // newly-entered page before its punctuation/text.
@@ -119,6 +163,7 @@ function buildRenderedChars(
       out.push({
         ch: "",
         srcOffset: null,
+        srcEndOffset: null,
         isPunct: false,
         isNewline: false,
         pageAnchor: { id: p.id, offset: p.offset },
@@ -127,24 +172,34 @@ function buildRenderedChars(
     }
     while (punctIdx < punctInjects.length && punctInjects[punctIdx].offset === i) {
       for (const ch of [...punctInjects[punctIdx].content]) {
-        out.push({ ch, srcOffset: null, isPunct: true, isNewline: false });
+        out.push({
+          ch,
+          srcOffset: null,
+          srcEndOffset: null,
+          isPunct: true,
+          isNewline: false,
+        });
       }
       punctIdx++;
     }
-    if (i === chars.length) break;
-    const ch = chars[i];
-    out.push({
-      ch,
-      srcOffset: i,
-      isPunct: PUNCT_RE.test(ch),
-      isNewline: ch === "\n",
-    });
+    while (charIdx < chars.length && chars[charIdx].srcOffset === i) {
+      const c = chars[charIdx];
+      out.push({
+        ch: c.ch,
+        srcOffset: c.srcOffset,
+        srcEndOffset: c.srcEndOffset,
+        isPunct: PUNCT_RE.test(c.ch),
+        isNewline: c.ch === "\n",
+      });
+      charIdx++;
+    }
   }
   return out;
 }
 
 // Group rendered chars into blocks. Block boundary policy depends on lineMode:
-//   paragraph: split on `paragraph-break` markers; fall back to literal `\n`.
+//   paragraph: split on paragraph starts (`paragraph-break` or xml <p> open
+//              markers); fall back to literal `\n`.
 //   phrase:    split on `tls:seg` markers; fall back to phrase-ending punct.
 function buildBlocks(
   bucket: BucketName,
@@ -154,10 +209,11 @@ function buildBlocks(
   bodyLength: number,
 ): Block[] {
   // Marker-derived boundary set: master_offset values where a new block starts.
-  const markerType = lineMode === "phrase" ? "tls:seg" : "paragraph-break";
   const boundaryOffsets = new Set<number>();
   for (const m of markers) {
-    if (m.type !== markerType) continue;
+    const isBoundary =
+      lineMode === "phrase" ? m.type === "tls:seg" : isParagraphBoundaryMarker(m);
+    if (!isBoundary) continue;
     const off = typeof m.offset === "number" ? m.offset : 0;
     boundaryOffsets.add(off);
   }
@@ -177,6 +233,7 @@ function buildBlocks(
       endOffset: curEnd,
       chars: cur,
       estimatedHeight: estimateBlockHeight(cur),
+      tagName: lineMode === "paragraph" ? "p" : "div",
     });
     cur = [];
   };
@@ -197,7 +254,7 @@ function buildBlocks(
     }
     if (cur.length === 0) curStart = nextSrc ?? curEnd;
     cur.push(rc);
-    if (nextSrc != null) curEnd = nextSrc + 1;
+    if (rc.srcEndOffset != null) curEnd = rc.srcEndOffset;
 
     // Fall-back end-of-block triggers (after appending this char):
     if (!useMarkers) {
@@ -331,7 +388,7 @@ export function TextViewer({ textid, seq }: Props) {
           buildRenderedChars(view.text, view.markers),
           view.markers,
           lineMode,
-          [...decodeKrRefs(view.text)].length,
+          [...view.text].length,
         ),
       })),
     [bucketViews, lineMode],
@@ -443,8 +500,10 @@ export function TextViewer({ textid, seq }: Props) {
     return () => obs.disconnect();
   }, [blocks, visibleBlocks, textid, seq]);
 
-  // Consume pendingHighlight from a search-result click: ensure the block
-  // containing the target offset is mounted, then scroll + flash on next paint.
+  // Consume pendingHighlight from a search-result click: ensure the target
+  // block and everything before it are mounted, then scroll + flash on next
+  // paint. Punctuation/page markers can make rough placeholder heights drift
+  // from real text height; mounting the prefix keeps jump layout stable.
   useEffect(() => {
     if (
       pending == null ||
@@ -466,10 +525,15 @@ export function TextViewer({ textid, seq }: Props) {
       return;
     }
     setVisibleBlocks((prev) => {
-      if (prev.has(targetIdx)) return prev;
+      let changed = false;
       const next = new Set(prev);
-      next.add(targetIdx);
-      return next;
+      for (let i = 0; i <= targetIdx; i++) {
+        if (!next.has(i)) {
+          next.add(i);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
     });
   }, [pending, textid, seq, blocks]);
 
@@ -594,7 +658,7 @@ export function TextViewer({ textid, seq }: Props) {
     return <div className="empty-pane">Failed to load: {error}</div>;
   }
   if (!juan || !annotations) {
-    return <div className="empty-pane">Loading juan {seq}…</div>;
+    return <div className="empty-pane">Loading 卷 {seq}…</div>;
   }
 
   const title = manifest?.metadata?.title ?? textid;
@@ -611,7 +675,7 @@ export function TextViewer({ textid, seq }: Props) {
         <h1>{title}</h1>
         <h2>
           {textid}
-          {editionShort ? ` · ${editionShort}` : ""} · juan {seq}
+          {editionShort ? ` · ${editionShort}` : ""} · 卷 {seq}
         </h2>
       </div>
       <div className={`tv-body tv-body-${lineMode}`} ref={containerRef}>
@@ -670,9 +734,11 @@ function BlockView({
   seq,
   resolveAnchor,
 }: BlockViewProps) {
+  const Tag = block.tagName;
+
   if (!visible) {
     return (
-      <div
+      <Tag
         className="tv-block tv-block-placeholder"
         data-block-idx={blockIdx}
         style={{ minHeight: block.estimatedHeight }}
@@ -680,7 +746,7 @@ function BlockView({
     );
   }
   return (
-    <div
+    <Tag
       className="tv-block"
       data-block-idx={blockIdx}
       data-block-start={block.startOffset}
@@ -752,6 +818,6 @@ function BlockView({
           </span>
         );
       })}
-    </div>
+    </Tag>
   );
 }
