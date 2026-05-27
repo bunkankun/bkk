@@ -192,7 +192,10 @@ def _load_edition_labels(repo: Path, branch: str | None) -> dict[str, str]:
 def _load_imginfo(repo: Path, branch: str | None) -> dict[str, str]:
     """Parse ``imglist/imginfo.cfg`` from the imglist branch.
 
-    Returns ``{edition_short: base_url}`` from the ``[Versions]`` section.
+    Returns ``{edition_short: base_url}`` from the ``[Remote]`` section.
+    Some KRP repos carry metadata such as ``BASEEDITION=HFL`` in
+    ``[Versions]``; that is not an image base URL and should not leak into
+    ``metadata.image_base_urls``.
     """
     if branch is None:
         return {}
@@ -201,10 +204,14 @@ def _load_imginfo(repo: Path, branch: str | None) -> dict[str, str]:
     except subprocess.CalledProcessError:
         return {}
     cp = configparser.ConfigParser()
+    cp.optionxform = str
     cp.read_file(io.StringIO(text))
-    if not cp.has_section("Versions"):
+    if not cp.has_section("Remote"):
         return {}
-    return {k: v for k, v in cp.items("Versions")}
+    return {
+        k: v for k, v in cp.items("Remote")
+        if k.upper() != "BASEEDITION"
+    }
 
 
 # ---------- juan-text parsing ----------------------------------------------
@@ -214,6 +221,7 @@ _PB_RE = re.compile(r"^<pb:([^>]+)>$")
 _MD_RE = re.compile(r"^<md:[^>]+>$")
 _PROP_RE = re.compile(r"^#\+PROPERTY:\s+(\S+)\s*(.*)$")
 _HEADER_RE = re.compile(r"^(#\s|#\+)")
+_HEAD_LINE_RE = re.compile(r"^(\*+) (.+?)\s*$")
 _PUA_ENTITY_RE = re.compile(r"&KR(\d+);")
 
 
@@ -251,10 +259,13 @@ def _parse_juan_text(text: str, juan_seq: int,
     directives within the same file emit ``kr:org-directive`` markers in the
     *previous* section before closing it.
 
-    Mid-file ``# ...`` comment lines and ``** ...`` heading lines are not part
-    of the canonical text. They are extracted as ``comment`` and ``head``
-    markers (the latter carrying ``extras["level"]`` = number of leading stars)
-    so the body text stays free of org-mode metadata.
+    Mid-file ``# ...`` comment lines and column-zero ``** ...`` heading lines
+    are not part of the canonical text. They are extracted as ``comment`` and
+    ``head`` markers (the latter carrying ``extras["level"]`` = number of
+    leading stars) so the body text stays free of org-mode metadata. Indented
+    ``*`` lines are org list items, not headings, and stay on the content path.
+    Ordinary physical newlines are retained as layout markers: one newline
+    becomes ``kr:newline``; runs of two or more become ``paragraph-break``.
     """
     sections: list[Section] = []
 
@@ -266,7 +277,8 @@ def _parse_juan_text(text: str, juan_seq: int,
     juan_title = ""
     current_page_id = ""
     line_counter = 0
-    content_buf: list[str] = []
+    head_counter = 0
+    pending_newlines = 0
 
     def offset() -> int:
         return sum(len(p) for p in text_buf)
@@ -376,12 +388,9 @@ def _parse_juan_text(text: str, juan_seq: int,
         ))
         _emit_line_chars(chunk, text_buf, markers, offset)
 
-    def flush_content() -> None:
-        """Process buffered content lines through ¶-chunk dispatch."""
-        if not content_buf:
-            return
-        rest = "".join(content_buf)
-        content_buf.clear()
+    def process_content_line(line: str) -> None:
+        """Process one physical content line through ¶-chunk dispatch."""
+        rest = line
         # Some kanripo branches (e.g. WYG of KR3a0001) embed ``<pb:...>`` and
         # ``<md:...>`` markers inline mid-chunk instead of as standalone
         # lines. Normalise by wrapping every such marker in ``¶`` so the
@@ -389,6 +398,21 @@ def _parse_juan_text(text: str, juan_seq: int,
         rest = re.sub(r"(<(?:pb|md):[^>]+>)", r"¶\1¶", rest)
         for chunk in rest.split("¶"):
             process_chunk(chunk)
+
+    def emit_pending_newlines() -> None:
+        nonlocal pending_newlines
+        if pending_newlines == 1:
+            markers.append(Marker(
+                type="kr:newline", offset=offset(), content="\n", id="",
+            ))
+        elif pending_newlines >= 2:
+            markers.append(Marker(
+                type="paragraph-break",
+                offset=offset(),
+                content="\n" * pending_newlines,
+                id="",
+            ))
+        pending_newlines = 0
 
     # Consume the org-mode header (before the first <pb:...> or content).
     raw_lines = text.split("\n")
@@ -408,31 +432,46 @@ def _parse_juan_text(text: str, juan_seq: int,
             continue
         break
 
-    # Walk the rest line by line. ``# ...`` comments and ``* ...`` headings
-    # become typed markers; everything else is buffered and flushed through
+    # Walk the rest line by line. ``# ...`` comments and column-zero
+    # ``* ...`` headings become typed markers; everything else flows through
     # the ¶-chunk pipeline (which handles content, page-breaks, md drops, and
-    # mid-file JUAN directives).
-    for line in raw_lines[i:]:
+    # mid-file JUAN directives). Physical ``\n`` delimiters between these
+    # lines are emitted as layout markers before the next non-empty line.
+    body_lines = raw_lines[i:]
+    for idx, line in enumerate(body_lines):
+        has_newline = idx < len(body_lines) - 1
         if not line:
+            if has_newline:
+                pending_newlines += 1
             continue
+        emit_pending_newlines()
         if line.startswith("#") and not line.startswith("#+"):
-            flush_content()
             markers.append(Marker(
                 type="comment", offset=offset(), content=line, id="",
             ))
+            if has_newline:
+                pending_newlines += 1
             continue
-        if line.startswith("*"):
-            n_stars = len(line) - len(line.lstrip("*"))
-            head_content = line[n_stars:].lstrip()
-            flush_content()
+        head_match = _HEAD_LINE_RE.match(line)
+        if head_match:
+            head_counter += 1
+            n_stars = len(head_match.group(1))
+            head_content = head_match.group(2).strip().rstrip("¶").strip()
             head_marker = Marker(
-                type="head", offset=offset(), content=head_content, id="",
+                type="head",
+                offset=offset(),
+                content=head_content,
+                id=f"{text_id}_{edition_short}_{juan_seq:03d}-h{head_counter}",
             )
             head_marker.extras["level"] = n_stars
             markers.append(head_marker)
+            if has_newline:
+                pending_newlines += 1
             continue
-        content_buf.append(line)
-    flush_content()
+        process_content_line(line)
+        if has_newline:
+            pending_newlines += 1
+    emit_pending_newlines()
 
     if text_buf or markers or head_text:
         # Close any final section. If no JUAN directive ever populated

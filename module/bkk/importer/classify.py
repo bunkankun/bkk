@@ -60,12 +60,17 @@ def split_front_by_opening_indent(sections: list[Section]) -> list[Section]:
         return list(sections)
 
     head = sections[0]
-    split_off = _find_first_indented_line(head.markers)
+    split_marker_index: int | None = None
+    body_heading = _find_first_body_heading(head.markers)
+    if body_heading is None:
+        split_off = _find_first_indented_line(head.markers)
+    else:
+        split_off, split_marker_index = body_heading
     out: list[Section] = []
     if split_off is None:
         out.append(_with_bucket(head, "body"))
     else:
-        front, body = _split_section_at(head, split_off)
+        front, body = _split_section_at(head, split_off, split_marker_index)
         front.bucket = "front"
         body.bucket = "body"
         if front.text or front.markers:
@@ -110,8 +115,26 @@ def _find_first_indented_line(markers: list[Marker]) -> int | None:
     return None
 
 
+def _find_first_body_heading(markers: list[Marker]) -> tuple[int, int] | None:
+    """Return the offset of the first Mandoku body heading.
+
+    KRP master files often carry an opening source-side outline using
+    single-star lines, followed by real body headings as ``** ...`` lines.
+    Prefer that explicit boundary over the looser indentation heuristic.
+    """
+    for i, m in enumerate(markers):
+        if m.type != "head":
+            continue
+        level = m.extras.get("level")
+        if isinstance(level, int) and level >= 2:
+            return m.offset, i
+    return None
+
+
 def _split_section_at(section: Section,
-                      split_offset: int) -> tuple[Section, Section]:
+                      split_offset: int,
+                      split_marker_index: int | None = None,
+                      ) -> tuple[Section, Section]:
     """Split a section's text and markers at ``split_offset``.
 
     Markers at exactly ``split_offset`` go to the body section so the
@@ -122,8 +145,15 @@ def _split_section_at(section: Section,
 
     front_markers: list[Marker] = []
     body_markers: list[Marker] = []
-    for m in section.markers:
-        if m.offset < split_offset:
+    for i, m in enumerate(section.markers):
+        if (
+            m.offset < split_offset
+            or (
+                split_marker_index is not None
+                and m.offset == split_offset
+                and i < split_marker_index
+            )
+        ):
             front_markers.append(m)
         else:
             body_markers.append(Marker(

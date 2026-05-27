@@ -620,6 +620,7 @@ def _build_krp_juan_dict(
 def _build_krp_toc_entry(
     juan_seq: int, head_text: str, head_marker_id: str,
     bucket: str, start: int, end: int,
+    level: int = 1,
 ) -> dict:
     return {
         "ref": marker_to_flow({
@@ -628,6 +629,8 @@ def _build_krp_toc_entry(
             "span": [bucket, start, end],
         }),
         "label": head_text,
+        "type": "section",
+        "level": level,
     }
 
 
@@ -658,11 +661,10 @@ def _write_krp_juans(
             "front": front_secs, "body": body_secs, "back": back_secs,
         }
 
-        # TOC: one entry per titled section, span = [bucket, start, end] in
-        # the bucket's text stream (end exclusive — next section start, or
-        # len(text) for the last section in a bucket). Front-bucket entries
-        # are skipped: the front matter (頭注 / opening indent) repeats the
-        # body's title and adds no navigation value.
+        # TOC: prefer Mandoku ``head`` markers (``** ...`` etc.) where KRP
+        # source supplies them. Otherwise fall back to one entry per titled
+        # section. Front-bucket entries are skipped: the front matter
+        # (頭注 / opening outline) adds no navigation value.
         juan_toc: list[dict] = []
         for bucket_name, secs in sections_per_bucket.items():
             if bucket_name == "front":
@@ -672,6 +674,25 @@ def _write_krp_juans(
                 start = cursor
                 end = cursor + len(sec.text)
                 cursor = end
+                head_markers = [
+                    m for m in sec.markers
+                    if m.type == "head" and m.content and m.id
+                ]
+                if head_markers:
+                    for idx, marker in enumerate(head_markers):
+                        next_offset = (
+                            head_markers[idx + 1].offset
+                            if idx + 1 < len(head_markers) else len(sec.text)
+                        )
+                        level = marker.extras.get("level", 1)
+                        if not isinstance(level, int) or level < 1:
+                            level = 1
+                        juan_toc.append(_build_krp_toc_entry(
+                            juan.seq, marker.content, marker.id,
+                            bucket_name, start + marker.offset,
+                            start + next_offset, level,
+                        ))
+                    continue
                 if not sec.head_text:
                     continue
                 juan_toc.append(_build_krp_toc_entry(

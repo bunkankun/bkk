@@ -17,8 +17,13 @@ import yaml
 
 from bkk.importer.diverge import diff_trees, render_report
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
+from bkk.importer.classify import split_front_by_opening_indent
+from bkk.importer.ir import Bundle
 from bkk.importer.pua import PUA_BASE, PUA_END, codepoint_to_kr
-from bkk.importer.read.krp import _load_imglist, _parse_juan_text, read_krp
+import bkk.importer.read.krp as krp_read
+from bkk.importer.read.krp import (
+    _load_imginfo, _load_imglist, _parse_juan_text, read_krp,
+)
 from bkk.importer.recipe import load_recipe
 from bkk.importer.write.bundle import write_krp_edition, write_krp_master
 from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
@@ -231,6 +236,27 @@ def test_md_markers_are_dropped():
     assert pb_ids == ["KRT0001_TEST_001-1a"]
 
 
+def test_imginfo_uses_remote_urls_not_versions_metadata(monkeypatch):
+    """[Versions] may carry BASEEDITION metadata; image URLs live in [Remote]."""
+    def fake_git_show(repo: Path, branch: str, path: str) -> str:
+        assert branch == "_data"
+        assert path == "imglist/imginfo.cfg"
+        return (
+            "[Versions]\n"
+            "BASEEDITION=HFL\n"
+            "[Remote]\n"
+            "T=http://img.kanripo.org/\n"
+            "CBETA=http://example.test/cbeta/\n"
+        )
+
+    monkeypatch.setattr(krp_read, "_git_show", fake_git_show)
+
+    assert _load_imginfo(Path("/fake/repo"), "_data") == {
+        "T": "http://img.kanripo.org/",
+        "CBETA": "http://example.test/cbeta/",
+    }
+
+
 _HEAD_COMMENT_JUAN = (
     "# -*- coding: utf-8 -*-\n"
     "#+TITLE: 試験\n"
@@ -262,6 +288,7 @@ def test_heading_and_comment_lines_become_markers():
     assert len(heads) == 1
     assert heads[0].extras["level"] == 2
     assert heads[0].content == "1 第一章"
+    assert heads[0].id == "KRT0001_TEST_001-h1"
     assert heads[0].offset == 0
     # comment markers preserve the full source line including leading `#`.
     comments = [m for m in sec.markers if m.type == "comment"]
@@ -272,6 +299,14 @@ def test_heading_and_comment_lines_become_markers():
     # Both comments sit at the offset between the two content runs.
     boundary = len("天下皆知美")
     assert all(c.offset == boundary for c in comments)
+    paragraph_breaks = [m for m in sec.markers if m.type == "paragraph-break"]
+    assert [(m.offset, m.content) for m in paragraph_breaks] == [
+        (0, "\n\n"),
+        (boundary, "\n\n"),
+    ]
+    source_newlines = [m for m in sec.markers if m.type == "kr:newline"]
+    assert source_newlines
+    assert all(m.content == "\n" for m in source_newlines)
     # Marker offsets stay monotonic and within text bounds.
     text_len = len(sec.text)
     last = -1
@@ -279,6 +314,74 @@ def test_heading_and_comment_lines_become_markers():
         assert 0 <= m.offset <= text_len
         assert m.offset >= last
         last = m.offset
+
+
+_STAR_OUTLINE_JUAN = (
+    "# -*- coding: utf-8 -*-\n"
+    "#+TITLE: 試験\n"
+    "#+PROPERTY: ID KRT0001\n"
+    "#+PROPERTY: JUAN 3\n"
+    "試験卷下¶\n"
+    "述者名¶\n"
+    "  * 說聽\n"
+    "  * 躁靜\n"
+    "** 說聽¶\n"
+    "說法第一段¶\n"
+    "** 躁靜¶\n"
+    "躁靜第二段¶\n"
+)
+
+
+def test_krp_front_split_prefers_level_two_heading():
+    """KRP front matter stops at the first real Mandoku body heading."""
+    juan = _parse_juan_text(_STAR_OUTLINE_JUAN, juan_seq=3, text_id="KRT0001",
+                            imglist={}, edition_short="TEST")
+    juan.sections = split_front_by_opening_indent(juan.sections)
+
+    front, body = juan.sections
+    assert front.bucket == "front"
+    assert body.bucket == "body"
+    assert front.text == "試験卷下述者名說聽躁靜"
+    assert [
+        (m.type, m.offset, m.content)
+        for m in front.markers
+        if m.type == "kr:newline"
+    ] == [
+        ("kr:newline", 4, "\n"),
+        ("kr:newline", 7, "\n"),
+        ("kr:newline", 9, "\n"),
+        ("kr:newline", 11, "\n"),
+    ]
+    assert body.text == "說法第一段躁靜第二段"
+    assert [m.content for m in body.markers if m.type == "head"] == [
+        "說聽", "躁靜",
+    ]
+
+
+def test_krp_toc_uses_mandoku_heading_markers(tmp_path: Path):
+    juan = _parse_juan_text(_STAR_OUTLINE_JUAN, juan_seq=3, text_id="KRT0001",
+                            imglist={}, edition_short="TEST")
+    juan.sections = split_front_by_opening_indent(juan.sections)
+    bundle = Bundle(
+        text_id="KRT0001",
+        juans=[juan],
+        metadata={"title": "試験"},
+        edition_short="krp",
+    )
+
+    write_krp_master(bundle, tmp_path)
+    manifest = _load(tmp_path / "KRT0001" / "KRT0001.manifest.yaml")
+    toc = manifest["table_of_contents"]
+
+    assert [entry["label"] for entry in toc] == ["說聽", "躁靜"]
+    assert [entry["ref"]["marker_id"] for entry in toc] == [
+        "KRT0001_TEST_003-h1",
+        "KRT0001_TEST_003-h2",
+    ]
+    assert [entry["ref"]["span"] for entry in toc] == [
+        ["body", 0, 5],
+        ["body", 5, 10],
+    ]
 
 
 _NON_CJK_JUAN = (

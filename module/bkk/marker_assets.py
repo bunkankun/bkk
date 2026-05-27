@@ -20,6 +20,7 @@ from bkk.importer.write.yaml_writer import marker_to_flow
 VALID_BUCKETS = ("front", "body", "back")
 
 STRUCTURAL_MARKER_TYPES = {
+    "head",
     "tls:head",
     "tls:div-start",
     "tls:div-end",
