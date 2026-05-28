@@ -19,6 +19,7 @@ import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
 
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
 const PHRASE_END_RE = /[。！？；]/;
+const PHRASE_LINE_OPENER_RE = /^[「『《〈（(〔【]$/;
 const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
 const BUCKETS = ["front", "body", "back"] as const;
 
@@ -114,6 +115,23 @@ function estimateBlockHeight(chars: RenderedChar[]): number {
   if (visible === 0) return 0;
   const lines = Math.max(1, Math.ceil(visible / FALLBACK_CHARS_PER_LINE));
   return lines * FALLBACK_LINE_HEIGHT;
+}
+
+function firstOffset(chars: RenderedChar[], fallback: number): number {
+  for (const c of chars) {
+    if (c.srcOffset != null) return c.srcOffset;
+    if (c.pageAnchor) return c.pageAnchor.offset;
+  }
+  return fallback;
+}
+
+function lastEndOffset(chars: RenderedChar[], fallback: number): number {
+  for (let i = chars.length - 1; i >= 0; i--) {
+    const c = chars[i];
+    if (c.srcEndOffset != null) return c.srcEndOffset;
+    if (c.pageAnchor) return c.pageAnchor.offset;
+  }
+  return fallback;
 }
 
 // Build the rendered char stream: decode PUA refs, then inject punctuation
@@ -222,20 +240,38 @@ function buildBlocks(
 
   const blocks: Block[] = [];
   let cur: RenderedChar[] = [];
-  let curStart = 0;
-  let curEnd = 0;
+  let lastEnd = 0;
 
   const flush = () => {
     if (cur.length === 0) return;
+    let charsForBlock = cur;
+    let carry: RenderedChar[] = [];
+    if (lineMode === "phrase") {
+      let carryStart = cur.length;
+      while (
+        carryStart > 0 &&
+        !cur[carryStart - 1].pageAnchor &&
+        PHRASE_LINE_OPENER_RE.test(cur[carryStart - 1].ch)
+      ) {
+        carryStart--;
+      }
+      if (carryStart > 0 && carryStart < cur.length) {
+        charsForBlock = cur.slice(0, carryStart);
+        carry = cur.slice(carryStart);
+      }
+    }
+    const startOffset = firstOffset(charsForBlock, lastEnd);
+    const endOffset = lastEndOffset(charsForBlock, startOffset);
     blocks.push({
       bucket,
-      startOffset: curStart,
-      endOffset: curEnd,
-      chars: cur,
-      estimatedHeight: estimateBlockHeight(cur),
+      startOffset,
+      endOffset,
+      chars: charsForBlock,
+      estimatedHeight: estimateBlockHeight(charsForBlock),
       tagName: lineMode === "paragraph" ? "p" : "div",
     });
-    cur = [];
+    lastEnd = endOffset;
+    cur = carry;
   };
 
   for (const rc of chars) {
@@ -252,9 +288,8 @@ function buildBlocks(
         // handled below after appending the char.
       }
     }
-    if (cur.length === 0) curStart = nextSrc ?? curEnd;
     cur.push(rc);
-    if (rc.srcEndOffset != null) curEnd = rc.srcEndOffset;
+    if (rc.srcEndOffset != null) lastEnd = rc.srcEndOffset;
 
     // Fall-back end-of-block triggers (after appending this char):
     if (!useMarkers) {
@@ -266,8 +301,11 @@ function buildBlocks(
     }
   }
   if (cur.length > 0) {
-    if (curEnd === curStart) curEnd = bodyLength;
     flush();
+  }
+  if (blocks.length > 0) {
+    const last = blocks[blocks.length - 1];
+    if (last.endOffset === last.startOffset) last.endOffset = bodyLength;
   }
   return blocks;
 }
@@ -617,6 +655,7 @@ export function TextViewer({ textid, seq }: Props) {
     const spans = containerRef.current.querySelectorAll<HTMLElement>("span[data-offset]");
     let bucket: BucketName | null = null;
     const offsets: number[] = [];
+    const endOffsets: number[] = [];
     const selChars: string[] = [];
     spans.forEach((sp) => {
       if (!range.intersectsNode(sp)) return;
@@ -631,6 +670,8 @@ export function TextViewer({ textid, seq }: Props) {
       if (PUNCT_RE.test(ch)) return;
       if (!isCjk(ch) && !isPua(cp)) return;
       offsets.push(off);
+      const endOff = Number(sp.dataset.endOffset);
+      endOffsets.push(Number.isNaN(endOff) ? off + 1 : endOff);
       selChars.push(ch);
     });
     if (offsets.length === 0) {
@@ -639,7 +680,7 @@ export function TextViewer({ textid, seq }: Props) {
     }
     if (bucket == null) return;
     const start = Math.min(...offsets);
-    const end = Math.max(...offsets) + 1;
+    const end = Math.max(...endOffsets);
     const anchor = resolveAnchor(bucket, start);
     workspace.setSelection({
       textid,
@@ -791,6 +832,7 @@ function BlockView({
             className={cls}
             data-bucket={block.bucket}
             data-offset={off}
+            data-end-offset={rc.srcEndOffset ?? off + 1}
             title={title}
             onMouseEnter={() => workspace.setHover(rc.ch)}
             onClick={(ev) => {

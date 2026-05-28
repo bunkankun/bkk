@@ -29,6 +29,7 @@ export function AnnotationsTab() {
   const sel = useWorkspace((s) => s.selection);
   const [anns, setAnns] = useState<Annotation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [includePin, setIncludePin] = useState(false);
 
   useEffect(() => {
     if (textid == null || seq == null) {
@@ -64,11 +65,30 @@ export function AnnotationsTab() {
     visible = [];
   }
 
-  const refString = sel
-    ? `${sel.textid}:${sel.bucket}:${sel.anchorMarkerId ?? `@${sel.start}`}${
-        sel.anchorOffset > 0 ? `+${sel.anchorOffset}` : ""
-      }`
+  const selectionLines = sel
+    ? [
+        "selection:",
+        `  juan: ${sel.seq}`,
+        `  bucket: ${sel.bucket}`,
+        `  offset: ${sel.start}`,
+        `  length: ${Math.max(0, sel.end - sel.start)}`,
+      ]
     : null;
+
+  const refString =
+    sel && selectionLines
+      ? includePin
+        ? [
+            "- role: base",
+            `  textid: ${sel.textid}`,
+            "  selection:",
+            `    juan: ${sel.seq}`,
+            `    bucket: ${sel.bucket}`,
+            `    offset: ${sel.start}`,
+            `    length: ${Math.max(0, sel.end - sel.start)}`,
+          ].join("\n")
+        : selectionLines.join("\n")
+      : null;
 
   const onCopyRef = async () => {
     if (!refString) return;
@@ -105,9 +125,6 @@ export function AnnotationsTab() {
             </button>
           </div>
           <div className="sel-actions">
-            <button className="sel-action" onClick={onSearchSelection}>
-              Search this
-            </button>
             <button
               className="sel-action"
               onClick={onCopyRef}
@@ -115,7 +132,18 @@ export function AnnotationsTab() {
             >
               Copy ref
             </button>
+            <button className="sel-action" onClick={onSearchSelection}>
+              Search this
+            </button>
           </div>
+          <label className="sel-pin-toggle">
+            <input
+              type="checkbox"
+              checked={includePin}
+              onChange={(ev) => setIncludePin(ev.currentTarget.checked)}
+            />
+            Include pin
+          </label>
         </>
       )}
       {visible.length === 0 ? (

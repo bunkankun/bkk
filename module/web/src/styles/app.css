@@ -1550,7 +1550,7 @@ button {
 .sel-actions {
   display: flex;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 .sel-action {
   flex: 1;
@@ -1569,4 +1569,20 @@ button {
   background: var(--hov);
   color: var(--t1);
   border-color: var(--amb);
+}
+.sel-pin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--t3);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.sel-pin-toggle input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--amb);
 }
