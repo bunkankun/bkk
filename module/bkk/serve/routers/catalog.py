@@ -20,6 +20,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from bkk.serve import _examples as ex, errors
+from bkk.index.catalog import MISSING_INDEX_DATE, normalize_search_text
 from bkk.serve.catalog import FILTERS, CatalogService, _kr_categories
 from bkk.serve.state import AppState
 from bkk.serve.schemas import (
@@ -41,6 +42,18 @@ class CategoryNode(BaseModel):
 
 class CategoriesResponse(BaseModel):
     categories: list[CategoryNode]
+
+
+class TimelineBucket(BaseModel):
+    key: str
+    label: str
+    start: int
+    end: int
+    bundle_count: int
+
+
+class TimelineResponse(BaseModel):
+    buckets: list[TimelineBucket]
 
 
 @functools.lru_cache(maxsize=1)
@@ -149,11 +162,19 @@ def _parent_category_code(code: str, codes: set[str]) -> str | None:
 
 def _parse_query(
     params: list[tuple[str, str]],
-) -> tuple[dict[str, list[str]], int, int]:
+) -> tuple[dict[str, list[str]], str | None, str | None, int, int]:
     filters: dict[str, list[str]] = {}
+    q: str | None = None
+    century: str | None = None
     limit = 50
     offset = 0
     for key, raw in params:
+        if key == "q":
+            q = raw.strip() or None
+            continue
+        if key == "century":
+            century = raw.strip() or None
+            continue
         if key == "limit":
             try:
                 limit = max(1, min(int(raw), 500))
@@ -167,7 +188,7 @@ def _parse_query(
                 raise errors.bad_request("bad_offset", value=raw)
             continue
         filters.setdefault(key, []).append(raw)
-    return filters, limit, offset
+    return filters, q, century, limit, offset
 
 
 @router.get(
@@ -184,7 +205,9 @@ def browse(request: Request) -> CatalogResponse:
     state = request.app.state.bkk
     service = CatalogService(state.cache)
 
-    filters, limit, offset = _parse_query(list(request.query_params.multi_items()))
+    filters, q, century, limit, offset = _parse_query(
+        list(request.query_params.multi_items())
+    )
     bad = service.validate_keys(list(filters.keys()))
     if bad:
         raise errors.bad_request(
@@ -193,16 +216,50 @@ def browse(request: Request) -> CatalogResponse:
             allowed=service.whitelist(),
         )
 
-    indexed = _browse_catalog_index(state, filters, limit=limit, offset=offset)
+    indexed = _browse_catalog_index(
+        state, filters, q=q, century=century, limit=limit, offset=offset
+    )
     if indexed is not None:
         return indexed
+    if q or century:
+        raise errors.index_unavailable(
+            "catalog index is required for catalog search and timeline browsing; "
+            "rebuild _catalog.bkkc with `bkk index catalog`"
+        )
 
-    page = service.query(filters, limit=limit, offset=offset)
+    if q or century:
+        snap = state.cache.get()
+        records = snap.records
+        for key, wanted_raw in filters.items():
+            wanted = {w.strip() for w in wanted_raw if w and w.strip()}
+            if wanted:
+                records = [
+                    rec for rec in records
+                    if FILTERS[key](rec) & wanted
+                ]
+        records.sort(key=lambda r: r.textid)
+    else:
+        page = service.query(filters, limit=limit, offset=offset)
+        records = [m.record for m in page.matches]
+    if q:
+        records = _filter_snapshot_query(records, q)
+    if century:
+        start, end = _century_range_from_key(century)
+        records = [
+            rec for rec in records
+            if _snapshot_index_date(rec) is not None
+            and start <= _snapshot_index_date(rec) <= end
+        ]
+    total = len(records) if q or century else page.total
+    if q or century:
+        records = records[offset:offset + limit]
+        next_offset = offset + limit if offset + limit < total else None
+    else:
+        next_offset = page.next_offset
 
     matches: list[CatalogMatchOut] = []
     pins: list[RecipePin] = []
-    for m in page.matches:
-        rec = m.record
+    for rec in records:
         echo: dict[str, Any] = {}
         for key, values in filters.items():
             if not values:
@@ -235,14 +292,43 @@ def browse(request: Request) -> CatalogResponse:
         )
 
     return CatalogResponse(
-        total=page.total,
+        total=total,
         offset=offset,
         limit=limit,
-        next_offset=page.next_offset,
-        filters_applied=filters,
+        next_offset=next_offset,
+        filters_applied=_filters_applied(filters, q=q, century=century),
         matches=matches,
         recipe={"pins": [p.model_dump(exclude_none=True) for p in pins]},
     )
+
+
+@router.get(
+    "/timeline",
+    response_model=TimelineResponse,
+    summary="Calendar-century catalog buckets",
+)
+def timeline(request: Request) -> TimelineResponse:
+    state = request.app.state.bkk
+    conn = state.open_catalog()
+    if conn is None:
+        raise errors.index_unavailable(
+            "catalog index is required for timeline browsing; "
+            "rebuild _catalog.bkkc with `bkk index catalog`"
+        )
+    try:
+        rows = conn.execute(
+            "SELECT index_date, COUNT(*) FROM catalog_bundle "
+            "WHERE index_date != ? GROUP BY index_date",
+            (MISSING_INDEX_DATE,),
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        raise errors.index_unavailable(
+            "catalog index is unreadable; rebuild _catalog.bkkc with "
+            "`bkk index catalog`"
+        )
+    finally:
+        conn.close()
+    return _timeline_from_year_counts(rows)
 
 
 def _category_counts(state: AppState) -> tuple[Counter[str], bool]:
@@ -270,6 +356,8 @@ def _browse_catalog_index(
     state: AppState,
     filters: dict[str, list[str]],
     *,
+    q: str | None = None,
+    century: str | None = None,
     limit: int,
     offset: int,
 ) -> CatalogResponse | None:
@@ -286,21 +374,67 @@ def _browse_catalog_index(
         return None
     conn.row_factory = sqlite3.Row
     try:
-        params: list[Any] = []
-        where = ""
+        if (q or century) and not _catalog_index_has_bundle_search(conn, q=bool(q)):
+            return None
+        where_params: list[Any] = []
+        rank_params: list[Any] = []
+        where_clauses: list[str] = []
         if wanted:
             placeholders = ",".join("?" for _ in wanted)
-            where = f"WHERE section_code IN ({placeholders})"
-            params.extend(sorted(wanted))
+            where_clauses.append(f"section_code IN ({placeholders})")
+            where_params.extend(sorted(wanted))
+        if century:
+            start, end = _century_range_from_key(century)
+            where_clauses.append("index_date BETWEEN ? AND ?")
+            where_params.extend([start, end])
+        rank_sql = "index_date"
+        if q:
+            query, query_norm = _catalog_query_terms(q)
+            like = f"%{query}%"
+            like_norm = f"%{query_norm}%"
+            where_clauses.append(
+                "("
+                "lower(COALESCE(title, '')) LIKE ? OR "
+                "COALESCE(title_pinyin_search, '') LIKE ? OR "
+                "lower(COALESCE(title_english, '')) LIKE ? OR "
+                "EXISTS ("
+                "  SELECT 1 FROM catalog_identifier ci "
+                "  WHERE ci.textid = catalog_bundle.textid "
+                "  AND ci.value_search LIKE ?"
+                ")"
+                ")"
+            )
+            where_params.extend([like, like_norm, like, like_norm])
+            rank_sql = (
+                "CASE "
+                "WHEN EXISTS ("
+                "  SELECT 1 FROM catalog_identifier ci "
+                "  WHERE ci.textid = catalog_bundle.textid "
+                "  AND ci.value_search = ?"
+                ") THEN 0 "
+                "WHEN EXISTS ("
+                "  SELECT 1 FROM catalog_identifier ci "
+                "  WHERE ci.textid = catalog_bundle.textid "
+                "  AND ci.value_search LIKE ?"
+                ") THEN 1 "
+                "WHEN EXISTS ("
+                "  SELECT 1 FROM catalog_identifier ci "
+                "  WHERE ci.textid = catalog_bundle.textid "
+                "  AND ci.value_search LIKE ?"
+                ") THEN 2 "
+                "ELSE 3 END"
+            )
+            rank_params.extend([query_norm, f"{query_norm}%", like_norm])
+        where = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
         total = conn.execute(
-            f"SELECT COUNT(*) FROM catalog_bundle {where}", params
+            f"SELECT COUNT(*) FROM catalog_bundle {where}", where_params
         ).fetchone()[0]
         rows = conn.execute(
             "SELECT * FROM catalog_bundle "
             f"{where} "
-            "ORDER BY index_date, textid LIMIT ? OFFSET ?",
-            [*params, limit, offset],
+            f"ORDER BY {rank_sql}, index_date, textid LIMIT ? OFFSET ?",
+            [*where_params, *rank_params, limit, offset],
         ).fetchall()
     except sqlite3.DatabaseError:
         return None
@@ -351,7 +485,156 @@ def _browse_catalog_index(
         offset=offset,
         limit=limit,
         next_offset=next_off,
-        filters_applied=filters,
+        filters_applied=_filters_applied(filters, q=q, century=century),
         matches=matches,
         recipe={"pins": [p.model_dump(exclude_none=True) for p in pins]},
     )
+
+
+def _catalog_query_terms(q: str) -> tuple[str, str]:
+    query = q.strip().lower()
+    query_norm = normalize_search_text(query) or query
+    return query, query_norm
+
+
+def _catalog_index_has_bundle_search(
+    conn: sqlite3.Connection, *, q: bool
+) -> bool:
+    bundle_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(catalog_bundle)").fetchall()
+    }
+    if "index_date" not in bundle_cols:
+        return False
+    if q and "title_pinyin_search" not in bundle_cols:
+        return False
+    if q:
+        identifier_table = conn.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'catalog_identifier'"
+        ).fetchone()
+        if identifier_table is None:
+            return False
+    return True
+
+
+def _filters_applied(
+    filters: dict[str, list[str]], *, q: str | None, century: str | None
+) -> dict[str, list[str]]:
+    out = dict(filters)
+    if q:
+        out["q"] = [q]
+    if century:
+        out["century"] = [century]
+    return out
+
+
+def _filter_snapshot_query(records, q: str):
+    query, query_norm = _catalog_query_terms(q)
+
+    def rank(rec) -> int | None:
+        ids = [rec.textid]
+        if rec.canonical_identifier:
+            ids.append(rec.canonical_identifier)
+        for value in rec.identifiers.values():
+            if isinstance(value, list):
+                ids.extend(str(v) for v in value if isinstance(v, (str, int)))
+            elif isinstance(value, (str, int)):
+                ids.append(str(value))
+        id_terms = [normalize_search_text(v) or "" for v in ids]
+        if query_norm in id_terms:
+            return 0
+        if any(v.startswith(query_norm) for v in id_terms):
+            return 1
+        if any(query_norm in v for v in id_terms):
+            return 2
+        title_terms = [
+            rec.title or "",
+            *(rec.alt_titles or []),
+        ]
+        if any(query in t.lower() for t in title_terms):
+            return 3
+        return None
+
+    ranked = [(r, rec) for rec in records if (r := rank(rec)) is not None]
+    ranked.sort(key=lambda item: (item[0], item[1].textid))
+    return [rec for _, rec in ranked]
+
+
+def _snapshot_index_date(rec) -> int | None:
+    year = _leading_year(rec.composition_period)
+    return year
+
+
+def _leading_year(raw: Any) -> int | None:
+    if not isinstance(raw, str):
+        return None
+    m = re.search(r"-?\d+", raw)
+    return int(m.group(0)) if m else None
+
+
+def _timeline_from_snapshot(state: AppState) -> TimelineResponse:
+    counts: Counter[int] = Counter()
+    for rec in state.cache.get().records:
+        year = _snapshot_index_date(rec)
+        if year is not None:
+            counts[year] += 1
+    return _timeline_from_year_counts(counts.items())
+
+
+def _timeline_from_year_counts(rows) -> TimelineResponse:
+    bucket_counts: Counter[str] = Counter()
+    bucket_meta: dict[str, tuple[int, int, str]] = {}
+    for year, count in rows:
+        key, label, start, end = _century_bucket(int(year))
+        bucket_counts[key] += int(count)
+        bucket_meta[key] = (start, end, label)
+    buckets = [
+        TimelineBucket(
+            key=key,
+            label=bucket_meta[key][2],
+            start=bucket_meta[key][0],
+            end=bucket_meta[key][1],
+            bundle_count=count,
+        )
+        for key, count in bucket_counts.items()
+    ]
+    buckets.sort(key=lambda b: (b.start, b.end))
+    return TimelineResponse(buckets=buckets)
+
+
+def _century_bucket(year: int) -> tuple[str, str, int, int]:
+    if year <= 0:
+        century = max(1, ((abs(year) - 1) // 100) + 1)
+        start = -(century * 100)
+        end = 0 if century == 1 else -((century - 1) * 100 + 1)
+        return (
+            f"bce-{century:02d}",
+            f"{_ordinal(century)} c. BCE",
+            start,
+            end,
+        )
+    century = ((year - 1) // 100) + 1
+    start = ((century - 1) * 100) + 1
+    end = century * 100
+    return f"ce-{century:02d}", f"{_ordinal(century)} c. CE", start, end
+
+
+def _century_range_from_key(key: str) -> tuple[int, int]:
+    m = re.fullmatch(r"(bce|ce)-(\d+)", key)
+    if not m:
+        raise errors.bad_request("bad_century", value=key)
+    era, raw_century = m.groups()
+    century = int(raw_century)
+    if century < 1:
+        raise errors.bad_request("bad_century", value=key)
+    if era == "bce":
+        return -(century * 100), 0 if century == 1 else -((century - 1) * 100 + 1)
+    return ((century - 1) * 100) + 1, century * 100
+
+
+def _ordinal(n: int) -> str:
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"

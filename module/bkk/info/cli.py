@@ -1,10 +1,12 @@
-"""``bkk info`` — show corpus, index, and config summary.
+"""``bkk info`` — show corpus, index, catalog, and config summary.
 
 Reports three blocks of high-signal status:
 
 - **corpus**: path, bundle count, breakdown by section prefix
 - **index**: path, schema version, size, per-table counts, available voices,
   stale-bundle count
+- **catalog**: path, schema version, size, per-table counts, source CSV,
+  date range
 - **config**: which ``.bkkrc`` files were loaded and the merged values for the
   ``global``, ``index``, and ``info`` sections
 
@@ -23,6 +25,7 @@ from pathlib import Path
 import yaml
 
 from bkk.config import load_rc, rc_files
+from bkk.index.catalog import CATALOG_SCHEMA_VERSION
 from bkk.index.merge import discover_bundles, is_stale
 from bkk.index.schema import SCHEMA_VERSION
 
@@ -30,6 +33,7 @@ _INDEX_TABLES = (
     "bundle", "juan", "bucket", "witness", "variant", "voice_range",
     "toc", "trigram",
 )
+_CATALOG_TABLES = ("catalog_bundle", "catalog_section", "catalog_identifier")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,6 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--index", type=Path, default=None, dest="index_path",
                    help="merged .bkkx path (default: [info].index, "
                         "[index].out, or <corpus>/_corpus.bkkx)")
+    p.add_argument("--catalog", type=Path, default=None, dest="catalog_path",
+                   help="catalog .bkkc path (default: [info].catalog, "
+                        "[serve].catalog, or <corpus>/_catalog.bkkc)")
     p.add_argument("--bundles", action="store_true",
                    help="emit per-bundle table")
     p.add_argument("--prefix", default=None,
@@ -56,6 +63,7 @@ def run(argv: list[str] | None = None) -> int:
     rc = load_rc()
     g = rc.get("global", {})
     idx_rc = rc.get("index", {})
+    serve_rc = rc.get("serve", {})
     info_rc = rc.get("info", {})
 
     parser = build_parser()
@@ -74,11 +82,20 @@ def run(argv: list[str] | None = None) -> int:
             or idx_rc.get("out")
             or corpus / "_corpus.bkkx"
         )
+    if args.catalog_path is not None:
+        catalog_path = Path(args.catalog_path)
+    else:
+        catalog_path = Path(
+            info_rc.get("catalog")
+            or serve_rc.get("catalog")
+            or corpus / "_catalog.bkkc"
+        )
 
     want_bundles = args.bundles or args.prefix is not None
 
     corpus_data = _collect_corpus(corpus, prefix=None)
     index_data = _collect_index(index_path, corpus)
+    catalog_data = _collect_catalog(catalog_path)
     config_data = _collect_config(rc)
     bundles_data = (
         _collect_bundles(corpus, index_path, prefix=args.prefix)
@@ -88,6 +105,7 @@ def run(argv: list[str] | None = None) -> int:
     report = {
         "corpus": corpus_data,
         "index": index_data,
+        "catalog": catalog_data,
         "config": config_data,
     }
     if bundles_data is not None:
@@ -182,10 +200,59 @@ def _collect_index(index_path: Path, corpus: Path) -> dict:
     return out
 
 
+def _collect_catalog(catalog_path: Path) -> dict:
+    if not catalog_path.exists():
+        return {"path": str(catalog_path), "built": False}
+
+    out: dict = {
+        "path": str(catalog_path),
+        "built": True,
+        "size_bytes": catalog_path.stat().st_size,
+    }
+    try:
+        conn = sqlite3.connect(f"file:{catalog_path}?mode=ro", uri=True)
+        try:
+            conn.row_factory = sqlite3.Row
+            meta = dict(conn.execute("SELECT key, value FROM meta").fetchall())
+            schema_version = int(meta.get("schema_version", "0") or "0")
+            out["schema_version"] = schema_version
+            out["schema_current"] = CATALOG_SCHEMA_VERSION
+            out["schema_ok"] = schema_version == CATALOG_SCHEMA_VERSION
+            if meta.get("source_csv"):
+                out["source_csv"] = meta["source_csv"]
+
+            counts: dict[str, int | None] = {}
+            for table in _CATALOG_TABLES:
+                try:
+                    row = conn.execute(
+                        f"SELECT COUNT(*) FROM {table}"
+                    ).fetchone()
+                    counts[table] = int(row[0]) if row else 0
+                except sqlite3.OperationalError:
+                    counts[table] = None
+            out["counts"] = counts
+
+            try:
+                row = conn.execute(
+                    "SELECT MIN(index_date), MAX(index_date) "
+                    "FROM catalog_bundle WHERE index_date != 9999"
+                ).fetchone()
+                if row and row[0] is not None and row[1] is not None:
+                    out["date_min"] = int(row[0])
+                    out["date_max"] = int(row[1])
+            except sqlite3.OperationalError:
+                pass
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError as exc:
+        out["error"] = f"could not open catalog index: {exc}"
+    return out
+
+
 def _collect_config(rc: dict) -> dict:
     files = [str(p) for p in rc_files()]
     sections: dict[str, dict] = {}
-    for name in ("global", "info", "index"):
+    for name in ("global", "info", "index", "serve"):
         if name in rc:
             sections[name] = {k: str(v) for k, v in rc[name].items()}
     return {"files": files, "sections": sections}
@@ -311,6 +378,33 @@ def _render_text(report: dict) -> None:
             checked = i["per_bundle_indices_checked"]
             stale = i["per_bundle_indices_stale"]
             print(f"  per-bundle: {checked} indexed, {stale} stale")
+
+    cat = report["catalog"]
+    print()
+    print("catalog")
+    print(f"  path:     {cat['path']}")
+    if not cat["built"]:
+        print("  (not built — run `bkk index catalog`)")
+    elif "error" in cat:
+        print(f"  error:    {cat['error']}")
+    else:
+        size_mb = cat["size_bytes"] / (1024 * 1024)
+        version_tag = "" if cat.get("schema_ok") else (
+            f" (expected {cat['schema_current']})"
+        )
+        print(f"  size:     {size_mb:,.1f} MiB ({cat['size_bytes']:,} bytes)")
+        print(f"  schema:   v{cat['schema_version']}{version_tag}")
+        if cat.get("source_csv"):
+            print(f"  source:   {cat['source_csv']}")
+        counts = cat.get("counts", {})
+        if counts:
+            print("  counts:")
+            width = max(len(t) for t in counts)
+            for table, n in counts.items():
+                val = "—" if n is None else f"{n:,}"
+                print(f"    {table:<{width}}  {val:>12}")
+        if "date_min" in cat and "date_max" in cat:
+            print(f"  dates:    {cat['date_min']}..{cat['date_max']}")
 
     cfg = report["config"]
     print()

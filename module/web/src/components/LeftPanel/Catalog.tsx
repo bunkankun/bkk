@@ -1,42 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { getCatalog, getCategories } from "../../api/client";
+import { useCallback, useEffect, useState } from "react";
+import { getCatalog, getCategories, getTimeline } from "../../api/client";
 import type {
   CatalogMatch,
   CategoriesResponse,
   CategoryNode,
+  TimelineBucket,
+  TimelineResponse,
 } from "../../api/types";
 import { workspace, useWorkspace } from "../../state/useWorkspace";
-
-function matchesFilter(m: CatalogMatch, needle: string): boolean {
-  if (!needle) return true;
-  const haystacks: string[] = [m.textid];
-  if (m.title) haystacks.push(m.title);
-  if (m.canonical_identifier) haystacks.push(m.canonical_identifier);
-  if (m.edition_short) haystacks.push(m.edition_short);
-  const meta = m.metadata as {
-    alt_titles?: unknown;
-    authors?: unknown;
-    identifiers?: Record<string, unknown>;
-  };
-  const altTitles = Array.isArray(meta.alt_titles) ? meta.alt_titles : [];
-  for (const t of altTitles) if (typeof t === "string") haystacks.push(t);
-  const authors = Array.isArray(meta.authors) ? meta.authors : [];
-  for (const a of authors) {
-    if (a && typeof a === "object" && "name" in a) {
-      const name = (a as { name?: unknown }).name;
-      if (typeof name === "string") haystacks.push(name);
-    }
-  }
-  if (meta.identifiers && typeof meta.identifiers === "object") {
-    for (const v of Object.values(meta.identifiers)) {
-      if (typeof v === "string") haystacks.push(v);
-      else if (Array.isArray(v))
-        for (const x of v) if (typeof x === "string") haystacks.push(x);
-    }
-  }
-  const n = needle.toLowerCase();
-  return haystacks.some((h) => h.toLowerCase().includes(n));
-}
 
 type SubLoadState =
   | { status: "idle" }
@@ -44,13 +15,21 @@ type SubLoadState =
   | { status: "ok"; matches: CatalogMatch[] }
   | { status: "error"; error: string };
 
-export function Catalog() {
+type CatalogMode = "categories" | "timeline";
+
+export function Catalog({ mode }: { mode: CatalogMode }) {
   const [cats, setCats] = useState<CategoriesResponse | null>(null);
   const [catsError, setCatsError] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<TimelineResponse | null>(null);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [debouncedFilter, setDebouncedFilter] = useState("");
   const [openTops, setOpenTops] = useState<Set<string>>(() => new Set());
   const [openSubs, setOpenSubs] = useState<Set<string>>(() => new Set());
+  const [openBuckets, setOpenBuckets] = useState<Set<string>>(() => new Set());
   const [subLoads, setSubLoads] = useState<Record<string, SubLoadState>>({});
+  const [bucketLoads, setBucketLoads] = useState<Record<string, SubLoadState>>({});
+  const [searchLoad, setSearchLoad] = useState<SubLoadState>({ status: "idle" });
   const activeTextid = useWorkspace((s) => s.activeTextid);
 
   useEffect(() => {
@@ -66,6 +45,49 @@ export function Catalog() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedFilter(filter.trim());
+    }, 180);
+    return () => window.clearTimeout(handle);
+  }, [filter]);
+
+  useEffect(() => {
+    if (!debouncedFilter) {
+      setSearchLoad({ status: "idle" });
+      return;
+    }
+    const controller = new AbortController();
+    setSearchLoad({ status: "loading" });
+    getCatalog({ q: debouncedFilter, limit: 100 })
+      .then((r) => {
+        if (!controller.signal.aborted) {
+          setSearchLoad({ status: "ok", matches: r.matches });
+        }
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) {
+          setSearchLoad({ status: "error", error: String(e) });
+        }
+      });
+    return () => controller.abort();
+  }, [debouncedFilter]);
+
+  useEffect(() => {
+    if (mode !== "timeline" || timeline || timelineError) return;
+    let cancelled = false;
+    getTimeline()
+      .then((d) => {
+        if (!cancelled) setTimeline(d);
+      })
+      .catch((e) => {
+        if (!cancelled) setTimelineError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, timeline, timelineError]);
 
   const toggleTop = useCallback((code: string) => {
     setOpenTops((prev) => {
@@ -108,35 +130,53 @@ export function Catalog() {
       });
   }, [subLoads]);
 
-  const filterNeedle = filter.trim();
-  const filteredSubLoads = useMemo(() => {
-    if (!filterNeedle) return subLoads;
-    const out: Record<string, SubLoadState> = {};
-    for (const [code, s] of Object.entries(subLoads)) {
-      if (s.status !== "ok") {
-        out[code] = s;
-        continue;
-      }
-      out[code] = {
-        status: "ok",
-        matches: s.matches.filter((m) => matchesFilter(m, filterNeedle)),
-      };
-    }
-    return out;
-  }, [subLoads, filterNeedle]);
+  const toggleBucket = useCallback((bucket: TimelineBucket) => {
+    setOpenBuckets((prev) => {
+      const next = new Set(prev);
+      if (next.has(bucket.key)) next.delete(bucket.key);
+      else next.add(bucket.key);
+      return next;
+    });
+    const shouldFetch =
+      bucketLoads[bucket.key]?.status !== "ok" &&
+      bucketLoads[bucket.key]?.status !== "loading";
+    setBucketLoads((prev) => {
+      if (
+        prev[bucket.key]?.status === "ok" ||
+        prev[bucket.key]?.status === "loading"
+      ) return prev;
+      return { ...prev, [bucket.key]: { status: "loading" } };
+    });
+    if (!shouldFetch) return;
+    getCatalog({ limit: 200, century: bucket.key })
+      .then((r) => {
+        setBucketLoads((prev) => ({
+          ...prev,
+          [bucket.key]: { status: "ok", matches: r.matches },
+        }));
+      })
+      .catch((e) => {
+        setBucketLoads((prev) => ({
+          ...prev,
+          [bucket.key]: { status: "error", error: String(e) },
+        }));
+      });
+  }, [bucketLoads]);
 
   if (catsError) return <div className="empty">Failed to load categories: {catsError}</div>;
   if (!cats) return <div className="empty">Loading categories…</div>;
+
+  const searching = debouncedFilter.length > 0;
 
   return (
     <div>
       <div className="cat-filter">
         <input
           type="text"
-          placeholder="Filter expanded bundles…"
+          placeholder="Search title, pinyin, English, ID…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          aria-label="Filter loaded bundles"
+          aria-label="Search catalog"
         />
         {filter && (
           <button
@@ -149,19 +189,36 @@ export function Catalog() {
           </button>
         )}
       </div>
-      {cats.categories.map((top) => (
-        <CategoryRow
-          key={top.code}
-          node={top}
-          depth={0}
-          isOpen={openTops.has(top.code)}
-          openSubs={openSubs}
-          subLoads={filteredSubLoads}
+      {searching ? (
+        <CatalogMatchList
+          state={searchLoad}
           activeTextid={activeTextid}
-          onToggleTop={toggleTop}
-          onToggleSub={toggleSub}
+          empty="No catalog results."
         />
-      ))}
+      ) : mode === "timeline" ? (
+        <TimelineView
+          timeline={timeline}
+          error={timelineError}
+          openBuckets={openBuckets}
+          bucketLoads={bucketLoads}
+          activeTextid={activeTextid}
+          onToggleBucket={toggleBucket}
+        />
+      ) : (
+        cats.categories.map((top) => (
+          <CategoryRow
+            key={top.code}
+            node={top}
+            depth={0}
+            isOpen={openTops.has(top.code)}
+            openSubs={openSubs}
+            subLoads={subLoads}
+            activeTextid={activeTextid}
+            onToggleTop={toggleTop}
+            onToggleSub={toggleSub}
+          />
+        ))
+      )}
     </div>
   );
 }
@@ -268,33 +325,135 @@ function CategoryNodeRow({
       )}
       {isOpen && load?.status === "ok" &&
         load.matches.map((m) => (
-          <div
+          <CatalogBundleRow
             key={m.textid}
-            className={`list-item cat-bundle${m.textid === activeTextid ? " on" : ""}`}
-            style={{ paddingLeft: indent + 24 }}
-            onClick={() => workspace.selectBundle(m.textid)}
-            title={m.canonical_identifier ?? m.textid}
-          >
-            <div className="list-cjk">{(m.title ?? "").slice(0, 2) || "·"}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "var(--t1)",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {m.title ?? m.textid}
-              </div>
-              <div className="list-sub">
-                {m.textid}
-                {m.edition_short ? ` · ${m.edition_short}` : ""}
-              </div>
-            </div>
-          </div>
+            match={m}
+            active={m.textid === activeTextid}
+            paddingLeft={indent + 24}
+          />
         ))}
+    </div>
+  );
+}
+
+function TimelineView({
+  timeline,
+  error,
+  openBuckets,
+  bucketLoads,
+  activeTextid,
+  onToggleBucket,
+}: {
+  timeline: TimelineResponse | null;
+  error: string | null;
+  openBuckets: Set<string>;
+  bucketLoads: Record<string, SubLoadState>;
+  activeTextid: string | null;
+  onToggleBucket: (bucket: TimelineBucket) => void;
+}) {
+  if (error) return <div className="empty">Failed to load timeline: {error}</div>;
+  if (!timeline) return <div className="empty">Loading timeline…</div>;
+  if (timeline.buckets.length === 0) {
+    return <div className="empty">No dated catalog entries.</div>;
+  }
+  return (
+    <div>
+      {timeline.buckets.map((bucket) => {
+        const isOpen = openBuckets.has(bucket.key);
+        const load = bucketLoads[bucket.key];
+        return (
+          <div key={bucket.key}>
+            <div className="cat-sub" onClick={() => onToggleBucket(bucket)}>
+              <span className="cat-caret">{isOpen ? "▾" : "▸"}</span>
+              <span className="cat-zh">{bucket.label}</span>
+              <span className="cat-code">
+                {bucket.start}..{bucket.end}
+              </span>
+              <span className="cat-count">{bucket.bundle_count}</span>
+            </div>
+            {isOpen && (
+              <CatalogMatchList
+                state={load ?? { status: "idle" }}
+                activeTextid={activeTextid}
+                empty="No bundles in this century."
+                paddingLeft={38}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CatalogMatchList({
+  state,
+  activeTextid,
+  empty,
+  paddingLeft = 12,
+}: {
+  state: SubLoadState;
+  activeTextid: string | null;
+  empty: string;
+  paddingLeft?: number;
+}) {
+  if (state.status === "idle" || state.status === "loading") {
+    return <div className="empty">Loading…</div>;
+  }
+  if (state.status === "error") {
+    return <div className="empty">Failed: {state.error}</div>;
+  }
+  if (state.matches.length === 0) {
+    return <div className="empty">{empty}</div>;
+  }
+  return (
+    <div>
+      {state.matches.map((m) => (
+        <CatalogBundleRow
+          key={m.textid}
+          match={m}
+          active={m.textid === activeTextid}
+          paddingLeft={paddingLeft}
+        />
+      ))}
+    </div>
+  );
+}
+
+function CatalogBundleRow({
+  match,
+  active,
+  paddingLeft,
+}: {
+  match: CatalogMatch;
+  active: boolean;
+  paddingLeft: number;
+}) {
+  return (
+    <div
+      className={`list-item cat-bundle${active ? " on" : ""}`}
+      style={{ paddingLeft }}
+      onClick={() => workspace.selectBundle(match.textid)}
+      title={match.canonical_identifier ?? match.textid}
+    >
+      <div className="list-cjk">{(match.title ?? "").slice(0, 2) || "·"}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 12,
+            color: "var(--t1)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {match.title ?? match.textid}
+        </div>
+        <div className="list-sub">
+          {match.textid}
+          {match.edition_short ? ` · ${match.edition_short}` : ""}
+        </div>
+      </div>
     </div>
   );
 }

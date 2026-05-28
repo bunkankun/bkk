@@ -75,6 +75,23 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
       </svg>
     ),
   },
+  {
+    id: "timeline",
+    label: "Timeline",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+        <path
+          d="M8 2v12M4 4h8M5 8h6M3.5 12h9"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+        />
+        <circle cx="8" cy="4" r="1.2" fill="currentColor" />
+        <circle cx="8" cy="8" r="1.2" fill="currentColor" />
+        <circle cx="8" cy="12" r="1.2" fill="currentColor" />
+      </svg>
+    ),
+  },
 ];
 
 export function ActivityBar() {

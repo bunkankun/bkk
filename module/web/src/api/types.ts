@@ -52,6 +52,18 @@ export interface CategoriesResponse {
   categories: CategoryNode[];
 }
 
+export interface TimelineBucket {
+  key: string;
+  label: string;
+  start: number;
+  end: number;
+  bundle_count: number;
+}
+
+export interface TimelineResponse {
+  buckets: TimelineBucket[];
+}
+
 // Manifest is a passthrough dict — type the parts we actually read.
 export interface ManifestPart {
   seq: number;

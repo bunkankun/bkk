@@ -6,7 +6,9 @@ import csv
 import logging
 import re
 import sqlite3
+import unicodedata
 from dataclasses import dataclass
+from typing import Any
 from pathlib import Path
 
 import yaml
@@ -15,7 +17,7 @@ from .merge import discover_bundles
 
 log = logging.getLogger("bkk.index")
 
-CATALOG_SCHEMA_VERSION = 1
+CATALOG_SCHEMA_VERSION = 2
 
 DDL = """
 CREATE TABLE meta (
@@ -28,6 +30,7 @@ CREATE TABLE catalog_bundle (
   section_code TEXT NOT NULL,
   title TEXT,
   title_pinyin TEXT,
+  title_pinyin_search TEXT,
   title_english TEXT,
   not_before INTEGER,
   not_after INTEGER,
@@ -36,6 +39,14 @@ CREATE TABLE catalog_bundle (
   index_date_source TEXT NOT NULL,
   canonical_identifier TEXT,
   manifest_hash TEXT
+);
+
+CREATE TABLE catalog_identifier (
+  textid TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  value TEXT NOT NULL,
+  value_search TEXT NOT NULL,
+  FOREIGN KEY(textid) REFERENCES catalog_bundle(textid)
 );
 
 CREATE TABLE catalog_section (
@@ -50,6 +61,8 @@ CREATE TABLE catalog_section (
 
 CREATE INDEX idx_catalog_bundle_section ON catalog_bundle(section_code);
 CREATE INDEX idx_catalog_bundle_index_date ON catalog_bundle(index_date);
+CREATE INDEX idx_catalog_identifier_textid ON catalog_identifier(textid);
+CREATE INDEX idx_catalog_identifier_value ON catalog_identifier(value_search);
 CREATE INDEX idx_catalog_section_parent ON catalog_section(parent_code);
 """
 
@@ -109,6 +122,7 @@ def build_catalog_index(
         )
 
     bundle_records: dict[str, tuple] = {}
+    identifier_records: list[tuple[str, str, str, str]] = []
     direct_counts: dict[str, int] = {}
     for bundle_dir in bundles:
         textid = bundle_dir.name
@@ -144,6 +158,7 @@ def build_catalog_index(
             section_code,
             row.title,
             row.title_pinyin,
+            normalize_search_text(row.title_pinyin),
             row.title_english,
             row.not_before,
             row.not_after,
@@ -153,6 +168,7 @@ def build_catalog_index(
             manifest.get("canonical_identifier"),
             manifest.get("hash"),
         )
+        identifier_records.extend(_identifier_records(textid, manifest))
         direct_counts[section_code] = direct_counts.get(section_code, 0) + 1
 
     section_records = _section_records(sections, direct_counts)
@@ -173,11 +189,18 @@ def build_catalog_index(
         )
         conn.executemany(
             "INSERT INTO catalog_bundle("
-            "textid, section_code, title, title_pinyin, title_english, "
+            "textid, section_code, title, title_pinyin, title_pinyin_search, "
+            "title_english, "
             "not_before, not_after, dzt_date, index_date, index_date_source, "
             "canonical_identifier, manifest_hash"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             list(bundle_records.values()),
+        )
+        conn.executemany(
+            "INSERT INTO catalog_identifier("
+            "textid, kind, value, value_search"
+            ") VALUES (?,?,?,?)",
+            identifier_records,
         )
         conn.executemany(
             "INSERT INTO catalog_section("
@@ -217,6 +240,20 @@ def parse_years(raw: str | int | None) -> list[int]:
     if not text:
         return []
     return [_year_from_match(m) for m in _YEAR_RE.finditer(text)]
+
+
+def normalize_search_text(raw: str | int | None) -> str | None:
+    """Normalize catalog search text; notably strips pinyin tone marks."""
+    if raw is None:
+        return None
+    text = str(raw).strip().lower()
+    if not text:
+        return None
+    decomposed = unicodedata.normalize("NFD", text)
+    stripped = "".join(
+        ch for ch in decomposed if unicodedata.category(ch) != "Mn"
+    )
+    return unicodedata.normalize("NFC", stripped)
 
 
 def calculate_index_date(
@@ -337,6 +374,49 @@ def _read_manifest(bundle_dir: Path) -> dict:
         )
         return {}
     return manifest if isinstance(manifest, dict) else {}
+
+
+def _identifier_records(textid: str, manifest: dict) -> list[tuple[str, str, str, str]]:
+    values: list[tuple[str, str]] = [("textid", textid)]
+    canonical_identifier = manifest.get("canonical_identifier")
+    if isinstance(canonical_identifier, (str, int)):
+        values.append(("canonical_identifier", str(canonical_identifier)))
+
+    for source in _manifest_identifier_sources(manifest):
+        for key, raw in source.items():
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, (str, int)):
+                        values.append((str(key), str(item)))
+            elif isinstance(raw, (str, int)):
+                values.append((str(key), str(raw)))
+
+    seen: set[tuple[str, str]] = set()
+    records: list[tuple[str, str, str, str]] = []
+    for kind, value in values:
+        value = value.strip()
+        value_search = normalize_search_text(value)
+        if not value or value_search is None:
+            continue
+        dedupe_key = (kind, value)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        records.append((textid, kind, value, value_search))
+    return records
+
+
+def _manifest_identifier_sources(manifest: dict) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    metadata = manifest.get("metadata") or {}
+    if isinstance(metadata, dict):
+        identifiers = metadata.get("identifiers") or {}
+        if isinstance(identifiers, dict):
+            out.append(identifiers)
+    top_level = manifest.get("identifiers") or {}
+    if isinstance(top_level, dict):
+        out.append(top_level)
+    return out
 
 
 def _catalog_row_from_manifest(textid: str, manifest: dict) -> CatalogRow:

@@ -20,7 +20,7 @@ import type {
   SearchSort,
 } from "../api/types";
 
-export type Activity = "texts" | "catalog";
+export type Activity = "texts" | "catalog" | "timeline";
 export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
 export type SearchTarget = "fulltext" | "dictionary" | "translations";

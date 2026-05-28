@@ -65,7 +65,8 @@ CLI flags override env vars.
 - Left and right panel widths are user-draggable (handles between activity-bar/LeftPanel and Workspace/RightPanel) and persisted in localStorage
 - The menubar logo tooltip reports the configured `upstream_repo`; the search bar sits at the right next to the (disabled) Login button
 - Full-text search (Menubar) with five sort modes; results render in a Search tab on the right panel and clicking a hit scrolls + flashes the matched span in the workspace for 15s
-- A pinned filter input on the LeftPanel Catalog narrows the loaded bundle list client-side (title / alt_titles / authors / identifiers)
+- A pinned search input on the LeftPanel Catalog queries the server-side catalog across title, pinyin (tone-insensitive), English title, and identifiers before any category is expanded
+- The left activity bar has separate Catalog and Timeline entries; Timeline browses calendar-century buckets
 
 What does NOT work yet (deferred to later slices): GitHub login, in-browser editing/PRs, translation mode, IIIF facsimile (Inspect), AI/Dharma panels, the cross-text annotation dictionary, pane splits.
 
@@ -85,14 +86,15 @@ The endpoint is `GET /search?q=…&sort=…` (see [module/bkk/serve/routers/sear
 
 Results render in a third right-panel tab (alongside Annot. and Chat) that appears once a search is in flight and remains for the session. Each row shows `toc_label · textid · juan` plus a KWIC line. The left context is anchored to the right edge via `display: flex; justify-content: flex-end`, so when it overflows the column its **leftmost** chars get clipped (those nearest the match stay visible). Phrase-boundary trim (`。！？；`) preserves clean breakpoints when sentence-enders are present, with an ellipsis chip marking elided text on either side. Hits whose match came from a non-master witness are flagged with an amber chip in the meta row naming the edition (e.g. `TKD`); when the witness provides context around the match (i.e. the variant reading is longer than its master span) a second, dimmer KWIC line renders below the master line, showing the witness's actual context around the query (`witness_left` / `matched_text` / `witness_right`) — useful when the master text was rewritten and so the master line's highlighted token is the replaced master string rather than the query itself. Clicking a row opens the juan in the workspace and triggers a 15s amber flash on the master span. Pagination uses prev/next over `offset` (page size 50).
 
-The catalog filter input on the LeftPanel is currently a UI-only client-side substring filter over the already-loaded matches. v2 will swap this for a backend `GET /catalog?q=` endpoint and lift the filter state into the workspace store.
+The catalog search input on the LeftPanel calls `GET /catalog?q=…`. It searches the whole catalog server-side across title, tone-insensitive pinyin, English title, `textid`, canonical identifier, and manifest identifiers.
 
 ## Catalog tree
 
 The LeftPanel Catalog is a two-level tree of the Kanripo classification, populated from `GET /catalog/categories` ([module/bkk/serve/routers/catalog.py](module/bkk/serve/routers/catalog.py)). The endpoint joins `bkk.data/kr_categories.yaml` (bilingual labels) with per-leaf bundle counts derived from the live corpus.
 
 - Top categories KR1–KR6 are listed at startup with descendant bundle counts; expanding a top reveals its subcategories.
-- Subcategory bundles load lazily on first expand via `GET /catalog?filters=tags.kr-categories=<code>` and are cached for the session.
+- Subcategory bundles load lazily on first expand via `GET /catalog?tags.kr-categories=<code>` and are cached for the session.
+- The Timeline view loads `GET /catalog/timeline`; opening a century lazily fetches `GET /catalog?century=<bucket>`.
 - Clicking a bundle calls `workspace.selectBundle(textid)`, which both populates the right-side TOC AND fire-and-forget auto-opens the first part — body text and TOC appear in parallel rather than requiring a TOC click.
 
 ## Read view

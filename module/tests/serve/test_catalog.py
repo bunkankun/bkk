@@ -330,3 +330,161 @@ def test_catalog_browse_parent_category_excludes_descendants(tmp_path: Path):
     assert body is not None
     assert body.total == 1
     assert body.matches[0].textid == "KR3f0001"
+
+
+def test_catalog_q_searches_titles_pinyin_english_and_identifiers(tmp_path: Path):
+    write_bundle(
+        tmp_path,
+        "KR1a0001",
+        "甲",
+        title="Manifest Zhouyi",
+        identifiers={"krp": "KR1a0001", "slug": ["book-of-changes"]},
+        canonical_identifier="bkk:test/KR1a0001/v1",
+    )
+    write_bundle(
+        tmp_path,
+        "KR1a0002",
+        "乙",
+        title="Manifest Other",
+        identifiers={"krp": "KR1a0002"},
+    )
+    csv_path = _write_frontmatter(
+        tmp_path / "frontmatter.csv",
+        [
+            {"id": "KR1", "title": "經部"},
+            {"id": "KR1a", "title": "易類"},
+            {
+                "id": "KR1a0001", "title": "周易", "titlePinyin": "Zhōuyì",
+                "titleEnglish": "The Changes", "notBefore": "-900",
+                "notAfter": "-100",
+            },
+            {
+                "id": "KR1a0002", "title": "周易旁通",
+                "titlePinyin": "Zhouyi pangtong",
+                "titleEnglish": "Changes Companion", "notBefore": "10",
+                "notAfter": "10",
+            },
+        ],
+    )
+    catalog_path = build_catalog_index(tmp_path, csv_path, tmp_path / "_catalog.bkkc")
+    client = TestClient(create_app(ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+        catalog_path=catalog_path,
+    )))
+
+    by_pinyin = client.get("/catalog", params={"q": "zhouyi"}).json()
+    assert by_pinyin["total"] == 2
+    assert {m["textid"] for m in by_pinyin["matches"]} == {"KR1a0001", "KR1a0002"}
+
+    by_english = client.get("/catalog", params={"q": "changes"}).json()
+    assert by_english["total"] == 2
+
+    by_identifier = client.get("/catalog", params={"q": "book-of-changes"}).json()
+    assert by_identifier["total"] == 1
+    assert by_identifier["matches"][0]["textid"] == "KR1a0001"
+
+
+def test_catalog_q_ranks_exact_id_before_substring(tmp_path: Path):
+    write_bundle(tmp_path, "KR1a0001", "甲", identifiers={"krp": "KR1a0001"})
+    write_bundle(tmp_path, "KR1a0002", "乙", identifiers={"slug": ["prefix-KR1a0001"]})
+    csv_path = _write_frontmatter(
+        tmp_path / "frontmatter.csv",
+        [
+            {"id": "KR1", "title": "經部"},
+            {"id": "KR1a", "title": "易類"},
+            {"id": "KR1a0001", "title": "A", "notBefore": "100", "notAfter": "100"},
+            {"id": "KR1a0002", "title": "B", "notBefore": "1", "notAfter": "1"},
+        ],
+    )
+    catalog_path = build_catalog_index(tmp_path, csv_path, tmp_path / "_catalog.bkkc")
+    client = TestClient(create_app(ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+        catalog_path=catalog_path,
+    )))
+
+    body = client.get("/catalog", params={"q": "KR1a0001"}).json()
+
+    assert [m["textid"] for m in body["matches"]] == ["KR1a0001", "KR1a0002"]
+
+
+def test_catalog_q_combines_with_category_filter(tmp_path: Path):
+    write_bundle(tmp_path, "KR1a0001", "甲", identifiers={"krp": "KR1a0001"})
+    write_bundle(tmp_path, "KR3a0001", "乙", identifiers={"krp": "KR3a0001"})
+    csv_path = _write_frontmatter(
+        tmp_path / "frontmatter.csv",
+        [
+            {"id": "KR1", "title": "經部"},
+            {"id": "KR1a", "title": "易類"},
+            {"id": "KR3", "title": "子部"},
+            {"id": "KR3a", "title": "儒家類"},
+            {
+                "id": "KR1a0001", "title": "同名", "titlePinyin": "Tongming",
+                "notBefore": "1", "notAfter": "1",
+            },
+            {
+                "id": "KR3a0001", "title": "同名", "titlePinyin": "Tongming",
+                "notBefore": "1", "notAfter": "1",
+            },
+        ],
+    )
+    catalog_path = build_catalog_index(tmp_path, csv_path, tmp_path / "_catalog.bkkc")
+    client = TestClient(create_app(ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+        catalog_path=catalog_path,
+    )))
+
+    body = client.get(
+        "/catalog",
+        params={"q": "tongming", "tags.kr-categories": "KR3a"},
+    ).json()
+
+    assert body["total"] == 1
+    assert body["matches"][0]["textid"] == "KR3a0001"
+
+
+def test_catalog_timeline_buckets_and_browsing(tmp_path: Path):
+    write_bundle(tmp_path, "KR1a0001", "甲")
+    write_bundle(tmp_path, "KR1a0002", "乙")
+    write_bundle(tmp_path, "KR1a0003", "丙")
+    csv_path = _write_frontmatter(
+        tmp_path / "frontmatter.csv",
+        [
+            {"id": "KR1", "title": "經部"},
+            {"id": "KR1a", "title": "易類"},
+            {"id": "KR1a0001", "title": "BCE", "notBefore": "-390", "notAfter": "-390"},
+            {"id": "KR1a0002", "title": "CE", "notBefore": "101", "notAfter": "101"},
+            {"id": "KR1a0003", "title": "Missing"},
+        ],
+    )
+    catalog_path = build_catalog_index(tmp_path, csv_path, tmp_path / "_catalog.bkkc")
+    client = TestClient(create_app(ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+        catalog_path=catalog_path,
+    )))
+
+    timeline = client.get("/catalog/timeline").json()
+
+    assert timeline["buckets"] == [
+        {
+            "key": "bce-04",
+            "label": "4th c. BCE",
+            "start": -400,
+            "end": -301,
+            "bundle_count": 1,
+        },
+        {
+            "key": "ce-02",
+            "label": "2nd c. CE",
+            "start": 101,
+            "end": 200,
+            "bundle_count": 1,
+        },
+    ]
+
+    body = client.get("/catalog", params={"century": "bce-04"}).json()
+    assert body["total"] == 1
+    assert body["matches"][0]["textid"] == "KR1a0001"

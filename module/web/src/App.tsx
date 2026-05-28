@@ -53,13 +53,24 @@ function ResizeHandle({ side }: { side: "left" | "right" }) {
 function LeftPanel() {
   const activity = useWorkspace((s) => s.activity);
   const width = useWorkspace((s) => s.panelWidths.left);
+  const title = activity === "timeline"
+    ? "Timeline"
+    : activity === "catalog"
+      ? "Catalog"
+      : "Texts";
   return (
     <div className="lp" style={{ width }}>
       <div className="ph">
-        <span>{activity === "catalog" ? "Catalog" : "Texts"}</span>
+        <span>{title}</span>
       </div>
       <div className="lp-body">
-        {activity === "catalog" ? <Catalog /> : <Toc />}
+        {activity === "timeline" ? (
+          <Catalog mode="timeline" />
+        ) : activity === "catalog" ? (
+          <Catalog mode="categories" />
+        ) : (
+          <Toc />
+        )}
       </div>
     </div>
   );

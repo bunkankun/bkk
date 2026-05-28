@@ -18,6 +18,7 @@ import type {
   SearchResponse,
   SearchSort,
   ServerInfo,
+  TimelineResponse,
   WorkspaceFile,
   WorkspaceFileList,
   WorkspaceWriteResult,
@@ -114,11 +115,15 @@ export async function putWorkspaceFile(params: {
 }
 
 export async function getCatalog(params?: {
+  q?: string;
+  century?: string;
   limit?: number;
   offset?: number;
   filters?: Record<string, string[]>;
 }): Promise<CatalogResponse> {
   const q = new URLSearchParams();
+  if (params?.q) q.set("q", params.q);
+  if (params?.century) q.set("century", params.century);
   if (params?.limit != null) q.set("limit", String(params.limit));
   if (params?.offset != null) q.set("offset", String(params.offset));
   if (params?.filters) {
@@ -132,6 +137,10 @@ export async function getCatalog(params?: {
 
 export async function getCategories(): Promise<CategoriesResponse> {
   return fetchJson<CategoriesResponse>(`${apiBase}/catalog/categories`);
+}
+
+export async function getTimeline(): Promise<TimelineResponse> {
+  return fetchJson<TimelineResponse>(`${apiBase}/catalog/timeline`);
 }
 
 export async function getManifest(textid: string): Promise<Manifest> {

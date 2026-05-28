@@ -23,20 +23,25 @@ def _write_bundle(
     *,
     manifest_hash: str | None = None,
     title: str | None = None,
+    identifiers: dict | None = None,
+    top_level_identifiers: dict | None = None,
 ) -> Path:
+    metadata = {"title": title} if title else {}
+    if identifiers is not None:
+        metadata["identifiers"] = identifiers
+    manifest = {
+        "canonical_identifier": f"bkk:test/{textid}/v1",
+        "hash": manifest_hash,
+        "metadata": metadata,
+        "editions": [{"short": "X", "label": "x"}],
+        "assets": {"parts": []},
+    }
+    if top_level_identifiers is not None:
+        manifest["identifiers"] = top_level_identifiers
     bundle_dir = root / textid
     bundle_dir.mkdir(parents=True)
     (bundle_dir / f"{textid}.manifest.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "canonical_identifier": f"bkk:test/{textid}/v1",
-                "hash": manifest_hash,
-                "metadata": {"title": title} if title else {},
-                "editions": [{"short": "X", "label": "x"}],
-                "assets": {"parts": []},
-            },
-            allow_unicode=True,
-        ),
+        yaml.safe_dump(manifest, allow_unicode=True),
         encoding="utf-8",
     )
     return bundle_dir
@@ -251,5 +256,47 @@ def test_catalog_prefix_limits_current_corpus_counts(tmp_path):
             "SELECT code, descendant_bundle_count FROM catalog_section "
             "WHERE code IN ('KR1', 'KR3') ORDER BY code",
         ) == [("KR1", 0), ("KR3", 1)]
+    finally:
+        conn.close()
+
+
+def test_catalog_index_stores_pinyin_search_and_manifest_identifiers(tmp_path):
+    _write_bundle(
+        tmp_path,
+        "KR1a0001",
+        identifiers={"krp": "KR1a0001", "slug": ["zhouyi"]},
+        top_level_identifiers={"legacy": "LEG-1"},
+    )
+    csv_path = _write_frontmatter(
+        tmp_path / "frontmatter.csv",
+        [
+            {"id": "KR1", "title": "經部"},
+            {"id": "KR1a", "title": "易類"},
+            {
+                "id": "KR1a0001", "title": "周易", "titlePinyin": "Zhōuyì",
+                "titleEnglish": "Changes", "notBefore": "-900",
+                "notAfter": "-100",
+            },
+        ],
+    )
+
+    out = build_catalog_index(tmp_path, csv_path, tmp_path / "_catalog.bkkc")
+
+    conn = sqlite3.connect(out)
+    try:
+        assert _rows(
+            conn,
+            "SELECT title_pinyin, title_pinyin_search FROM catalog_bundle",
+        ) == [("Zhōuyì", "zhouyi")]
+        assert set(_rows(
+            conn,
+            "SELECT kind, value, value_search FROM catalog_identifier",
+        )) >= {
+            ("textid", "KR1a0001", "kr1a0001"),
+            ("canonical_identifier", "bkk:test/KR1a0001/v1", "bkk:test/kr1a0001/v1"),
+            ("krp", "KR1a0001", "kr1a0001"),
+            ("slug", "zhouyi", "zhouyi"),
+            ("legacy", "LEG-1", "leg-1"),
+        }
     finally:
         conn.close()
