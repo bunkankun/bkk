@@ -6,8 +6,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { getAnnotations, getJuan, getManifest } from "../../api/client";
-import type { Annotation, Juan, JuanMarker, Manifest } from "../../api/types";
+import { getAnnotations, getCatalog, getJuan, getManifest } from "../../api/client";
+import type {
+  Annotation,
+  CatalogMatch,
+  Juan,
+  JuanMarker,
+  Manifest,
+} from "../../api/types";
 import { krRefToChar } from "../../lib/pua";
 import {
   isResizing,
@@ -18,8 +24,9 @@ import {
 import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
 
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
-const PHRASE_END_RE = /[。！？；]/;
+const PHRASE_END_RE = /[。！？；，：]/;
 const PHRASE_LINE_OPENER_RE = /^[「『《〈（(〔【]$/;
+const PHRASE_LINE_CLOSER_RE = /^[」]$/;
 const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
 const BUCKETS = ["front", "body", "back"] as const;
 
@@ -68,6 +75,7 @@ interface Block {
 const FALLBACK_LINE_HEIGHT = 38;
 const FALLBACK_CHARS_PER_LINE = 24;
 const KR_REF_START_RE = /^&KR(\d+);/;
+const BUNKANKUN_BASE_URL = "https://ask.bunkankun.org";
 
 interface SourceChar {
   ch: string;
@@ -241,6 +249,7 @@ function buildBlocks(
   const blocks: Block[] = [];
   let cur: RenderedChar[] = [];
   let lastEnd = 0;
+  let pendingPhraseBreak = false;
 
   const flush = () => {
     if (cur.length === 0) return;
@@ -279,13 +288,20 @@ function buildBlocks(
     // Decide whether to start a new block *before* placing this char.
     if (cur.length > 0 && nextSrc != null) {
       if (useMarkers) {
-        if (boundaryOffsets.has(nextSrc)) {
+        if (boundaryOffsets.has(nextSrc) && !PHRASE_LINE_CLOSER_RE.test(rc.ch)) {
           flush();
         }
       } else if (lineMode === "paragraph") {
         // fall-back: literal newline starts a new block (the newline lives
         // at the END of the previous block, not the start of the next).
         // handled below after appending the char.
+      } else if (
+        lineMode === "phrase" &&
+        pendingPhraseBreak &&
+        !PHRASE_LINE_CLOSER_RE.test(rc.ch)
+      ) {
+        pendingPhraseBreak = false;
+        flush();
       }
     }
     cur.push(rc);
@@ -296,7 +312,7 @@ function buildBlocks(
       if (lineMode === "paragraph" && rc.isNewline) {
         flush();
       } else if (lineMode === "phrase" && PHRASE_END_RE.test(rc.ch)) {
-        flush();
+        pendingPhraseBreak = true;
       }
     }
   }
@@ -327,6 +343,18 @@ function firstPageMarker(
   return null;
 }
 
+function textidToBunkankunUrl(textid: string): string {
+  return `${BUNKANKUN_BASE_URL}/${textid.slice(0, 3)}/${textid.slice(
+    0,
+    4,
+  )}/${textid}`;
+}
+
+function catalogString(match: CatalogMatch | null, key: string): string | null {
+  const value = match?.metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 interface Props {
   textid: string;
   seq: number;
@@ -335,6 +363,7 @@ interface Props {
 export function TextViewer({ textid, seq }: Props) {
   const [juan, setJuan] = useState<Juan | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [catalogMatch, setCatalogMatch] = useState<CatalogMatch | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -354,17 +383,22 @@ export function TextViewer({ textid, seq }: Props) {
     let cancelled = false;
     setJuan(null);
     setAnnotations(null);
+    setCatalogMatch(null);
     setError(null);
     Promise.all([
       getJuan(textid, seq),
       getAnnotations(textid, seq),
       getManifest(textid).catch(() => null),
+      getCatalog({ q: textid, limit: 10 }).catch(() => null),
     ])
-      .then(([j, a, m]) => {
+      .then(([j, a, m, catalog]) => {
         if (cancelled) return;
         setJuan(j);
         setAnnotations(a);
         setManifest(m);
+        setCatalogMatch(
+          catalog?.matches.find((match) => match.textid === textid) ?? null,
+        );
         // Seed currentPage to the juan's first page-break so the image panel
         // has something to show before the user scrolls.
         const first = firstPageMarker(j);
@@ -703,7 +737,10 @@ export function TextViewer({ textid, seq }: Props) {
   }
 
   const title = manifest?.metadata?.title ?? textid;
+  const titlePinyin = catalogString(catalogMatch, "title_pinyin");
+  const titleEnglish = catalogString(catalogMatch, "title_english");
   const editionShort = manifest?.metadata?.edition?.short ?? null;
+  const bunkankunUrl = textidToBunkankunUrl(textid);
 
   return (
     <div
@@ -714,8 +751,14 @@ export function TextViewer({ textid, seq }: Props) {
     >
       <div className="tv-title">
         <h1>{title}</h1>
+        {titlePinyin ? <div className="tv-title-pinyin">{titlePinyin}</div> : null}
+        {titleEnglish ? (
+          <div className="tv-title-english">{titleEnglish}</div>
+        ) : null}
         <h2>
-          {textid}
+          <a href={bunkankunUrl} target="ask-bkk">
+            {textid}
+          </a>
           {editionShort ? ` · ${editionShort}` : ""} · 卷 {seq}
         </h2>
       </div>

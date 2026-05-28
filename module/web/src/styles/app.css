@@ -605,11 +605,30 @@ button {
   letter-spacing: 0.04em;
   margin-bottom: 4px;
 }
+.tv-title-pinyin {
+  font-size: 13px;
+  color: var(--t2);
+  line-height: 1.5;
+}
+.tv-title-english {
+  font-size: 13px;
+  color: var(--t1);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
 .tv-title h2 {
   font-size: 12px;
   font-weight: 400;
   color: var(--t2);
   font-style: italic;
+}
+.tv-title h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+.tv-title h2 a:hover {
+  color: var(--amb);
+  text-decoration: underline;
 }
 .tv-body {
   font-family: var(--fc);
