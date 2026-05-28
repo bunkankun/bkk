@@ -1,5 +1,5 @@
 import { startGithubLogin } from "../../api/client";
-import { useWorkspace, workspace } from "../../state/useWorkspace";
+import { useWorkspace, workspace, type Theme } from "../../state/useWorkspace";
 import { SearchBar } from "./SearchBar";
 
 export function Menubar() {
@@ -7,6 +7,7 @@ export function Menubar() {
   const version = useWorkspace((s) => s.serverInfo?.version);
   const auth = useWorkspace((s) => s.auth);
   const persistence = useWorkspace((s) => s.persistence);
+  const theme = useWorkspace((s) => s.uiPrefs.theme);
   const user = auth.session?.user ?? null;
   const tooltip =
     upstream != null
@@ -30,6 +31,17 @@ export function Menubar() {
       </button>
       <div className="mb-spacer" />
       <SearchBar />
+      <select
+        className="mb-select mb-theme"
+        value={theme}
+        title="Theme"
+        aria-label="Theme"
+        onChange={(e) => workspace.setTheme(e.target.value as Theme)}
+      >
+        <option value="current">Current</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
       {user && persistence.status !== "idle" ? (
         <span
           className={`mb-sync mb-sync-${persistence.status}`}

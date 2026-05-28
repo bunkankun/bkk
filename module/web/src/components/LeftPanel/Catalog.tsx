@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { getCatalog, getCategories, getTimeline } from "../../api/client";
 import type {
   CatalogMatch,
@@ -8,6 +8,7 @@ import type {
   TimelineResponse,
 } from "../../api/types";
 import { workspace, useWorkspace } from "../../state/useWorkspace";
+import { listPathFromName } from "../../lib/textLists";
 
 type SubLoadState =
   | { status: "idle" }
@@ -429,6 +430,26 @@ function CatalogBundleRow({
   active: boolean;
   paddingLeft: number;
 }) {
+  const lists = useWorkspace((s) => s.textLists);
+  const addToList = (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (lists.length === 0) {
+      const name = window.prompt("Create list", "New list");
+      if (!name) return;
+      void workspace.createTextList(name).then(() => {
+        const path = listPathFromName(name);
+        return workspace.addTextToList(path, match.textid);
+      });
+      return;
+    }
+    const choice = window.prompt(
+      `Add ${match.textid} to list`,
+      lists[0]?.name ?? "",
+    );
+    if (!choice) return;
+    const list = lists.find((item) => item.name === choice || item.path === choice);
+    if (list) void workspace.addTextToList(list.path, match.textid);
+  };
   return (
     <div
       className={`list-item cat-bundle${active ? " on" : ""}`}
@@ -454,6 +475,14 @@ function CatalogBundleRow({
           {match.edition_short ? ` · ${match.edition_short}` : ""}
         </div>
       </div>
+      <button
+        type="button"
+        className="cat-add-list"
+        title="Add to list"
+        onClick={addToList}
+      >
+        +
+      </button>
     </div>
   );
 }

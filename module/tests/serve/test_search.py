@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from bkk.index.catalog import build_catalog_index
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
+from bkk.serve.routers import search as search_router
 
 from .conftest import write_bundle
 
@@ -46,6 +48,58 @@ def test_search_textid_scope(client):
     body = r.json()
     assert body["total"] >= 1
     assert all(h["textid"] == "TEST0002" for h in body["hits"])
+
+
+def test_search_repeated_textids_scope(client):
+    request = SimpleNamespace(app=client.app)
+    hits, *_ = search_router._search_hits(
+        request,
+        q="甲",
+        textid=None,
+        textids=["TEST0001", "TEST0002"],
+        witness=None,
+        voice=None,
+        category=None,
+        category_descendants=True,
+        date_before=None,
+        date_after=None,
+        left_char=None,
+        right_char=None,
+        left_bigram=None,
+        right_bigram=None,
+        around_binom=None,
+        sort="textid",
+        context=20,
+    )
+    assert len(hits) >= 1
+    assert {h.textid for h in hits} == {"TEST0001"}
+
+
+def test_search_textids_endpoint_returns_full_unique_set(client):
+    request = SimpleNamespace(app=client.app)
+    body = search_router.search_textids(
+        request,
+        q="甲",
+        textid=None,
+        textids=None,
+        witness=None,
+        voice=None,
+        category=None,
+        category_descendants=True,
+        date_before=None,
+        date_after=None,
+        left_char=None,
+        right_char=None,
+        left_bigram=None,
+        right_bigram=None,
+        around_binom=None,
+        sort="textid",
+        context=20,
+    )
+    assert body.query == "甲"
+    assert body.hit_count >= body.text_count
+    assert body.text_count == len(body.textids)
+    assert body.textids == sorted(set(body.textids))
 
 
 def test_search_hit_carries_recipe(client):

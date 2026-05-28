@@ -14,7 +14,7 @@ from ..state import UserSession
 
 router = APIRouter(prefix="/workspace", tags=["workspace"])
 
-ALLOWED_ROOTS = ("settings/", "notes/", "searches/")
+ALLOWED_ROOTS = ("settings/", "notes/", "searches/", "lists/")
 
 
 def _session(request: Request) -> UserSession:
@@ -238,3 +238,44 @@ async def write_file(request: Request, path: str) -> dict[str, Any]:
         "sha": content_result.get("sha") if isinstance(content_result, dict) else None,
         "commit": result.get("commit") if isinstance(result, dict) else None,
     }
+
+
+@router.delete("/files/{path:path}", summary="Delete one workspace file")
+def delete_file(
+    request: Request,
+    path: str,
+    sha: str | None = Query(None, description="Expected current GitHub blob sha"),
+) -> dict[str, Any]:
+    user_session = _session(request)
+    normalized = _normalize_workspace_path(path)
+    current = _file_payload(user_session, normalized)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Workspace file not found")
+    current_sha = current.get("sha")
+    if not isinstance(current_sha, str):
+        raise HTTPException(status_code=502, detail="GitHub file payload has no sha")
+    if sha != current_sha:
+        raise HTTPException(
+            status_code=409,
+            detail="Workspace file changed remotely; reload before deleting",
+        )
+    payload = {
+        "message": f"Delete BKK workspace file: {normalized}",
+        "sha": current_sha,
+        "branch": user_session.workspace["branch"],
+    }
+    try:
+        result = _github_json(
+            "DELETE",
+            f"/repos/{user_session.workspace['repo']}/contents/{_contents_path(normalized)}",
+            user_session.access_token,
+            json=payload,
+        )
+    except HTTPException as exc:
+        if _github_409(exc):
+            raise HTTPException(
+                status_code=409,
+                detail="Workspace file changed remotely; reload before deleting",
+            ) from exc
+        raise
+    return {"path": normalized, "commit": result.get("commit") if isinstance(result, dict) else None}

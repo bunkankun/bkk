@@ -27,3 +27,49 @@
   --fm: "IBM Plex Mono", monospace;
   --fc: "Noto Serif SC", "Songti SC", "SimSun", serif;
 }
+
+:root[data-theme="dark"] {
+  --bg: #050507;
+  --bg-act: #000000;
+  --bg-pan: #0b0b10;
+  --bg-ed: #07070a;
+  --bg-tab: #101018;
+
+  --bdr: #353543;
+  --bdr-l: #24242f;
+
+  --t1: #f3f4ff;
+  --t2: #b7bad0;
+  --t3: #7c8198;
+
+  --amb: oklch(0.82 0.16 72);
+  --amb-d: oklch(0.82 0.16 72 / 0.18);
+  --amb-b: oklch(0.82 0.16 72 / 0.34);
+
+  --blu: oklch(0.78 0.12 245);
+  --grn: oklch(0.78 0.12 155);
+  --hov: rgba(255, 255, 255, 0.095);
+}
+
+:root[data-theme="light"] {
+  --bg: #f8f8fb;
+  --bg-act: #eceef5;
+  --bg-pan: #ffffff;
+  --bg-ed: #ffffff;
+  --bg-tab: #f0f1f6;
+
+  --bdr: #d7d9e2;
+  --bdr-l: #e6e8ef;
+
+  --t1: #1d2230;
+  --t2: #596174;
+  --t3: #8a91a2;
+
+  --amb: oklch(0.48 0.14 55);
+  --amb-d: oklch(0.48 0.14 55 / 0.12);
+  --amb-b: oklch(0.48 0.14 55 / 0.24);
+
+  --blu: oklch(0.48 0.12 252);
+  --grn: oklch(0.47 0.12 155);
+  --hov: rgba(24, 31, 50, 0.07);
+}

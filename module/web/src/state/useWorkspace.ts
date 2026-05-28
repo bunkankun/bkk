@@ -6,12 +6,15 @@
 import { useSyncExternalStore } from "react";
 import {
   ApiError,
+  deleteWorkspaceFile,
   getAuthSession,
   getWorkspaceFile,
+  listWorkspaceFiles,
   getManifest,
   logout as logoutRequest,
   putWorkspaceFile,
   searchCorpus,
+  searchTextids,
 } from "../api/client";
 import type {
   AuthSession,
@@ -19,12 +22,22 @@ import type {
   SearchResponse,
   SearchSort,
 } from "../api/types";
+import {
+  addTextidsToContent,
+  listColor,
+  listNameFromPath,
+  listPathFromName,
+  parseTextList,
+  serializeTextList,
+} from "../lib/textLists";
 
-export type Activity = "texts" | "catalog" | "timeline";
+export type Activity = "texts" | "catalog" | "timeline" | "lists";
 export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
 export type SearchTarget = "fulltext" | "dictionary" | "translations";
 export type LineMode = "paragraph" | "phrase";
+export type Theme = "current" | "dark" | "light";
+export type ListFilterMode = "off" | "any" | "all";
 export type SearchFacetKind =
   | "category"
   | "witness"
@@ -68,6 +81,21 @@ export interface SearchHistoryEntry {
   filters: SearchFilters;
   pivotTextid: string | null;
   createdAt: string;
+}
+
+export interface TextList {
+  path: string;
+  name: string;
+  content: string;
+  textids: string[];
+  sha?: string;
+  source: "local" | "remote";
+}
+
+export interface ListBadge {
+  path: string;
+  name: string;
+  color: string;
 }
 
 export interface PendingHighlight {
@@ -136,6 +164,9 @@ export interface WorkspaceState {
   // search slice; ephemeral (no URL persistence in v1).
   search: SearchState;
   searchHistory: SearchHistoryEntry[];
+  textLists: TextList[];
+  activeListPaths: string[];
+  listFilterMode: ListFilterMode;
   // a search-result span the TextViewer should scroll to + flash, then clear.
   pendingHighlight: PendingHighlight | null;
   // the page-break the user is currently viewing in Inspect mode; drives the
@@ -144,6 +175,9 @@ export interface WorkspaceState {
   currentPage: CurrentPage | null;
   // user-tunable read-mode display preferences (persisted in localStorage).
   readPrefs: { lineMode: LineMode };
+  // broader UI preferences (persisted locally and, when logged in, in the
+  // user's GitHub workspace session file).
+  uiPrefs: { theme: Theme };
   // user-tunable panel widths, persisted in localStorage. The handle
   // between activity-bar and left panel adjusts `left`; the one between
   // workspace and right panel adjusts `right`; the inspect-mode splitter
@@ -156,7 +190,10 @@ export interface WorkspaceState {
 }
 
 const READ_PREFS_KEY = "bkk.readPrefs";
+const UI_PREFS_KEY = "bkk.uiPrefs";
 const PANEL_WIDTHS_KEY = "bkk.panelWidths";
+const TEXT_LISTS_KEY = "bkk.textLists";
+const LIST_PREFS_KEY = "bkk.listPrefs";
 const DEFAULT_LEFT_WIDTH = 240;
 const DEFAULT_RIGHT_WIDTH = 360;
 const DEFAULT_INSPECT_WIDTH = 480;
@@ -185,6 +222,92 @@ function saveReadPrefs(prefs: { lineMode: LineMode }): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(READ_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* localStorage disabled — silently keep state in memory only */
+  }
+}
+
+function coerceTheme(value: unknown, fallback: Theme = "current"): Theme {
+  return value === "dark" || value === "light" || value === "current"
+    ? value
+    : fallback;
+}
+
+function loadUiPrefs(): { theme: Theme } {
+  if (typeof window === "undefined") return { theme: "current" };
+  try {
+    const raw = window.localStorage.getItem(UI_PREFS_KEY);
+    if (!raw) return { theme: "current" };
+    const parsed = JSON.parse(raw);
+    return { theme: coerceTheme(parsed?.theme) };
+  } catch {
+    return { theme: "current" };
+  }
+}
+
+function saveUiPrefs(prefs: { theme: Theme }): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(UI_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* localStorage disabled — silently keep state in memory only */
+  }
+}
+
+function loadLocalTextLists(): TextList[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(TEXT_LISTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => typeof item?.path === "string" && typeof item?.content === "string")
+      .map((item) => {
+        const fallback = listNameFromPath(item.path);
+        const parsedList = parseTextList(item.content, fallback);
+        return {
+          path: item.path,
+          name: parsedList.name ?? fallback,
+          content: item.content,
+          textids: parsedList.textids,
+          source: "local" as const,
+        };
+      });
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalTextLists(lists: TextList[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const localLists = lists.map((list) => ({
+      path: list.path,
+      content: list.content,
+    }));
+    window.localStorage.setItem(TEXT_LISTS_KEY, JSON.stringify(localLists));
+  } catch {
+    /* localStorage disabled — silently keep state in memory only */
+  }
+}
+
+function loadListFilterMode(): ListFilterMode {
+  if (typeof window === "undefined") return "off";
+  try {
+    const raw = window.localStorage.getItem(LIST_PREFS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed?.filterMode === "any" || parsed?.filterMode === "all"
+      ? parsed.filterMode
+      : "off";
+  } catch {
+    return "off";
+  }
+}
+
+function saveListPrefs(mode: ListFilterMode): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LIST_PREFS_KEY, JSON.stringify({ filterMode: mode }));
   } catch {
     /* localStorage disabled — silently keep state in memory only */
   }
@@ -289,9 +412,13 @@ let state: WorkspaceState = {
     response: null,
   },
   searchHistory: [],
+  textLists: loadLocalTextLists(),
+  activeListPaths: [],
+  listFilterMode: loadListFilterMode(),
   pendingHighlight: null,
   currentPage: null,
   readPrefs: loadReadPrefs(),
+  uiPrefs: loadUiPrefs(),
   panelWidths: loadPanelWidths(),
   persistence: { status: "idle", error: null },
 };
@@ -328,6 +455,7 @@ async function runSearchInternal(offset: number): Promise<void> {
     const response = await searchCorpus({
       q: query,
       sort,
+      textids: scopedListTextids(),
       offset,
       textid: filters.textid ?? undefined,
       witness: filters.witness,
@@ -446,6 +574,71 @@ async function writeWorkspaceJson(path: string, value: unknown): Promise<void> {
   workspaceFileShas[path] = result.sha ?? undefined;
 }
 
+function textListFromContent(path: string, content: string, sha?: string): TextList {
+  const fallback = listNameFromPath(path);
+  const parsed = parseTextList(content, fallback);
+  return {
+    path,
+    name: parsed.name ?? fallback,
+    content,
+    textids: parsed.textids,
+    sha,
+    source: sha ? "remote" : "local",
+  };
+}
+
+function replaceTextList(list: TextList): void {
+  const others = state.textLists.filter((item) => item.path !== list.path);
+  const textLists = [...others, list].sort((a, b) => a.name.localeCompare(b.name));
+  state = {
+    ...state,
+    textLists,
+    activeListPaths: state.activeListPaths.filter((path) =>
+      textLists.some((item) => item.path === path),
+    ),
+  };
+  saveLocalTextLists(textLists);
+}
+
+function scopedListTextids(): string[] | undefined {
+  if (state.listFilterMode === "off") return undefined;
+  const active = state.textLists.filter((list) => state.activeListPaths.includes(list.path));
+  if (active.length === 0) return undefined;
+  if (state.listFilterMode === "any") {
+    return [...new Set(active.flatMap((list) => list.textids))].sort();
+  }
+  const [head, ...tail] = active;
+  const intersection = new Set(head.textids);
+  for (const list of tail) {
+    const ids = new Set(list.textids);
+    for (const id of [...intersection]) {
+      if (!ids.has(id)) intersection.delete(id);
+    }
+  }
+  return [...intersection].sort();
+}
+
+function searchParamsForLists() {
+  const { query, sort, filters } = state.search;
+  return {
+    q: query,
+    sort,
+    textid: filters.textid ?? undefined,
+    textids: scopedListTextids(),
+    witness: filters.witness,
+    voice: filters.voice,
+    category: filters.category,
+    categoryDescendants: filters.categoryDescendants,
+    dateBefore: filters.dateBefore ?? undefined,
+    dateAfter: filters.dateAfter ?? undefined,
+    leftChar: filters.leftChar,
+    rightChar: filters.rightChar,
+    leftBigram: filters.leftBigram,
+    rightBigram: filters.rightBigram,
+    aroundBinom: filters.aroundBinom,
+  };
+}
+
 function validSearchHistoryEntry(value: unknown): SearchHistoryEntry | null {
   if (typeof value !== "object" || value == null) return null;
   const rec = value as Partial<SearchHistoryEntry>;
@@ -550,7 +743,10 @@ async function saveSessionState(): Promise<void> {
       readMode: state.readMode,
       rightTab: state.rightTab,
       readPrefs: state.readPrefs,
+      uiPrefs: state.uiPrefs,
       panelWidths: state.panelWidths,
+      activeListPaths: state.activeListPaths,
+      listFilterMode: state.listFilterMode,
       updatedAt: new Date().toISOString(),
     });
     state = { ...state, persistence: { status: "idle", error: null } };
@@ -580,8 +776,14 @@ async function loadWorkspacePersistence(): Promise<void> {
         currentPage?: unknown;
         readMode?: unknown;
         rightTab?: unknown;
+        readPrefs?: unknown;
+        uiPrefs?: unknown;
+        panelWidths?: unknown;
+        activeListPaths?: unknown;
+        listFilterMode?: unknown;
       }>(SESSION_PATH),
     ]);
+    await loadRemoteTextLists();
     const entries = Array.isArray(historyDoc?.entries)
       ? historyDoc.entries
           .map(validSearchHistoryEntry)
@@ -616,7 +818,56 @@ async function loadWorkspacePersistence(): Promise<void> {
         sessionDoc.rightTab === "annotations"
           ? sessionDoc.rightTab
           : state.rightTab;
-      state = { ...state, readMode, rightTab };
+      const sessionReadPrefs =
+        typeof sessionDoc.readPrefs === "object" && sessionDoc.readPrefs != null
+          ? (sessionDoc.readPrefs as { lineMode?: unknown })
+          : null;
+      const readPrefs = sessionReadPrefs
+        ? {
+            ...state.readPrefs,
+            lineMode:
+              sessionReadPrefs.lineMode === "phrase" ? "phrase" : state.readPrefs.lineMode,
+          }
+        : state.readPrefs;
+      const sessionUiPrefs =
+        typeof sessionDoc.uiPrefs === "object" && sessionDoc.uiPrefs != null
+          ? (sessionDoc.uiPrefs as { theme?: unknown })
+          : null;
+      const uiPrefs = sessionUiPrefs
+        ? { ...state.uiPrefs, theme: coerceTheme(sessionUiPrefs.theme, state.uiPrefs.theme) }
+        : state.uiPrefs;
+      const sessionPanelWidths =
+        typeof sessionDoc.panelWidths === "object" && sessionDoc.panelWidths != null
+          ? (sessionDoc.panelWidths as { left?: unknown; right?: unknown; inspect?: unknown })
+          : null;
+      const panelWidths = sessionPanelWidths
+        ? {
+            left: clampWidth(sessionPanelWidths.left, state.panelWidths.left, "left"),
+            right: clampWidth(sessionPanelWidths.right, state.panelWidths.right, "right"),
+            inspect: clampWidth(sessionPanelWidths.inspect, state.panelWidths.inspect, "inspect"),
+          }
+        : state.panelWidths;
+      const activeListPaths = Array.isArray(sessionDoc.activeListPaths)
+        ? sessionDoc.activeListPaths.filter((item): item is string => typeof item === "string")
+        : state.activeListPaths;
+      const listFilterMode =
+        sessionDoc.listFilterMode === "any" || sessionDoc.listFilterMode === "all"
+          ? sessionDoc.listFilterMode
+          : state.listFilterMode;
+      if (sessionReadPrefs) saveReadPrefs(readPrefs);
+      if (sessionUiPrefs) saveUiPrefs(uiPrefs);
+      if (sessionPanelWidths) savePanelWidths(panelWidths);
+      saveListPrefs(listFilterMode);
+      state = {
+        ...state,
+        readMode,
+        rightTab,
+        readPrefs,
+        uiPrefs,
+        panelWidths,
+        activeListPaths,
+        listFilterMode,
+      };
       notify();
       if (activeTextid != null && activeSeq != null) {
         workspace.openJuan(activeTextid, activeSeq);
@@ -651,6 +902,63 @@ async function loadWorkspacePersistence(): Promise<void> {
     };
     notify();
   }
+}
+
+async function loadRemoteTextLists(): Promise<void> {
+  if (state.auth.status !== "authenticated") return;
+  const localBeforeLogin = loadLocalTextLists();
+  const listing = await listWorkspaceFiles("lists/");
+  const remoteLists: TextList[] = [];
+  for (const entry of listing.files) {
+    if (entry.type !== "file" || !entry.path.endsWith(".txt")) continue;
+    const file = await getWorkspaceFile(entry.path);
+    workspaceFileShas[entry.path] = file.sha;
+    remoteLists.push(textListFromContent(entry.path, file.content, file.sha));
+  }
+  let merged = [...remoteLists];
+  for (const local of localBeforeLogin) {
+    const remote = merged.find((item) => item.path === local.path);
+    if (!remote) {
+      const result = await putWorkspaceFile({ path: local.path, content: local.content });
+      workspaceFileShas[local.path] = result.sha ?? undefined;
+      merged.push({ ...local, sha: result.sha ?? undefined, source: "remote" });
+      continue;
+    }
+    if (remote.content === local.content) continue;
+    const choice = typeof window !== "undefined"
+      ? window.prompt(
+          `List "${remote.name}" exists locally and in your GitHub workspace. Type merge, remote, or local.`,
+          "merge",
+        )
+      : "remote";
+    if (choice === "local") {
+      const result = await putWorkspaceFile({
+        path: remote.path,
+        content: local.content,
+        sha: remote.sha,
+      });
+      const next = textListFromContent(remote.path, local.content, result.sha ?? undefined);
+      merged = merged.map((item) => (item.path === remote.path ? next : item));
+    } else if (choice === "merge") {
+      const content = addTextidsToContent(remote.content, remote.name, local.textids);
+      const result = await putWorkspaceFile({
+        path: remote.path,
+        content,
+        sha: remote.sha,
+      });
+      const next = textListFromContent(remote.path, content, result.sha ?? undefined);
+      merged = merged.map((item) => (item.path === remote.path ? next : item));
+    }
+  }
+  state = {
+    ...state,
+    textLists: merged.sort((a, b) => a.name.localeCompare(b.name)),
+    activeListPaths: state.activeListPaths.filter((path) =>
+      merged.some((item) => item.path === path),
+    ),
+  };
+  saveLocalTextLists(state.textLists);
+  notify();
 }
 
 function subscribe(l: () => void) {
@@ -818,6 +1126,8 @@ export const workspace = {
       activeSeq: null,
       currentPage: null,
       pane: { kind: "leaf", id: state.pane.id, tabs: [], activeTabId: null },
+      textLists: loadLocalTextLists(),
+      activeListPaths: [],
     };
     notify();
   },
@@ -925,6 +1235,130 @@ export const workspace = {
   runSearchAt(offset: number) {
     return runSearchInternal(offset);
   },
+  async saveSearchAsTextList(path: string | null = null) {
+    const params = searchParamsForLists();
+    if (!params.q.trim()) return;
+    const result = await searchTextids(params);
+    const suggested = path ?? listPathFromName(`Search ${params.q}`);
+    const existing = state.textLists.find((item) => item.path === suggested);
+    const name = existing?.name ?? listNameFromPath(suggested);
+    const content = addTextidsToContent(existing?.content ?? "", name, result.textids, {
+      source: "search",
+      query: result.query,
+      hit_count: result.hit_count,
+      text_count: result.text_count,
+    });
+    return workspace.saveTextList(suggested, content);
+  },
+  async createTextList(name: string) {
+    const path = listPathFromName(name);
+    const content = serializeTextList({ name, textids: [] });
+    return workspace.saveTextList(path, content);
+  },
+  async saveTextList(path: string, content: string) {
+    const list = textListFromContent(path, content, workspaceFileShas[path]);
+    if (state.auth.status === "authenticated") {
+      state = { ...state, persistence: { status: "saving", error: null } };
+      notify();
+      try {
+        const result = await putWorkspaceFile({
+          path,
+          content,
+          sha: workspaceFileShas[path],
+        });
+        workspaceFileShas[path] = result.sha ?? undefined;
+        replaceTextList({ ...list, sha: result.sha ?? undefined, source: "remote" });
+        state = { ...state, persistence: { status: "idle", error: null } };
+        notify();
+      } catch (e) {
+        state = {
+          ...state,
+          persistence: {
+            status: "error",
+            error: e instanceof Error ? e.message : String(e),
+          },
+        };
+        notify();
+      }
+    } else {
+      replaceTextList(list);
+      notify();
+    }
+  },
+  async deleteTextList(path: string) {
+    const nextLists = state.textLists.filter((item) => item.path !== path);
+    if (state.auth.status === "authenticated" && workspaceFileShas[path]) {
+      state = { ...state, persistence: { status: "saving", error: null } };
+      notify();
+      try {
+        await deleteWorkspaceFile({ path, sha: workspaceFileShas[path] });
+        delete workspaceFileShas[path];
+      } catch (e) {
+        state = {
+          ...state,
+          persistence: {
+            status: "error",
+            error: e instanceof Error ? e.message : String(e),
+          },
+        };
+        notify();
+        return;
+      }
+    }
+    state = {
+      ...state,
+      textLists: nextLists,
+      activeListPaths: state.activeListPaths.filter((p) => p !== path),
+      persistence: { status: "idle", error: null },
+    };
+    saveLocalTextLists(nextLists);
+    notify();
+  },
+  async renameTextList(path: string, name: string) {
+    const list = state.textLists.find((item) => item.path === path);
+    if (!list) return;
+    const nextPath = listPathFromName(name);
+    const content = serializeTextList({
+      name,
+      textids: list.textids,
+      existingContent: list.content,
+    });
+    await workspace.saveTextList(nextPath, content);
+    if (nextPath !== path) await workspace.deleteTextList(path);
+  },
+  async addTextToList(path: string, textid: string) {
+    const list = state.textLists.find((item) => item.path === path);
+    if (!list) return;
+    const content = addTextidsToContent(list.content, list.name, [textid]);
+    await workspace.saveTextList(path, content);
+  },
+  async addCurrentTextToList(path: string) {
+    if (!state.activeTextid) return;
+    await workspace.addTextToList(path, state.activeTextid);
+  },
+  setListActive(path: string, active: boolean) {
+    const activeListPaths = active
+      ? [...new Set([...state.activeListPaths, path])]
+      : state.activeListPaths.filter((item) => item !== path);
+    state = { ...state, activeListPaths };
+    notify();
+    scheduleSessionSave();
+    if (state.listFilterMode !== "off" && state.search.status !== "idle") {
+      return runSearchInternal(0);
+    }
+  },
+  setListFilterMode(mode: ListFilterMode) {
+    state = { ...state, listFilterMode: mode };
+    saveListPrefs(mode);
+    notify();
+    scheduleSessionSave();
+    if (state.search.status !== "idle") return runSearchInternal(0);
+  },
+  listBadgesForTextid(textid: string): ListBadge[] {
+    return state.textLists
+      .filter((list) => state.activeListPaths.includes(list.path) && list.textids.includes(textid))
+      .map((list) => ({ path: list.path, name: list.name, color: listColor(list.path) }));
+  },
   useSearchHistoryEntry(entry: SearchHistoryEntry) {
     cancelSearchRequest();
     state = {
@@ -995,6 +1429,15 @@ export const workspace = {
     const readPrefs = { ...state.readPrefs, lineMode };
     state = { ...state, readPrefs };
     saveReadPrefs(readPrefs);
+    notify();
+    scheduleSessionSave();
+  },
+  setTheme(theme: Theme) {
+    const next = coerceTheme(theme, state.uiPrefs.theme);
+    if (next === state.uiPrefs.theme) return;
+    const uiPrefs = { ...state.uiPrefs, theme: next };
+    state = { ...state, uiPrefs };
+    saveUiPrefs(uiPrefs);
     notify();
     scheduleSessionSave();
   },

@@ -264,6 +264,13 @@ export interface SearchResponse {
   hits: SearchHit[];
 }
 
+export interface SearchTextidsResponse {
+  query: string;
+  hit_count: number;
+  text_count: number;
+  textids: string[];
+}
+
 // Server identity
 export interface ServerInfo {
   service?: string;
@@ -306,6 +313,11 @@ export interface WorkspaceFile {
 export interface WorkspaceWriteResult {
   path: string;
   sha?: string | null;
+  commit?: unknown;
+}
+
+export interface WorkspaceDeleteResult {
+  path: string;
   commit?: unknown;
 }
 

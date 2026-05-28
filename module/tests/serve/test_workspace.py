@@ -42,6 +42,7 @@ def test_workspace_path_validation_allows_workspace_roots():
     assert workspace_router._normalize_workspace_path("settings/ui.json") == "settings/ui.json"
     assert workspace_router._normalize_workspace_path("notes/n1.md") == "notes/n1.md"
     assert workspace_router._normalize_workspace_path("searches/s1.json") == "searches/s1.json"
+    assert workspace_router._normalize_workspace_path("lists/favorites.txt") == "lists/favorites.txt"
 
 
 def test_workspace_read_uses_user_repo_and_branch(client, monkeypatch):
@@ -131,6 +132,48 @@ def test_workspace_write_uses_user_repo_branch_and_sha(client, monkeypatch):
                 "content": base64.b64encode(b'{"theme":"light"}').decode("ascii"),
                 "branch": "alice",
                 "sha": "remote-sha",
+            }
+        },
+    )
+
+
+def test_workspace_delete_uses_user_repo_branch_and_sha(client, monkeypatch):
+    session = _session(client)
+    calls = []
+
+    def fake_github_json(method, path, token, **kwargs):
+        calls.append((method, path, token, kwargs))
+        if method == "GET":
+            return {
+                "type": "file",
+                "path": "lists/favorites.txt",
+                "sha": "remote-sha",
+                "content": base64.b64encode(b"KR1a0001\n").decode("ascii"),
+            }
+        return {"commit": {"sha": "commit-sha"}}
+
+    monkeypatch.setattr(workspace_router, "_github_json", fake_github_json)
+
+    class Request:
+        cookies = {"bkk_session": session.id}
+        app = client.app
+
+    body = workspace_router.delete_file(
+        Request(),
+        "lists/favorites.txt",
+        sha="remote-sha",
+    )
+
+    assert body["path"] == "lists/favorites.txt"
+    assert calls[1] == (
+        "DELETE",
+        "/repos/alice/BKK-Workspace/contents/lists/favorites.txt",
+        "secret-token",
+        {
+            "json": {
+                "message": "Delete BKK workspace file: lists/favorites.txt",
+                "sha": "remote-sha",
+                "branch": "alice",
             }
         },
     )

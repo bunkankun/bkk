@@ -27,7 +27,7 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
           width="8"
           height="10"
           rx="1"
-          fill="#12111a"
+          fill="var(--bg-act)"
           stroke="currentColor"
           strokeWidth="1.3"
         />
@@ -89,6 +89,26 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
         <circle cx="8" cy="4" r="1.2" fill="currentColor" />
         <circle cx="8" cy="8" r="1.2" fill="currentColor" />
         <circle cx="8" cy="12" r="1.2" fill="currentColor" />
+      </svg>
+    ),
+  },
+  {
+    id: "lists",
+    label: "Lists",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+        <path
+          d="M5 4h8M5 8h8M5 12h8"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+        />
+        <path
+          d="M2.5 4h.01M2.5 8h.01M2.5 12h.01"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
       </svg>
     ),
   },

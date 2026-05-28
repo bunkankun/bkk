@@ -59,7 +59,7 @@ button {
 /* menubar -------------------------------------------------------- */
 .mb {
   height: 36px;
-  background: #09080f;
+  background: var(--bg-act);
   border-bottom: 1px solid var(--bdr);
   display: flex;
   align-items: center;
@@ -155,6 +155,11 @@ button {
 .mb-select:focus {
   border-color: var(--amb);
 }
+.mb-theme {
+  width: 76px;
+  margin-left: 6px;
+  flex: 0 0 auto;
+}
 .mb-search-go {
   height: 24px;
   padding: 0 10px;
@@ -231,7 +236,7 @@ button {
   white-space: nowrap;
 }
 .mb-sync-error {
-  color: #ff8f7a;
+  color: var(--amb);
 }
 
 /* activity bar --------------------------------------------------- */
@@ -394,6 +399,122 @@ button {
 .list-sub {
   font-size: 11px;
   color: var(--t2);
+}
+.cat-add-list {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.cat-add-list:hover {
+  border-color: var(--amb);
+  color: var(--amb);
+  background: var(--amb-d);
+}
+.lists-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.lists-toolbar,
+.list-editor-actions,
+.list-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--bdr-l);
+}
+.lists-toolbar button,
+.lists-toolbar select,
+.list-editor button {
+  height: 24px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--t2);
+  font: inherit;
+  font-size: 12px;
+}
+.lists-toolbar button,
+.list-editor button {
+  cursor: pointer;
+  padding: 0 8px;
+}
+.lists-toolbar button:hover:not(:disabled),
+.list-editor button:hover:not(:disabled) {
+  color: var(--amb);
+  border-color: var(--amb);
+  background: var(--amb-d);
+}
+.lists-list {
+  border-bottom: 1px solid var(--bdr-l);
+  max-height: 34%;
+  overflow: auto;
+}
+.text-list-row {
+  width: 100%;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--t2);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.text-list-row.on,
+.text-list-row:hover {
+  background: var(--hov);
+  color: var(--t1);
+}
+.text-list-row span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.text-list-row em {
+  color: var(--t3);
+  font-style: normal;
+  font-size: 11px;
+}
+.list-editor {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.list-editor-head strong {
+  flex: 1;
+  color: var(--t1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-editor textarea {
+  flex: 1;
+  min-height: 160px;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: 10px;
+  background: var(--bg-ed);
+  color: var(--t1);
+  font: 12px/1.6 var(--fm);
+}
+.list-editor-actions {
+  border-top: 1px solid var(--bdr-l);
+  border-bottom: none;
+  flex-wrap: wrap;
 }
 .empty {
   padding: 14px 14px;
@@ -675,7 +796,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0a0a10;
+  background: var(--bg);
   position: relative;
 }
 .image-panel-body.zoomed {
@@ -822,14 +943,15 @@ button {
 /* status bar ----------------------------------------------------- */
 .sb {
   height: 24px;
-  background: oklch(0.28 0.07 260);
+  background: var(--bg-tab);
+  border-top: 1px solid var(--bdr);
   display: flex;
   align-items: center;
   font-family: var(--fm);
   font-size: 11px;
   flex-shrink: 0;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--t2);
 }
 .si {
   display: flex;
@@ -849,7 +971,7 @@ button {
   align-items: center;
   font-size: 10px;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--t2);
   border: none;
   background: transparent;
   font-family: var(--fm);
@@ -857,16 +979,16 @@ button {
   letter-spacing: 0.04em;
 }
 .sdb:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--hov);
+  color: var(--t1);
 }
 .sdb:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .sdb.on {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
+  color: var(--amb);
+  background: var(--amb-d);
 }
 
 /* catalog filter ------------------------------------------------- */
@@ -1155,6 +1277,7 @@ button {
   display: flex;
   gap: 6px;
   align-items: baseline;
+  flex-wrap: wrap;
   font-size: 10px;
   color: var(--t3);
   margin-bottom: 4px;
@@ -1170,7 +1293,6 @@ button {
   color: var(--t3);
 }
 .kwic-chip {
-  margin-left: auto;
   padding: 0 5px;
   border-radius: 3px;
   background: var(--amb-d);
@@ -1178,6 +1300,16 @@ button {
   font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+.kwic-list-badge {
+  padding: 0 5px;
+  border-radius: 3px;
+  color: white;
+  font-size: 9px;
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .kwic-line {
   font-family: var(--fc);

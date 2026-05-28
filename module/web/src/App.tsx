@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { getServerInfo } from "./api/client";
 import { ActivityBar } from "./components/ActivityBar";
 import { Catalog } from "./components/LeftPanel/Catalog";
+import { Lists } from "./components/LeftPanel/Lists";
 import { Toc } from "./components/LeftPanel/Toc";
 import { Menubar } from "./components/Menubar";
 import { AnnotationsTab } from "./components/RightPanel/AnnotationsTab";
@@ -55,6 +56,8 @@ function LeftPanel() {
   const width = useWorkspace((s) => s.panelWidths.left);
   const title = activity === "timeline"
     ? "Timeline"
+    : activity === "lists"
+      ? "Lists"
     : activity === "catalog"
       ? "Catalog"
       : "Texts";
@@ -66,6 +69,8 @@ function LeftPanel() {
       <div className="lp-body">
         {activity === "timeline" ? (
           <Catalog mode="timeline" />
+        ) : activity === "lists" ? (
+          <Lists />
         ) : activity === "catalog" ? (
           <Catalog mode="categories" />
         ) : (
@@ -116,6 +121,8 @@ function RightPanel() {
 }
 
 export function App() {
+  const theme = useWorkspace((s) => s.uiPrefs.theme);
+
   useEffect(() => {
     let cancelled = false;
     void workspace.loadAuthSession();
@@ -134,6 +141,10 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   return (
     <div className="app">

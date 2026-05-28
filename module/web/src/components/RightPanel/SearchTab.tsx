@@ -1,4 +1,5 @@
 import type { SearchFacetValue, SearchFacets, SearchHit } from "../../api/types";
+import { listPathFromName } from "../../lib/textLists";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import type { SearchFacetKind, SearchFilters } from "../../state/useWorkspace";
 
@@ -231,6 +232,7 @@ function HitRow({ hit }: { hit: SearchHit }) {
   const wLeftRaw = hit.witness_left ?? "";
   const wRightRaw = hit.witness_right ?? "";
   const showWitnessLine = witness !== null && (wLeftRaw.length > 0 || wRightRaw.length > 0);
+  const badges = workspace.listBadgesForTextid(hit.textid);
   // Split each side into anchor (master/identity, shared with master line)
   // and interior (variant chars). Trim only the anchor with the master-line
   // trim helpers; collapse the interior when long.
@@ -263,6 +265,16 @@ function HitRow({ hit }: { hit: SearchHit }) {
         <span className="kwic-juan">juan {hit.juan_seq}</span>
         {hit.bucket !== "body" ? <span className="kwic-chip">{hit.bucket}</span> : null}
         {witness ? <span className="kwic-chip">{witness}</span> : null}
+        {badges.map((badge) => (
+          <span
+            key={badge.path}
+            className="kwic-list-badge"
+            style={{ backgroundColor: badge.color }}
+            title={badge.name}
+          >
+            {badge.name}
+          </span>
+        ))}
       </div>
       <div className="kwic-line">
         <span className="kwic-left">
@@ -306,6 +318,8 @@ export function SearchTab() {
   const response = useWorkspace((s) => s.search.response);
   const query = useWorkspace((s) => s.search.query);
   const filters = useWorkspace((s) => s.search.filters);
+  useWorkspace((s) => s.activeListPaths);
+  const listFilterMode = useWorkspace((s) => s.listFilterMode);
 
   if (status === "idle") {
     return <div className="rc empty">Enter a query in the menu bar to search.</div>;
@@ -345,6 +359,11 @@ export function SearchTab() {
   const facets = response.facets ? normalizeFacets(response.facets) : EMPTY_FACETS;
   const disabled = status === "loading";
   const filtered = hasAnyFilter(filters);
+  const saveSearchList = () => {
+    const name = window.prompt("Save matched texts as list", `Search ${response.query}`);
+    if (!name) return;
+    void workspace.saveSearchAsTextList(listPathFromName(name));
+  };
 
   const goPage = async (nextOffset: number) => {
     // Bounded reuse: re-run the search with a new offset. Cheapest path —
@@ -360,6 +379,17 @@ export function SearchTab() {
           {start}–{end} of {response.total} for “{response.query}”
         </span>
         <span className="kwic-sort">· {response.sort}</span>
+        {listFilterMode !== "off" ? (
+          <span className="kwic-sort">· lists: {listFilterMode}</span>
+        ) : null}
+        <button
+          type="button"
+          className="kwic-clear-filters"
+          disabled={disabled}
+          onClick={saveSearchList}
+        >
+          save list
+        </button>
         {filtered ? (
           <button
             type="button"

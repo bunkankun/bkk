@@ -63,12 +63,14 @@ CLI flags override env vars.
 - Annotated chars are dotted-underlined; hover for tooltip; click to push into the right-panel selection
 - Bundles without annotations show "No annotations for this juan."
 - Left and right panel widths are user-draggable (handles between activity-bar/LeftPanel and Workspace/RightPanel) and persisted in localStorage
-- The menubar logo tooltip reports the configured `upstream_repo`; the search bar sits at the right next to the (disabled) Login button
+- Theme selection lives in the Menubar with three choices: Current, Dark, and Light. The choice is cached in `localStorage["bkk.uiPrefs"]` and, when logged in, saved into the user's GitHub workspace session file.
+- The menubar logo tooltip reports the configured `upstream_repo`; the search bar sits at the right next to the theme selector and GitHub login/user controls
 - Full-text search (Menubar) with five sort modes; results render in a Search tab on the right panel and clicking a hit scrolls + flashes the matched span in the workspace for 15s
+- User text lists live in the left activity bar's Lists view. Lists are plain `lists/*.txt` files: a KR id in the first token of a line counts as membership, while comments and other line content are ignored. Anonymous lists persist locally; logged-in lists sync through the GitHub workspace. Active lists can mark search hits and optionally filter searches with sticky Any/All modes.
 - A pinned search input on the LeftPanel Catalog queries the server-side catalog across title, pinyin (tone-insensitive), English title, and identifiers before any category is expanded
 - The left activity bar has separate Catalog and Timeline entries; Timeline browses calendar-century buckets
 
-What does NOT work yet (deferred to later slices): GitHub login, in-browser editing/PRs, translation mode, IIIF facsimile (Inspect), AI/Dharma panels, the cross-text annotation dictionary, pane splits.
+What does NOT work yet (deferred to later slices): in-browser text editing/PRs, translation mode, AI/Dharma panels, the cross-text annotation dictionary, pane splits.
 
 ## Search
 
@@ -84,7 +86,7 @@ The Menubar carries a search bar with two dropdowns:
 
 The endpoint is `GET /search?q=…&sort=…` (see [module/bkk/serve/routers/search.py](module/bkk/serve/routers/search.py)); the response echoes the `sort` value that took effect. Hits are sorted over the **full** result list before the `offset:offset+limit` slice.
 
-Results render in a third right-panel tab (alongside Annot. and Chat) that appears once a search is in flight and remains for the session. Each row shows `toc_label · textid · juan` plus a KWIC line. The left context is anchored to the right edge via `display: flex; justify-content: flex-end`, so when it overflows the column its **leftmost** chars get clipped (those nearest the match stay visible). Phrase-boundary trim (`。！？；`) preserves clean breakpoints when sentence-enders are present, with an ellipsis chip marking elided text on either side. Hits whose match came from a non-master witness are flagged with an amber chip in the meta row naming the edition (e.g. `TKD`); when the witness provides context around the match (i.e. the variant reading is longer than its master span) a second, dimmer KWIC line renders below the master line, showing the witness's actual context around the query (`witness_left` / `matched_text` / `witness_right`) — useful when the master text was rewritten and so the master line's highlighted token is the replaced master string rather than the query itself. Clicking a row opens the juan in the workspace and triggers a 15s amber flash on the master span. Pagination uses prev/next over `offset` (page size 50).
+Results render in a third right-panel tab (alongside Annot. and Chat) that appears once a search is in flight and remains for the session. Each row shows `toc_label · textid · juan` plus a KWIC line. The left context is anchored to the right edge via `display: flex; justify-content: flex-end`, so when it overflows the column its **leftmost** chars get clipped (those nearest the match stay visible). Phrase-boundary trim (`。！？；`) preserves clean breakpoints when sentence-enders are present, with an ellipsis chip marking elided text on either side. Hits whose match came from a non-master witness are flagged with an amber chip in the meta row naming the edition (e.g. `TKD`); when the witness provides context around the match (i.e. the variant reading is longer than its master span) a second, dimmer KWIC line renders below the master line, showing the witness's actual context around the query (`witness_left` / `matched_text` / `witness_right`) — useful when the master text was rewritten and so the master line's highlighted token is the replaced master string rather than the query itself. Clicking a row opens the juan in the workspace and triggers a 15s amber flash on the master span. Pagination uses prev/next over `offset` (page size 50). Repeated `textids` parameters restrict search to a list-scope; `GET /search/textids` returns all unique matched text ids with `hit_count` and `text_count` for saving search-derived lists.
 
 The catalog search input on the LeftPanel calls `GET /catalog?q=…`. It searches the whole catalog server-side across title, tone-insensitive pinyin, English title, `textid`, canonical identifier, and manifest identifiers.
 
@@ -103,7 +105,7 @@ The Workspace TextViewer ([module/web/src/components/Workspace/TextViewer.tsx](m
 
 - Block boundaries follow `paragraph-break` markers (paragraph mode, default) or `tls:seg` markers (phrase mode), falling back to literal `\n` / phrase-ending punctuation when those markers are absent.
 - Each block lives in an `IntersectionObserver` with `rootMargin: "200% 0px"`; once a block enters the expanded viewport it stays mounted (so scroll position never jumps back).
-- The line-mode toggle (¶ / ↵) lives in the StatusBar and persists in `localStorage["bkk.readPrefs"]`.
+- The line-mode toggle (¶ / ↵) lives in the StatusBar and persists in `localStorage["bkk.readPrefs"]`. When the user is logged in, it is also saved to `settings/session.json` in their GitHub workspace.
 - Punctuation is injected from `punctuation`-type markers at their `offset`, skipping positions where the master text already has punctuation.
 - PUA Kanripo refs (`&KRnnnn;`) are decoded on render via `decodeKrRefs`; only CJK + PUA chars participate in selection (drag-select skips ASCII/whitespace markers).
 
@@ -117,6 +119,6 @@ Clicking a search hit calls `workspace.openHit(hit)`, which atomically updates t
 
 ## Resizable panels
 
-Both the LeftPanel and RightPanel widths are user-draggable. Handles (`<ResizeHandle side="left|right" />` in [module/web/src/App.tsx](module/web/src/App.tsx)) sit between the activity-bar/LeftPanel and Workspace/RightPanel respectively. Widths are clamped to `[180, 600]` px and persisted in `localStorage["bkk.panelWidths"]`.
+Both the LeftPanel and RightPanel widths are user-draggable. Handles (`<ResizeHandle side="left|right" />` in [module/web/src/App.tsx](module/web/src/App.tsx)) sit between the activity-bar/LeftPanel and Workspace/RightPanel respectively. Widths are clamped to `[180, 600]` px and persisted in `localStorage["bkk.panelWidths"]`. Authenticated sessions also restore and save these widths through `settings/session.json`.
 
 The drag's terminating `mouseup` bubbles into the Workspace's `.ec` element, whose `handleMouseUp` would otherwise treat any non-collapsed `window.getSelection()` range as a fresh drag-select and switch the right tab to Annotations (hiding live search results). A module-scoped `isResizing` guard in [module/web/src/state/useWorkspace.ts](module/web/src/state/useWorkspace.ts) is set on drag start and cleared in a `setTimeout(0)` after `mouseup` — the deferred clear lets the bubbling event observe the guard as still true and short-circuit. The drag also pre-clears `window.getSelection()` so a stale selection (from before the drag) can't trip the same path.

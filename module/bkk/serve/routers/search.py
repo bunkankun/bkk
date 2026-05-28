@@ -22,6 +22,7 @@ from ..schemas import (
     SearchFacets,
     SearchFacetValue,
     SearchResponse,
+    SearchTextidsResponse,
     VariantOverlayOut,
 )
 
@@ -247,6 +248,7 @@ def _apply_hit_filters(
     hits: Iterable[Hit],
     *,
     meta: dict[str, _CatalogMeta],
+    textids: set[str],
     categories: set[str],
     category_descendants: bool,
     date_before: int | None,
@@ -259,6 +261,8 @@ def _apply_hit_filters(
 ) -> list[Hit]:
     out: list[Hit] = []
     for h in hits:
+        if textids and h.textid not in textids:
+            continue
         m = meta.get(h.textid)
         if not _category_matches(m.section_code if m else None, categories, category_descendants):
             continue
@@ -279,6 +283,10 @@ def _apply_hit_filters(
             continue
         out.append(h)
     return out
+
+
+def _unique_textids(hits: Iterable[Hit]) -> list[str]:
+    return sorted({h.textid for h in hits})
 
 
 def _facet_values(
@@ -374,6 +382,109 @@ def _build_facets(
 router = APIRouter(tags=["search"])
 
 
+def _search_hits(
+    request: Request,
+    *,
+    q: str,
+    textid: str | None,
+    textids: list[str] | None,
+    witness: list[str] | None,
+    voice: list[str] | None,
+    category: list[str] | None,
+    category_descendants: bool,
+    date_before: int | None,
+    date_after: int | None,
+    left_char: list[str] | None,
+    right_char: list[str] | None,
+    left_bigram: list[str] | None,
+    right_bigram: list[str] | None,
+    around_binom: list[str] | None,
+    sort: Sort,
+    context: int,
+) -> tuple[list[Hit], dict[str, _CatalogMeta], set[str] | None, set[str] | None, set[str], set[str], set[str], set[str], set[str], set[str], set[str], CorpusSnapshot | None]:
+    state = request.app.state.bkk
+    ix = state.open_index()
+    if ix is None:
+        raise errors.index_unavailable(state._index_error or "index not built")
+
+    witnesses = set(witness) if witness else None
+    voices = set(voice) if voice else None
+    scoped_textids = set(textids or [])
+    if textid:
+        scoped_textids = {textid} if not scoped_textids else scoped_textids & {textid}
+    categories = _selected(category)
+    selected_left_char = _selected(left_char)
+    selected_right_char = _selected(right_char)
+    selected_left_bigram = _selected(left_bigram)
+    selected_right_bigram = _selected(right_bigram)
+    selected_around_binom = _selected(around_binom)
+    if voices is not None:
+        available = set(ix.available_voices())
+        unknown = voices - available
+        if unknown:
+            ix.close()
+            raise errors.bad_request(
+                "unknown_voice",
+                unknown=sorted(unknown),
+                available=sorted(available),
+            )
+    try:
+        if scoped_textids:
+            all_hits = [
+                hit
+                for tid in sorted(scoped_textids)
+                for hit in ix.search(
+                    q,
+                    context=context,
+                    witnesses=witnesses,
+                    textid=tid,
+                    voices=voices,
+                )
+            ]
+        else:
+            all_hits = list(ix.search(
+                q,
+                context=context,
+                witnesses=witnesses,
+                textid=textid,
+                voices=voices,
+            ))
+    finally:
+        ix.close()
+
+    snap = state.cache.get() if sort == "date" else None
+    meta = _catalog_meta(request, snap)
+    filtered_hits = _apply_hit_filters(
+        all_hits,
+        meta=meta,
+        textids=scoped_textids,
+        categories=categories,
+        category_descendants=category_descendants,
+        date_before=date_before,
+        date_after=date_after,
+        left_char=selected_left_char,
+        right_char=selected_right_char,
+        left_bigram=selected_left_bigram,
+        right_bigram=selected_right_bigram,
+        around_binom=selected_around_binom,
+    )
+    sorted_hits = _sort_hits(filtered_hits, sort, q, snap)
+    return (
+        sorted_hits,
+        meta,
+        witnesses,
+        voices,
+        categories,
+        selected_left_char,
+        selected_right_char,
+        selected_left_bigram,
+        selected_right_bigram,
+        selected_around_binom,
+        scoped_textids,
+        snap,
+    )
+
+
 @router.get("/search", response_model=SearchResponse, summary="KWIC search across the corpus")
 def search(
     request: Request,
@@ -387,6 +498,10 @@ def search(
         None,
         description="restrict to one bundle's textid",
         openapi_examples=ex.TEXTID,
+    ),
+    textids: list[str] | None = Query(
+        None,
+        description="restrict to these bundle textids (repeatable)",
     ),
     witness: list[str] | None = Query(
         None,
@@ -422,26 +537,11 @@ def search(
         None,
         description="open/current textid used to expose a date-pivot hint in facets",
     ),
-    left_char: list[str] | None = Query(
-        None,
-        description="restrict by the character immediately before the match",
-    ),
-    right_char: list[str] | None = Query(
-        None,
-        description="restrict by the character immediately after the match",
-    ),
-    left_bigram: list[str] | None = Query(
-        None,
-        description="restrict by the two characters immediately before the match",
-    ),
-    right_bigram: list[str] | None = Query(
-        None,
-        description="restrict by the two characters immediately after the match",
-    ),
-    around_binom: list[str] | None = Query(
-        None,
-        description="restrict by immediate before+after character pair",
-    ),
+    left_char: list[str] | None = Query(None),
+    right_char: list[str] | None = Query(None),
+    left_bigram: list[str] | None = Query(None),
+    right_bigram: list[str] | None = Query(None),
+    around_binom: list[str] | None = Query(None),
     sort: Sort = Query(
         "match",
         description=(
@@ -456,52 +556,38 @@ def search(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> SearchResponse:
-    state = request.app.state.bkk
-    ix = state.open_index()
-    if ix is None:
-        raise errors.index_unavailable(state._index_error or "index not built")
-
-    witnesses = set(witness) if witness else None
-    voices = set(voice) if voice else None
-    categories = _selected(category)
-    selected_left_char = _selected(left_char)
-    selected_right_char = _selected(right_char)
-    selected_left_bigram = _selected(left_bigram)
-    selected_right_bigram = _selected(right_bigram)
-    selected_around_binom = _selected(around_binom)
-    if voices is not None:
-        available = set(ix.available_voices())
-        unknown = voices - available
-        if unknown:
-            ix.close()
-            raise errors.bad_request(
-                "unknown_voice",
-                unknown=sorted(unknown),
-                available=sorted(available),
-            )
-    try:
-        all_hits = list(ix.search(
-            q, context=context, witnesses=witnesses, textid=textid, voices=voices,
-        ))
-    finally:
-        ix.close()
-
-    snap = state.cache.get() if sort == "date" else None
-    meta = _catalog_meta(request, snap)
-    filtered_hits = _apply_hit_filters(
-        all_hits,
-        meta=meta,
-        categories=categories,
+    (
+        sorted_hits,
+        meta,
+        witnesses,
+        voices,
+        categories,
+        selected_left_char,
+        selected_right_char,
+        selected_left_bigram,
+        selected_right_bigram,
+        selected_around_binom,
+        _scoped_textids,
+        snap,
+    ) = _search_hits(
+        request,
+        q=q,
+        textid=textid,
+        textids=textids,
+        witness=witness,
+        voice=voice,
+        category=category,
         category_descendants=category_descendants,
         date_before=date_before,
         date_after=date_after,
-        left_char=selected_left_char,
-        right_char=selected_right_char,
-        left_bigram=selected_left_bigram,
-        right_bigram=selected_right_bigram,
-        around_binom=selected_around_binom,
+        left_char=left_char,
+        right_char=right_char,
+        left_bigram=left_bigram,
+        right_bigram=right_bigram,
+        around_binom=around_binom,
+        sort=sort,
+        context=context,
     )
-    sorted_hits = _sort_hits(filtered_hits, sort, q, snap)
     facets = _build_facets(
         sorted_hits,
         meta=meta,
@@ -560,4 +646,56 @@ def search(
             )
             for h in page
         ],
+    )
+
+
+@router.get(
+    "/search/textids",
+    response_model=SearchTextidsResponse,
+    summary="Unique textids matching a KWIC search",
+)
+def search_textids(
+    request: Request,
+    q: str = Query(..., min_length=1, openapi_examples=ex.QUERY),
+    textid: str | None = Query(None, openapi_examples=ex.TEXTID),
+    textids: list[str] | None = Query(None),
+    witness: list[str] | None = Query(None, openapi_examples=ex.WITNESS_LIST),
+    voice: list[str] | None = Query(None, openapi_examples=ex.VOICE_LIST),
+    category: list[str] | None = Query(None),
+    category_descendants: bool = Query(True),
+    date_before: int | None = Query(None),
+    date_after: int | None = Query(None),
+    left_char: list[str] | None = Query(None),
+    right_char: list[str] | None = Query(None),
+    left_bigram: list[str] | None = Query(None),
+    right_bigram: list[str] | None = Query(None),
+    around_binom: list[str] | None = Query(None),
+    sort: Sort = Query("textid"),
+    context: int = Query(20, ge=0, le=200),
+) -> SearchTextidsResponse:
+    sorted_hits, *_ = _search_hits(
+        request,
+        q=q,
+        textid=textid,
+        textids=textids,
+        witness=witness,
+        voice=voice,
+        category=category,
+        category_descendants=category_descendants,
+        date_before=date_before,
+        date_after=date_after,
+        left_char=left_char,
+        right_char=right_char,
+        left_bigram=left_bigram,
+        right_bigram=right_bigram,
+        around_binom=around_binom,
+        sort=sort,
+        context=context,
+    )
+    ids = _unique_textids(sorted_hits)
+    return SearchTextidsResponse(
+        query=q,
+        hit_count=len(sorted_hits),
+        text_count=len(ids),
+        textids=ids,
     )

@@ -136,6 +136,13 @@ class SearchResponse(BaseModel):
     hits: list[HitOut]
 
 
+class SearchTextidsResponse(BaseModel):
+    query: str
+    hit_count: int
+    text_count: int
+    textids: list[str]
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: str | None = None
