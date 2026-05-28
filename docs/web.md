@@ -66,7 +66,26 @@ CLI flags override env vars.
 - Theme selection lives in the Menubar with three choices: Current, Dark, and Light. The choice is cached in `localStorage["bkk.uiPrefs"]` and, when logged in, saved into the user's GitHub workspace session file.
 - The menubar logo tooltip reports the configured `upstream_repo`; the search bar sits at the right next to the theme selector and GitHub login/user controls
 - Full-text search (Menubar) with five sort modes; results render in a Search tab on the right panel and clicking a hit scrolls + flashes the matched span in the workspace for 15s
-- User text lists live in the left activity bar's Lists view. Lists are plain `lists/*.txt` files: a KR id in the first token of a line counts as membership, while comments and other line content are ignored. Anonymous lists persist locally; logged-in lists sync through the GitHub workspace. Active lists can mark search hits and optionally filter searches with sticky Any/All modes.
+- User text lists live in the left activity bar's Lists view. Lists are plain `lists/*.txt` files: a KR id in the first token of a line counts as membership, while comments and other line content are ignored. Anonymous lists persist locally; logged-in lists sync through the GitHub workspace. Active lists mark search hits; when a search is open they also appear as colored list facets, where the user can switch list filtering between badges-only, Any, and All.
+
+For lists:
+
+badges means: active lists do not filter the search. They only add colored badges to matching search results, so you can see which hits belong to which list.
+
+any means: filter search results to texts that are in at least one active list. This is a union.
+
+all means: filter search results to texts that are in every active list. This is an intersection.
+
+Example:
+
+List A: KR1, KR2, KR3
+List B: KR2, KR3, KR4
+
+badges: search whole corpus, badge hits from A/B
+any: search only KR1, KR2, KR3, KR4
+all: search only KR2, KR3
+
+
 - A pinned search input on the LeftPanel Catalog queries the server-side catalog across title, pinyin (tone-insensitive), English title, and identifiers before any category is expanded
 - The left activity bar has separate Catalog and Timeline entries; Timeline browses calendar-century buckets
 

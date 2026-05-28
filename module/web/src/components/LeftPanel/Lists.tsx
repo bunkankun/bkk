@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { useWorkspace, workspace, type ListFilterMode } from "../../state/useWorkspace";
+import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { listPathFromName } from "../../lib/textLists";
 
 export function Lists() {
   const lists = useWorkspace((s) => s.textLists);
   const active = useWorkspace((s) => s.activeListPaths);
-  const mode = useWorkspace((s) => s.listFilterMode);
   const activeTextid = useWorkspace((s) => s.activeTextid);
   const [selectedPath, setSelectedPath] = useState<string | null>(lists[0]?.path ?? null);
   const selected = lists.find((list) => list.path === selectedPath) ?? lists[0] ?? null;
@@ -48,15 +47,6 @@ export function Lists() {
     <div className="lists-panel">
       <div className="lists-toolbar">
         <button type="button" onClick={create}>New</button>
-        <select
-          value={mode}
-          onChange={(e) => workspace.setListFilterMode(e.target.value as ListFilterMode)}
-          title="Search filter mode"
-        >
-          <option value="off">Mark</option>
-          <option value="any">Any</option>
-          <option value="all">All</option>
-        </select>
       </div>
       <div className="lists-list">
         {lists.length === 0 ? (

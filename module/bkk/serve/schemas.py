@@ -102,6 +102,7 @@ class SearchFacetValue(BaseModel):
     label: str | None = None
     count: int
     selected: bool = False
+    excluded: bool = False
 
 
 class SearchDateFacets(BaseModel):
@@ -141,6 +142,10 @@ class SearchTextidsResponse(BaseModel):
     hit_count: int
     text_count: int
     textids: list[str]
+    entries: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Per-text search-list rows with textid, hit_count, and optional title.",
+    )
 
 
 class ErrorResponse(BaseModel):

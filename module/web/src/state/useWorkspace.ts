@@ -50,17 +50,26 @@ export type SearchFacetKind =
 
 export interface SearchFilters {
   textid: string | null;
+  textidExclude: string[];
   category: string[];
+  categoryExclude: string[];
   categoryDescendants: boolean;
   dateBefore: number | null;
   dateAfter: number | null;
   witness: string[];
+  witnessExclude: string[];
   voice: string[];
+  voiceExclude: string[];
   leftChar: string[];
+  leftCharExclude: string[];
   rightChar: string[];
+  rightCharExclude: string[];
   leftBigram: string[];
+  leftBigramExclude: string[];
   rightBigram: string[];
+  rightBigramExclude: string[];
   aroundBinom: string[];
+  aroundBinomExclude: string[];
 }
 
 export interface SearchState {
@@ -68,6 +77,7 @@ export interface SearchState {
   target: SearchTarget;
   sort: SearchSort;
   filters: SearchFilters;
+  facetLimit: number;
   status: "idle" | "loading" | "ok" | "error";
   error: string | null;
   response: SearchResponse | null;
@@ -395,18 +405,28 @@ let state: WorkspaceState = {
     sort: "match",
     filters: {
       textid: null,
+      textidExclude: [],
       category: [],
+      categoryExclude: [],
       categoryDescendants: true,
       dateBefore: null,
       dateAfter: null,
       witness: [],
+      witnessExclude: [],
       voice: [],
+      voiceExclude: [],
       leftChar: [],
+      leftCharExclude: [],
       rightChar: [],
+      rightCharExclude: [],
       leftBigram: [],
+      leftBigramExclude: [],
       rightBigram: [],
+      rightBigramExclude: [],
       aroundBinom: [],
+      aroundBinomExclude: [],
     },
+    facetLimit: 12,
     status: "idle",
     error: null,
     response: null,
@@ -458,18 +478,28 @@ async function runSearchInternal(offset: number): Promise<void> {
       textids: scopedListTextids(),
       offset,
       textid: filters.textid ?? undefined,
+      textidNot: filters.textidExclude,
       witness: filters.witness,
+      witnessNot: filters.witnessExclude,
       voice: filters.voice,
+      voiceNot: filters.voiceExclude,
       category: filters.category,
+      categoryNot: filters.categoryExclude,
       categoryDescendants: filters.categoryDescendants,
       dateBefore: filters.dateBefore ?? undefined,
       dateAfter: filters.dateAfter ?? undefined,
       pivotTextid: state.activeTextid ?? undefined,
       leftChar: filters.leftChar,
+      leftCharNot: filters.leftCharExclude,
       rightChar: filters.rightChar,
+      rightCharNot: filters.rightCharExclude,
       leftBigram: filters.leftBigram,
+      leftBigramNot: filters.leftBigramExclude,
       rightBigram: filters.rightBigram,
+      rightBigramNot: filters.rightBigramExclude,
       aroundBinom: filters.aroundBinom,
+      aroundBinomNot: filters.aroundBinomExclude,
+      facetLimit: state.search.facetLimit,
       signal: controller.signal,
     });
     if (runId !== searchRunId) return;
@@ -516,37 +546,104 @@ function toggled(values: string[], value: string): string[] {
     : [...values, value];
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+const excludeKeyByFacet: Record<SearchFacetKind, keyof SearchFilters> = {
+  category: "categoryExclude",
+  witness: "witnessExclude",
+  voice: "voiceExclude",
+  leftChar: "leftCharExclude",
+  rightChar: "rightCharExclude",
+  leftBigram: "leftBigramExclude",
+  rightBigram: "rightBigramExclude",
+  aroundBinom: "aroundBinomExclude",
+};
+
+function coerceSearchFilters(value: unknown): SearchFilters {
+  const rec =
+    typeof value === "object" && value != null
+      ? (value as Partial<Record<keyof SearchFilters, unknown>>)
+      : {};
+  return {
+    textid: typeof rec.textid === "string" ? rec.textid : null,
+    textidExclude: stringArray(rec.textidExclude),
+    category: stringArray(rec.category),
+    categoryExclude: stringArray(rec.categoryExclude),
+    categoryDescendants:
+      typeof rec.categoryDescendants === "boolean" ? rec.categoryDescendants : true,
+    dateBefore: typeof rec.dateBefore === "number" ? rec.dateBefore : null,
+    dateAfter: typeof rec.dateAfter === "number" ? rec.dateAfter : null,
+    witness: stringArray(rec.witness),
+    witnessExclude: stringArray(rec.witnessExclude),
+    voice: stringArray(rec.voice),
+    voiceExclude: stringArray(rec.voiceExclude),
+    leftChar: stringArray(rec.leftChar),
+    leftCharExclude: stringArray(rec.leftCharExclude),
+    rightChar: stringArray(rec.rightChar),
+    rightCharExclude: stringArray(rec.rightCharExclude),
+    leftBigram: stringArray(rec.leftBigram),
+    leftBigramExclude: stringArray(rec.leftBigramExclude),
+    rightBigram: stringArray(rec.rightBigram),
+    rightBigramExclude: stringArray(rec.rightBigramExclude),
+    aroundBinom: stringArray(rec.aroundBinom),
+    aroundBinomExclude: stringArray(rec.aroundBinomExclude),
+  };
+}
+
 function resetSearchFilters(filters: SearchFilters): SearchFilters {
   return {
     ...filters,
     textid: null,
+    textidExclude: [],
     category: [],
+    categoryExclude: [],
     dateBefore: null,
     dateAfter: null,
     witness: [],
+    witnessExclude: [],
     voice: [],
+    voiceExclude: [],
     leftChar: [],
+    leftCharExclude: [],
     rightChar: [],
+    rightCharExclude: [],
     leftBigram: [],
+    leftBigramExclude: [],
     rightBigram: [],
+    rightBigramExclude: [],
     aroundBinom: [],
+    aroundBinomExclude: [],
   };
 }
 
 function cloneSearchFilters(filters: SearchFilters): SearchFilters {
+  const safe = coerceSearchFilters(filters);
   return {
-    textid: filters.textid,
-    category: [...filters.category],
-    categoryDescendants: filters.categoryDescendants,
-    dateBefore: filters.dateBefore,
-    dateAfter: filters.dateAfter,
-    witness: [...filters.witness],
-    voice: [...filters.voice],
-    leftChar: [...filters.leftChar],
-    rightChar: [...filters.rightChar],
-    leftBigram: [...filters.leftBigram],
-    rightBigram: [...filters.rightBigram],
-    aroundBinom: [...filters.aroundBinom],
+    textid: safe.textid,
+    textidExclude: [...safe.textidExclude],
+    category: [...safe.category],
+    categoryExclude: [...safe.categoryExclude],
+    categoryDescendants: safe.categoryDescendants,
+    dateBefore: safe.dateBefore,
+    dateAfter: safe.dateAfter,
+    witness: [...safe.witness],
+    witnessExclude: [...safe.witnessExclude],
+    voice: [...safe.voice],
+    voiceExclude: [...safe.voiceExclude],
+    leftChar: [...safe.leftChar],
+    leftCharExclude: [...safe.leftCharExclude],
+    rightChar: [...safe.rightChar],
+    rightCharExclude: [...safe.rightCharExclude],
+    leftBigram: [...safe.leftBigram],
+    leftBigramExclude: [...safe.leftBigramExclude],
+    rightBigram: [...safe.rightBigram],
+    rightBigramExclude: [...safe.rightBigramExclude],
+    aroundBinom: [...safe.aroundBinom],
+    aroundBinomExclude: [...safe.aroundBinomExclude],
   };
 }
 
@@ -624,18 +721,27 @@ function searchParamsForLists() {
     q: query,
     sort,
     textid: filters.textid ?? undefined,
+    textidNot: filters.textidExclude,
     textids: scopedListTextids(),
     witness: filters.witness,
+    witnessNot: filters.witnessExclude,
     voice: filters.voice,
+    voiceNot: filters.voiceExclude,
     category: filters.category,
+    categoryNot: filters.categoryExclude,
     categoryDescendants: filters.categoryDescendants,
     dateBefore: filters.dateBefore ?? undefined,
     dateAfter: filters.dateAfter ?? undefined,
     leftChar: filters.leftChar,
+    leftCharNot: filters.leftCharExclude,
     rightChar: filters.rightChar,
+    rightCharNot: filters.rightCharExclude,
     leftBigram: filters.leftBigram,
+    leftBigramNot: filters.leftBigramExclude,
     rightBigram: filters.rightBigram,
+    rightBigramNot: filters.rightBigramExclude,
     aroundBinom: filters.aroundBinom,
+    aroundBinomNot: filters.aroundBinomExclude,
   };
 }
 
@@ -653,7 +759,27 @@ function validSearchHistoryEntry(value: unknown): SearchHistoryEntry | null {
   ) {
     return null;
   }
-  return rec as SearchHistoryEntry;
+  return {
+    id: rec.id,
+    query: rec.query,
+    target: rec.target as SearchTarget,
+    sort: rec.sort as SearchSort,
+    filters: coerceSearchFilters(rec.filters),
+    pivotTextid: typeof rec.pivotTextid === "string" ? rec.pivotTextid : null,
+    createdAt: rec.createdAt,
+  };
+}
+
+function uniqueSearchHistory(entries: SearchHistoryEntry[]): SearchHistoryEntry[] {
+  const seen = new Set<string>();
+  const out: SearchHistoryEntry[] = [];
+  for (const entry of entries) {
+    const key = entry.query.trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(entry);
+  }
+  return out;
 }
 
 function scheduleSessionSave(): void {
@@ -694,10 +820,7 @@ function rememberSearch(params: {
     pivotTextid: params.pivotTextid,
     createdAt: new Date().toISOString(),
   };
-  const deduped = state.searchHistory.filter(
-    (item) =>
-      !(item.query === entry.query && item.target === entry.target && item.sort === entry.sort),
-  );
+  const deduped = state.searchHistory.filter((item) => item.query.trim() !== q);
   state = {
     ...state,
     searchHistory: [entry, ...deduped].slice(0, MAX_SEARCH_HISTORY),
@@ -788,11 +911,11 @@ async function loadWorkspacePersistence(): Promise<void> {
       ? historyDoc.entries
           .map(validSearchHistoryEntry)
           .filter((item): item is SearchHistoryEntry => item != null)
-          .slice(0, MAX_SEARCH_HISTORY)
       : [];
+    const uniqueEntries = uniqueSearchHistory(entries).slice(0, MAX_SEARCH_HISTORY);
     state = {
       ...state,
-      searchHistory: entries,
+      searchHistory: uniqueEntries,
       persistence: { status: "idle", error: null },
     };
     notify();
@@ -1177,25 +1300,67 @@ export const workspace = {
     notify();
   },
   setSearchTextid(textid: string | null) {
+    const textidExclude = textid
+      ? state.search.filters.textidExclude.filter((v) => v !== textid)
+      : state.search.filters.textidExclude;
     state = {
       ...state,
       search: {
         ...state.search,
-        filters: { ...state.search.filters, textid },
+        filters: { ...state.search.filters, textid, textidExclude },
       },
     };
     notify();
     return runSearchInternal(0);
   },
-  toggleSearchFacet(kind: SearchFacetKind, value: string) {
+  toggleSearchTextidExclude(textid: string) {
     const filters = state.search.filters;
     state = {
       ...state,
       search: {
         ...state.search,
-        filters: { ...filters, [kind]: toggled(filters[kind], value) },
+        filters: {
+          ...filters,
+          textid: filters.textid === textid ? null : filters.textid,
+          textidExclude: toggled(filters.textidExclude, textid),
+        },
       },
     };
+    notify();
+    return runSearchInternal(0);
+  },
+  toggleSearchFacet(
+    kind: SearchFacetKind,
+    value: string,
+    mode: "include" | "exclude" = "include",
+  ) {
+    const filters = state.search.filters;
+    const excludeKey = excludeKeyByFacet[kind];
+    const includeValues = filters[kind];
+    const excludeValues = filters[excludeKey] as string[];
+    const nextFilters = mode === "exclude"
+      ? {
+          ...filters,
+          [kind]: includeValues.filter((v) => v !== value),
+          [excludeKey]: toggled(excludeValues, value),
+        }
+      : {
+          ...filters,
+          [kind]: toggled(includeValues, value),
+          [excludeKey]: excludeValues.filter((v) => v !== value),
+        };
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        filters: nextFilters,
+      },
+    };
+    notify();
+    return runSearchInternal(0);
+  },
+  setSearchFacetLimit(facetLimit: number) {
+    state = { ...state, search: { ...state.search, facetLimit } };
     notify();
     return runSearchInternal(0);
   },
@@ -1228,6 +1393,7 @@ export const workspace = {
       search: {
         ...state.search,
         filters: resetSearchFilters(state.search.filters),
+        facetLimit: 12,
       },
     };
     return runSearchInternal(0);
@@ -1242,12 +1408,18 @@ export const workspace = {
     const suggested = path ?? listPathFromName(`Search ${params.q}`);
     const existing = state.textLists.find((item) => item.path === suggested);
     const name = existing?.name ?? listNameFromPath(suggested);
+    const entries = (result.entries ?? []).map((entry) => ({
+      textid: entry.textid,
+      hitCount: entry.hit_count,
+      title: entry.title,
+    }));
     const content = addTextidsToContent(existing?.content ?? "", name, result.textids, {
       source: "search",
       query: result.query,
       hit_count: result.hit_count,
       text_count: result.text_count,
-    });
+      columns: "textid hit_count title",
+    }, entries);
     return workspace.saveTextList(suggested, content);
   },
   async createTextList(name: string) {
@@ -1369,6 +1541,7 @@ export const workspace = {
         target: entry.target,
         sort: entry.sort,
         filters: cloneSearchFilters(entry.filters),
+        facetLimit: 12,
         status: "idle",
         error: null,
         response: null,

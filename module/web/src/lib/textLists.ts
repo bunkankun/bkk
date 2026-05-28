@@ -6,6 +6,12 @@ export interface ParsedTextList {
   metadata: Record<string, string>;
 }
 
+export interface TextListEntry {
+  textid: string;
+  hitCount?: number | null;
+  title?: string | null;
+}
+
 export function sanitizeListName(name: string): string {
   const trimmed = name.trim() || "Untitled list";
   return trimmed
@@ -52,11 +58,20 @@ export function parseTextList(content: string, fallbackName: string): ParsedText
 export function serializeTextList(params: {
   name: string;
   textids: string[];
+  entries?: TextListEntry[];
   metadata?: Record<string, string | number | null | undefined>;
   existingContent?: string;
 }): string {
+  const entryById = new Map(
+    (params.entries ?? [])
+      .filter((entry) => KRID_RE.test(entry.textid))
+      .map((entry) => [entry.textid, entry]),
+  );
   const seen = new Set<string>();
-  const ids = params.textids.filter((id) => {
+  const ids = [
+    ...(params.entries ?? []).map((entry) => entry.textid),
+    ...params.textids,
+  ].filter((id) => {
     if (!KRID_RE.test(id) || seen.has(id)) return false;
     seen.add(id);
     return true;
@@ -77,7 +92,17 @@ export function serializeTextList(params: {
       const first = trimmed.split(/\s+/, 1)[0];
       return !KRID_RE.test(first);
     });
-  return [...header, "", ...ids, ...preserved].join("\n").replace(/\n*$/, "\n");
+  const rows = ids.map((id) => {
+    const entry = entryById.get(id);
+    if (!entry) return id;
+    const cols = [
+      id,
+      entry.hitCount == null ? "" : String(entry.hitCount),
+      entry.title?.trim() ?? "",
+    ];
+    return cols.join(" ").replace(/\s+$/, "");
+  });
+  return [...header, "", ...rows, ...preserved].join("\n").replace(/\n*$/, "\n");
 }
 
 export function addTextidsToContent(
@@ -85,11 +110,13 @@ export function addTextidsToContent(
   name: string,
   textids: string[],
   metadata?: Record<string, string | number | null | undefined>,
+  entries?: TextListEntry[],
 ): string {
   const parsed = parseTextList(content, name);
   return serializeTextList({
     name: parsed.name ?? name,
     textids: [...parsed.textids, ...textids],
+    entries,
     metadata,
     existingContent: content,
   });

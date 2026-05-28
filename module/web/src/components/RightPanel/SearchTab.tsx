@@ -1,9 +1,18 @@
+import { useEffect, useState } from "react";
 import type { SearchFacetValue, SearchFacets, SearchHit } from "../../api/types";
-import { listPathFromName } from "../../lib/textLists";
+import { listColor, listPathFromName } from "../../lib/textLists";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
-import type { SearchFacetKind, SearchFilters } from "../../state/useWorkspace";
+import type {
+  ListFilterMode,
+  SearchFacetKind,
+  SearchFilters,
+  TextList,
+} from "../../state/useWorkspace";
 
 const PAGE_SIZE = 50;
+const DEFAULT_FACET_LIMIT = 12;
+const EXPANDED_FACET_LIMIT = 100;
+const DATE_FILTER_DELAY_MS = 1500;
 
 // Treat sentence-enders as "line" boundaries for KWIC truncation. Same set
 // the read-mode phrase splitter uses (TextViewer.tsx PHRASE_END_RE).
@@ -53,6 +62,12 @@ const EMPTY_FACETS: SearchFacets = {
   date: {},
 };
 
+type FacetGroupKey = SearchFacetKind | "textid";
+
+function facetTitle(v: SearchFacetValue): string {
+  return v.label ?? v.value;
+}
+
 function normalizeFacets(facets: SearchFacets | undefined): SearchFacets {
   return {
     textid: facets?.textid ?? [],
@@ -71,16 +86,25 @@ function normalizeFacets(facets: SearchFacets | undefined): SearchFacets {
 function hasAnyFilter(filters: SearchFilters): boolean {
   return Boolean(
     filters.textid ||
+      filters.textidExclude.length ||
       filters.category.length ||
+      filters.categoryExclude.length ||
       filters.dateBefore != null ||
       filters.dateAfter != null ||
       filters.witness.length ||
+      filters.witnessExclude.length ||
       filters.voice.length ||
+      filters.voiceExclude.length ||
       filters.leftChar.length ||
+      filters.leftCharExclude.length ||
       filters.rightChar.length ||
+      filters.rightCharExclude.length ||
       filters.leftBigram.length ||
+      filters.leftBigramExclude.length ||
       filters.rightBigram.length ||
-      filters.aroundBinom.length,
+      filters.rightBigramExclude.length ||
+      filters.aroundBinom.length ||
+      filters.aroundBinomExclude.length,
   );
 }
 
@@ -89,30 +113,49 @@ function FacetGroup({
   values,
   kind,
   disabled,
+  expanded,
+  hasMore,
+  onMore,
 }: {
   label: string;
   values: SearchFacetValue[];
   kind: SearchFacetKind;
   disabled: boolean;
+  expanded: boolean;
+  hasMore: boolean;
+  onMore: () => void;
 }) {
   if (values.length === 0) return null;
+  const shown = expanded ? values : values.slice(0, DEFAULT_FACET_LIMIT);
   return (
     <div className="kwic-facet-group">
       <div className="kwic-facet-label">{label}</div>
       <div className="kwic-facet-values">
-        {values.map((v) => (
+        {shown.map((v) => (
           <button
             key={v.value}
             type="button"
-            className={`kwic-facet-chip${v.selected ? " on" : ""}`}
+            className={`kwic-facet-chip${v.selected ? " on" : ""}${v.excluded ? " off" : ""}`}
             disabled={disabled}
-            onClick={() => void workspace.toggleSearchFacet(kind, v.value)}
-            title={v.label ?? v.value}
+            onClick={(e) =>
+              void workspace.toggleSearchFacet(kind, v.value, e.ctrlKey ? "exclude" : "include")
+            }
+            title={facetTitle(v)}
           >
             <span className="kwic-facet-value">{v.value}</span>
             <span className="kwic-facet-count">{v.count}</span>
           </button>
         ))}
+        {!expanded && hasMore ? (
+          <button
+            type="button"
+            className="kwic-facet-more"
+            disabled={disabled}
+            onClick={onMore}
+          >
+            ...
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -122,29 +165,99 @@ function TextFacetGroup({
   values,
   selected,
   disabled,
+  expanded,
+  hasMore,
+  onMore,
 }: {
   values: SearchFacetValue[];
   selected: string | null;
   disabled: boolean;
+  expanded: boolean;
+  hasMore: boolean;
+  onMore: () => void;
 }) {
   if (values.length === 0) return null;
+  const shown = expanded ? values : values.slice(0, DEFAULT_FACET_LIMIT);
   return (
     <div className="kwic-facet-group">
       <div className="kwic-facet-label">Text</div>
       <div className="kwic-facet-values">
-        {values.map((v) => (
+        {shown.map((v) => (
           <button
             key={v.value}
             type="button"
-            className={`kwic-facet-chip${v.value === selected ? " on" : ""}`}
+            className={`kwic-facet-chip${v.value === selected ? " on" : ""}${v.excluded ? " off" : ""}`}
             disabled={disabled}
-            onClick={() => void workspace.setSearchTextid(v.value === selected ? null : v.value)}
-            title={v.label ? `${v.value} · ${v.label}` : v.value}
+            onClick={(e) => {
+              if (e.ctrlKey) void workspace.toggleSearchTextidExclude(v.value);
+              else void workspace.setSearchTextid(v.value === selected ? null : v.value);
+            }}
+            title={facetTitle(v)}
           >
             <span className="kwic-facet-value">{v.value}</span>
             <span className="kwic-facet-count">{v.count}</span>
           </button>
         ))}
+        {!expanded && hasMore ? (
+          <button
+            type="button"
+            className="kwic-facet-more"
+            disabled={disabled}
+            onClick={onMore}
+          >
+            ...
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ListFacetGroup({
+  lists,
+  mode,
+  disabled,
+}: {
+  lists: TextList[];
+  mode: ListFilterMode;
+  disabled: boolean;
+}) {
+  if (lists.length === 0 && mode === "off") return null;
+  return (
+    <div className="kwic-facet-group">
+      <div className="kwic-facet-label">Lists</div>
+      <div className="kwic-list-facet">
+        {lists.length > 0 ? (
+          <div className="kwic-facet-values">
+            {lists.map((list) => (
+              <button
+                key={list.path}
+                type="button"
+                className={`kwic-list-filter-badge${mode !== "off" ? " on" : ""}`}
+                style={{ backgroundColor: listColor(list.path) }}
+                disabled={disabled}
+                onClick={() => void workspace.setListFilterMode(mode === "off" ? "any" : "off")}
+                title={`${list.name} · ${list.textids.length} texts`}
+              >
+                <span>{list.name}</span>
+                <span>{list.textids.length}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="kwic-list-mode">
+          {(["off", "any", "all"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={mode === value ? "on" : ""}
+              disabled={disabled}
+              onClick={() => void workspace.setListFilterMode(value)}
+            >
+              {value === "off" ? "badges" : value}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -167,13 +280,41 @@ function DateFacet({
   max?: number | null;
   disabled: boolean;
 }) {
-  const setYear = (which: "before" | "after", raw: string) => {
+  const [beforeDraft, setBeforeDraft] = useState(before == null ? "" : String(before));
+  const [afterDraft, setAfterDraft] = useState(after == null ? "" : String(after));
+
+  useEffect(() => {
+    setBeforeDraft(before == null ? "" : String(before));
+  }, [before]);
+
+  useEffect(() => {
+    setAfterDraft(after == null ? "" : String(after));
+  }, [after]);
+
+  const commitYear = (which: "before" | "after", raw: string) => {
     const trimmed = raw.trim();
     const value = trimmed === "" ? null : Number(trimmed);
     if (value == null || Number.isFinite(value)) {
       void workspace.setSearchDateFilter(which, value);
     }
   };
+
+  useEffect(() => {
+    if (beforeDraft === (before == null ? "" : String(before))) return;
+    const timer = window.setTimeout(() => {
+      commitYear("before", beforeDraft);
+    }, DATE_FILTER_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [beforeDraft, before]);
+
+  useEffect(() => {
+    if (afterDraft === (after == null ? "" : String(after))) return;
+    const timer = window.setTimeout(() => {
+      commitYear("after", afterDraft);
+    }, DATE_FILTER_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [afterDraft, after]);
+
   return (
     <div className="kwic-facet-group">
       <div className="kwic-facet-label">Date</div>
@@ -182,20 +323,22 @@ function DateFacet({
           <span>&lt;</span>
           <input
             type="number"
-            value={before ?? ""}
+            value={beforeDraft}
             disabled={disabled}
             placeholder={max != null ? String(max) : "year"}
-            onChange={(e) => setYear("before", e.target.value)}
+            onChange={(e) => setBeforeDraft(e.target.value)}
+            onBlur={() => commitYear("before", beforeDraft)}
           />
         </label>
         <label>
           <span>&gt;</span>
           <input
             type="number"
-            value={after ?? ""}
+            value={afterDraft}
             disabled={disabled}
             placeholder={min != null ? String(min) : "year"}
-            onChange={(e) => setYear("after", e.target.value)}
+            onChange={(e) => setAfterDraft(e.target.value)}
+            onBlur={() => commitYear("after", afterDraft)}
           />
         </label>
       </div>
@@ -313,13 +456,38 @@ function HitRow({ hit }: { hit: SearchHit }) {
 }
 
 export function SearchTab() {
+  const [expandedFacets, setExpandedFacets] = useState<Set<FacetGroupKey>>(() => new Set());
   const status = useWorkspace((s) => s.search.status);
   const error = useWorkspace((s) => s.search.error);
   const response = useWorkspace((s) => s.search.response);
   const query = useWorkspace((s) => s.search.query);
   const filters = useWorkspace((s) => s.search.filters);
-  useWorkspace((s) => s.activeListPaths);
+  const facetLimit = useWorkspace((s) => s.search.facetLimit);
+  const textLists = useWorkspace((s) => s.textLists);
+  const activeListPaths = useWorkspace((s) => s.activeListPaths);
   const listFilterMode = useWorkspace((s) => s.listFilterMode);
+  const activePathSet = new Set(activeListPaths);
+  const activeLists = textLists.filter((list) => activePathSet.has(list.path));
+  const facetHasMore = (values: SearchFacetValue[]) =>
+    facetLimit <= DEFAULT_FACET_LIMIT
+      ? values.length >= DEFAULT_FACET_LIMIT
+      : values.length > DEFAULT_FACET_LIMIT;
+  useEffect(() => {
+    if (facetLimit <= DEFAULT_FACET_LIMIT) {
+      setExpandedFacets(new Set());
+    }
+  }, [facetLimit]);
+  const expandFacet = (key: FacetGroupKey) => {
+    setExpandedFacets((cur) => {
+      if (cur.has(key)) return cur;
+      const next = new Set(cur);
+      next.add(key);
+      return next;
+    });
+    if (facetLimit < EXPANDED_FACET_LIMIT) {
+      void workspace.setSearchFacetLimit(EXPANDED_FACET_LIMIT);
+    }
+  };
 
   if (status === "idle") {
     return <div className="rc empty">Enter a query in the menu bar to search.</div>;
@@ -402,16 +570,27 @@ export function SearchTab() {
         ) : null}
       </div>
       <div className="kwic-facets">
+        <ListFacetGroup
+          lists={activeLists}
+          mode={listFilterMode}
+          disabled={disabled}
+        />
         <TextFacetGroup
           values={facets.textid}
           selected={filters.textid}
           disabled={disabled}
+          expanded={expandedFacets.has("textid")}
+          hasMore={facetHasMore(facets.textid)}
+          onMore={() => expandFacet("textid")}
         />
         <FacetGroup
           label="Category"
           values={facets.category}
           kind="category"
           disabled={disabled}
+          expanded={expandedFacets.has("category")}
+          hasMore={facetHasMore(facets.category)}
+          onMore={() => expandFacet("category")}
         />
         <DateFacet
           before={filters.dateBefore}
@@ -427,42 +606,63 @@ export function SearchTab() {
           values={facets.witness}
           kind="witness"
           disabled={disabled}
+          expanded={expandedFacets.has("witness")}
+          hasMore={facetHasMore(facets.witness)}
+          onMore={() => expandFacet("witness")}
         />
         <FacetGroup
           label="Voice"
           values={facets.voice}
           kind="voice"
           disabled={disabled}
+          expanded={expandedFacets.has("voice")}
+          hasMore={facetHasMore(facets.voice)}
+          onMore={() => expandFacet("voice")}
         />
         <FacetGroup
           label="Left"
           values={facets.left_char}
           kind="leftChar"
           disabled={disabled}
+          expanded={expandedFacets.has("leftChar")}
+          hasMore={facetHasMore(facets.left_char)}
+          onMore={() => expandFacet("leftChar")}
         />
         <FacetGroup
           label="Right"
           values={facets.right_char}
           kind="rightChar"
           disabled={disabled}
+          expanded={expandedFacets.has("rightChar")}
+          hasMore={facetHasMore(facets.right_char)}
+          onMore={() => expandFacet("rightChar")}
         />
         <FacetGroup
           label="Left 2"
           values={facets.left_bigram}
           kind="leftBigram"
           disabled={disabled}
+          expanded={expandedFacets.has("leftBigram")}
+          hasMore={facetHasMore(facets.left_bigram)}
+          onMore={() => expandFacet("leftBigram")}
         />
         <FacetGroup
           label="Right 2"
           values={facets.right_bigram}
           kind="rightBigram"
           disabled={disabled}
+          expanded={expandedFacets.has("rightBigram")}
+          hasMore={facetHasMore(facets.right_bigram)}
+          onMore={() => expandFacet("rightBigram")}
         />
         <FacetGroup
           label="Binom"
           values={facets.around_binom}
           kind="aroundBinom"
           disabled={disabled}
+          expanded={expandedFacets.has("aroundBinom")}
+          hasMore={facetHasMore(facets.around_binom)}
+          onMore={() => expandFacet("aroundBinom")}
         />
       </div>
       {response.hits.map((h, i) => (

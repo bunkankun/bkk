@@ -230,6 +230,7 @@ export interface SearchFacetValue {
   label?: string | null;
   count: number;
   selected: boolean;
+  excluded: boolean;
 }
 
 export interface SearchDateFacets {
@@ -269,6 +270,11 @@ export interface SearchTextidsResponse {
   hit_count: number;
   text_count: number;
   textids: string[];
+  entries?: {
+    textid: string;
+    hit_count: number;
+    title?: string | null;
+  }[];
 }
 
 // Server identity
