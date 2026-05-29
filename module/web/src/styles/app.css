@@ -509,6 +509,12 @@ button {
   font-size: 10px;
   color: var(--t3);
 }
+.history-pin {
+  flex: 0 0 auto;
+  font-size: 9px;
+  color: var(--amb);
+  line-height: 1;
+}
 .history-date {
   flex: 0 0 auto;
   white-space: nowrap;

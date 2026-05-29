@@ -41,6 +41,11 @@ export function History() {
               {entry.textid} · {pageLabel(entry)}
             </span>
           </span>
+          {entry.pinned ? (
+            <span className="history-pin" title="Pinned" aria-label="Pinned">
+              ●
+            </span>
+          ) : null}
           <span className="history-date">{formatVisitedAt(entry.visitedAt)}</span>
         </button>
       ))}

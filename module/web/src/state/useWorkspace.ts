@@ -99,6 +99,7 @@ export interface TextHistoryEntry {
   title: string | null;
   visitedAt: string;
   currentPage: CurrentPage | null;
+  pinned?: boolean;
 }
 
 export interface TextList {
@@ -159,6 +160,8 @@ export interface PaneLeaf {
     pinned?: boolean;
     readMode?: ReadMode;
     lineMode?: LineMode;
+    hoverChar?: string | null;
+    hoverCodepoint?: number | null;
   }[];
   activeTabId: string | null;
 }
@@ -178,9 +181,6 @@ export interface WorkspaceState {
   activeTextid: string | null;
   activeSeq: number | null;
   focusedPaneId: string | null;
-  // hovered char + its codepoint (for CharInfoBar / StatusBar).
-  hoverChar: string | null;
-  hoverCodepoint: number | null;
   // user selection for filtering the annotations panel.
   selection: SelectionRange | null;
   // right panel
@@ -419,8 +419,6 @@ let state: WorkspaceState = {
   activeTextid: null,
   activeSeq: null,
   focusedPaneId: null,
-  hoverChar: null,
-  hoverCodepoint: null,
   selection: null,
   rightTab: "annotations",
   readMode: "read",
@@ -922,6 +920,7 @@ function validTextHistoryEntry(value: unknown): TextHistoryEntry | null {
     title: typeof rec.title === "string" ? rec.title : null,
     visitedAt: rec.visitedAt,
     currentPage: validCurrentPage(rec.currentPage),
+    pinned: rec.pinned === true,
   };
 }
 
@@ -954,16 +953,19 @@ function rememberTextVisit(params: {
   textid: string;
   seq: number;
   currentPage?: CurrentPage | null;
+  pinned?: boolean;
 }): void {
   const existing = state.textHistory.find((item) => item.textid === params.textid);
   const currentPage =
     params.currentPage !== undefined ? params.currentPage : existing?.currentPage ?? null;
+  const pinned = params.pinned !== undefined ? params.pinned : existing?.pinned === true;
   const entry: TextHistoryEntry = {
     textid: params.textid,
     seq: params.seq,
     title: existing?.title ?? null,
     visitedAt: new Date().toISOString(),
     currentPage,
+    pinned,
   };
   state = {
     ...state,
@@ -1339,13 +1341,21 @@ export const workspace = {
     notify();
     scheduleSessionSave();
   },
-  setHover(char: string | null) {
-    if (char == null || char.length === 0) {
-      state = { ...state, hoverChar: null, hoverCodepoint: null };
-    } else {
-      const cp = char.codePointAt(0) ?? null;
-      state = { ...state, hoverChar: char, hoverCodepoint: cp };
-    }
+  setHover(paneId: string, tabId: string, char: string | null) {
+    const hoverChar = char && char.length > 0 ? char : null;
+    const hoverCodepoint = hoverChar ? hoverChar.codePointAt(0) ?? null : null;
+    state = {
+      ...state,
+      pane: mapPaneLeaves(state.pane, (leaf) => {
+        if (leaf.id !== paneId) return leaf;
+        return {
+          ...leaf,
+          tabs: leaf.tabs.map((tab) =>
+            tab.id === tabId ? { ...tab, hoverChar, hoverCodepoint } : tab,
+          ),
+        };
+      }),
+    };
     notify();
   },
   setSelection(sel: SelectionRange | null) {
@@ -1416,7 +1426,7 @@ export const workspace = {
         /* TOC component will surface the same error to the user */
       });
   },
-  openJuan(textid: string, seq: number) {
+  openJuan(textid: string, seq: number, options: { pinned?: boolean } = {}) {
     const tabId = `${textid}:${seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
@@ -1425,6 +1435,7 @@ export const workspace = {
       type: "text" as const,
       textid,
       seq,
+      pinned: options.pinned === true,
       readMode: sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode,
       lineMode: sourceTab?.pinned
         ? state.readPrefs.lineMode
@@ -1442,11 +1453,14 @@ export const workspace = {
       pane,
       activity: "texts",
     };
-    rememberTextVisit({ textid, seq });
+    rememberTextVisit({ textid, seq, pinned: tab.pinned });
     notify();
     scheduleSessionSave();
   },
   togglePinnedTab(paneId: string, tabId: string) {
+    const leaf = paneLeaves(state.pane).find((item) => item.id === paneId);
+    const tab = leaf?.tabs.find((item) => item.id === tabId);
+    const nextPinned = tab ? !tab.pinned : false;
     state = {
       ...state,
       pane: mapPaneLeaves(state.pane, (leaf) => {
@@ -1458,6 +1472,13 @@ export const workspace = {
           ),
         };
       }),
+      textHistory: tab
+        ? state.textHistory.map((entry) =>
+            entry.textid === tab.textid && entry.seq === tab.seq
+              ? { ...entry, pinned: nextPinned }
+              : entry,
+          )
+        : state.textHistory,
     };
     notify();
     scheduleSessionSave();
@@ -1465,7 +1486,7 @@ export const workspace = {
   openHistoryText(textid: string) {
     const entry = state.textHistory.find((item) => item.textid === textid);
     if (!entry) return;
-    workspace.openJuan(entry.textid, entry.seq);
+    workspace.openJuan(entry.textid, entry.seq, { pinned: entry.pinned === true });
     if (
       entry.currentPage != null &&
       entry.currentPage.textid === entry.textid &&
@@ -1486,6 +1507,7 @@ export const workspace = {
         textid: entry.textid,
         seq: entry.seq,
         currentPage: entry.currentPage,
+        pinned: entry.pinned === true,
       });
       notify();
       scheduleSessionSave();
@@ -1862,16 +1884,18 @@ export const workspace = {
     const tabId = `${hit.textid}:${hit.juan_seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
-    const pane = paneForOpenTab({
+    const tab = {
       id: tabId,
       type: "text" as const,
       textid: hit.textid,
       seq: hit.juan_seq,
+      pinned: false,
       readMode: sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode,
       lineMode: sourceTab?.pinned
         ? state.readPrefs.lineMode
         : sourceTab?.lineMode ?? state.readPrefs.lineMode,
-    });
+    };
+    const pane = paneForOpenTab(tab);
     const focusedPaneId = leafIdForTab(pane, tabId);
     state = {
       ...state,
@@ -1889,7 +1913,9 @@ export const workspace = {
         length: hit.master_length,
       },
     };
+    rememberTextVisit({ textid: hit.textid, seq: hit.juan_seq, pinned: tab.pinned === true });
     notify();
+    scheduleSessionSave();
   },
   consumeHighlight() {
     if (state.pendingHighlight == null) return;

@@ -34,7 +34,6 @@ function focusedTab(pane: PaneNode, focusedPaneId: string | null) {
 export function StatusBar() {
   const textid = useWorkspace((s) => s.activeTextid);
   const seq = useWorkspace((s) => s.activeSeq);
-  const cp = useWorkspace((s) => s.hoverCodepoint);
   const pane = useWorkspace((s) => s.pane);
   const focusedPaneId = useWorkspace((s) => s.focusedPaneId);
   const defaultMode = useWorkspace((s) => s.readMode);
@@ -42,6 +41,7 @@ export function StatusBar() {
   const tab = focusedTab(pane, focusedPaneId);
   const mode = tab?.readMode ?? defaultMode;
   const lineMode = tab?.lineMode ?? defaultLineMode;
+  const cp = tab?.hoverCodepoint ?? null;
 
   return (
     <div className="sb">

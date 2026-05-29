@@ -356,12 +356,14 @@ function catalogString(match: CatalogMatch | null, key: string): string | null {
 }
 
 interface Props {
+  paneId: string;
+  tabId: string;
   textid: string;
   seq: number;
   lineMode: LineMode;
 }
 
-export function TextViewer({ textid, seq, lineMode }: Props) {
+export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
   const [juan, setJuan] = useState<Juan | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [catalogMatch, setCatalogMatch] = useState<CatalogMatch | null>(null);
@@ -747,7 +749,7 @@ export function TextViewer({ textid, seq, lineMode }: Props) {
       className="ec"
       ref={scrollRef}
       onMouseUp={handleMouseUp}
-      onMouseLeave={() => workspace.setHover(null)}
+      onMouseLeave={() => workspace.setHover(paneId, tabId, null)}
     >
       <div className="tv-title">
         <h1>{title}</h1>
@@ -781,6 +783,8 @@ export function TextViewer({ textid, seq, lineMode }: Props) {
                   flashBucket={flashBucket}
                   textid={textid}
                   seq={seq}
+                  paneId={paneId}
+                  tabId={tabId}
                   resolveAnchor={resolveAnchor}
                 />
               );
@@ -801,6 +805,8 @@ interface BlockViewProps {
   flashBucket: BucketName | null;
   textid: string;
   seq: number;
+  paneId: string;
+  tabId: string;
   resolveAnchor: (
     bucket: BucketName,
     offset: number,
@@ -816,6 +822,8 @@ function BlockView({
   flashBucket,
   textid,
   seq,
+  paneId,
+  tabId,
   resolveAnchor,
 }: BlockViewProps) {
   const Tag = block.tagName;
@@ -877,7 +885,7 @@ function BlockView({
             data-offset={off}
             data-end-offset={rc.srcEndOffset ?? off + 1}
             title={title}
-            onMouseEnter={() => workspace.setHover(rc.ch)}
+            onMouseEnter={() => workspace.setHover(paneId, tabId, rc.ch)}
             onClick={(ev) => {
               if (!has) return;
               // Suppress when this click is part of a drag-selection — let

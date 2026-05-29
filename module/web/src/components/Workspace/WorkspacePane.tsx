@@ -127,6 +127,8 @@ export function WorkspacePane({ pane }: { pane: PaneLeaf }) {
             <div className="ws-split-left">
               <TextViewer
                 key={`${activeTab.textid}:${activeTab.seq}`}
+                paneId={pane.id}
+                tabId={activeTab.id}
                 textid={activeTab.textid}
                 seq={activeTab.seq}
                 lineMode={lineMode}
@@ -144,6 +146,8 @@ export function WorkspacePane({ pane }: { pane: PaneLeaf }) {
         ) : (
           <TextViewer
             key={`${activeTab.textid}:${activeTab.seq}`}
+            paneId={pane.id}
+            tabId={activeTab.id}
             textid={activeTab.textid}
             seq={activeTab.seq}
             lineMode={lineMode}
@@ -152,7 +156,7 @@ export function WorkspacePane({ pane }: { pane: PaneLeaf }) {
       ) : (
         <div className="empty-pane">Select a text from the catalog or TOC.</div>
       )}
-      <CharInfoBar />
+      <CharInfoBar ch={activeTab?.hoverChar ?? null} cp={activeTab?.hoverCodepoint ?? null} />
     </div>
   );
 }

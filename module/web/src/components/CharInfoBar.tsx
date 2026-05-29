@@ -1,12 +1,8 @@
-import { useWorkspace } from "../state/useWorkspace";
-
 function formatCp(cp: number): string {
   return `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
-export function CharInfoBar() {
-  const ch = useWorkspace((s) => s.hoverChar);
-  const cp = useWorkspace((s) => s.hoverCodepoint);
+export function CharInfoBar({ ch, cp }: { ch: string | null; cp: number | null }) {
   if (!ch || cp == null) {
     return (
       <div className="cib">
