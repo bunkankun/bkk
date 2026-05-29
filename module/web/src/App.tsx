@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { getServerInfo } from "./api/client";
 import { ActivityBar } from "./components/ActivityBar";
 import { Catalog } from "./components/LeftPanel/Catalog";
+import { History } from "./components/LeftPanel/History";
 import { Lists } from "./components/LeftPanel/Lists";
+import { Settings } from "./components/LeftPanel/Settings";
 import { Toc } from "./components/LeftPanel/Toc";
 import { Menubar } from "./components/Menubar";
 import { AnnotationsTab } from "./components/RightPanel/AnnotationsTab";
@@ -58,9 +60,13 @@ function LeftPanel() {
     ? "Timeline"
     : activity === "lists"
       ? "Lists"
+    : activity === "history"
+      ? "History"
+    : activity === "settings"
+      ? "Settings"
     : activity === "catalog"
       ? "Catalog"
-      : "Texts";
+      : "Contents";
   return (
     <div className="lp" style={{ width }}>
       <div className="ph">
@@ -71,6 +77,10 @@ function LeftPanel() {
           <Catalog mode="timeline" />
         ) : activity === "lists" ? (
           <Lists />
+        ) : activity === "history" ? (
+          <History />
+        ) : activity === "settings" ? (
+          <Settings />
         ) : activity === "catalog" ? (
           <Catalog mode="categories" />
         ) : (
@@ -122,6 +132,8 @@ function RightPanel() {
 
 export function App() {
   const theme = useWorkspace((s) => s.uiPrefs.theme);
+  const leftSidebarVisible = useWorkspace((s) => s.uiPrefs.leftSidebarVisible);
+  const rightSidebarVisible = useWorkspace((s) => s.uiPrefs.rightSidebarVisible);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,11 +163,19 @@ export function App() {
       <Menubar />
       <div className="app-main">
         <ActivityBar />
-        <LeftPanel />
-        <ResizeHandle side="left" />
+        {leftSidebarVisible && (
+          <>
+            <LeftPanel />
+            <ResizeHandle side="left" />
+          </>
+        )}
         <PaneTree />
-        <ResizeHandle side="right" />
-        <RightPanel />
+        {rightSidebarVisible && (
+          <>
+            <ResizeHandle side="right" />
+            <RightPanel />
+          </>
+        )}
       </div>
       <StatusBar />
     </div>

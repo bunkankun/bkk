@@ -358,9 +358,10 @@ function catalogString(match: CatalogMatch | null, key: string): string | null {
 interface Props {
   textid: string;
   seq: number;
+  lineMode: LineMode;
 }
 
-export function TextViewer({ textid, seq }: Props) {
+export function TextViewer({ textid, seq, lineMode }: Props) {
   const [juan, setJuan] = useState<Juan | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [catalogMatch, setCatalogMatch] = useState<CatalogMatch | null>(null);
@@ -369,7 +370,6 @@ export function TextViewer({ textid, seq }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pending = useWorkspace((s) => s.pendingHighlight);
-  const lineMode = useWorkspace((s) => s.readPrefs.lineMode);
   const [flashOffsets, setFlashOffsets] = useState<{ start: number; end: number } | null>(
     null,
   );

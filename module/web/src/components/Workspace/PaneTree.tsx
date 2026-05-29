@@ -1,16 +1,22 @@
-// PaneTree is the host for one or more workspace panes. v1 only ever
-// renders a single leaf — but the indirection lives here so that a
-// future slice can render `pane.kind === 'split'` cases without
-// touching App.tsx.
-
+import { useWorkspace, type PaneNode } from "../../state/useWorkspace";
 import { WorkspacePane } from "./WorkspacePane";
 
+function PaneNodeView({ pane }: { pane: PaneNode }) {
+  if (pane.kind === "leaf") return <WorkspacePane pane={pane} />;
+  return (
+    <div className="pane-split pane-split-horizontal">
+      {pane.children.map((child) => (
+        <PaneNodeView key={child.id} pane={child} />
+      ))}
+    </div>
+  );
+}
+
 export function PaneTree() {
-  // v1: single leaf. The workspace store still uses a PaneLeaf shape
-  // that could later be wrapped in a discriminated union for splits.
+  const pane = useWorkspace((s) => s.pane);
   return (
     <div className="ca">
-      <WorkspacePane />
+      <PaneNodeView pane={pane} />
     </div>
   );
 }

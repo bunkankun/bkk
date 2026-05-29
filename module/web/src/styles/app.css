@@ -81,6 +81,10 @@ button {
   color: var(--amb);
   line-height: 1;
 }
+.mb-logo-cjk-compact,
+.mb-logo-cjk-min {
+  display: none;
+}
 .mb-logo-txt {
   font-size: 13px;
   font-weight: 600;
@@ -155,11 +159,6 @@ button {
 .mb-select:focus {
   border-color: var(--amb);
 }
-.mb-theme {
-  width: 76px;
-  margin-left: 6px;
-  flex: 0 0 auto;
-}
 .mb-search-go {
   height: 24px;
   padding: 0 10px;
@@ -178,6 +177,34 @@ button {
 .mb-search-go:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.mb-sidebar-toggles {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+.mb-icon-btn {
+  width: 26px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--t3);
+  cursor: pointer;
+  padding: 0;
+}
+.mb-icon-btn:hover {
+  color: var(--t1);
+  background: var(--hov);
+}
+.mb-icon-btn.on {
+  color: var(--amb);
+  border-color: var(--amb);
+  background: var(--amb-d);
 }
 .mb-login {
   padding: 4px 13px;
@@ -224,10 +251,19 @@ button {
 }
 .mb-user-name {
   max-width: 120px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  font: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+}
+.mb-user-name:hover {
+  color: var(--amb);
 }
 .mb-sync {
   margin-left: 6px;
@@ -237,6 +273,24 @@ button {
 }
 .mb-sync-error {
   color: var(--amb);
+}
+
+@media (max-width: 760px) {
+  .mb-logo-cjk-full {
+    display: none;
+  }
+  .mb-logo-cjk-compact {
+    display: inline;
+  }
+}
+
+@media (max-width: 560px) {
+  .mb-logo-cjk-compact {
+    display: none;
+  }
+  .mb-logo-cjk-min {
+    display: inline;
+  }
 }
 
 /* activity bar --------------------------------------------------- */
@@ -400,6 +454,96 @@ button {
   font-size: 11px;
   color: var(--t2);
 }
+.history-list {
+  padding: 4px 0;
+}
+.history-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 7px 12px;
+  border: none;
+  border-bottom: 1px solid var(--bdr-l);
+  background: transparent;
+  color: var(--t2);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.history-row:hover {
+  background: var(--hov);
+  color: var(--t1);
+}
+.history-row.on {
+  background: var(--amb-d);
+}
+.history-cjk {
+  flex: 0 0 30px;
+  min-width: 0;
+  font-family: var(--fc);
+  font-size: 16px;
+  color: var(--t1);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.history-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.history-title,
+.history-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-title {
+  font-size: 12px;
+  color: var(--t1);
+}
+.history-meta,
+.history-date {
+  font-size: 10px;
+  color: var(--t3);
+}
+.history-date {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.settings-panel {
+  padding: 10px 12px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  color: var(--t2);
+}
+.settings-label {
+  font-size: 12px;
+  color: var(--t1);
+}
+.settings-select {
+  height: 26px;
+  min-width: 112px;
+  padding: 0 6px;
+  border: 1px solid var(--bdr);
+  background: var(--bg);
+  color: var(--t2);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+}
+.settings-select:focus {
+  border-color: var(--amb);
+}
 .cat-add-list {
   width: 22px;
   height: 22px;
@@ -530,6 +674,23 @@ button {
   overflow: hidden;
   min-width: 0;
 }
+.pane-split {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.pane-split-horizontal {
+  flex-direction: row;
+}
+.pane-split-horizontal > .wp,
+.pane-split-horizontal > .pane-split {
+  border-right: 1px solid var(--bdr);
+}
+.pane-split-horizontal > :last-child {
+  border-right: none;
+}
 .wp {
   display: flex;
   flex-direction: column;
@@ -571,6 +732,7 @@ button {
   border: none;
   border-right: 1px solid var(--bdr);
   font-family: inherit;
+  min-width: 0;
 }
 .tab.on {
   background: var(--bg-ed);
@@ -584,6 +746,28 @@ button {
   right: 0;
   height: 1px;
   background: var(--bg-ed);
+}
+.tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tab-pin {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: var(--t3);
+  font-size: 11px;
+  line-height: 1;
+}
+.tab-pin:hover,
+.tab-pin.on {
+  color: var(--amb);
+  background: var(--amb-d);
 }
 
 /* editor / text viewer */

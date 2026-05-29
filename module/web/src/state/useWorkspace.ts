@@ -31,7 +31,7 @@ import {
   serializeTextList,
 } from "../lib/textLists";
 
-export type Activity = "texts" | "catalog" | "timeline" | "lists";
+export type Activity = "texts" | "catalog" | "timeline" | "lists" | "history" | "settings";
 export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
 export type SearchTarget = "fulltext" | "dictionary" | "translations";
@@ -93,6 +93,14 @@ export interface SearchHistoryEntry {
   createdAt: string;
 }
 
+export interface TextHistoryEntry {
+  textid: string;
+  seq: number;
+  title: string | null;
+  visitedAt: string;
+  currentPage: CurrentPage | null;
+}
+
 export interface TextList {
   path: string;
   name: string;
@@ -143,16 +151,33 @@ export interface SelectionRange {
 export interface PaneLeaf {
   kind: "leaf";
   id: string;
-  // v1 only ever holds one tab; structured for later splits.
-  tabs: { id: string; type: "text"; textid: string; seq: number }[];
+  tabs: {
+    id: string;
+    type: "text";
+    textid: string;
+    seq: number;
+    pinned?: boolean;
+    readMode?: ReadMode;
+    lineMode?: LineMode;
+  }[];
   activeTabId: string | null;
 }
+
+export interface PaneSplit {
+  kind: "split";
+  id: string;
+  direction: "horizontal";
+  children: PaneNode[];
+}
+
+export type PaneNode = PaneLeaf | PaneSplit;
 
 export interface WorkspaceState {
   activity: Activity;
   // active bundle/juan; juan is null until user picks one from TOC.
   activeTextid: string | null;
   activeSeq: number | null;
+  focusedPaneId: string | null;
   // hovered char + its codepoint (for CharInfoBar / StatusBar).
   hoverChar: string | null;
   hoverCodepoint: number | null;
@@ -169,11 +194,11 @@ export interface WorkspaceState {
     error: string | null;
     session: AuthSession | null;
   };
-  // v1 has a single leaf; kept so PaneTree.tsx can later host splits.
-  pane: PaneLeaf;
+  pane: PaneNode;
   // search slice; ephemeral (no URL persistence in v1).
   search: SearchState;
   searchHistory: SearchHistoryEntry[];
+  textHistory: TextHistoryEntry[];
   textLists: TextList[];
   activeListPaths: string[];
   listFilterMode: ListFilterMode;
@@ -187,7 +212,7 @@ export interface WorkspaceState {
   readPrefs: { lineMode: LineMode };
   // broader UI preferences (persisted locally and, when logged in, in the
   // user's GitHub workspace session file).
-  uiPrefs: { theme: Theme };
+  uiPrefs: { theme: Theme; leftSidebarVisible: boolean; rightSidebarVisible: boolean };
   // user-tunable panel widths, persisted in localStorage. The handle
   // between activity-bar and left panel adjusts `left`; the one between
   // workspace and right panel adjusts `right`; the inspect-mode splitter
@@ -214,6 +239,7 @@ const INSPECT_MAX_WIDTH = 1200;
 const SEARCH_HISTORY_PATH = "searches/history.json";
 const SESSION_PATH = "settings/session.json";
 const MAX_SEARCH_HISTORY = 50;
+const MAX_TEXT_HISTORY = 20;
 
 function loadReadPrefs(): { lineMode: LineMode } {
   if (typeof window === "undefined") return { lineMode: "paragraph" };
@@ -243,19 +269,29 @@ function coerceTheme(value: unknown, fallback: Theme = "current"): Theme {
     : fallback;
 }
 
-function loadUiPrefs(): { theme: Theme } {
-  if (typeof window === "undefined") return { theme: "current" };
+function loadUiPrefs(): { theme: Theme; leftSidebarVisible: boolean; rightSidebarVisible: boolean } {
+  if (typeof window === "undefined") {
+    return { theme: "current", leftSidebarVisible: true, rightSidebarVisible: true };
+  }
   try {
     const raw = window.localStorage.getItem(UI_PREFS_KEY);
-    if (!raw) return { theme: "current" };
+    if (!raw) return { theme: "current", leftSidebarVisible: true, rightSidebarVisible: true };
     const parsed = JSON.parse(raw);
-    return { theme: coerceTheme(parsed?.theme) };
+    return {
+      theme: coerceTheme(parsed?.theme),
+      leftSidebarVisible: parsed?.leftSidebarVisible !== false,
+      rightSidebarVisible: parsed?.rightSidebarVisible !== false,
+    };
   } catch {
-    return { theme: "current" };
+    return { theme: "current", leftSidebarVisible: true, rightSidebarVisible: true };
   }
 }
 
-function saveUiPrefs(prefs: { theme: Theme }): void {
+function saveUiPrefs(prefs: {
+  theme: Theme;
+  leftSidebarVisible: boolean;
+  rightSidebarVisible: boolean;
+}): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(UI_PREFS_KEY, JSON.stringify(prefs));
@@ -382,6 +418,7 @@ let state: WorkspaceState = {
   activity: "catalog",
   activeTextid: null,
   activeSeq: null,
+  focusedPaneId: null,
   hoverChar: null,
   hoverCodepoint: null,
   selection: null,
@@ -432,6 +469,7 @@ let state: WorkspaceState = {
     response: null,
   },
   searchHistory: [],
+  textHistory: [],
   textLists: loadLocalTextLists(),
   activeListPaths: [],
   listFilterMode: loadListFilterMode(),
@@ -451,6 +489,83 @@ const workspaceFileShas: Record<string, string | undefined> = {};
 let sessionSaveTimer: number | null = null;
 let historySaveTimer: number | null = null;
 let restoredSessionOnce = false;
+
+function paneLeaves(node: PaneNode): PaneLeaf[] {
+  if (node.kind === "leaf") return [node];
+  return node.children.flatMap(paneLeaves);
+}
+
+function mapPaneLeaves(node: PaneNode, fn: (leaf: PaneLeaf) => PaneLeaf): PaneNode {
+  if (node.kind === "leaf") return fn(node);
+  return { ...node, children: node.children.map((child) => mapPaneLeaves(child, fn)) };
+}
+
+function activePaneLeaf(node: PaneNode): PaneLeaf | null {
+  const leaves = paneLeaves(node);
+  return (
+    (state.focusedPaneId ? leaves.find((leaf) => leaf.id === state.focusedPaneId) : null) ??
+    leaves.find((leaf) =>
+      leaf.tabs.some((tab) => tab.id === leaf.activeTabId && tab.textid === state.activeTextid),
+    ) ??
+    leaves.find((leaf) => leaf.tabs.every((tab) => !tab.pinned)) ??
+    leaves[0] ??
+    null
+  );
+}
+
+function paneHasPinnedTab(node: PaneNode): boolean {
+  return paneLeaves(node).some((leaf) => leaf.tabs.some((tab) => tab.pinned));
+}
+
+function nextPaneId(): string {
+  return `pane-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function leafWithTab(
+  id: string,
+  tab: PaneLeaf["tabs"][number],
+): PaneLeaf {
+  return {
+    kind: "leaf",
+    id,
+    tabs: [tab],
+    activeTabId: tab.id,
+  };
+}
+
+function paneForOpenTab(
+  tab: PaneLeaf["tabs"][number],
+): PaneNode {
+  const target = activePaneLeaf(state.pane);
+  const activeTab = target?.tabs.find((item) => item.id === target.activeTabId) ?? target?.tabs[0];
+  if (activeTab?.pinned) {
+    const nextLeaf = leafWithTab(nextPaneId(), tab);
+    return state.pane.kind === "split"
+      ? { ...state.pane, children: [...state.pane.children, nextLeaf] }
+      : {
+          kind: "split",
+          id: "root-split",
+          direction: "horizontal",
+          children: [state.pane, nextLeaf],
+        };
+  }
+  if (target) {
+    return mapPaneLeaves(state.pane, (leaf) => (leaf.id === target.id ? leafWithTab(leaf.id, tab) : leaf));
+  }
+  return leafWithTab("root", tab);
+}
+
+function leafIdForTab(node: PaneNode, tabId: string): string | null {
+  for (const leaf of paneLeaves(node)) {
+    if (leaf.tabs.some((tab) => tab.id === tabId)) return leaf.id;
+  }
+  return null;
+}
+
+function activeTabForLeaf(leaf: PaneLeaf | null): PaneLeaf["tabs"][number] | null {
+  if (!leaf) return null;
+  return leaf.tabs.find((tab) => tab.id === leaf.activeTabId) ?? leaf.tabs[0] ?? null;
+}
 
 function cancelSearchRequest(): void {
   searchRunId++;
@@ -770,6 +885,46 @@ function validSearchHistoryEntry(value: unknown): SearchHistoryEntry | null {
   };
 }
 
+function validCurrentPage(value: unknown): CurrentPage | null {
+  if (typeof value !== "object" || value == null) return null;
+  const rec = value as Partial<CurrentPage>;
+  if (
+    typeof rec.textid !== "string" ||
+    typeof rec.seq !== "number" ||
+    typeof rec.bucket !== "string" ||
+    typeof rec.markerId !== "string" ||
+    typeof rec.offset !== "number"
+  ) {
+    return null;
+  }
+  return {
+    textid: rec.textid,
+    seq: rec.seq,
+    bucket: rec.bucket,
+    markerId: rec.markerId,
+    offset: rec.offset,
+  };
+}
+
+function validTextHistoryEntry(value: unknown): TextHistoryEntry | null {
+  if (typeof value !== "object" || value == null) return null;
+  const rec = value as Partial<TextHistoryEntry>;
+  if (
+    typeof rec.textid !== "string" ||
+    typeof rec.seq !== "number" ||
+    typeof rec.visitedAt !== "string"
+  ) {
+    return null;
+  }
+  return {
+    textid: rec.textid,
+    seq: rec.seq,
+    title: typeof rec.title === "string" ? rec.title : null,
+    visitedAt: rec.visitedAt,
+    currentPage: validCurrentPage(rec.currentPage),
+  };
+}
+
 function uniqueSearchHistory(entries: SearchHistoryEntry[]): SearchHistoryEntry[] {
   const seen = new Set<string>();
   const out: SearchHistoryEntry[] = [];
@@ -780,6 +935,59 @@ function uniqueSearchHistory(entries: SearchHistoryEntry[]): SearchHistoryEntry[
     out.push(entry);
   }
   return out;
+}
+
+function uniqueTextHistory(entries: TextHistoryEntry[]): TextHistoryEntry[] {
+  const seen = new Set<string>();
+  const out: TextHistoryEntry[] = [];
+  for (const entry of entries) {
+    if (!entry.textid || seen.has(entry.textid)) continue;
+    seen.add(entry.textid);
+    out.push(entry);
+  }
+  return out
+    .sort((a, b) => Date.parse(b.visitedAt) - Date.parse(a.visitedAt))
+    .slice(0, MAX_TEXT_HISTORY);
+}
+
+function rememberTextVisit(params: {
+  textid: string;
+  seq: number;
+  currentPage?: CurrentPage | null;
+}): void {
+  const existing = state.textHistory.find((item) => item.textid === params.textid);
+  const currentPage =
+    params.currentPage !== undefined ? params.currentPage : existing?.currentPage ?? null;
+  const entry: TextHistoryEntry = {
+    textid: params.textid,
+    seq: params.seq,
+    title: existing?.title ?? null,
+    visitedAt: new Date().toISOString(),
+    currentPage,
+  };
+  state = {
+    ...state,
+    textHistory: [entry, ...state.textHistory.filter((item) => item.textid !== params.textid)]
+      .slice(0, MAX_TEXT_HISTORY),
+  };
+  void getManifest(params.textid)
+    .then((manifest) => {
+      const title = manifest.metadata?.title;
+      if (!title) return;
+      const current = state.textHistory.find((item) => item.textid === params.textid);
+      if (!current || current.title === title) return;
+      state = {
+        ...state,
+        textHistory: state.textHistory.map((item) =>
+          item.textid === params.textid ? { ...item, title } : item,
+        ),
+      };
+      notify();
+      scheduleSessionSave();
+    })
+    .catch(() => {
+      /* Best-effort title enrichment only. */
+    });
 }
 
 function scheduleSessionSave(): void {
@@ -870,6 +1078,7 @@ async function saveSessionState(): Promise<void> {
       panelWidths: state.panelWidths,
       activeListPaths: state.activeListPaths,
       listFilterMode: state.listFilterMode,
+      textHistory: state.textHistory,
       updatedAt: new Date().toISOString(),
     });
     state = { ...state, persistence: { status: "idle", error: null } };
@@ -904,6 +1113,7 @@ async function loadWorkspacePersistence(): Promise<void> {
         panelWidths?: unknown;
         activeListPaths?: unknown;
         listFilterMode?: unknown;
+        textHistory?: unknown;
       }>(SESSION_PATH),
     ]);
     await loadRemoteTextLists();
@@ -921,14 +1131,6 @@ async function loadWorkspacePersistence(): Promise<void> {
     notify();
     if (!restoredSessionOnce && sessionDoc != null) {
       restoredSessionOnce = true;
-      const activeTextid =
-        typeof sessionDoc.activeTextid === "string" ? sessionDoc.activeTextid : null;
-      const activeSeq =
-        typeof sessionDoc.activeSeq === "number" ? sessionDoc.activeSeq : null;
-      const currentPage =
-        typeof sessionDoc.currentPage === "object" && sessionDoc.currentPage != null
-          ? (sessionDoc.currentPage as Partial<CurrentPage>)
-          : null;
       const readMode =
         sessionDoc.readMode === "inspect" ||
         sessionDoc.readMode === "trans" ||
@@ -954,10 +1156,25 @@ async function loadWorkspacePersistence(): Promise<void> {
         : state.readPrefs;
       const sessionUiPrefs =
         typeof sessionDoc.uiPrefs === "object" && sessionDoc.uiPrefs != null
-          ? (sessionDoc.uiPrefs as { theme?: unknown })
+          ? (sessionDoc.uiPrefs as {
+              theme?: unknown;
+              leftSidebarVisible?: unknown;
+              rightSidebarVisible?: unknown;
+            })
           : null;
       const uiPrefs = sessionUiPrefs
-        ? { ...state.uiPrefs, theme: coerceTheme(sessionUiPrefs.theme, state.uiPrefs.theme) }
+        ? {
+            ...state.uiPrefs,
+            theme: coerceTheme(sessionUiPrefs.theme, state.uiPrefs.theme),
+            leftSidebarVisible:
+              typeof sessionUiPrefs.leftSidebarVisible === "boolean"
+                ? sessionUiPrefs.leftSidebarVisible
+                : state.uiPrefs.leftSidebarVisible,
+            rightSidebarVisible:
+              typeof sessionUiPrefs.rightSidebarVisible === "boolean"
+                ? sessionUiPrefs.rightSidebarVisible
+                : state.uiPrefs.rightSidebarVisible,
+          }
         : state.uiPrefs;
       const sessionPanelWidths =
         typeof sessionDoc.panelWidths === "object" && sessionDoc.panelWidths != null
@@ -977,6 +1194,13 @@ async function loadWorkspacePersistence(): Promise<void> {
         sessionDoc.listFilterMode === "any" || sessionDoc.listFilterMode === "all"
           ? sessionDoc.listFilterMode
           : state.listFilterMode;
+      const textHistory = Array.isArray(sessionDoc.textHistory)
+        ? uniqueTextHistory(
+            sessionDoc.textHistory
+              .map(validTextHistoryEntry)
+              .filter((item): item is TextHistoryEntry => item != null),
+          )
+        : state.textHistory;
       if (sessionReadPrefs) saveReadPrefs(readPrefs);
       if (sessionUiPrefs) saveUiPrefs(uiPrefs);
       if (sessionPanelWidths) savePanelWidths(panelWidths);
@@ -990,30 +1214,9 @@ async function loadWorkspacePersistence(): Promise<void> {
         panelWidths,
         activeListPaths,
         listFilterMode,
+        textHistory,
       };
       notify();
-      if (activeTextid != null && activeSeq != null) {
-        workspace.openJuan(activeTextid, activeSeq);
-        if (
-          currentPage != null &&
-          currentPage.textid === activeTextid &&
-          currentPage.seq === activeSeq &&
-          typeof currentPage.bucket === "string" &&
-          typeof currentPage.offset === "number"
-        ) {
-          state = {
-            ...state,
-            pendingHighlight: {
-              textid: activeTextid,
-              seq: activeSeq,
-              bucket: currentPage.bucket,
-              offset: currentPage.offset,
-              length: 1,
-            },
-          };
-          notify();
-        }
-      }
     }
   } catch (e) {
     state = {
@@ -1116,8 +1319,25 @@ export const workspace = {
     notify();
   },
   setReadMode(readMode: ReadMode) {
-    state = { ...state, readMode };
+    const target = activePaneLeaf(state.pane);
+    if (!target) {
+      state = { ...state, readMode };
+    } else {
+      state = {
+        ...state,
+        pane: mapPaneLeaves(state.pane, (leaf) => {
+          if (leaf.id !== target.id) return leaf;
+          return {
+            ...leaf,
+            tabs: leaf.tabs.map((tab) =>
+              tab.id === leaf.activeTabId ? { ...tab, readMode } : tab,
+            ),
+          };
+        }),
+      };
+    }
     notify();
+    scheduleSessionSave();
   },
   setHover(char: string | null) {
     if (char == null || char.length === 0) {
@@ -1130,6 +1350,17 @@ export const workspace = {
   },
   setSelection(sel: SelectionRange | null) {
     state = { ...state, selection: sel };
+    notify();
+  },
+  focusPane(paneId: string) {
+    const leaf = paneLeaves(state.pane).find((item) => item.id === paneId);
+    const tab = activeTabForLeaf(leaf ?? null);
+    state = {
+      ...state,
+      focusedPaneId: paneId,
+      activeTextid: tab?.textid ?? state.activeTextid,
+      activeSeq: tab?.seq ?? state.activeSeq,
+    };
     notify();
   },
   setCurrentPage(p: CurrentPage | null) {
@@ -1145,18 +1376,23 @@ export const workspace = {
     ) {
       return;
     }
-    state = { ...state, currentPage: p };
+    const textHistory =
+      p == null
+        ? state.textHistory
+        : state.textHistory.map((entry) =>
+            entry.textid === p.textid && entry.seq === p.seq
+              ? { ...entry, currentPage: p }
+              : entry,
+          );
+    state = { ...state, currentPage: p, textHistory };
     notify();
     scheduleSessionSave();
   },
   selectBundle(textid: string) {
     // Reset juan + selection when changing bundle.
-    const pane: PaneLeaf = {
-      kind: "leaf",
-      id: state.pane.id,
-      tabs: [],
-      activeTabId: null,
-    };
+    const pane = paneHasPinnedTab(state.pane)
+      ? state.pane
+      : { kind: "leaf" as const, id: "root", tabs: [], activeTabId: null };
     state = {
       ...state,
       activeTextid: textid,
@@ -1182,24 +1418,78 @@ export const workspace = {
   },
   openJuan(textid: string, seq: number) {
     const tabId = `${textid}:${seq}`;
-    const tabs = [{ id: tabId, type: "text" as const, textid, seq }];
-    const pane: PaneLeaf = {
-      kind: "leaf",
-      id: state.pane.id,
-      tabs,
-      activeTabId: tabId,
+    const target = activePaneLeaf(state.pane);
+    const sourceTab = activeTabForLeaf(target);
+    const tab = {
+      id: tabId,
+      type: "text" as const,
+      textid,
+      seq,
+      readMode: sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode,
+      lineMode: sourceTab?.pinned
+        ? state.readPrefs.lineMode
+        : sourceTab?.lineMode ?? state.readPrefs.lineMode,
     };
+    const pane = paneForOpenTab(tab);
+    const focusedPaneId = leafIdForTab(pane, tabId);
     state = {
       ...state,
       activeTextid: textid,
       activeSeq: seq,
+      focusedPaneId,
       selection: null,
       currentPage: null,
       pane,
       activity: "texts",
     };
+    rememberTextVisit({ textid, seq });
     notify();
     scheduleSessionSave();
+  },
+  togglePinnedTab(paneId: string, tabId: string) {
+    state = {
+      ...state,
+      pane: mapPaneLeaves(state.pane, (leaf) => {
+        if (leaf.id !== paneId) return leaf;
+        return {
+          ...leaf,
+          tabs: leaf.tabs.map((tab) =>
+            tab.id === tabId ? { ...tab, pinned: !tab.pinned } : tab,
+          ),
+        };
+      }),
+    };
+    notify();
+    scheduleSessionSave();
+  },
+  openHistoryText(textid: string) {
+    const entry = state.textHistory.find((item) => item.textid === textid);
+    if (!entry) return;
+    workspace.openJuan(entry.textid, entry.seq);
+    if (
+      entry.currentPage != null &&
+      entry.currentPage.textid === entry.textid &&
+      entry.currentPage.seq === entry.seq
+    ) {
+      state = {
+        ...state,
+        currentPage: entry.currentPage,
+        pendingHighlight: {
+          textid: entry.textid,
+          seq: entry.seq,
+          bucket: entry.currentPage.bucket,
+          offset: entry.currentPage.offset,
+          length: 1,
+        },
+      };
+      rememberTextVisit({
+        textid: entry.textid,
+        seq: entry.seq,
+        currentPage: entry.currentPage,
+      });
+      notify();
+      scheduleSessionSave();
+    }
   },
   setServerInfo(info: WorkspaceState["serverInfo"]) {
     state = { ...state, serverInfo: info };
@@ -1237,6 +1527,7 @@ export const workspace = {
   },
   async logout() {
     await logoutRequest();
+    restoredSessionOnce = false;
     state = {
       ...state,
       auth: {
@@ -1245,10 +1536,12 @@ export const workspace = {
         session: { authenticated: false, user: null },
       },
       searchHistory: [],
+      textHistory: [],
       activeTextid: null,
       activeSeq: null,
+      focusedPaneId: null,
       currentPage: null,
-      pane: { kind: "leaf", id: state.pane.id, tabs: [], activeTabId: null },
+      pane: { kind: "leaf", id: "root", tabs: [], activeTabId: null },
       textLists: loadLocalTextLists(),
       activeListPaths: [],
     };
@@ -1567,19 +1860,24 @@ export const workspace = {
   },
   openHit(hit: SearchHit) {
     const tabId = `${hit.textid}:${hit.juan_seq}`;
-    const tabs = [
-      { id: tabId, type: "text" as const, textid: hit.textid, seq: hit.juan_seq },
-    ];
-    const pane: PaneLeaf = {
-      kind: "leaf",
-      id: state.pane.id,
-      tabs,
-      activeTabId: tabId,
-    };
+    const target = activePaneLeaf(state.pane);
+    const sourceTab = activeTabForLeaf(target);
+    const pane = paneForOpenTab({
+      id: tabId,
+      type: "text" as const,
+      textid: hit.textid,
+      seq: hit.juan_seq,
+      readMode: sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode,
+      lineMode: sourceTab?.pinned
+        ? state.readPrefs.lineMode
+        : sourceTab?.lineMode ?? state.readPrefs.lineMode,
+    });
+    const focusedPaneId = leafIdForTab(pane, tabId);
     state = {
       ...state,
       activeTextid: hit.textid,
       activeSeq: hit.juan_seq,
+      focusedPaneId,
       selection: null,
       currentPage: null,
       pane,
@@ -1599,9 +1897,25 @@ export const workspace = {
     notify();
   },
   setLineMode(lineMode: LineMode) {
-    const readPrefs = { ...state.readPrefs, lineMode };
-    state = { ...state, readPrefs };
-    saveReadPrefs(readPrefs);
+    const target = activePaneLeaf(state.pane);
+    if (!target) {
+      const readPrefs = { ...state.readPrefs, lineMode };
+      state = { ...state, readPrefs };
+      saveReadPrefs(readPrefs);
+    } else {
+      state = {
+        ...state,
+        pane: mapPaneLeaves(state.pane, (leaf) => {
+          if (leaf.id !== target.id) return leaf;
+          return {
+            ...leaf,
+            tabs: leaf.tabs.map((tab) =>
+              tab.id === leaf.activeTabId ? { ...tab, lineMode } : tab,
+            ),
+          };
+        }),
+      };
+    }
     notify();
     scheduleSessionSave();
   },
@@ -1613,6 +1927,19 @@ export const workspace = {
     saveUiPrefs(uiPrefs);
     notify();
     scheduleSessionSave();
+  },
+  setSidebarVisible(side: "left" | "right", visible: boolean) {
+    const key = side === "left" ? "leftSidebarVisible" : "rightSidebarVisible";
+    if (state.uiPrefs[key] === visible) return;
+    const uiPrefs = { ...state.uiPrefs, [key]: visible };
+    state = { ...state, uiPrefs };
+    saveUiPrefs(uiPrefs);
+    notify();
+    scheduleSessionSave();
+  },
+  toggleSidebar(side: "left" | "right") {
+    const key = side === "left" ? "leftSidebarVisible" : "rightSidebarVisible";
+    workspace.setSidebarVisible(side, !state.uiPrefs[key]);
   },
   setPanelWidth(side: PanelSide, width: number) {
     const next = clampWidth(width, state.panelWidths[side], side);

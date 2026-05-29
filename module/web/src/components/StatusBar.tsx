@@ -2,6 +2,7 @@ import {
   useWorkspace,
   workspace,
   type LineMode,
+  type PaneNode,
   type ReadMode,
 } from "../state/useWorkspace";
 
@@ -20,12 +21,27 @@ const LINE_MODES: { id: LineMode; label: string; tip: string }[] = [
   { id: "phrase", label: "↵", tip: "Phrase-per-line display (tls:seg or punctuation)" },
 ];
 
+function paneLeaves(pane: PaneNode): Extract<PaneNode, { kind: "leaf" }>[] {
+  return pane.kind === "leaf" ? [pane] : pane.children.flatMap(paneLeaves);
+}
+
+function focusedTab(pane: PaneNode, focusedPaneId: string | null) {
+  const leaves = paneLeaves(pane);
+  const leaf = leaves.find((item) => item.id === focusedPaneId) ?? leaves[0] ?? null;
+  return leaf?.tabs.find((tab) => tab.id === leaf.activeTabId) ?? leaf?.tabs[0] ?? null;
+}
+
 export function StatusBar() {
   const textid = useWorkspace((s) => s.activeTextid);
   const seq = useWorkspace((s) => s.activeSeq);
   const cp = useWorkspace((s) => s.hoverCodepoint);
-  const mode = useWorkspace((s) => s.readMode);
-  const lineMode = useWorkspace((s) => s.readPrefs.lineMode);
+  const pane = useWorkspace((s) => s.pane);
+  const focusedPaneId = useWorkspace((s) => s.focusedPaneId);
+  const defaultMode = useWorkspace((s) => s.readMode);
+  const defaultLineMode = useWorkspace((s) => s.readPrefs.lineMode);
+  const tab = focusedTab(pane, focusedPaneId);
+  const mode = tab?.readMode ?? defaultMode;
+  const lineMode = tab?.lineMode ?? defaultLineMode;
 
   return (
     <div className="sb">

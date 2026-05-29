@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getManifest } from "../../api/client";
-import { setResizing, useWorkspace, workspace } from "../../state/useWorkspace";
+import { setResizing, useWorkspace, workspace, type PaneLeaf } from "../../state/useWorkspace";
 import { CharInfoBar } from "../CharInfoBar";
 import { ImagePanel } from "./ImagePanel";
 import { TextViewer } from "./TextViewer";
@@ -38,14 +38,16 @@ function InspectResizer() {
   );
 }
 
-export function WorkspacePane() {
-  const pane = useWorkspace((s) => s.pane);
-  const readMode = useWorkspace((s) => s.readMode);
+export function WorkspacePane({ pane }: { pane: PaneLeaf }) {
+  const defaultReadMode = useWorkspace((s) => s.readMode);
+  const defaultLineMode = useWorkspace((s) => s.readPrefs.lineMode);
   const inspectWidth = useWorkspace((s) => s.panelWidths.inspect);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const activeTab =
     pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0] ?? null;
 
+  const readMode = activeTab?.readMode ?? defaultReadMode;
+  const lineMode = activeTab?.lineMode ?? defaultLineMode;
   const showInspect = readMode === "inspect" && activeTab != null;
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export function WorkspacePane() {
   }, [pane.tabs, titles]);
 
   return (
-    <div className="wp">
+    <div className="wp" onMouseDown={() => workspace.focusPane(pane.id)}>
       <div className="tab-bar">
         {pane.tabs.length === 0 && (
           <div
@@ -93,8 +95,29 @@ export function WorkspacePane() {
             key={t.id}
             className={`tab${t.id === activeTab?.id ? " on" : ""}`}
             title={`${titles[t.textid] ?? t.textid} · ${t.textid} · 卷 ${t.seq}`}
+            onClick={() => workspace.focusPane(pane.id)}
           >
-            {titles[t.textid] ?? t.textid} · {t.textid} · 卷 {t.seq}
+            <span className="tab-title">
+              {titles[t.textid] ?? t.textid} · {t.textid} · 卷 {t.seq}
+            </span>
+            <span
+              className={`tab-pin${t.pinned ? " on" : ""}`}
+              role="button"
+              tabIndex={0}
+              title={t.pinned ? "Unpin text" : "Pin text"}
+              onClick={(e) => {
+                e.stopPropagation();
+                workspace.togglePinnedTab(pane.id, t.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                e.stopPropagation();
+                workspace.togglePinnedTab(pane.id, t.id);
+              }}
+            >
+              {t.pinned ? "●" : "○"}
+            </span>
           </button>
         ))}
       </div>
@@ -106,6 +129,7 @@ export function WorkspacePane() {
                 key={`${activeTab.textid}:${activeTab.seq}`}
                 textid={activeTab.textid}
                 seq={activeTab.seq}
+                lineMode={lineMode}
               />
             </div>
             <InspectResizer />
@@ -122,6 +146,7 @@ export function WorkspacePane() {
             key={`${activeTab.textid}:${activeTab.seq}`}
             textid={activeTab.textid}
             seq={activeTab.seq}
+            lineMode={lineMode}
           />
         )
       ) : (

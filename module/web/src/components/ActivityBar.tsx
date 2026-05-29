@@ -2,45 +2,6 @@ import { useWorkspace, workspace, type Activity } from "../state/useWorkspace";
 
 const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
   {
-    id: "texts",
-    label: "Texts",
-    icon: (
-      <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-        <rect
-          x="2"
-          y="2"
-          width="8"
-          height="11"
-          rx="1"
-          stroke="currentColor"
-          strokeWidth="1.3"
-        />
-        <path
-          d="M5 6h4M5 8.5h3M5 11h2"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-        />
-        <rect
-          x="6"
-          y="4"
-          width="8"
-          height="10"
-          rx="1"
-          fill="var(--bg-act)"
-          stroke="currentColor"
-          strokeWidth="1.3"
-        />
-        <path
-          d="M9 8h2M9 10h3"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-  {
     id: "catalog",
     label: "Catalog",
     icon: (
@@ -93,6 +54,67 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
     ),
   },
   {
+    id: "texts",
+    label: "Contents",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+        <rect
+          x="2"
+          y="2"
+          width="8"
+          height="11"
+          rx="1"
+          stroke="currentColor"
+          strokeWidth="1.3"
+        />
+        <path
+          d="M5 6h4M5 8.5h3M5 11h2"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+        <rect
+          x="6"
+          y="4"
+          width="8"
+          height="10"
+          rx="1"
+          fill="var(--bg-act)"
+          stroke="currentColor"
+          strokeWidth="1.3"
+        />
+        <path
+          d="M9 8h2M9 10h3"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: "history",
+    label: "History",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+        <path
+          d="M3 3.5v3h3M3.4 6.5A5 5 0 1 0 5 3.1"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M8 5.2v3.1l2.1 1.3"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "lists",
     label: "Lists",
     icon: (
@@ -107,6 +129,21 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
           d="M2.5 4h.01M2.5 8h.01M2.5 12h.01"
           stroke="currentColor"
           strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="2.1" stroke="currentColor" strokeWidth="1.3" />
+        <path
+          d="M8 1.8v2M8 12.2v2M3.6 3.6 5 5M11 11l1.4 1.4M1.8 8h2M12.2 8h2M3.6 12.4 5 11M11 5l1.4-1.4"
+          stroke="currentColor"
+          strokeWidth="1.3"
           strokeLinecap="round"
         />
       </svg>
