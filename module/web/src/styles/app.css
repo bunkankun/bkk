@@ -849,6 +849,27 @@ button {
   color: var(--amb);
   background: var(--amb-d);
 }
+.pane-close {
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 4px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--t3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pane-close:hover {
+  color: var(--t1);
+  background: var(--bg3);
+}
 
 /* editor / text viewer */
 .ec {

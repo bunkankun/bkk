@@ -42,6 +42,7 @@ export type Activity =
   | "settings";
 export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
+export type OpenMode = "read" | "trans" | "sticky";
 export type SearchTarget = "fulltext" | "dictionary" | "translations";
 export type LineMode = "paragraph" | "phrase";
 export type Theme = "current" | "dark" | "light";
@@ -195,6 +196,7 @@ export interface WorkspaceState {
   rightTab: RightTab;
   // upper-right "Read | Trans | Inspect" — Trans/Inspect disabled in v1.
   readMode: ReadMode;
+  openMode: OpenMode;
   selectedTranslation: TranslationSummary | null;
   // info from GET /api/info (loaded once at startup).
   serverInfo: { upstream_repo?: string | null; version?: string } | null;
@@ -431,6 +433,7 @@ let state: WorkspaceState = {
   selection: null,
   rightTab: "annotations",
   readMode: "read",
+  openMode: "read",
   selectedTranslation: null,
   serverInfo: null,
   auth: {
@@ -541,12 +544,22 @@ function leafWithTab(
   };
 }
 
+function removePaneLeaf(node: PaneNode, paneId: string): PaneNode {
+  if (node.kind === "leaf") return node;
+  if (node.children.some((c) => c.kind === "leaf" && c.id === paneId)) {
+    const remaining = node.children.filter((c) => !(c.kind === "leaf" && c.id === paneId));
+    return remaining.length === 1 ? remaining[0] : { ...node, children: remaining };
+  }
+  return { ...node, children: node.children.map((c) => removePaneLeaf(c, paneId)) };
+}
+
 function paneForOpenTab(
   tab: PaneLeaf["tabs"][number],
 ): PaneNode {
   const target = activePaneLeaf(state.pane);
   const activeTab = target?.tabs.find((item) => item.id === target.activeTabId) ?? target?.tabs[0];
   if (activeTab?.pinned) {
+    if (tab.id === activeTab.id) return state.pane;
     const nextLeaf = leafWithTab(nextPaneId(), tab);
     return state.pane.kind === "split"
       ? { ...state.pane, children: [...state.pane.children, nextLeaf] }
@@ -1084,6 +1097,7 @@ async function saveSessionState(): Promise<void> {
       activeSeq: state.activeSeq,
       currentPage: state.currentPage,
       readMode: state.readMode,
+      openMode: state.openMode,
       rightTab: state.rightTab,
       readPrefs: state.readPrefs,
       uiPrefs: state.uiPrefs,
@@ -1119,6 +1133,7 @@ async function loadWorkspacePersistence(): Promise<void> {
         activeSeq?: unknown;
         currentPage?: unknown;
         readMode?: unknown;
+        openMode?: unknown;
         rightTab?: unknown;
         readPrefs?: unknown;
         uiPrefs?: unknown;
@@ -1149,6 +1164,12 @@ async function loadWorkspacePersistence(): Promise<void> {
         sessionDoc.readMode === "read"
           ? sessionDoc.readMode
           : state.readMode;
+      const openMode =
+        sessionDoc.openMode === "read" ||
+        sessionDoc.openMode === "trans" ||
+        sessionDoc.openMode === "sticky"
+          ? sessionDoc.openMode
+          : state.openMode;
       const rightTab =
         sessionDoc.rightTab === "chat" ||
         sessionDoc.rightTab === "search" ||
@@ -1220,6 +1241,7 @@ async function loadWorkspacePersistence(): Promise<void> {
       state = {
         ...state,
         readMode,
+        openMode,
         rightTab,
         readPrefs,
         uiPrefs,
@@ -1350,6 +1372,11 @@ export const workspace = {
         }),
       };
     }
+    notify();
+    scheduleSessionSave();
+  },
+  setOpenMode(openMode: OpenMode) {
+    state = { ...state, openMode };
     notify();
     scheduleSessionSave();
   },
@@ -1485,7 +1512,9 @@ export const workspace = {
       textid,
       seq,
       pinned: options.pinned === true,
-      readMode: sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode,
+      readMode: state.openMode === "sticky"
+        ? (sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode)
+        : state.openMode,
       lineMode: sourceTab?.pinned
         ? state.readPrefs.lineMode
         : sourceTab?.lineMode ?? state.readPrefs.lineMode,
@@ -1529,6 +1558,17 @@ export const workspace = {
           )
         : state.textHistory,
     };
+    notify();
+    scheduleSessionSave();
+  },
+  closePane(paneId: string) {
+    const newPane = removePaneLeaf(state.pane, paneId);
+    if (newPane === state.pane) return;
+    const leaves = paneLeaves(newPane);
+    const focusedPaneId = leaves.find((l) => l.id === state.focusedPaneId)
+      ? state.focusedPaneId
+      : (leaves[0]?.id ?? null);
+    state = { ...state, pane: newPane, focusedPaneId };
     notify();
     scheduleSessionSave();
   },
@@ -1939,7 +1979,9 @@ export const workspace = {
       textid: hit.textid,
       seq: hit.juan_seq,
       pinned: false,
-      readMode: sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode,
+      readMode: state.openMode === "sticky"
+        ? (sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode)
+        : state.openMode,
       lineMode: sourceTab?.pinned
         ? state.readPrefs.lineMode
         : sourceTab?.lineMode ?? state.readPrefs.lineMode,

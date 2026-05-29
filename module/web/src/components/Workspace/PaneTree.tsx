@@ -1,12 +1,12 @@
 import { useWorkspace, type PaneNode } from "../../state/useWorkspace";
 import { WorkspacePane } from "./WorkspacePane";
 
-function PaneNodeView({ pane }: { pane: PaneNode }) {
-  if (pane.kind === "leaf") return <WorkspacePane pane={pane} />;
+function PaneNodeView({ pane, closeable = false }: { pane: PaneNode; closeable?: boolean }) {
+  if (pane.kind === "leaf") return <WorkspacePane pane={pane} closeable={closeable} />;
   return (
     <div className="pane-split pane-split-horizontal">
       {pane.children.map((child) => (
-        <PaneNodeView key={child.id} pane={child} />
+        <PaneNodeView key={child.id} pane={child} closeable={true} />
       ))}
     </div>
   );

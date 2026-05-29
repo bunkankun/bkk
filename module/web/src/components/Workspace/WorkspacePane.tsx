@@ -39,7 +39,7 @@ function InspectResizer() {
   );
 }
 
-export function WorkspacePane({ pane }: { pane: PaneLeaf }) {
+export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; closeable?: boolean }) {
   const defaultReadMode = useWorkspace((s) => s.readMode);
   const defaultLineMode = useWorkspace((s) => s.readPrefs.lineMode);
   const inspectWidth = useWorkspace((s) => s.panelWidths.inspect);
@@ -123,6 +123,18 @@ export function WorkspacePane({ pane }: { pane: PaneLeaf }) {
             </span>
           </button>
         ))}
+        {closeable && (
+          <button
+            className="pane-close"
+            title="Close pane"
+            onClick={(e) => {
+              e.stopPropagation();
+              workspace.closePane(pane.id);
+            }}
+          >
+            ×
+          </button>
+        )}
       </div>
       {activeTab ? (
         showInspect ? (
