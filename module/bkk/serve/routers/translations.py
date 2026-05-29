@@ -8,12 +8,14 @@ from bkk.serve import errors, selection
 from bkk.serve.schemas import (
     OverlayFamily,
     OverlaysResponse,
+    SegmentTranslationsResponse,
     TranslationAlignmentResponse,
     TranslationListResponse,
 )
 from bkk.serve.state import AppState
 from bkk.serve.translations import (
     align_translation,
+    get_segment_translations,
     list_translation_bundles_from_catalog,
     list_translation_bundles,
     load_translation_bundle_from_catalog,
@@ -190,3 +192,35 @@ def juan_translation_alignment(
         source_juan=juan,
         translation=translation,
     )
+
+
+@router.get(
+    "/bundles/{textid}/juan/{seq}/segment-translations",
+    response_model=SegmentTranslationsResponse,
+    summary="Get all translations for a specific source segment",
+)
+def segment_translations(
+    request: Request,
+    textid: str = PathParam(...),
+    seq: int = PathParam(..., ge=0),
+    corresp: str = Query(...),
+    source_text: str = Query(default=""),
+) -> SegmentTranslationsResponse:
+    state: AppState = request.app.state.bkk
+    catalog_conn = state.open_catalog()
+    search_conn = state.open_translation_search()
+    try:
+        return get_segment_translations(
+            state.corpus_root,
+            textid=textid,
+            seq=seq,
+            corresp=corresp,
+            source_text=source_text,
+            search_conn=search_conn,
+            catalog_conn=catalog_conn,
+        )
+    finally:
+        if catalog_conn is not None:
+            catalog_conn.close()
+        if search_conn is not None:
+            search_conn.close()

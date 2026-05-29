@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { getAnnotations } from "../../api/client";
-import type { Annotation } from "../../api/types";
+import { getAnnotations, getSegmentTranslations } from "../../api/client";
+import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 
 function AnnCard({ a }: { a: Annotation }) {
@@ -15,10 +15,43 @@ function AnnCard({ a }: { a: Annotation }) {
       {a.sense?.def && <div className="ann-def">{a.sense.def}</div>}
       {a.translation?.text && (
         <div className="ann-tr">
-          “{a.translation.text}”
+          "{a.translation.text}"
           {a.translation.src ? ` — ${a.translation.src}` : ""}
         </div>
       )}
+    </div>
+  );
+}
+
+function SegTransCard({ entry, textid }: { entry: SegmentTranslationEntry; textid: string }) {
+  const onLoad = () => {
+    workspace.selectTranslation({
+      id: entry.bundle_id,
+      source_textid: textid,
+      language: entry.language ?? null,
+      title: entry.title ?? null,
+      original_title: null,
+      canonical_identifier: null,
+      source_canonical_identifier: null,
+      responsibility: entry.translator
+        ? [{ role: "translator", name: entry.translator }]
+        : [],
+      date: null,
+      license: null,
+      juan_count: 0,
+      segment_count: 0,
+      source_juans: [],
+    });
+  };
+  return (
+    <div className="ann seg-trans">
+      <div className="ann-head">
+        {entry.language && <span className="ann-orth">{entry.language}</span>}
+        {entry.translator && <span className="ann-pron">{entry.translator}</span>}
+        <button className="seg-trans-load" onClick={onLoad} title="Open this translation">↗</button>
+      </div>
+      {entry.title && <div className="ann-concept">{entry.title}</div>}
+      <div className="ann-tr">"{entry.text}"</div>
     </div>
   );
 }
@@ -27,9 +60,12 @@ export function AnnotationsTab() {
   const textid = useWorkspace((s) => s.activeTextid);
   const seq = useWorkspace((s) => s.activeSeq);
   const sel = useWorkspace((s) => s.selection);
+  const selectedSegment = useWorkspace((s) => s.selectedSegment);
   const [anns, setAnns] = useState<Annotation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [includePin, setIncludePin] = useState(false);
+  const [segTranslations, setSegTranslations] = useState<SegmentTranslationEntry[] | null>(null);
+  const [segError, setSegError] = useState<string | null>(null);
 
   useEffect(() => {
     if (textid == null || seq == null) {
@@ -40,16 +76,34 @@ export function AnnotationsTab() {
     setAnns(null);
     setError(null);
     getAnnotations(textid, seq)
-      .then((a) => {
-        if (!cancelled) setAnns(a);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(String(e));
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then((a) => { if (!cancelled) setAnns(a); })
+      .catch((e) => { if (!cancelled) setError(String(e)); });
+    return () => { cancelled = true; };
   }, [textid, seq]);
+
+  useEffect(() => {
+    if (
+      selectedSegment == null ||
+      selectedSegment.textid !== textid ||
+      selectedSegment.seq !== seq
+    ) {
+      setSegTranslations(null);
+      setSegError(null);
+      return;
+    }
+    let cancelled = false;
+    setSegTranslations(null);
+    setSegError(null);
+    getSegmentTranslations(
+      selectedSegment.textid,
+      selectedSegment.seq,
+      selectedSegment.corresp,
+      selectedSegment.sourceText,
+    )
+      .then((r) => { if (!cancelled) setSegTranslations(r.entries); })
+      .catch((e) => { if (!cancelled) setSegError(String(e)); });
+    return () => { cancelled = true; };
+  }, [selectedSegment, textid, seq]);
 
   if (textid == null || seq == null) {
     return <div className="rc empty">Open a juan to see annotations.</div>;
@@ -105,6 +159,11 @@ export function AnnotationsTab() {
     void workspace.runSearch();
   };
 
+  const showSegment =
+    selectedSegment != null &&
+    selectedSegment.textid === textid &&
+    selectedSegment.seq === seq;
+
   return (
     <div className="rc">
       {sel && sel.textid === textid && sel.seq === seq && (
@@ -146,6 +205,32 @@ export function AnnotationsTab() {
           </label>
         </>
       )}
+
+      {showSegment && (
+        <div className="seg-trans-panel">
+          <div className="seg-trans-header">
+            <span className="seg-trans-corresp">{selectedSegment!.corresp}</span>
+            <span className="seg-trans-text">{selectedSegment!.sourceText}</span>
+            <button
+              className="sel-clear"
+              onClick={() => workspace.setSelectedSegment(null)}
+            >
+              ×
+            </button>
+          </div>
+          {segError && <div className="empty">{segError}</div>}
+          {segTranslations == null && !segError && (
+            <div className="empty">Loading translations…</div>
+          )}
+          {segTranslations != null && segTranslations.length === 0 && (
+            <div className="empty">No translations for this segment.</div>
+          )}
+          {segTranslations?.map((entry, i) => (
+            <SegTransCard key={`${entry.bundle_id}-${i}`} entry={entry} textid={textid!} />
+          ))}
+        </div>
+      )}
+
       {visible.length === 0 ? (
         <div className="empty">
           {anns.length === 0

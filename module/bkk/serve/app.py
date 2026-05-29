@@ -73,14 +73,14 @@ def create_app(config: ServeConfig) -> FastAPI:
         else None
     )
     errors.install_handlers(app, spa_index=spa_index)
-    # Register annotations BEFORE bundles/texts so the more specific
-    # /juan/{seq}/annotations route wins over /juan/{seq}/{bucket}.
+    # Register specific sub-routes BEFORE bundles/texts so they win over the
+    # generic /juan/{seq}/{bucket} wildcard in bundles_router.
     app.include_router(annotations_router.router)
+    app.include_router(translations_router.router)
     app.include_router(bundles_router.router)
     app.include_router(texts_router.router)
     app.include_router(catalog_router.router)
     app.include_router(search_router.router)
-    app.include_router(translations_router.router)
     app.include_router(recipes_router.router)
     app.include_router(auth_router.router)
     app.include_router(workspace_router.router)

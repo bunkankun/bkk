@@ -30,6 +30,7 @@ class TranslationSegment:
     text: str
     ref: list[str]
     corresp: list[str]
+    resp: str | None = None
 
 
 @dataclass(frozen=True)
@@ -199,18 +200,32 @@ def load_translation_bundle(
         if not isinstance(entry, dict):
             continue
         seq = entry.get("seq")
+        label = entry.get("label")
         filename = entry.get("file")
         if not isinstance(seq, int) or not isinstance(filename, str):
             continue
+        try:
+            source_seq = int(label)
+        except (TypeError, ValueError):
+            source_seq = seq
         if not include_juans:
             continue
         path = bundle_dir / filename
         if not path.is_file():
             continue
         juan = _read_translation_juan(path)
-        juans[seq] = juan
+        juans[source_seq] = juan
         total_segments += len(juan.segments)
-    summary = _summary(bundle_id, manifest, source_textid, len(juans), total_segments)
+    source_juans: list[int] = []
+    for entry in manifest.get("juan") or []:
+        if not isinstance(entry, dict):
+            continue
+        label = entry.get("label")
+        try:
+            source_juans.append(int(label))
+        except (TypeError, ValueError):
+            pass
+    summary = _summary(bundle_id, manifest, source_textid, len(juans), total_segments, source_juans)
     if not include_juans:
         total_segments = 0
     return TranslationBundle(
@@ -322,6 +337,7 @@ def align_translation(
                 source_text=source_text[seg["start"]:seg["end"]],
                 translation_text="\n".join(p.text for p in own_parts),
                 translation_refs=[r for p in own_parts for r in p.ref],
+                resp=own_parts[0].resp if own_parts else None,
                 continued=continued,
             )
         )
@@ -354,11 +370,13 @@ def _read_translation_juan(path: Path) -> TranslationJuan:
         marker = markers[i] if i < len(markers) and isinstance(markers[i], dict) else {}
         corresp = marker.get("corresp")
         refs = marker.get("ref")
+        resp = marker.get("resp")
         segments.append(
             TranslationSegment(
                 text=_unescape_span_text(span.group(1)),
                 ref=_string_list(refs) or _refs_from_attrs(span.group(2)),
                 corresp=_string_list(corresp),
+                resp=resp if isinstance(resp, str) else None,
             )
         )
     seq = header.get("juan_seq") if isinstance(header.get("juan_seq"), int) else 0
@@ -372,6 +390,7 @@ def _summary(
     source_textid: str,
     juan_count: int,
     segment_count: int,
+    source_juans: list[int] | None = None,
 ) -> TranslationSummary:
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     resp = [
@@ -395,6 +414,7 @@ def _summary(
         license=manifest.get("license"),
         juan_count=juan_count,
         segment_count=segment_count,
+        source_juans=source_juans or [],
     )
 
 
@@ -487,3 +507,114 @@ def _unescape_span_text(text: str) -> str:
     if escaped:
         out.append("\\")
     return "".join(out)
+
+
+def get_segment_translations(
+    corpus_root: Path,
+    textid: str,
+    seq: int,
+    corresp: str,
+    source_text: str,
+    *,
+    search_conn: sqlite3.Connection | None = None,
+    catalog_conn: sqlite3.Connection | None = None,
+) -> "SegmentTranslationsResponse":
+    from .schemas import SegmentTranslationEntry, SegmentTranslationsResponse  # noqa: PLC0415
+    if search_conn is not None and catalog_conn is not None:
+        entries = _segment_translations_from_index(
+            search_conn, catalog_conn, textid=textid, seq=seq, corresp=corresp,
+        )
+    else:
+        entries = _segment_translations_from_fs(
+            corpus_root, textid=textid, seq=seq, corresp=corresp,
+        )
+    return SegmentTranslationsResponse(
+        corresp=corresp,
+        source_text=source_text,
+        entries=entries,
+    )
+
+
+def _segment_translations_from_index(
+    search_conn: sqlite3.Connection,
+    catalog_conn: sqlite3.Connection,
+    *,
+    textid: str,
+    seq: int,
+    corresp: str,
+) -> "list":
+    from .schemas import SegmentTranslationEntry  # noqa: PLC0415
+    rows = search_conn.execute(
+        "SELECT ts.translation_id, ts.text"
+        " FROM translation_segment ts"
+        " WHERE ts.corresp = ? AND ts.juan_seq = ?",
+        [corresp, seq],
+    ).fetchall()
+    if not rows:
+        return []
+    placeholders = ",".join("?" * len(rows))
+    ids = [r[0] for r in rows]
+    text_by_id = {r[0]: r[1] for r in rows}
+    cat_rows = catalog_conn.execute(
+        f"SELECT id, source_textid, language, title, responsibility"
+        f" FROM catalog_translation"
+        f" WHERE id IN ({placeholders}) AND source_textid = ?",
+        [*ids, textid],
+    ).fetchall()
+    entries = []
+    for cat_id, _src, language, title, responsibility_raw in cat_rows:
+        text = text_by_id.get(cat_id)
+        if not text:
+            continue
+        try:
+            responsibility = json.loads(responsibility_raw or "[]")
+        except json.JSONDecodeError:
+            responsibility = []
+        translator = next(
+            (item["name"] for item in responsibility
+             if isinstance(item, dict) and item.get("name")),
+            None,
+        )
+        entries.append(SegmentTranslationEntry(
+            bundle_id=cat_id,
+            title=title,
+            language=language,
+            translator=translator,
+            text=text,
+        ))
+    return entries
+
+
+def _segment_translations_from_fs(
+    corpus_root: Path,
+    *,
+    textid: str,
+    seq: int,
+    corresp: str,
+) -> "list":
+    from .schemas import SegmentTranslationEntry  # noqa: PLC0415
+    bundles = list_translation_bundles(corpus_root, source_textid=textid)
+    entries = []
+    for bundle_stub in bundles:
+        try:
+            bundle = load_translation_bundle(bundle_stub.path, include_juans=True)
+        except Exception:
+            continue
+        trans_juan = bundle.juans.get(seq)
+        if trans_juan is None:
+            continue
+        for seg in trans_juan.segments:
+            if corresp in seg.corresp and seg.text:
+                translator = next(
+                    (r.name for r in bundle.summary.responsibility if r.name),
+                    None,
+                )
+                entries.append(SegmentTranslationEntry(
+                    bundle_id=bundle.id,
+                    title=bundle.summary.title,
+                    language=bundle.summary.language,
+                    translator=translator,
+                    text=seg.text,
+                ))
+                break
+    return entries

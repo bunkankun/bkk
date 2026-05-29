@@ -18,7 +18,7 @@ from .merge import discover_bundles
 
 log = logging.getLogger("bkk.index")
 
-CATALOG_SCHEMA_VERSION = 3
+CATALOG_SCHEMA_VERSION = 4
 
 DDL = """
 CREATE TABLE meta (
@@ -78,7 +78,8 @@ CREATE TABLE catalog_translation (
   responsibility TEXT NOT NULL,
   date TEXT,
   license TEXT,
-  juan_count INTEGER NOT NULL
+  juan_count INTEGER NOT NULL,
+  seg_count INTEGER NOT NULL
 );
 
 CREATE INDEX idx_catalog_translation_source ON catalog_translation(source_textid);
@@ -236,8 +237,8 @@ def build_catalog_index(
             "INSERT INTO catalog_translation("
             "id, source_textid, path, canonical_identifier, "
             "source_canonical_identifier, language, title, original_title, "
-            "responsibility, date, license, juan_count"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "responsibility, date, license, juan_count, seg_count"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             translation_records,
         )
         conn.commit()
@@ -545,11 +546,16 @@ def _translation_records(corpus: Path) -> list[tuple]:
             item for item in (manifest.get("responsibility") or [])
             if isinstance(item, dict)
         ]
-        juan_count = sum(
-            1 for entry in (manifest.get("juan") or [])
+        juan_entries = [
+            entry for entry in (manifest.get("juan") or [])
             if isinstance(entry, dict)
             and isinstance(entry.get("seq"), int)
             and isinstance(entry.get("file"), str)
+        ]
+        juan_count = len(juan_entries)
+        seg_count = sum(
+            entry["segs"] for entry in juan_entries
+            if isinstance(entry.get("segs"), int)
         )
         records.append((
             bundle_id,
@@ -564,6 +570,7 @@ def _translation_records(corpus: Path) -> list[tuple]:
             manifest.get("date"),
             manifest.get("license"),
             juan_count,
+            seg_count,
         ))
     return records
 

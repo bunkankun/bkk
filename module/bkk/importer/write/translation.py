@@ -91,6 +91,7 @@ def write_translation(
         juan_entries.append(marker_to_flow({
             "seq": seq,
             "label": label,
+            "segs": len(segs),
             "file": filename,
             "hash": jhash,
         }))

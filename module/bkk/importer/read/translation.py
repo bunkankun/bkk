@@ -162,7 +162,12 @@ def _parse_header(root, xml_path: Path) -> tuple[dict, str, str, dict]:
                 title_in_bibl = bibl.find(_q("title"))
                 if title_in_bibl is not None and (title_in_bibl.text or "").strip():
                     original_title = title_in_bibl.text.strip()
-                break
+            else:
+                # Publication bibl: extract year for the date field.
+                bibl_text = "".join(bibl.itertext()).strip()
+                year_m = re.search(r"\b(1[0-9]{3}|20[0-9]{2})\b", bibl_text)
+                if year_m:
+                    md["date"] = year_m.group(1)
         lang_el = source_desc.find(f".//{_q('lang')}")
         if lang_el is not None:
             xml_lang = lang_el.get(_q("lang", XML_NS)) or ""
@@ -174,9 +179,6 @@ def _parse_header(root, xml_path: Path) -> tuple[dict, str, str, dict]:
 
     creation = root.find(f".//{_q('teiHeader')}//{_q('creation')}")
     if creation is not None:
-        date_el = creation.find(_q("date"))
-        if date_el is not None and (date_el.text or "").strip():
-            md["date"] = date_el.text.strip()
         # TLS creation lines look like:
         #   <creation [resp="#CH"]>Initially created: <date>…</date> by CH</creation>
         # Extract the "by <name>" tail; fall back to @resp's value. The role is

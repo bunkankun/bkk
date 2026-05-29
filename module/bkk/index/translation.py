@@ -28,7 +28,7 @@ _SPAN_RE = re.compile(r"\[((?:\\.|[^\]\\])*)\]\{([^}]*)\}")
 
 log = logging.getLogger("bkk.index")
 
-TRANSLATION_SCHEMA_VERSION = 1
+TRANSLATION_SCHEMA_VERSION = 2
 
 # Tables only — heavy search index is deferred until end of merge.
 _TABLES_DDL = """
@@ -40,11 +40,13 @@ CREATE TABLE meta (
 CREATE TABLE translation_segment (
   translation_id TEXT NOT NULL,
   juan_seq INTEGER NOT NULL,
+  corresp TEXT,
   text TEXT NOT NULL,
   text_search TEXT
 );
 
 CREATE INDEX idx_translation_segment_id ON translation_segment(translation_id);
+CREATE INDEX idx_translation_segment_corresp ON translation_segment(corresp);
 """
 
 _SEARCH_INDEX_DDL = """
@@ -79,7 +81,7 @@ def build_translation_index(
         )
         conn.executemany(
             "INSERT INTO translation_segment"
-            "(translation_id, juan_seq, text, text_search) VALUES (?,?,?,?)",
+            "(translation_id, juan_seq, corresp, text, text_search) VALUES (?,?,?,?,?)",
             records,
         )
         conn.commit()
@@ -224,7 +226,10 @@ def _merge_one(conn: sqlite3.Connection, bkkt: Path) -> None:
                 f"expected {TRANSLATION_SCHEMA_VERSION}; rebuild it first"
             )
         conn.execute(
-            "INSERT INTO translation_segment SELECT * FROM src.translation_segment"
+            "INSERT INTO translation_segment"
+            "(translation_id, juan_seq, corresp, text, text_search)"
+            " SELECT translation_id, juan_seq, corresp, text, text_search"
+            " FROM src.translation_segment"
         )
         conn.commit()
     except Exception:
@@ -268,33 +273,48 @@ def _schema_version(path: Path) -> int:
 def _segment_records_for_bundle(
     bundle_dir: Path,
     bundle_id: str,
-) -> list[tuple[str, int, str, str | None]]:
+) -> list[tuple[str, int, str | None, str, str | None]]:
     manifest_path = bundle_dir / f"{bundle_id}.md"
     try:
         manifest, _ = _read_markdown_frontmatter(manifest_path)
     except Exception as exc:
         log.warning("%s: translation manifest parse failed: %s", manifest_path, exc)
         return []
-    records: list[tuple[str, int, str, str | None]] = []
+    records: list[tuple[str, int, str | None, str, str | None]] = []
     for entry in manifest.get("juan") or []:
         if not isinstance(entry, dict):
             continue
         seq = entry.get("seq")
+        label = entry.get("label")
         filename = entry.get("file")
         if not isinstance(seq, int) or not isinstance(filename, str):
             continue
+        try:
+            source_seq = int(label)
+        except (TypeError, ValueError):
+            source_seq = seq
         juan_path = bundle_dir / filename
         if not juan_path.is_file():
             continue
         try:
-            _, body = _read_markdown_frontmatter(juan_path)
+            header, body = _read_markdown_frontmatter(juan_path)
         except Exception:
             continue
-        for span in _SPAN_RE.finditer(body):
+        markers = header.get("markers") if isinstance(header.get("markers"), list) else []
+        spans = list(_SPAN_RE.finditer(body))
+        for i, span in enumerate(spans):
             text = _unescape(span.group(1)).strip()
             if not text:
                 continue
-            records.append((bundle_id, seq, text, normalize_search_text(text)))
+            marker = markers[i] if i < len(markers) and isinstance(markers[i], dict) else {}
+            corresp_raw = marker.get("corresp")
+            if isinstance(corresp_raw, str):
+                corresp = corresp_raw
+            elif isinstance(corresp_raw, list) and corresp_raw:
+                corresp = corresp_raw[0] if isinstance(corresp_raw[0], str) else None
+            else:
+                corresp = None
+            records.append((bundle_id, source_seq, corresp, text, normalize_search_text(text)))
     return records
 
 

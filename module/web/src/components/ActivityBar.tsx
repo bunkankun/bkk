@@ -94,7 +94,7 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
   },
   {
     id: "overlays",
-    label: "Overlays",
+    label: "TRANSL",
     icon: (
       <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
         <path

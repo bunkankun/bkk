@@ -4,7 +4,7 @@ import { ActivityBar } from "./components/ActivityBar";
 import { Catalog } from "./components/LeftPanel/Catalog";
 import { History } from "./components/LeftPanel/History";
 import { Lists } from "./components/LeftPanel/Lists";
-import { Overlays } from "./components/LeftPanel/Overlays";
+import { Translations } from "./components/LeftPanel/Translations";
 import { Settings } from "./components/LeftPanel/Settings";
 import { Toc } from "./components/LeftPanel/Toc";
 import { Menubar } from "./components/Menubar";
@@ -60,7 +60,7 @@ function LeftPanel() {
   const title = activity === "timeline"
     ? "Timeline"
     : activity === "overlays"
-      ? "Overlays"
+      ? "TRANSLATIONS"
     : activity === "lists"
       ? "Lists"
     : activity === "history"
@@ -79,7 +79,7 @@ function LeftPanel() {
         {activity === "timeline" ? (
           <Catalog mode="timeline" />
         ) : activity === "overlays" ? (
-          <Overlays />
+          <Translations />
         ) : activity === "lists" ? (
           <Lists />
         ) : activity === "history" ? (
