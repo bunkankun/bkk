@@ -1316,17 +1316,17 @@ def _skip_filter_translation_paths(
     kept: list[Path] = []
     skipped = 0
     for xml_path in paths:
-        m = _TRANSLATION_STEM_RE.match(xml_path.stem)
-        if not m:
-            kept.append(xml_path)
-            continue
-        bundle_dir = translation_bundle_dir(
-            args.out_root,
-            source_text_id=m.group("text"),
-            language=m.group("lang"),
-            bundle_id=xml_path.stem,
-            by_section=args.by_section,
-        )
+        spec = _prepare_translation_xml(args, xml_path, materialize=False)
+        try:
+            bundle_dir = translation_bundle_dir(
+                args.out_root,
+                source_text_id=spec.source_text_id,
+                language=spec.language,
+                bundle_id=spec.bundle_id,
+                by_section=args.by_section,
+            )
+        finally:
+            spec.cleanup()
         if bundle_dir.exists():
             _report_skipped(
                 bundle_dir, kind="translation", label=xml_path.stem,
@@ -1361,12 +1361,135 @@ def _resolve_translation_targets(args) -> list[Path]:
         m = _TRANSLATION_STEM_RE.match(path.stem)
         if not m:
             continue
-        if text_filter and m.group("text") != text_filter:
-            continue
         if lang_filter and m.group("lang") != lang_filter:
             continue
+        if text_filter and m.group("text") != text_filter:
+            if not getattr(args, "update_ids", False):
+                continue
+            canonical = _translation_canonical_source_id(args, path, m)
+            if canonical != text_filter:
+                continue
         matches.append(path)
     return matches
+
+
+class _PreparedTranslation:
+    def __init__(
+        self,
+        *,
+        xml_path: Path,
+        source_text_id: str,
+        language: str | None,
+        bundle_id: str,
+        rewritten: bool = False,
+    ) -> None:
+        self.xml_path = xml_path
+        self.source_text_id = source_text_id
+        self.language = language
+        self.bundle_id = bundle_id
+        self.rewritten = rewritten
+
+    def cleanup(self) -> None:
+        if self.rewritten:
+            self.xml_path.unlink(missing_ok=True)
+
+
+def _read_translation_source_corresp(xml_path: Path) -> str | None:
+    """Return the first ``sourceDesc//bibl/@corresp`` target, if present."""
+    try:
+        from lxml import etree
+    except ImportError:
+        return None
+    try:
+        tree = etree.parse(str(xml_path), etree.XMLParser(recover=True))
+    except Exception:  # noqa: BLE001
+        return None
+    tei_ns = "http://www.tei-c.org/ns/1.0"
+    for bibl in tree.iter(f"{{{tei_ns}}}bibl"):
+        corresp = (bibl.get("corresp") or "").strip()
+        if corresp.startswith("#") and len(corresp) > 1:
+            return corresp[1:]
+    return None
+
+
+def _translation_canonical_source_id(args, xml_path: Path, m) -> str:
+    """Resolve the canonical source id for a translation file.
+
+    ``--update-ids`` exists for TLS split files whose filename carries a
+    provisional id (for example ``KR2b007a``) while the source TEI declares
+    the canonical Kanripo id (for example ``KR2b0007``). Translation files
+    can follow either the provisional filename or the canonical header, so
+    prefer the source TEI idno when available and fall back to the translation
+    header's ``bibl/@corresp``.
+    """
+    text_id = m.group("text")
+    if not getattr(args, "update_ids", False):
+        return text_id
+
+    if getattr(args, "in_root", None) is not None:
+        matches = _find_tls_texts(args.in_root, text_id)
+        if matches:
+            kanripo_id = _read_kanripo_idno(matches[0])
+            if kanripo_id:
+                return kanripo_id
+
+    header_id = _read_translation_source_corresp(xml_path)
+    return header_id or text_id
+
+
+def _translation_bundle_id_for(
+    m,
+    source_text_id: str,
+) -> str:
+    """Build the bundle id from a parsed translation stem and source id."""
+    tail = m.group("tail")
+    parts = [source_text_id, m.group("lang")]
+    if tail:
+        parts.append(tail)
+    return "-".join(parts)
+
+
+def _prepare_translation_xml(
+    args, xml_path: Path, *, materialize: bool = True,
+) -> _PreparedTranslation:
+    """Return the effective XML path and bundle naming for translation import."""
+    m = _TRANSLATION_STEM_RE.match(xml_path.stem)
+    if not m:
+        return _PreparedTranslation(
+            xml_path=xml_path,
+            source_text_id="",
+            language=None,
+            bundle_id=xml_path.stem,
+        )
+
+    source_text_id = _translation_canonical_source_id(args, xml_path, m)
+    bundle_id = _translation_bundle_id_for(m, source_text_id)
+    language = m.group("lang")
+    provisional_id = m.group("text")
+    if (
+        not getattr(args, "update_ids", False)
+        or source_text_id == provisional_id
+        or not materialize
+    ):
+        return _PreparedTranslation(
+            xml_path=xml_path,
+            source_text_id=source_text_id,
+            language=language,
+            bundle_id=bundle_id,
+        )
+
+    print(
+        f"note: {xml_path.stem}: replacing provisional id with "
+        f"{source_text_id} before import",
+        file=sys.stderr,
+    )
+    return _PreparedTranslation(
+        xml_path=_rewrite_ids(xml_path, provisional_id, source_text_id),
+        source_text_id=source_text_id,
+        language=language,
+        bundle_id=bundle_id,
+        rewritten=True,
+    )
 
 
 def _import_one_translation(args, xml_path: Path) -> None:
@@ -1374,14 +1497,19 @@ def _import_one_translation(args, xml_path: Path) -> None:
     from .read.translation import read_translation
     from .write.translation import translation_bundle_dir, write_translation
 
-    m = _TRANSLATION_STEM_RE.match(xml_path.stem)
-    lang_hint = m.group("lang") if m else None
-
-    bundle = read_translation(
-        xml_path,
-        language_hint=lang_hint,
-        bundle_id_hint=xml_path.stem,
-    )
+    spec = _prepare_translation_xml(args, xml_path)
+    try:
+        bundle = read_translation(
+            spec.xml_path,
+            language_hint=spec.language,
+            bundle_id_hint=spec.bundle_id,
+        )
+        if spec.rewritten and bundle.source_info:
+            bundle.source_info["source_files"] = [
+                {"role": "translation", "path": xml_path.name}
+            ]
+    finally:
+        spec.cleanup()
 
     # --on-exists skip: per-text guard, mirrors the bulk pre-filter so
     # direct callers and single-file invocations are protected too.

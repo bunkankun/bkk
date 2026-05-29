@@ -459,3 +459,109 @@ def test_on_exists_skip_bulk_prefilter_reports_skipped(
     err = capsys.readouterr().err
     assert "skipped" in err and "already imported" in err
     assert "nothing to import" in err
+
+
+# ---------- --update-ids ----------------------------------------------------
+
+
+def _minimal_source_tei(canonical: str, xml_id: str) -> str:
+    return (
+        f'<TEI xmlns="http://www.tei-c.org/ns/1.0" xml:id="{xml_id}">'
+        f"<teiHeader><fileDesc><titleStmt><title>x</title></titleStmt>"
+        f"<publicationStmt><p/></publicationStmt><sourceDesc><p/></sourceDesc>"
+        f"</fileDesc><profileDesc><textClass>"
+        f'<idno type="kanripo">{canonical}</idno>'
+        f"</textClass></profileDesc></teiHeader><text><body/></text></TEI>"
+    )
+
+
+def _minimal_translation_tei(source_id: str) -> str:
+    return (
+        f'<TEI xmlns="http://www.tei-c.org/ns/1.0" '
+        f'xml:id="{source_id}-en" type="transl">'
+        f"<teiHeader><fileDesc><titleStmt><title>Translation</title>"
+        f'<editor role="translator">tester</editor></titleStmt>'
+        f"<publicationStmt><p>test publication</p></publicationStmt>"
+        f"<sourceDesc><p>Translation of "
+        f'<bibl corresp="#{source_id}"><title>Source</title></bibl> '
+        f'into <lang xml:lang="en">English</lang>.</p></sourceDesc>'
+        f"</fileDesc></teiHeader><text><body><div><p>"
+        f'<seg corresp="#{source_id}_tls_001-1a.1" '
+        f'xml:lang="en">translated line</seg>'
+        f"</p></div></body></text></TEI>"
+    )
+
+
+def test_update_ids_maps_provisional_translation_to_canonical_bundle(
+    tmp_path: Path,
+):
+    """A split TLS source id in the filename is canonicalized for output."""
+    in_root = tmp_path / "in"
+    source_xml = in_root / "tls-texts" / "data" / "KR2" / "KR2b" / "KR2b007a.xml"
+    source_xml.parent.mkdir(parents=True)
+    source_xml.write_text(
+        _minimal_source_tei("KR2b0007", "KR2b007a"),
+        encoding="utf-8",
+    )
+    trans_xml = in_root / "tls-data" / "translations" / "KR2b007a-en.xml"
+    trans_xml.parent.mkdir(parents=True)
+    trans_xml.write_text(_minimal_translation_tei("KR2b007a"), encoding="utf-8")
+
+    out = tmp_path / "out"
+    rc = run([
+        "--format", "translation",
+        "--in", str(in_root),
+        "--out", str(out),
+        "--text-id", "KR2b0007",
+        "--lang", "en",
+        "--update-ids",
+        "--yes",
+    ])
+    assert rc == 0
+
+    bundle_dir = out / "translations" / "KR2b0007" / "en" / "KR2b0007-en"
+    assert bundle_dir.is_dir()
+    manifest = _load_manifest_from_md(bundle_dir / "KR2b0007-en.md")
+    assert manifest["canonical_identifier"] == "bkk:translation/KR2b0007-en/v1"
+    assert manifest["source"]["canonical_identifier"] == "bkk:krp/KR2b0007/v1"
+
+    source_sidecar = yaml.safe_load(
+        (bundle_dir / "KR2b0007-en.source.yaml").read_text(encoding="utf-8")
+    )
+    assert source_sidecar["source_files"] == [
+        {"role": "translation", "path": "KR2b007a-en.xml"}
+    ]
+
+
+def test_update_ids_skip_checks_canonical_translation_bundle(
+    tmp_path: Path, capsys,
+):
+    """The --on-exists prefilter uses the canonicalized bundle directory."""
+    in_root = tmp_path / "in"
+    source_xml = in_root / "tls-texts" / "data" / "KR2" / "KR2b" / "KR2b007a.xml"
+    source_xml.parent.mkdir(parents=True)
+    source_xml.write_text(
+        _minimal_source_tei("KR2b0007", "KR2b007a"),
+        encoding="utf-8",
+    )
+    trans_xml = in_root / "tls-data" / "translations" / "KR2b007a-en.xml"
+    trans_xml.parent.mkdir(parents=True)
+    trans_xml.write_text(_minimal_translation_tei("KR2b007a"), encoding="utf-8")
+
+    out = tmp_path / "out"
+    args = [
+        "--format", "translation",
+        "--in", str(in_root),
+        "--out", str(out),
+        "--text-id", "KR2b0007",
+        "--lang", "en",
+        "--update-ids",
+        "--yes",
+    ]
+    assert run(args) == 0
+    _ = capsys.readouterr()
+
+    assert run(args + ["--on-exists", "skip"]) == 0
+    err = capsys.readouterr().err
+    assert "skipping translation KR2b007a-en" in err
+    assert "translations/KR2b0007/en/KR2b0007-en" in err
