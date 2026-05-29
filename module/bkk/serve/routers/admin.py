@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Path as PathParam, Request
 from fastapi.responses import JSONResponse
 
-from bkk.index import build_catalog_index, build_index, merge_bundles
+from bkk.index import build_catalog_index, build_index, merge_bundles, merge_translations
 from bkk.index.catalog import default_catalog_csv
 from bkk.validator import validate_bundle
 
@@ -81,6 +81,15 @@ def _run_catalog_index(jobs: JobRegistry, job_id: str, corpus_root, csv_path, ou
     try:
         out = build_catalog_index(corpus_root, csv_path, out_path)
         jobs.mark_done(job_id, {"catalog_path": str(out)})
+    except Exception as exc:
+        jobs.mark_error(job_id, exc)
+
+
+def _run_translation_index(jobs: JobRegistry, job_id: str, corpus_root, out_path):
+    jobs.mark_running(job_id)
+    try:
+        out = merge_translations(corpus_root, out_path)
+        jobs.mark_done(job_id, {"translation_search_path": str(out)})
     except Exception as exc:
         jobs.mark_error(job_id, exc)
 
@@ -150,6 +159,26 @@ def post_catalog_index(
         state.corpus_root,
         csv_path,
         state.catalog_path,
+    )
+    return _accepted(job)
+
+
+@router.post(
+    "/translations",
+    summary="Rebuild the translation fulltext search index",
+)
+def post_translation_search_index(
+    request: Request,
+    background: BackgroundTasks,
+    state: AppState = Depends(_require_admin),
+) -> JSONResponse:
+    job = state.jobs.create(kind="translation_search", target=None)
+    background.add_task(
+        _run_translation_index,
+        state.jobs,
+        job.id,
+        state.corpus_root,
+        state.translation_search_path,
     )
     return _accepted(job)
 

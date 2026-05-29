@@ -183,6 +183,10 @@ class AppState:
         return self.config.catalog_path
 
     @property
+    def translation_search_path(self) -> Path | None:
+        return self.config.translation_search_path
+
+    @property
     def cache(self) -> CorpusCache:
         if self._cache is None:
             self._cache = CorpusCache(self.corpus_root)
@@ -229,6 +233,17 @@ class AppState:
             return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         except sqlite3.DatabaseError as exc:
             log.warning("catalog index unavailable at %s: %s", path, exc)
+            return None
+
+    def open_translation_search(self) -> sqlite3.Connection | None:
+        """Open a read-only handle on the translation search index, or ``None`` if absent."""
+        path = self.translation_search_path
+        if path is None or not path.exists():
+            return None
+        try:
+            return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        except sqlite3.DatabaseError as exc:
+            log.warning("translation search index unavailable at %s: %s", path, exc)
             return None
 
     def lookup_bundle(self, textid: str) -> BundleRecord | None:

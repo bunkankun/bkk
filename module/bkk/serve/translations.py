@@ -1,0 +1,489 @@
+"""Read Markdown translation bundles in-place for the serve API."""
+
+from __future__ import annotations
+
+import re
+import json
+import sqlite3
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from .schemas import (
+    TranslationAlignedRow,
+    TranslationAlignmentResponse,
+    TranslationResponsibility,
+    TranslationSummary,
+)
+from bkk.index.catalog import normalize_search_text
+
+
+FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?(.*)\Z", re.S)
+SPAN_RE = re.compile(r"\[((?:\\.|[^\]\\])*)\]\{([^}]*)\}")
+SOURCE_ID_RE = re.compile(r"bkk:[^/]+/([^/]+)/")
+
+
+@dataclass(frozen=True)
+class TranslationSegment:
+    text: str
+    ref: list[str]
+    corresp: list[str]
+
+
+@dataclass(frozen=True)
+class TranslationJuan:
+    seq: int
+    label: str
+    path: Path
+    segments: list[TranslationSegment]
+
+
+@dataclass(frozen=True)
+class TranslationBundle:
+    id: str
+    path: Path
+    manifest: dict[str, Any]
+    source_textid: str
+    summary: TranslationSummary
+    juans: dict[int, TranslationJuan] = field(default_factory=dict)
+
+
+def translation_root(corpus_root: Path) -> Path:
+    return corpus_root / "translations"
+
+
+def list_translation_bundles(
+    corpus_root: Path,
+    *,
+    q: str | None = None,
+    source_textid: str | None = None,
+    lang: str | None = None,
+) -> list[TranslationBundle]:
+    root = translation_root(corpus_root)
+    if not root.is_dir():
+        return []
+    query = (q or "").casefold().strip()
+    out: list[TranslationBundle] = []
+    bundle_paths = {
+        path
+        for pattern in ("*/*/*/*.md", "*/*/*/*/*.md")
+        for path in root.glob(pattern)
+    }
+    for bundle_md in sorted(bundle_paths):
+        bundle_id = bundle_md.stem
+        if bundle_md.parent.name != bundle_id:
+            continue
+        try:
+            bundle = load_translation_bundle(bundle_md.parent, include_juans=False)
+        except Exception:
+            continue
+        if source_textid and bundle.source_textid != source_textid:
+            continue
+        if lang and bundle.summary.language != lang:
+            continue
+        if query:
+            if _matches_metadata_query(bundle, query):
+                out.append(bundle)
+                continue
+            bundle = load_translation_bundle(bundle_md.parent, include_juans=True)
+            if not _matches_text_query(bundle, query):
+                continue
+        out.append(bundle)
+    return out
+
+
+def list_translation_bundles_from_catalog(
+    conn: sqlite3.Connection,
+    *,
+    search_conn: sqlite3.Connection | None = None,
+    q: str | None = None,
+    source_textid: str | None = None,
+    lang: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> tuple[list[TranslationBundle], int]:
+    where: list[str] = []
+    params: list[Any] = []
+    if source_textid:
+        where.append("t.source_textid = ?")
+        params.append(source_textid)
+    if lang:
+        where.append("t.language = ?")
+        params.append(lang)
+    query = (q or "").strip()
+    if query:
+        query_search = normalize_search_text(query) or query.casefold()
+        like = f"%{query_search}%"
+        raw_like = f"%{query.casefold()}%"
+        meta_cond = (
+            "lower(t.id) LIKE ? OR lower(t.source_textid) LIKE ? OR "
+            "lower(coalesce(t.language, '')) LIKE ? OR "
+            "lower(coalesce(t.title, '')) LIKE ? OR "
+            "lower(coalesce(t.original_title, '')) LIKE ? OR "
+            "lower(t.responsibility) LIKE ?"
+        )
+        meta_params = [raw_like, raw_like, raw_like, raw_like, raw_like, raw_like]
+        if search_conn is not None:
+            fulltext_rows = search_conn.execute(
+                "SELECT DISTINCT translation_id FROM translation_segment "
+                "WHERE text_search LIKE ?",
+                [like],
+            ).fetchall()
+            fulltext_ids = [row[0] for row in fulltext_rows]
+            if fulltext_ids:
+                placeholders = ",".join("?" * len(fulltext_ids))
+                where.append(f"({meta_cond} OR t.id IN ({placeholders}))")
+                params.extend(meta_params + fulltext_ids)
+            else:
+                where.append(f"({meta_cond})")
+                params.extend(meta_params)
+        else:
+            where.append(f"({meta_cond})")
+            params.extend(meta_params)
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    total = int(conn.execute(
+        f"SELECT COUNT(*) FROM catalog_translation t {where_sql}", params,
+    ).fetchone()[0])
+    rows = conn.execute(
+        "SELECT id, source_textid, path, canonical_identifier, "
+        "source_canonical_identifier, language, title, original_title, "
+        "responsibility, date, license, juan_count "
+        f"FROM catalog_translation t {where_sql} "
+        "ORDER BY source_textid, language, id LIMIT ? OFFSET ?",
+        [*params, limit, offset],
+    ).fetchall()
+    return [_bundle_from_catalog_row(row) for row in rows], total
+
+
+def load_translation_bundle_from_catalog(
+    conn: sqlite3.Connection,
+    *,
+    translation_id: str,
+    source_textid: str | None = None,
+    include_juans: bool = True,
+) -> TranslationBundle | None:
+    where = ["id = ?"]
+    params: list[Any] = [translation_id]
+    if source_textid is not None:
+        where.append("source_textid = ?")
+        params.append(source_textid)
+    row = conn.execute(
+        "SELECT id, source_textid, path, canonical_identifier, "
+        "source_canonical_identifier, language, title, original_title, "
+        "responsibility, date, license, juan_count "
+        f"FROM catalog_translation WHERE {' AND '.join(where)}",
+        params,
+    ).fetchone()
+    if row is None:
+        return None
+    bundle = _bundle_from_catalog_row(row)
+    if include_juans:
+        return load_translation_bundle(bundle.path, include_juans=True)
+    return bundle
+
+
+def load_translation_bundle(
+    bundle_dir: Path,
+    *,
+    include_juans: bool = True,
+) -> TranslationBundle:
+    bundle_id = bundle_dir.name
+    manifest_path = bundle_dir / f"{bundle_id}.md"
+    manifest, _body = _read_frontmatter(manifest_path)
+    source_textid = _source_textid(bundle_dir, manifest)
+    juans: dict[int, TranslationJuan] = {}
+    total_segments = 0
+    for entry in manifest.get("juan") or []:
+        if not isinstance(entry, dict):
+            continue
+        seq = entry.get("seq")
+        filename = entry.get("file")
+        if not isinstance(seq, int) or not isinstance(filename, str):
+            continue
+        if not include_juans:
+            continue
+        path = bundle_dir / filename
+        if not path.is_file():
+            continue
+        juan = _read_translation_juan(path)
+        juans[seq] = juan
+        total_segments += len(juan.segments)
+    summary = _summary(bundle_id, manifest, source_textid, len(juans), total_segments)
+    if not include_juans:
+        total_segments = 0
+    return TranslationBundle(
+        id=bundle_id,
+        path=bundle_dir,
+        manifest=manifest,
+        source_textid=source_textid,
+        summary=summary,
+        juans=juans,
+    )
+
+
+def _bundle_from_catalog_row(row: sqlite3.Row | tuple) -> TranslationBundle:
+    (
+        bundle_id,
+        source_textid,
+        path,
+        canonical_identifier,
+        source_canonical_identifier,
+        language,
+        title,
+        original_title,
+        responsibility_raw,
+        date,
+        license_,
+        juan_count,
+    ) = row
+    try:
+        responsibility = json.loads(responsibility_raw or "[]")
+    except json.JSONDecodeError:
+        responsibility = []
+    resp = [
+        TranslationResponsibility(
+            role=item.get("role") if isinstance(item.get("role"), str) else None,
+            name=item.get("name") if isinstance(item.get("name"), str) else None,
+        )
+        for item in responsibility
+        if isinstance(item, dict)
+    ]
+    summary = TranslationSummary(
+        id=bundle_id,
+        source_textid=source_textid,
+        canonical_identifier=canonical_identifier,
+        source_canonical_identifier=source_canonical_identifier,
+        language=language,
+        title=title,
+        original_title=original_title,
+        responsibility=resp,
+        date=date,
+        license=license_,
+        juan_count=juan_count,
+    )
+    return TranslationBundle(
+        id=bundle_id,
+        path=Path(path),
+        manifest={},
+        source_textid=source_textid,
+        summary=summary,
+        juans={},
+    )
+
+
+def align_translation(
+    *,
+    textid: str,
+    seq: int,
+    source_juan: dict[str, Any],
+    translation: TranslationBundle,
+) -> TranslationAlignmentResponse:
+    source_body = source_juan.get("body") if isinstance(source_juan, dict) else {}
+    if not isinstance(source_body, dict):
+        source_body = {}
+    source_text = source_body.get("text") if isinstance(source_body.get("text"), str) else ""
+    markers = source_body.get("markers") if isinstance(source_body.get("markers"), list) else []
+    segs = _source_segments(source_text, markers)
+    if not segs:
+        return TranslationAlignmentResponse(
+            textid=textid,
+            juan_seq=seq,
+            translation=translation.summary,
+            status="no_alignment_markers",
+            rows=[],
+        )
+    trans_juan = translation.juans.get(seq)
+    by_corresp: dict[str, list[TranslationSegment]] = {}
+    first_corresp_for_segment: dict[int, str] = {}
+    if trans_juan is not None:
+        for segment in trans_juan.segments:
+            if not segment.corresp:
+                continue
+            first_corresp_for_segment[id(segment)] = segment.corresp[0]
+            for corresp in segment.corresp:
+                by_corresp.setdefault(corresp, []).append(segment)
+
+    rows: list[TranslationAlignedRow] = []
+    for seg in segs:
+        parts = by_corresp.get(seg["corresp"], [])
+        own_parts = [
+            p for p in parts
+            if first_corresp_for_segment.get(id(p), seg["corresp"]) == seg["corresp"]
+        ]
+        continued = bool(parts) and not own_parts
+        rows.append(
+            TranslationAlignedRow(
+                corresp=seg["corresp"],
+                source_marker_id=seg["id"],
+                source_offset=seg["start"],
+                source_end=seg["end"],
+                source_text=source_text[seg["start"]:seg["end"]],
+                translation_text="\n".join(p.text for p in own_parts),
+                translation_refs=[r for p in own_parts for r in p.ref],
+                continued=continued,
+            )
+        )
+    return TranslationAlignmentResponse(
+        textid=textid,
+        juan_seq=seq,
+        translation=translation.summary,
+        status="ok",
+        rows=rows,
+    )
+
+
+def _read_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
+    raw = path.read_text(encoding="utf-8")
+    match = FRONTMATTER_RE.match(raw)
+    if not match:
+        return {}, raw
+    data = yaml.safe_load(match.group(1)) or {}
+    if not isinstance(data, dict):
+        data = {}
+    return data, match.group(2)
+
+
+def _read_translation_juan(path: Path) -> TranslationJuan:
+    header, body = _read_frontmatter(path)
+    markers = header.get("markers") if isinstance(header.get("markers"), list) else []
+    spans = list(SPAN_RE.finditer(body))
+    segments: list[TranslationSegment] = []
+    for i, span in enumerate(spans):
+        marker = markers[i] if i < len(markers) and isinstance(markers[i], dict) else {}
+        corresp = marker.get("corresp")
+        refs = marker.get("ref")
+        segments.append(
+            TranslationSegment(
+                text=_unescape_span_text(span.group(1)),
+                ref=_string_list(refs) or _refs_from_attrs(span.group(2)),
+                corresp=_string_list(corresp),
+            )
+        )
+    seq = header.get("juan_seq") if isinstance(header.get("juan_seq"), int) else 0
+    label = str(header.get("juan_label") or path.stem.rsplit("_", 1)[-1])
+    return TranslationJuan(seq=seq, label=label, path=path, segments=segments)
+
+
+def _summary(
+    bundle_id: str,
+    manifest: dict[str, Any],
+    source_textid: str,
+    juan_count: int,
+    segment_count: int,
+) -> TranslationSummary:
+    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    resp = [
+        TranslationResponsibility(
+            role=item.get("role") if isinstance(item.get("role"), str) else None,
+            name=item.get("name") if isinstance(item.get("name"), str) else None,
+        )
+        for item in (manifest.get("responsibility") or [])
+        if isinstance(item, dict)
+    ]
+    return TranslationSummary(
+        id=bundle_id,
+        source_textid=source_textid,
+        canonical_identifier=manifest.get("canonical_identifier"),
+        source_canonical_identifier=source.get("canonical_identifier"),
+        language=manifest.get("language"),
+        title=manifest.get("title"),
+        original_title=manifest.get("original_title"),
+        responsibility=resp,
+        date=manifest.get("date"),
+        license=manifest.get("license"),
+        juan_count=juan_count,
+        segment_count=segment_count,
+    )
+
+
+def _source_textid(bundle_dir: Path, manifest: dict[str, Any]) -> str:
+    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    cid = source.get("canonical_identifier")
+    if isinstance(cid, str):
+        match = SOURCE_ID_RE.match(cid)
+        if match:
+            return match.group(1)
+    # translations/<section>/<source>/<lang>/<bundle>
+    try:
+        return bundle_dir.parents[1].name
+    except IndexError:
+        return "_unknown"
+
+
+def _source_segments(text: str, markers: list[Any]) -> list[dict[str, Any]]:
+    seg_markers: list[tuple[int, str, str]] = []
+    for marker in markers:
+        if not isinstance(marker, dict) or marker.get("type") != "tls:seg":
+            continue
+        marker_id = marker.get("id")
+        offset = marker.get("offset")
+        if not isinstance(marker_id, str) or not isinstance(offset, int):
+            continue
+        seg_markers.append((offset, marker_id, _relative_marker_id(marker_id)))
+    seg_markers.sort(key=lambda item: item[0])
+    out: list[dict[str, Any]] = []
+    for i, (start, marker_id, rel) in enumerate(seg_markers):
+        end = seg_markers[i + 1][0] if i + 1 < len(seg_markers) else len(text)
+        out.append({"start": start, "end": end, "id": marker_id, "corresp": rel})
+    return out
+
+
+def _relative_marker_id(marker_id: str) -> str:
+    if "_tls_" in marker_id:
+        return marker_id.rsplit("_tls_", 1)[1]
+    return marker_id
+
+
+def _matches_metadata_query(bundle: TranslationBundle, query: str) -> bool:
+    hay = [
+        bundle.id,
+        bundle.source_textid,
+        bundle.summary.language or "",
+        bundle.summary.title or "",
+        bundle.summary.original_title or "",
+        " ".join(
+            str(v)
+            for item in bundle.manifest.get("responsibility") or []
+            if isinstance(item, dict)
+            for v in item.values()
+        ),
+    ]
+    return query in "\n".join(hay).casefold()
+
+
+def _matches_text_query(bundle: TranslationBundle, query: str) -> bool:
+    for juan in bundle.juans.values():
+        for seg in juan.segments:
+            if query in seg.text.casefold():
+                return True
+    return False
+
+
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, str)]
+    return []
+
+
+def _refs_from_attrs(attrs: str) -> list[str]:
+    return [part[1:] for part in attrs.split() if part.startswith("@") and len(part) > 1]
+
+
+def _unescape_span_text(text: str) -> str:
+    out: list[str] = []
+    escaped = False
+    for ch in text:
+        if escaped:
+            out.append(ch)
+            escaped = False
+        elif ch == "\\":
+            escaped = True
+        else:
+            out.append(ch)
+    if escaped:
+        out.append("\\")
+    return "".join(out)

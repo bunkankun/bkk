@@ -78,22 +78,12 @@ CREATE TABLE catalog_translation (
   responsibility TEXT NOT NULL,
   date TEXT,
   license TEXT,
-  juan_count INTEGER NOT NULL,
-  segment_count INTEGER NOT NULL
-);
-
-CREATE TABLE catalog_translation_segment (
-  translation_id TEXT NOT NULL,
-  juan_seq INTEGER NOT NULL,
-  text TEXT NOT NULL,
-  text_search TEXT,
-  FOREIGN KEY(translation_id) REFERENCES catalog_translation(id)
+  juan_count INTEGER NOT NULL
 );
 
 CREATE INDEX idx_catalog_translation_source ON catalog_translation(source_textid);
 CREATE INDEX idx_catalog_translation_language ON catalog_translation(language);
 CREATE INDEX idx_catalog_translation_title ON catalog_translation(title);
-CREATE INDEX idx_catalog_translation_segment_search ON catalog_translation_segment(text_search);
 """
 
 REQUIRED_COLUMNS = {
@@ -103,7 +93,6 @@ REQUIRED_COLUMNS = {
 _BUNDLE_ID_RE = re.compile(r"^(?P<section>KR\d+[a-z]+)(?P<number>\d+)$")
 _YEAR_RE = re.compile(r"(?<!\d)-?\s*\d+")
 _FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?(.*)\Z", re.S)
-_SPAN_RE = re.compile(r"\[((?:\\.|[^\]\\])*)\]\{([^}]*)\}")
 _SOURCE_ID_RE = re.compile(r"bkk:[^/]+/([^/]+)/")
 MISSING_INDEX_DATE = 9999
 
@@ -205,7 +194,7 @@ def build_catalog_index(
         direct_counts[section_code] = direct_counts.get(section_code, 0) + 1
 
     section_records = _section_records(sections, direct_counts)
-    translation_records, translation_segment_records = _translation_records(corpus)
+    translation_records = _translation_records(corpus)
 
     if out_path.exists():
         out_path.unlink()
@@ -247,15 +236,9 @@ def build_catalog_index(
             "INSERT INTO catalog_translation("
             "id, source_textid, path, canonical_identifier, "
             "source_canonical_identifier, language, title, original_title, "
-            "responsibility, date, license, juan_count, segment_count"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "responsibility, date, license, juan_count"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             translation_records,
-        )
-        conn.executemany(
-            "INSERT INTO catalog_translation_segment("
-            "translation_id, juan_seq, text, text_search"
-            ") VALUES (?,?,?,?)",
-            translation_segment_records,
         )
         conn.commit()
     finally:
@@ -519,19 +502,31 @@ def _parent_code(code: str, section_codes: set[str]) -> str | None:
     return max(candidates, key=len)
 
 
-def _translation_records(
-    corpus: Path,
-) -> tuple[list[tuple], list[tuple[str, int, str, str | None]]]:
-    root = corpus / "translations"
-    if not root.is_dir():
-        return [], []
+def _find_translation_roots(corpus: Path) -> list[Path]:
+    """Return all ``translations/`` directories directly under or one level below ``corpus``."""
+    direct = corpus / "translations"
+    if direct.is_dir():
+        return [direct]
+    out = []
+    for sub in sorted(corpus.iterdir()):
+        if sub.is_dir() and not sub.name.startswith("_"):
+            candidate = sub / "translations"
+            if candidate.is_dir():
+                out.append(candidate)
+    return out
+
+
+def _translation_records(corpus: Path) -> list[tuple]:
+    roots = _find_translation_roots(corpus)
+    if not roots:
+        return []
     bundle_paths = {
         path
+        for root in roots
         for pattern in ("*/*/*/*.md", "*/*/*/*/*.md")
         for path in root.glob(pattern)
     }
     records: list[tuple] = []
-    segment_records: list[tuple[str, int, str, str | None]] = []
     seen: set[str] = set()
     for bundle_md in sorted(bundle_paths):
         bundle_id = bundle_md.stem
@@ -550,34 +545,12 @@ def _translation_records(
             item for item in (manifest.get("responsibility") or [])
             if isinstance(item, dict)
         ]
-        juan_count = 0
-        segment_count = 0
-        for entry in manifest.get("juan") or []:
-            if not isinstance(entry, dict):
-                continue
-            seq = entry.get("seq")
-            filename = entry.get("file")
-            if not isinstance(seq, int) or not isinstance(filename, str):
-                continue
-            juan_path = bundle_md.parent / filename
-            if not juan_path.is_file():
-                continue
-            juan_count += 1
-            try:
-                _h, body = _read_markdown_frontmatter(juan_path)
-            except Exception:
-                continue
-            for span in _SPAN_RE.finditer(body):
-                text = _unescape_span_text(span.group(1)).strip()
-                if not text:
-                    continue
-                segment_count += 1
-                segment_records.append((
-                    bundle_id,
-                    seq,
-                    text,
-                    normalize_search_text(text),
-                ))
+        juan_count = sum(
+            1 for entry in (manifest.get("juan") or [])
+            if isinstance(entry, dict)
+            and isinstance(entry.get("seq"), int)
+            and isinstance(entry.get("file"), str)
+        )
         records.append((
             bundle_id,
             source_textid,
@@ -591,9 +564,8 @@ def _translation_records(
             manifest.get("date"),
             manifest.get("license"),
             juan_count,
-            segment_count,
         ))
-    return records, segment_records
+    return records
 
 
 def _read_markdown_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
@@ -616,17 +588,3 @@ def _translation_source_textid(bundle_dir: Path, source_canonical_identifier: An
         return "_unknown"
 
 
-def _unescape_span_text(text: str) -> str:
-    out: list[str] = []
-    escaped = False
-    for ch in text:
-        if escaped:
-            out.append(ch)
-            escaped = False
-        elif ch == "\\":
-            escaped = True
-        else:
-            out.append(ch)
-    if escaped:
-        out.append("\\")
-    return "".join(out)

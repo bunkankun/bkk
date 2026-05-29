@@ -5,6 +5,7 @@ Subcommands::
     python -m bkk.index build <bundle_dir> [--out PATH]
     python -m bkk.index catalog <corpus> [--csv PATH] [--out PATH]
                                          [--prefix KR3a]
+    python -m bkk.index translations <corpus> [--out PATH]
     python -m bkk.index merge <corpus> [--out PATH] [--prefix KR3a]
                                        [--rebuild | --no-build]
     python -m bkk.index search <bkkx_path> <query> [--context N]
@@ -23,6 +24,7 @@ from .catalog import build_catalog_index, default_catalog_csv
 from .ir import Hit
 from .merge import merge_bundles
 from .query import Index
+from .translation import build_translation_index, merge_translations
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,6 +65,17 @@ def build_parser() -> argparse.ArgumentParser:
                     help="restrict to bundles whose textid starts with PREFIX "
                          "(e.g. KR3a)")
 
+    pt = sub.add_parser("translations", help="build/merge per-bundle .bkkt translation search indices")
+    pt.add_argument("corpus", type=Path, nargs="?", default=None,
+                    help="corpus directory (or set global.corpus in .bkkrc)")
+    pt.add_argument("--out", type=Path, default=None,
+                    help="merged output path (default: <corpus>/_translations.bkkt)")
+    grp = pt.add_mutually_exclusive_group()
+    grp.add_argument("--rebuild", action="store_true",
+                     help="rebuild every per-bundle .bkkt, ignoring mtimes")
+    grp.add_argument("--no-build", action="store_true",
+                     help="error if any per-bundle .bkkt is missing or stale")
+
     ps = sub.add_parser("search", help="run a KWIC query against a .bkkx index")
     ps.add_argument("index_path", type=Path)
     ps.add_argument("query")
@@ -89,7 +102,7 @@ def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.cmd in ("merge", "catalog"):
+    if args.cmd in ("merge", "catalog", "translations"):
         if args.corpus is None:
             args.corpus = idx.get("corpus") or g.get("corpus")
         if args.corpus is None:
@@ -97,6 +110,9 @@ def run(argv: list[str] | None = None) -> int:
     if args.cmd == "merge":
         if args.out is None:
             args.out = Path(idx.get("out") or args.corpus / "_corpus.bkkx")
+    if args.cmd == "translations":
+        if args.out is None:
+            args.out = args.corpus / "_translations.bkkt"
     if args.cmd == "catalog":
         if args.out is None:
             args.out = args.corpus / "_catalog.bkkc"
@@ -116,6 +132,14 @@ def run(argv: list[str] | None = None) -> int:
         path = merge_bundles(
             args.corpus, args.out,
             prefix=args.prefix, rebuild=args.rebuild, no_build=args.no_build,
+            progress=True,
+        )
+        print(f"wrote {path}")
+        return 0
+    if args.cmd == "translations":
+        path = merge_translations(
+            args.corpus, args.out,
+            rebuild=args.rebuild, no_build=args.no_build,
             progress=True,
         )
         print(f"wrote {path}")

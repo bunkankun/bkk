@@ -12,6 +12,7 @@ class ServeConfig:
     corpus_root: Path
     index_path: Path
     catalog_path: Path | None = None
+    translation_search_path: Path | None = None
     host: str = "127.0.0.1"
     port: int = 8000
     admin_token: str | None = None
@@ -29,6 +30,10 @@ class ServeConfig:
         if self.catalog_path is None:
             object.__setattr__(
                 self, "catalog_path", self.corpus_root / "_catalog.bkkc"
+            )
+        if self.translation_search_path is None:
+            object.__setattr__(
+                self, "translation_search_path", self.corpus_root / "_translations.bkkt"
             )
 
     @classmethod
@@ -72,6 +77,15 @@ class ServeConfig:
             catalog = Path(rc_catalog).resolve()
         else:
             catalog = root / "_catalog.bkkc"
+
+        env_translation_search = os.environ.get("BKK_TRANSLATION_SEARCH_PATH")
+        rc_translation_search = rc.get("translation_search")
+        if env_translation_search:
+            translation_search: Path | None = Path(env_translation_search).resolve()
+        elif rc_translation_search:
+            translation_search = Path(rc_translation_search).resolve()
+        else:
+            translation_search = root / "_translations.bkkt"
 
         env_web_dist = os.environ.get("BKK_WEB_DIST")
         rc_web_dist = rc.get("web_dist")
@@ -143,6 +157,7 @@ class ServeConfig:
             corpus_root=root,
             index_path=index,
             catalog_path=catalog,
+            translation_search_path=translation_search,
             host=host,
             port=port,
             admin_token=admin_token,
@@ -163,6 +178,7 @@ class ServeConfig:
         corpus_root: Path | str | None = None,
         index_path: Path | str | None = None,
         catalog_path: Path | str | None = None,
+        translation_search_path: Path | str | None = None,
         host: str | None = None,
         port: int | None = None,
         admin_token: str | None = None,
@@ -183,6 +199,8 @@ class ServeConfig:
             updates["index_path"] = Path(index_path).resolve()
         if catalog_path is not None:
             updates["catalog_path"] = Path(catalog_path).resolve()
+        if translation_search_path is not None:
+            updates["translation_search_path"] = Path(translation_search_path).resolve()
         if host is not None:
             updates["host"] = host
         if port is not None:
