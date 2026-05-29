@@ -122,8 +122,14 @@ def build_catalog_index(
     out_path: Path | str,
     *,
     prefix: str | None = None,
+    csv_stub: Path | str | None = None,
 ) -> Path:
-    """Build a ``.bkkc`` catalog index for bundles present in ``corpus``."""
+    """Build a ``.bkkc`` catalog index for bundles present in ``corpus``.
+
+    If ``csv_stub`` is given, any bundle whose textid is absent from
+    ``csv_path`` is written there as a pre-filled stub row (id + title from
+    the manifest; remaining fields left blank) ready for manual completion.
+    """
     corpus = Path(corpus)
     csv_path = Path(csv_path)
     out_path = Path(out_path)
@@ -147,6 +153,7 @@ def build_catalog_index(
     bundle_records: dict[str, tuple] = {}
     identifier_records: list[tuple[str, str, str, str]] = []
     direct_counts: dict[str, int] = {}
+    stub_rows: list[CatalogRow] = []
     for bundle_dir in bundles:
         textid = bundle_dir.name
         if textid in bundle_records:
@@ -167,6 +174,8 @@ def build_catalog_index(
                 textid, csv_path,
             )
             row = _catalog_row_from_manifest(textid, manifest)
+            if csv_stub is not None:
+                stub_rows.append(row)
             index_date = IndexDate(MISSING_INDEX_DATE, "missing")
         else:
             index_date = _calculate_index_date(
@@ -244,6 +253,8 @@ def build_catalog_index(
         conn.commit()
     finally:
         conn.close()
+    if csv_stub is not None and stub_rows:
+        _write_stub_csv(Path(csv_stub), stub_rows)
     return out_path
 
 
@@ -466,6 +477,28 @@ def _catalog_row_from_manifest(textid: str, manifest: dict) -> CatalogRow:
         dzt_not_before=None,
         dzt_not_after=None,
     )
+
+
+_STUB_FIELDNAMES = ["id", "title", "titlePinyin", "titleEnglish", "notBefore", "notAfter", "dzt_date"]
+
+
+def _write_stub_csv(path: Path, rows: list[CatalogRow]) -> None:
+    """Write missing catalog rows as a stub CSV ready for manual completion."""
+    existed = path.exists()
+    with path.open("a", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=_STUB_FIELDNAMES)
+        if not existed:
+            writer.writeheader()
+        for row in rows:
+            writer.writerow({
+                "id": row.id,
+                "title": row.title or "",
+                "titlePinyin": "",
+                "titleEnglish": "",
+                "notBefore": "",
+                "notAfter": "",
+                "dzt_date": "",
+            })
 
 
 def _section_records(

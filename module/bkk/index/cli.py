@@ -64,6 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
     pc.add_argument("--prefix", default=None,
                     help="restrict to bundles whose textid starts with PREFIX "
                          "(e.g. KR3a)")
+    pc.add_argument("--csv-stub", type=Path, default=None, dest="csv_stub",
+                    help="append stub rows for bundles missing from the CSV "
+                         "to this file (created with header if absent)")
 
     pt = sub.add_parser("translations", help="build/merge per-bundle .bkkt translation search indices")
     pt.add_argument("corpus", type=Path, nargs="?", default=None,
@@ -145,8 +148,13 @@ def run(argv: list[str] | None = None) -> int:
         print(f"wrote {path}")
         return 0
     if args.cmd == "catalog":
-        path = build_catalog_index(args.corpus, args.csv_path, args.out, prefix=args.prefix)
+        path = build_catalog_index(
+            args.corpus, args.csv_path, args.out,
+            prefix=args.prefix, csv_stub=args.csv_stub,
+        )
         print(f"wrote {path}")
+        if args.csv_stub:
+            print(f"stubs → {args.csv_stub}")
         return 0
     if args.cmd == "search":
         with Index(args.index_path) as ix:
