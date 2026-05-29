@@ -168,6 +168,62 @@ class BundleAssetsResponse(BaseModel):
     assets: list[BundleAsset]
 
 
+class OverlayFamily(BaseModel):
+    id: str
+    label: str
+    count: int
+
+
+class OverlaysResponse(BaseModel):
+    overlays: list[OverlayFamily]
+
+
+class TranslationResponsibility(BaseModel):
+    role: str | None = None
+    name: str | None = None
+
+
+class TranslationSummary(BaseModel):
+    id: str
+    source_textid: str
+    canonical_identifier: str | None = None
+    source_canonical_identifier: str | None = None
+    language: str | None = None
+    title: str | None = None
+    original_title: str | None = None
+    responsibility: list[TranslationResponsibility] = Field(default_factory=list)
+    date: str | None = None
+    license: str | None = None
+    juan_count: int = 0
+    segment_count: int = 0
+
+
+class TranslationListResponse(BaseModel):
+    translations: list[TranslationSummary]
+    total: int
+    offset: int
+    limit: int
+
+
+class TranslationAlignedRow(BaseModel):
+    corresp: str
+    source_marker_id: str
+    source_offset: int
+    source_end: int
+    source_text: str
+    translation_text: str = ""
+    translation_refs: list[str] = Field(default_factory=list)
+    continued: bool = False
+
+
+class TranslationAlignmentResponse(BaseModel):
+    textid: str
+    juan_seq: int
+    translation: TranslationSummary | None = None
+    status: str
+    rows: list[TranslationAlignedRow] = Field(default_factory=list)
+
+
 class CollisionCandidate(BaseModel):
     """One bundle that matched an ambiguous identifier lookup."""
 

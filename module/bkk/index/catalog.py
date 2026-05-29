@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import re
 import sqlite3
@@ -17,7 +18,7 @@ from .merge import discover_bundles
 
 log = logging.getLogger("bkk.index")
 
-CATALOG_SCHEMA_VERSION = 2
+CATALOG_SCHEMA_VERSION = 3
 
 DDL = """
 CREATE TABLE meta (
@@ -64,6 +65,35 @@ CREATE INDEX idx_catalog_bundle_index_date ON catalog_bundle(index_date);
 CREATE INDEX idx_catalog_identifier_textid ON catalog_identifier(textid);
 CREATE INDEX idx_catalog_identifier_value ON catalog_identifier(value_search);
 CREATE INDEX idx_catalog_section_parent ON catalog_section(parent_code);
+
+CREATE TABLE catalog_translation (
+  id TEXT PRIMARY KEY,
+  source_textid TEXT NOT NULL,
+  path TEXT NOT NULL,
+  canonical_identifier TEXT,
+  source_canonical_identifier TEXT,
+  language TEXT,
+  title TEXT,
+  original_title TEXT,
+  responsibility TEXT NOT NULL,
+  date TEXT,
+  license TEXT,
+  juan_count INTEGER NOT NULL,
+  segment_count INTEGER NOT NULL
+);
+
+CREATE TABLE catalog_translation_segment (
+  translation_id TEXT NOT NULL,
+  juan_seq INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  text_search TEXT,
+  FOREIGN KEY(translation_id) REFERENCES catalog_translation(id)
+);
+
+CREATE INDEX idx_catalog_translation_source ON catalog_translation(source_textid);
+CREATE INDEX idx_catalog_translation_language ON catalog_translation(language);
+CREATE INDEX idx_catalog_translation_title ON catalog_translation(title);
+CREATE INDEX idx_catalog_translation_segment_search ON catalog_translation_segment(text_search);
 """
 
 REQUIRED_COLUMNS = {
@@ -72,6 +102,9 @@ REQUIRED_COLUMNS = {
 }
 _BUNDLE_ID_RE = re.compile(r"^(?P<section>KR\d+[a-z]+)(?P<number>\d+)$")
 _YEAR_RE = re.compile(r"(?<!\d)-?\s*\d+")
+_FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?(.*)\Z", re.S)
+_SPAN_RE = re.compile(r"\[((?:\\.|[^\]\\])*)\]\{([^}]*)\}")
+_SOURCE_ID_RE = re.compile(r"bkk:[^/]+/([^/]+)/")
 MISSING_INDEX_DATE = 9999
 
 
@@ -172,6 +205,7 @@ def build_catalog_index(
         direct_counts[section_code] = direct_counts.get(section_code, 0) + 1
 
     section_records = _section_records(sections, direct_counts)
+    translation_records, translation_segment_records = _translation_records(corpus)
 
     if out_path.exists():
         out_path.unlink()
@@ -208,6 +242,20 @@ def build_catalog_index(
             "direct_bundle_count, descendant_bundle_count"
             ") VALUES (?,?,?,?,?,?,?)",
             section_records,
+        )
+        conn.executemany(
+            "INSERT INTO catalog_translation("
+            "id, source_textid, path, canonical_identifier, "
+            "source_canonical_identifier, language, title, original_title, "
+            "responsibility, date, license, juan_count, segment_count"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            translation_records,
+        )
+        conn.executemany(
+            "INSERT INTO catalog_translation_segment("
+            "translation_id, juan_seq, text, text_search"
+            ") VALUES (?,?,?,?)",
+            translation_segment_records,
         )
         conn.commit()
     finally:
@@ -469,3 +517,116 @@ def _parent_code(code: str, section_codes: set[str]) -> str | None:
     if not candidates:
         return None
     return max(candidates, key=len)
+
+
+def _translation_records(
+    corpus: Path,
+) -> tuple[list[tuple], list[tuple[str, int, str, str | None]]]:
+    root = corpus / "translations"
+    if not root.is_dir():
+        return [], []
+    bundle_paths = {
+        path
+        for pattern in ("*/*/*/*.md", "*/*/*/*/*.md")
+        for path in root.glob(pattern)
+    }
+    records: list[tuple] = []
+    segment_records: list[tuple[str, int, str, str | None]] = []
+    seen: set[str] = set()
+    for bundle_md in sorted(bundle_paths):
+        bundle_id = bundle_md.stem
+        if bundle_md.parent.name != bundle_id or bundle_id in seen:
+            continue
+        seen.add(bundle_id)
+        try:
+            manifest, _body = _read_markdown_frontmatter(bundle_md)
+        except Exception as exc:
+            log.warning("%s: translation manifest parse failed: %s", bundle_md, exc)
+            continue
+        source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+        source_canonical_identifier = source.get("canonical_identifier")
+        source_textid = _translation_source_textid(bundle_md.parent, source_canonical_identifier)
+        responsibility = [
+            item for item in (manifest.get("responsibility") or [])
+            if isinstance(item, dict)
+        ]
+        juan_count = 0
+        segment_count = 0
+        for entry in manifest.get("juan") or []:
+            if not isinstance(entry, dict):
+                continue
+            seq = entry.get("seq")
+            filename = entry.get("file")
+            if not isinstance(seq, int) or not isinstance(filename, str):
+                continue
+            juan_path = bundle_md.parent / filename
+            if not juan_path.is_file():
+                continue
+            juan_count += 1
+            try:
+                _h, body = _read_markdown_frontmatter(juan_path)
+            except Exception:
+                continue
+            for span in _SPAN_RE.finditer(body):
+                text = _unescape_span_text(span.group(1)).strip()
+                if not text:
+                    continue
+                segment_count += 1
+                segment_records.append((
+                    bundle_id,
+                    seq,
+                    text,
+                    normalize_search_text(text),
+                ))
+        records.append((
+            bundle_id,
+            source_textid,
+            str(bundle_md.parent),
+            manifest.get("canonical_identifier"),
+            source_canonical_identifier,
+            manifest.get("language"),
+            manifest.get("title"),
+            manifest.get("original_title"),
+            json.dumps(responsibility, ensure_ascii=False, sort_keys=True),
+            manifest.get("date"),
+            manifest.get("license"),
+            juan_count,
+            segment_count,
+        ))
+    return records, segment_records
+
+
+def _read_markdown_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
+    raw = path.read_text(encoding="utf-8")
+    match = _FRONTMATTER_RE.match(raw)
+    if not match:
+        return {}, raw
+    data = yaml.safe_load(match.group(1)) or {}
+    return data if isinstance(data, dict) else {}, match.group(2)
+
+
+def _translation_source_textid(bundle_dir: Path, source_canonical_identifier: Any) -> str:
+    if isinstance(source_canonical_identifier, str):
+        match = _SOURCE_ID_RE.match(source_canonical_identifier)
+        if match:
+            return match.group(1)
+    try:
+        return bundle_dir.parents[1].name
+    except IndexError:
+        return "_unknown"
+
+
+def _unescape_span_text(text: str) -> str:
+    out: list[str] = []
+    escaped = False
+    for ch in text:
+        if escaped:
+            out.append(ch)
+            escaped = False
+        elif ch == "\\":
+            escaped = True
+        else:
+            out.append(ch)
+    if escaped:
+        out.append("\\")
+    return "".join(out)

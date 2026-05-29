@@ -277,6 +277,63 @@ export interface SearchTextidsResponse {
   }[];
 }
 
+// Translation overlays
+export interface OverlayFamily {
+  id: string;
+  label: string;
+  count: number;
+}
+
+export interface OverlaysResponse {
+  overlays: OverlayFamily[];
+}
+
+export interface TranslationResponsibility {
+  role?: string | null;
+  name?: string | null;
+}
+
+export interface TranslationSummary {
+  id: string;
+  source_textid: string;
+  canonical_identifier?: string | null;
+  source_canonical_identifier?: string | null;
+  language?: string | null;
+  title?: string | null;
+  original_title?: string | null;
+  responsibility: TranslationResponsibility[];
+  date?: string | null;
+  license?: string | null;
+  juan_count: number;
+  segment_count: number;
+}
+
+export interface TranslationListResponse {
+  translations: TranslationSummary[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface TranslationAlignedRow {
+  corresp: string;
+  source_marker_id: string;
+  source_offset: number;
+  source_end: number;
+  source_text: string;
+  translation_text: string;
+  translation_refs: string[];
+  continued: boolean;
+}
+
+export interface TranslationAlignmentResponse {
+  textid: string;
+  juan_seq: number;
+  translation: TranslationSummary | null;
+  status: string;
+  rows: TranslationAlignedRow[];
+}
+
 // Server identity
 export interface ServerInfo {
   service?: string;

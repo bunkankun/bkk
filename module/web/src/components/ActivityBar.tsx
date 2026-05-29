@@ -93,6 +93,27 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
     ),
   },
   {
+    id: "overlays",
+    label: "Overlays",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+        <path
+          d="M3 5.5 8 2.8l5 2.7-5 2.7-5-2.7Z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+        <path
+          d="m3 8 5 2.7L13 8M3 10.5l5 2.7 5-2.7"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "history",
     label: "History",
     icon: (

@@ -4,6 +4,7 @@ import { ActivityBar } from "./components/ActivityBar";
 import { Catalog } from "./components/LeftPanel/Catalog";
 import { History } from "./components/LeftPanel/History";
 import { Lists } from "./components/LeftPanel/Lists";
+import { Overlays } from "./components/LeftPanel/Overlays";
 import { Settings } from "./components/LeftPanel/Settings";
 import { Toc } from "./components/LeftPanel/Toc";
 import { Menubar } from "./components/Menubar";
@@ -58,6 +59,8 @@ function LeftPanel() {
   const width = useWorkspace((s) => s.panelWidths.left);
   const title = activity === "timeline"
     ? "Timeline"
+    : activity === "overlays"
+      ? "Overlays"
     : activity === "lists"
       ? "Lists"
     : activity === "history"
@@ -75,6 +78,8 @@ function LeftPanel() {
       <div className="lp-body">
         {activity === "timeline" ? (
           <Catalog mode="timeline" />
+        ) : activity === "overlays" ? (
+          <Overlays />
         ) : activity === "lists" ? (
           <Lists />
         ) : activity === "history" ? (

@@ -429,6 +429,80 @@ button {
   font-family: var(--fm);
   margin-left: auto;
 }
+
+/* overlays ---------------------------------------------------- */
+.ov {
+  padding: 10px;
+}
+.ov-family {
+  margin-bottom: 10px;
+}
+.ov-family-btn,
+.ov-row {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--t1);
+  text-align: left;
+  cursor: pointer;
+}
+.ov-family-btn {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ov-family-btn.on,
+.ov-row.on {
+  background: var(--amb-d);
+  border-color: var(--amb);
+}
+.ov-search {
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--bdr);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--t1);
+  padding: 0 8px;
+  margin-bottom: 10px;
+}
+.ov-section {
+  margin: 12px 0 5px;
+  color: var(--t3);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.ov-row {
+  display: block;
+  padding: 7px 8px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+.ov-row:hover {
+  background: var(--hov);
+}
+.ov-title,
+.ov-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-title {
+  font-size: 12px;
+}
+.ov-meta,
+.ov-note {
+  color: var(--t3);
+  font-size: 10px;
+}
+.ov-note {
+  padding: 6px 8px;
+}
 .list-item {
   display: flex;
   align-items: center;
@@ -895,6 +969,64 @@ button {
 }
 .pu {
   color: var(--t3);
+}
+
+.trans-ec {
+  padding-left: 24px;
+  padding-right: 24px;
+}
+.trans-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--bdr);
+}
+.trans-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.9fr) minmax(220px, 1.1fr);
+  gap: 18px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bdr-l);
+}
+.trans-source {
+  font-family: var(--fc);
+  font-size: 18px;
+  line-height: 1.8;
+  word-break: break-word;
+}
+.trans-ref {
+  font-family: var(--fm);
+  color: var(--t3);
+  font-size: 10px;
+  line-height: 1.2;
+  margin-bottom: 3px;
+  letter-spacing: 0;
+}
+.trans-target {
+  color: var(--t1);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.trans-target p {
+  margin: 0 0 6px;
+}
+.trans-target p:last-child {
+  margin-bottom: 0;
+}
+.trans-missing {
+  color: var(--t3);
+  font-style: italic;
+}
+.trans-row.continued .trans-source,
+.trans-row.continued .trans-target {
+  opacity: 0.68;
+}
+
+@media (max-width: 760px) {
+  .trans-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
 }
 
 .empty-pane {

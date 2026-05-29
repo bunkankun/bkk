@@ -15,11 +15,14 @@ import type {
   Juan,
   Manifest,
   ManifestPart,
+  OverlaysResponse,
   SearchResponse,
   SearchSort,
   SearchTextidsResponse,
   ServerInfo,
   TimelineResponse,
+  TranslationAlignmentResponse,
+  TranslationListResponse,
   WorkspaceFile,
   WorkspaceFileList,
   WorkspaceDeleteResult,
@@ -188,6 +191,47 @@ export async function getAnnotations(
 ): Promise<Annotation[]> {
   return fetchJson<Annotation[]>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/annotations`,
+  );
+}
+
+export async function getOverlays(): Promise<OverlaysResponse> {
+  return fetchJson<OverlaysResponse>(`${apiBase}/overlays`);
+}
+
+export async function searchTranslations(params?: {
+  q?: string;
+  sourceTextid?: string;
+  lang?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<TranslationListResponse> {
+  const q = new URLSearchParams();
+  if (params?.q) q.set("q", params.q);
+  if (params?.sourceTextid) q.set("source_textid", params.sourceTextid);
+  if (params?.lang) q.set("lang", params.lang);
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  if (params?.offset != null) q.set("offset", String(params.offset));
+  const qs = q.toString();
+  return fetchJson<TranslationListResponse>(
+    `${apiBase}/translations${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function getBundleTranslations(
+  textid: string,
+): Promise<TranslationListResponse> {
+  return fetchJson<TranslationListResponse>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/translations`,
+  );
+}
+
+export async function getTranslationAlignment(
+  textid: string,
+  seq: number,
+  translationId: string,
+): Promise<TranslationAlignmentResponse> {
+  return fetchJson<TranslationAlignmentResponse>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/translations/${encodeURIComponent(translationId)}`,
   );
 }
 

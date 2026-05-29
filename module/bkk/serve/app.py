@@ -18,6 +18,7 @@ from .routers import recipes as recipes_router
 from .routers import redirects as redirects_router
 from .routers import search as search_router
 from .routers import texts as texts_router
+from .routers import translations as translations_router
 from .routers import workspace as workspace_router
 from .state import AppState
 from .static import mount_spa
@@ -47,6 +48,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             {"name": "annotations", "description": "Per-juan annotations pinned to text offsets (sibling *.ann.yaml)."},
             {"name": "catalog", "description": "Browse the corpus with curated metadata filters."},
             {"name": "search", "description": "Variant-aware KWIC search across the corpus."},
+            {"name": "translations", "description": "Translation overlay discovery and alignment."},
             {"name": "recipes", "description": "Recipe-as-request: assemble pinned slices."},
             {"name": "auth", "description": "GitHub login and per-user BKK workspace setup."},
             {"name": "workspace", "description": "GitHub-backed user workspace files."},
@@ -78,6 +80,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(texts_router.router)
     app.include_router(catalog_router.router)
     app.include_router(search_router.router)
+    app.include_router(translations_router.router)
     app.include_router(recipes_router.router)
     app.include_router(auth_router.router)
     app.include_router(workspace_router.router)

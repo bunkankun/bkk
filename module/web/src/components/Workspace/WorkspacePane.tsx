@@ -4,6 +4,7 @@ import { setResizing, useWorkspace, workspace, type PaneLeaf } from "../../state
 import { CharInfoBar } from "../CharInfoBar";
 import { ImagePanel } from "./ImagePanel";
 import { TextViewer } from "./TextViewer";
+import { TranslationViewer } from "./TranslationViewer";
 
 function InspectResizer() {
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -42,6 +43,7 @@ export function WorkspacePane({ pane }: { pane: PaneLeaf }) {
   const defaultReadMode = useWorkspace((s) => s.readMode);
   const defaultLineMode = useWorkspace((s) => s.readPrefs.lineMode);
   const inspectWidth = useWorkspace((s) => s.panelWidths.inspect);
+  const selectedTranslation = useWorkspace((s) => s.selectedTranslation);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const activeTab =
     pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0] ?? null;
@@ -49,6 +51,7 @@ export function WorkspacePane({ pane }: { pane: PaneLeaf }) {
   const readMode = activeTab?.readMode ?? defaultReadMode;
   const lineMode = activeTab?.lineMode ?? defaultLineMode;
   const showInspect = readMode === "inspect" && activeTab != null;
+  const showTranslation = readMode === "trans" && activeTab != null;
 
   useEffect(() => {
     let cancelled = false;
@@ -143,6 +146,17 @@ export function WorkspacePane({ pane }: { pane: PaneLeaf }) {
               />
             </div>
           </div>
+        ) : showTranslation ? (
+          <TranslationViewer
+            key={`${activeTab.textid}:${activeTab.seq}:${selectedTranslation?.id ?? ""}`}
+            textid={activeTab.textid}
+            seq={activeTab.seq}
+            translationId={
+              selectedTranslation?.source_textid === activeTab.textid
+                ? selectedTranslation.id
+                : null
+            }
+          />
         ) : (
           <TextViewer
             key={`${activeTab.textid}:${activeTab.seq}`}

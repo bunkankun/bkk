@@ -21,6 +21,7 @@ import type {
   SearchHit,
   SearchResponse,
   SearchSort,
+  TranslationSummary,
 } from "../api/types";
 import {
   addTextidsToContent,
@@ -31,7 +32,14 @@ import {
   serializeTextList,
 } from "../lib/textLists";
 
-export type Activity = "texts" | "catalog" | "timeline" | "lists" | "history" | "settings";
+export type Activity =
+  | "texts"
+  | "catalog"
+  | "timeline"
+  | "overlays"
+  | "lists"
+  | "history"
+  | "settings";
 export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
 export type SearchTarget = "fulltext" | "dictionary" | "translations";
@@ -187,6 +195,7 @@ export interface WorkspaceState {
   rightTab: RightTab;
   // upper-right "Read | Trans | Inspect" — Trans/Inspect disabled in v1.
   readMode: ReadMode;
+  selectedTranslation: TranslationSummary | null;
   // info from GET /api/info (loaded once at startup).
   serverInfo: { upstream_repo?: string | null; version?: string } | null;
   auth: {
@@ -422,6 +431,7 @@ let state: WorkspaceState = {
   selection: null,
   rightTab: "annotations",
   readMode: "read",
+  selectedTranslation: null,
   serverInfo: null,
   auth: {
     status: "unknown",
@@ -1322,9 +1332,48 @@ export const workspace = {
   },
   setReadMode(readMode: ReadMode) {
     const target = activePaneLeaf(state.pane);
+    const activity = readMode === "trans" ? "overlays" : state.activity;
     if (!target) {
-      state = { ...state, readMode };
+      state = { ...state, readMode, activity };
     } else {
+      state = {
+        ...state,
+        activity,
+        pane: mapPaneLeaves(state.pane, (leaf) => {
+          if (leaf.id !== target.id) return leaf;
+          return {
+            ...leaf,
+            tabs: leaf.tabs.map((tab) =>
+              tab.id === leaf.activeTabId ? { ...tab, readMode } : tab,
+            ),
+          };
+        }),
+      };
+    }
+    notify();
+    scheduleSessionSave();
+  },
+  selectTranslation(translation: TranslationSummary) {
+    state = {
+      ...state,
+      selectedTranslation: translation,
+      readMode: "trans",
+      activity: "overlays",
+    };
+    if (state.activeTextid !== translation.source_textid) {
+      workspace.selectBundle(translation.source_textid);
+      state = {
+        ...state,
+        selectedTranslation: translation,
+        readMode: "trans",
+        activity: "overlays",
+      };
+      notify();
+      scheduleSessionSave();
+      return;
+    }
+    const target = activePaneLeaf(state.pane);
+    if (target) {
       state = {
         ...state,
         pane: mapPaneLeaves(state.pane, (leaf) => {
@@ -1332,7 +1381,7 @@ export const workspace = {
           return {
             ...leaf,
             tabs: leaf.tabs.map((tab) =>
-              tab.id === leaf.activeTabId ? { ...tab, readMode } : tab,
+              tab.id === leaf.activeTabId ? { ...tab, readMode: "trans" } : tab,
             ),
           };
         }),

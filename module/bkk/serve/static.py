@@ -26,6 +26,8 @@ API_PREFIXES = (
     "/texts",
     "/catalog",
     "/search",
+    "/overlays",
+    "/translations",
     "/recipes",
     "/admin",
     "/by-canonical",
