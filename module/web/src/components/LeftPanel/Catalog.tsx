@@ -9,6 +9,7 @@ import type {
 } from "../../api/types";
 import { workspace, useWorkspace } from "../../state/useWorkspace";
 import { listPathFromName } from "../../lib/textLists";
+import { krClass } from "../../lib/krClass";
 
 type SubLoadState =
   | { status: "idle" }
@@ -247,7 +248,7 @@ function CategoryRow(p: CategoryRowProps) {
       >
         <span className="cat-caret">{empty ? "·" : isOpen ? "▾" : "▸"}</span>
         <span className="cat-zh">{node.zh}</span>
-        <span className="cat-code">{node.code}</span>
+        <span className={`cat-code ${krClass(node.code)}`}>{node.code}</span>
         <span className="cat-count">{node.bundle_count}</span>
       </div>
       {isOpen &&
@@ -299,7 +300,7 @@ function CategoryNodeRow({
       >
         <span className="cat-caret">{empty ? "·" : isOpen ? "▾" : "▸"}</span>
         <span className="cat-zh">{node.zh}</span>
-        <span className="cat-code">{node.code}</span>
+        <span className={`cat-code ${krClass(node.code)}`}>{node.code}</span>
         <span className="cat-count">{node.bundle_count}</span>
       </div>
       {isOpen &&
@@ -457,7 +458,14 @@ function CatalogBundleRow({
       onClick={() => workspace.selectBundle(match.textid)}
       title={match.canonical_identifier ?? match.textid}
     >
-      <div className="list-cjk">{(match.title ?? "").slice(0, 2) || "·"}</div>
+      {paddingLeft >= 36 && (
+        <div
+          className={`list-cjk ${krClass(match.textid)}`}
+          style={{ position: "absolute", left: paddingLeft - 38, top: "50%", transform: "translateY(-50%)" }}
+        >
+          {(match.title ?? "").slice(0, 2) || "·"}
+        </div>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
@@ -471,7 +479,7 @@ function CatalogBundleRow({
           {match.title ?? match.textid}
         </div>
         <div className="list-sub">
-          {match.textid}
+          <span className={krClass(match.textid)}>{match.textid}</span>
           {match.edition_short ? ` · ${match.edition_short}` : ""}
         </div>
       </div>

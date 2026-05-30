@@ -26,6 +26,13 @@
   --ff: "IBM Plex Sans", sans-serif;
   --fm: "IBM Plex Mono", monospace;
   --fc: "Noto Serif SC", "Songti SC", "SimSun", serif;
+
+  --kr1: #66BB6A;
+  --kr2: #EF5350;
+  --kr3: #42A5F5;
+  --kr4: #BDBDBD;
+  --kr5: #BA68C8;
+  --kr6: #FFCA28;
 }
 
 :root[data-theme="dark"] {
@@ -49,6 +56,13 @@
   --blu: oklch(0.78 0.12 245);
   --grn: oklch(0.78 0.12 155);
   --hov: rgba(255, 255, 255, 0.095);
+
+  --kr1: #81C784;
+  --kr2: #EF9A9A;
+  --kr3: #90CAF9;
+  --kr4: #E0E0E0;
+  --kr5: #CE93D8;
+  --kr6: #FFE082;
 }
 
 :root[data-theme="light"] {
@@ -72,4 +86,11 @@
   --blu: oklch(0.48 0.12 252);
   --grn: oklch(0.47 0.12 155);
   --hov: rgba(24, 31, 50, 0.07);
+
+  --kr1: #2E7D32;
+  --kr2: #C62828;
+  --kr3: #1565C0;
+  --kr4: #424242;
+  --kr5: #7B4FA3;
+  --kr6: #D4A017;
 }

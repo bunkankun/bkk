@@ -5,6 +5,7 @@ import {
   type PaneNode,
   type ReadMode,
 } from "../state/useWorkspace";
+import { krClass } from "../lib/krClass";
 
 function formatCp(cp: number): string {
   return `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
@@ -45,7 +46,7 @@ export function StatusBar() {
 
   return (
     <div className="sb">
-      <div className="si">{textid ?? "—"}</div>
+      <div className={`si${textid ? ` ${krClass(textid)}` : ""}`}>{textid ?? "—"}</div>
       <div className="si">juan {seq ?? "—"}</div>
       <div className="si">{cp != null ? formatCp(cp) : ""}</div>
       <div className="s-sp" />

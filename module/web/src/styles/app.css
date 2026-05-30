@@ -1500,6 +1500,8 @@ button {
 }
 .cat-bundle {
   padding-left: 38px;
+  position: relative;
+  overflow: visible;
 }
 
 /* search results (KWIC) ----------------------------------------- */
@@ -2011,3 +2013,12 @@ button {
   margin: 0;
   accent-color: var(--amb);
 }
+
+/* KR category color classes — applied alongside element classes so they
+ * win via cascade order (defined last). */
+.kr1 { color: var(--kr1); }
+.kr2 { color: var(--kr2); }
+.kr3 { color: var(--kr3); }
+.kr4 { color: var(--kr4); }
+.kr5 { color: var(--kr5); }
+.kr6 { color: var(--kr6); }

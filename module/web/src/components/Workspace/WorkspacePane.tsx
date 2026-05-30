@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getManifest } from "../../api/client";
+import { krClass } from "../../lib/krClass";
 import { setResizing, useWorkspace, workspace, type PaneLeaf } from "../../state/useWorkspace";
 import { CharInfoBar } from "../CharInfoBar";
 import { ImagePanel } from "./ImagePanel";
@@ -101,7 +102,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
             onClick={() => workspace.focusPane(pane.id)}
           >
             <span className="tab-title">
-              {titles[t.textid] ?? t.textid} · {t.textid} · 卷 {t.seq}
+              {titles[t.textid] ?? t.textid} · <span className={krClass(t.textid)}>{t.textid}</span> · 卷 {t.seq}
             </span>
             <span
               className={`tab-pin${t.pinned ? " on" : ""}`}

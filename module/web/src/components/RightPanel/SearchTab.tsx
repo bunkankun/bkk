@@ -9,6 +9,7 @@ import type {
   TranslationSummary,
 } from "../../api/types";
 import { listColor, listPathFromName } from "../../lib/textLists";
+import { krClass } from "../../lib/krClass";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import type {
   ListFilterMode,
@@ -151,7 +152,7 @@ function FacetGroup({
             }
             title={facetTitle(v)}
           >
-            <span className="kwic-facet-value">{v.value}</span>
+            <span className={`kwic-facet-value ${krClass(v.value)}`}>{v.value}</span>
             <span className="kwic-facet-count">{v.count}</span>
           </button>
         ))}
@@ -203,7 +204,7 @@ function TextFacetGroup({
             }}
             title={facetTitle(v)}
           >
-            <span className="kwic-facet-value">{v.value}</span>
+            <span className={`kwic-facet-value ${krClass(v.value)}`}>{v.value}</span>
             <span className="kwic-facet-count">{v.count}</span>
           </button>
         ))}
@@ -413,7 +414,7 @@ function HitRow({ hit }: { hit: SearchHit }) {
     >
       <div className="kwic-meta">
         {hit.toc_label ? <span className="kwic-label">{hit.toc_label}</span> : null}
-        <span className="kwic-textid">{hit.textid}</span>
+        <span className={`kwic-textid ${krClass(hit.textid)}`}>{hit.textid}</span>
         <span className="kwic-juan">juan {hit.juan_seq}</span>
         {hit.bucket !== "body" ? <span className="kwic-chip">{hit.bucket}</span> : null}
         {witness ? <span className="kwic-chip">{witness}</span> : null}
@@ -496,7 +497,7 @@ function TranslationHitRow({ hit, query }: { hit: TranslationSegmentHit; query: 
   return (
     <button type="button" className={`kwic-row${hit.is_ai ? " kwic-row-ai" : ""}`} onClick={onClick}>
       <div className="kwic-meta">
-        <span className="kwic-textid">{hit.source_textid}</span>
+        <span className={`kwic-textid ${krClass(hit.source_textid)}`}>{hit.source_textid}</span>
         <span className="kwic-juan">juan {hit.juan_seq}</span>
         {hit.language ? <span className="kwic-chip">{hit.language}</span> : null}
         {names ? <span className="kwic-label">{names}</span> : null}

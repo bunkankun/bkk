@@ -1,4 +1,5 @@
 import { useWorkspace, workspace, type TextHistoryEntry } from "../../state/useWorkspace";
+import { krClass } from "../../lib/krClass";
 
 function formatVisitedAt(value: string): string {
   const date = new Date(value);
@@ -34,11 +35,11 @@ export function History() {
           onClick={() => workspace.openHistoryText(entry.textid)}
           title={entry.textid}
         >
-          <span className="history-cjk">{(entry.title ?? entry.textid).slice(0, 2)}</span>
+          <span className={`history-cjk ${krClass(entry.textid)}`}>{(entry.title ?? entry.textid).slice(0, 2)}</span>
           <span className="history-main">
             <span className="history-title">{entry.title ?? entry.textid}</span>
             <span className="history-meta">
-              {entry.textid} · {pageLabel(entry)}
+              <span className={krClass(entry.textid)}>{entry.textid}</span> · {pageLabel(entry)}
             </span>
           </span>
           {entry.pinned ? (

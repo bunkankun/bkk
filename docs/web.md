@@ -141,3 +141,26 @@ Clicking a search hit calls `workspace.openHit(hit)`, which atomically updates t
 Both the LeftPanel and RightPanel widths are user-draggable. Handles (`<ResizeHandle side="left|right" />` in [module/web/src/App.tsx](module/web/src/App.tsx)) sit between the activity-bar/LeftPanel and Workspace/RightPanel respectively. Widths are clamped to `[180, 600]` px and persisted in `localStorage["bkk.panelWidths"]`. Authenticated sessions also restore and save these widths through `settings/session.json`.
 
 The drag's terminating `mouseup` bubbles into the Workspace's `.ec` element, whose `handleMouseUp` would otherwise treat any non-collapsed `window.getSelection()` range as a fresh drag-select and switch the right tab to Annotations (hiding live search results). A module-scoped `isResizing` guard in [module/web/src/state/useWorkspace.ts](module/web/src/state/useWorkspace.ts) is set on drag start and cleared in a `setTimeout(0)` after `mouseup` — the deferred clear lets the bubbling event observe the guard as still true and short-circuit. The drag also pre-clears `window.getSelection()` so a stale selection (from before the drag) can't trip the same path.
+
+
+# CSS styles
+
+## for sections 
+
+```css
+:root {
+    --kr1: #2E7D32; /* Classics */
+    --kr2: #C62828; /* History */
+    --kr3: #1565C0; /* Masters */
+    --kr4: #424242; /* Belles-lettres */
+    --kr5: #7B4FA3; /* Daoism */
+    --kr6: #D4A017; /* Buddhism */
+}
+
+.kr1 { color: var(--kr1); }
+.kr2 { color: var(--kr2); }
+.kr3 { color: var(--kr3); }
+.kr4 { color: var(--kr4); }
+.kr5 { color: var(--kr5); }
+.kr6 { color: var(--kr6); }
+```
