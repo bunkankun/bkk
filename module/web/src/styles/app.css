@@ -849,6 +849,27 @@ button {
   color: var(--amb);
   background: var(--amb-d);
 }
+.tab-juan-nav {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--t3);
+}
+.tab-juan-nav:hover:not(.disabled) {
+  color: var(--amb);
+  background: var(--amb-d);
+}
+.tab-juan-nav.disabled {
+  opacity: 0.3;
+  cursor: default;
+}
 .pane-close {
   flex: 0 0 auto;
   margin-left: auto;
@@ -914,6 +935,31 @@ button {
 .tv-title h2 a:hover {
   color: var(--amb);
   text-decoration: underline;
+}
+.juan-nav {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.juan-nav-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--t2);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.juan-nav-btn:hover:not(:disabled) {
+  border-color: var(--amb);
+  color: var(--amb);
+}
+.juan-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .tv-body {
   font-family: var(--fc);

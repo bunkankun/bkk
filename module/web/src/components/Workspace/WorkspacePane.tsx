@@ -46,6 +46,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
   const inspectWidth = useWorkspace((s) => s.panelWidths.inspect);
   const selectedTranslation = useWorkspace((s) => s.selectedTranslation);
   const [titles, setTitles] = useState<Record<string, string>>({});
+  const [seqsMap, setSeqsMap] = useState<Record<string, number[]>>({});
   const activeTab =
     pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0] ?? null;
 
@@ -63,14 +64,23 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
     Promise.all(
       missing.map((textid) =>
         getManifest(textid)
-          .then((m) => [textid, m.metadata?.title ?? textid] as const)
-          .catch(() => [textid, textid] as const),
+          .then((m) => ({
+            textid,
+            title: m.metadata?.title ?? textid,
+            seqs: (m.assets?.parts ?? []).map((p) => p.seq).sort((a, b) => a - b),
+          }))
+          .catch(() => ({ textid, title: textid, seqs: [] as number[] })),
       ),
     ).then((entries) => {
       if (cancelled) return;
       setTitles((prev) => {
         const next = { ...prev };
-        for (const [textid, title] of entries) next[textid] = title;
+        for (const { textid, title } of entries) next[textid] = title;
+        return next;
+      });
+      setSeqsMap((prev) => {
+        const next = { ...prev };
+        for (const { textid, seqs } of entries) next[textid] = seqs;
         return next;
       });
     });
@@ -94,36 +104,69 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
             (no open text)
           </div>
         )}
-        {pane.tabs.map((t) => (
-          <button
-            key={t.id}
-            className={`tab${t.id === activeTab?.id ? " on" : ""}`}
-            title={`${titles[t.textid] ?? t.textid} · ${t.textid} · 卷 ${t.seq}`}
-            onClick={() => workspace.focusPane(pane.id)}
-          >
-            <span className="tab-title">
-              {titles[t.textid] ?? t.textid} · <span className={krClass(t.textid)}>{t.textid}</span> · 卷 {t.seq}
-            </span>
-            <span
-              className={`tab-pin${t.pinned ? " on" : ""}`}
-              role="button"
-              tabIndex={0}
-              title={t.pinned ? "Unpin text" : "Pin text"}
-              onClick={(e) => {
-                e.stopPropagation();
-                workspace.togglePinnedTab(pane.id, t.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter" && e.key !== " ") return;
-                e.preventDefault();
-                e.stopPropagation();
-                workspace.togglePinnedTab(pane.id, t.id);
-              }}
+        {pane.tabs.map((t) => {
+          const isActive = t.id === activeTab?.id;
+          const seqs = isActive ? (seqsMap[t.textid] ?? []) : [];
+          const curIdx = seqs.indexOf(t.seq);
+          const prevSeq = curIdx > 0 ? seqs[curIdx - 1] : null;
+          const nextSeq = curIdx >= 0 && curIdx < seqs.length - 1 ? seqs[curIdx + 1] : null;
+          return (
+            <button
+              key={t.id}
+              className={`tab${isActive ? " on" : ""}`}
+              title={`${titles[t.textid] ?? t.textid} · ${t.textid} · 卷 ${t.seq}`}
+              onClick={() => workspace.focusPane(pane.id)}
             >
-              {t.pinned ? "●" : "○"}
-            </span>
-          </button>
-        ))}
+              {isActive && (prevSeq !== null || nextSeq !== null) && (
+                <span
+                  className={`tab-juan-nav${prevSeq === null ? " disabled" : ""}`}
+                  role="button"
+                  tabIndex={prevSeq !== null ? 0 : -1}
+                  title={prevSeq !== null ? `← 卷 ${prevSeq}` : undefined}
+                  onClick={(e) => {
+                    if (prevSeq === null) return;
+                    e.stopPropagation();
+                    workspace.openJuan(t.textid, prevSeq);
+                  }}
+                >←</span>
+              )}
+              <span className="tab-title">
+                {titles[t.textid] ?? t.textid} · <span className={krClass(t.textid)}>{t.textid}</span> · 卷 {t.seq}
+              </span>
+              <span
+                className={`tab-pin${t.pinned ? " on" : ""}`}
+                role="button"
+                tabIndex={0}
+                title={t.pinned ? "Unpin text" : "Pin text"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  workspace.togglePinnedTab(pane.id, t.id);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  workspace.togglePinnedTab(pane.id, t.id);
+                }}
+              >
+                {t.pinned ? "●" : "○"}
+              </span>
+              {isActive && (prevSeq !== null || nextSeq !== null) && (
+                <span
+                  className={`tab-juan-nav${nextSeq === null ? " disabled" : ""}`}
+                  role="button"
+                  tabIndex={nextSeq !== null ? 0 : -1}
+                  title={nextSeq !== null ? `卷 ${nextSeq} →` : undefined}
+                  onClick={(e) => {
+                    if (nextSeq === null) return;
+                    e.stopPropagation();
+                    workspace.openJuan(t.textid, nextSeq);
+                  }}
+                >→</span>
+              )}
+            </button>
+          );
+        })}
         {closeable && (
           <button
             className="pane-close"

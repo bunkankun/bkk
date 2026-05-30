@@ -186,6 +186,8 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
     .join(", ");
   const date = alignment.translation?.date;
 
+  const firstTranslatedIdx = alignment.rows.findIndex((r) => r.translation_text && !r.continued);
+
   return (
     <div
       className="ec"
@@ -200,9 +202,23 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
           {translators ? ` · ${translators}` : ""}
           {date ? ` · ${date.slice(0, 4)}` : ""}
         </h2>
+        {firstTranslatedIdx >= 0 && (
+          <div className="juan-nav">
+            <button
+              className="juan-nav-btn"
+              onClick={() => {
+                containerRef.current
+                  ?.querySelector<HTMLElement>("[data-first-translated]")
+                  ?.scrollIntoView({ block: "start", behavior: "smooth" });
+              }}
+            >
+              ↓ first translation
+            </button>
+          </div>
+        )}
       </div>
       <div className="trans-grid" ref={containerRef}>
-        {alignment.rows.map((row) => {
+        {alignment.rows.map((row, rowIdx) => {
           const isActive =
             selectedSegment?.textid === textid &&
             selectedSegment.seq === seq &&
@@ -211,6 +227,7 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
           <div
             className={`trans-row${row.continued ? " continued" : ""}${isActive ? " active" : ""}`}
             key={`${row.source_marker_id}:${row.source_offset}`}
+            {...(rowIdx === firstTranslatedIdx ? { "data-first-translated": "1" } : {})}
           >
             <div
               className="trans-source"
