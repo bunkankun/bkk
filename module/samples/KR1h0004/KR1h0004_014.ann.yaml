@@ -8,7 +8,7 @@ annotations:
   seg_id: KR1h0004_tls_014-1a.3
   pos: 6
   bucket: body
-  offset: 13
+  offset: 11
   translation:
     text: Xiàn asked about shame.
     title: 論語 (en)
@@ -33,7 +33,7 @@ annotations:
   seg_id: KR1h0004_tls_014-1a.3
   pos: 7
   bucket: body
-  offset: 14
+  offset: 12
   translation:
     text: Xiàn asked about shame.
     title: 論語 (en)
@@ -58,7 +58,7 @@ annotations:
   seg_id: KR1h0004_tls_014-1a.5
   pos: 2
   bucket: body
-  offset: 14
+  offset: 12
   translation:
     text: '"When the Way prevails in the land, then to be concerned with one''s salary in grain,'
     title: 論語 (en)
@@ -82,7 +82,7 @@ annotations:
   seg_id: KR1h0004_tls_014-1a.5
   pos: 3
   bucket: body
-  offset: 15
+  offset: 13
   translation:
     text: '"When the Way prevails in the land, then to be concerned with one''s salary in grain,'
     title: 論語 (en)
@@ -107,7 +107,7 @@ annotations:
   seg_id: KR1h0004_tls_014-1a.5
   pos: 6
   bucket: body
-  offset: 18
+  offset: 16
   translation:
     text: '"When the Way prevails in the land, then to be concerned with one''s salary in grain,'
     title: 論語 (en)
@@ -132,7 +132,7 @@ annotations:
   seg_id: KR1h0004_tls_014-1a.6
   pos: 5
   bucket: body
-  offset: 21
+  offset: 19
   translation:
     text: or when the Way does not prevail in the land then to be concerned with one's salary in grain,
     title: 論語 (en)
@@ -157,7 +157,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.1
   pos: 1
   bucket: body
-  offset: 21
+  offset: 19
   translation:
     text: that is a public disgrace."
     title: 論語 (en)
@@ -182,7 +182,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.2
   pos: 2
   bucket: body
-  offset: 24
+  offset: 22
   translation:
     text: '"When as for aggressiveness, braggardy, resentment and lust'
     title: 論語 (en)
@@ -207,7 +207,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.2
   pos: 4
   bucket: body
-  offset: 26
+  offset: 24
   translation:
     text: '"When as for aggressiveness, braggardy, resentment and lust'
     title: 論語 (en)
@@ -232,7 +232,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.2
   pos: 6
   bucket: body
-  offset: 28
+  offset: 26
   translation:
     text: '"When as for aggressiveness, braggardy, resentment and lust'
     title: 論語 (en)
@@ -257,7 +257,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.3
   pos: 2
   bucket: body
-  offset: 28
+  offset: 26
   translation:
     text: someone does not practise these,
     title: 論語 (en)
@@ -282,7 +282,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.3
   pos: 3
   bucket: body
-  offset: 29
+  offset: 27
   translation:
     text: someone does not practise these,
     title: 論語 (en)
@@ -306,7 +306,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.2
   pos: 8
   bucket: body
-  offset: 30
+  offset: 28
   translation:
     text: '"When as for aggressiveness, braggardy, resentment and lust'
     title: 論語 (en)
@@ -334,7 +334,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.4
   pos: 1
   bucket: body
-  offset: 30
+  offset: 28
   translation:
     text: should one then consider him as Good?"
     title: 論語 (en)
@@ -358,7 +358,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.4
   pos: 2
   bucket: body
-  offset: 31
+  offset: 29
   translation:
     text: should one then consider him as Good?"
     title: 論語 (en)
@@ -383,7 +383,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.4
   pos: 2
   bucket: body
-  offset: 31
+  offset: 29
   translation:
     text: may one then be deemed morally perfect?"
     title: 論語 (en)
@@ -409,7 +409,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.4
   pos: 5
   bucket: body
-  offset: 34
+  offset: 32
   translation:
     text: should one then consider him as Good?"
     title: 論語 (en)
@@ -432,7 +432,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.4
   pos: 5
   bucket: body
-  offset: 34
+  offset: 32
   translation:
     text: should one then consider him as Good?"
     title: 論語 (en)
@@ -455,7 +455,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.6
   pos: 3
   bucket: body
-  offset: 39
+  offset: 37
   translation:
     text: '"This one should consider as hard to achieve,'
     title: 論語 (en)
@@ -480,7 +480,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.6
   pos: 3
   bucket: body
-  offset: 39
+  offset: 37
   translation:
     text: '"This one may deem hard to achieve,'
     title: 論語 (en)
@@ -506,7 +506,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.6
   pos: 5
   bucket: body
-  offset: 41
+  offset: 39
   translation:
     text: '"This one should consider as hard to achieve,'
     title: 論語 (en)
@@ -531,7 +531,7 @@ annotations:
   seg_id: KR1h0004_tls_014-3a.1
   pos: 1
   bucket: body
-  offset: 42
+  offset: 40
   translation:
     text: but when it comes to being good, then I do not know."
     title: 論語 (en)
@@ -556,7 +556,7 @@ annotations:
   seg_id: KR1h0004_tls_014-2a.6
   pos: 6
   bucket: body
-  offset: 42
+  offset: 40
   translation:
     text: '"This one should consider as hard to achieve,'
     title: 論語 (en)
@@ -582,7 +582,7 @@ annotations:
   seg_id: KR1h0004_tls_014-3a.1
   pos: 5
   bucket: body
-  offset: 46
+  offset: 44
   translation:
     text: but when it comes to being good, then I do not know."
     title: 論語 (en)
@@ -606,7 +606,7 @@ annotations:
   seg_id: KR1h0004_tls_014-3a.1
   pos: 6
   bucket: body
-  offset: 47
+  offset: 45
   translation:
     text: but when it comes to being good, then I do not know."
     title: 論語 (en)
@@ -630,7 +630,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.1
   pos: 2
   bucket: body
-  offset: 55
+  offset: 53
   translation:
     text: does not deserve to be considered a gentleman."
     title: 論語 (en)
@@ -654,7 +654,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.1
   pos: 3
   bucket: body
-  offset: 56
+  offset: 54
   translation:
     text: does not deserve to be considered a gentleman."
     title: 論語 (en)
@@ -679,7 +679,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.1
   pos: 5
   bucket: body
-  offset: 58
+  offset: 56
   translation:
     text: does not deserve to be considered a gentleman."
     title: 論語 (en)
@@ -704,7 +704,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.1
   pos: 6
   bucket: body
-  offset: 59
+  offset: 57
   translation:
     text: does not deserve to be considered a gentleman."
     title: 論語 (en)
@@ -730,7 +730,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.3
   pos: 2
   bucket: body
-  offset: 63
+  offset: 61
   translation:
     text: '"When the Way prevails in the land'
     title: 論語 (en)
@@ -754,7 +754,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.2
   pos: 5
   bucket: body
-  offset: 64
+  offset: 62
   translation:
     text: 'The Master said:'
     title: 論語 (en)
@@ -778,7 +778,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.3
   pos: 3
   bucket: body
-  offset: 64
+  offset: 62
   translation:
     text: '"When the Way prevails in the land'
     title: 論語 (en)
@@ -803,7 +803,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.4
   pos: 1
   bucket: body
-  offset: 65
+  offset: 63
   translation:
     text: take risks in making public commitments
     title: 論語 (en)
@@ -828,7 +828,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.4
   pos: 2
   bucket: body
-  offset: 66
+  offset: 64
   translation:
     text: take risks in making public commitments
     title: 論語 (en)
@@ -853,7 +853,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.5
   pos: 1
   bucket: body
-  offset: 67
+  offset: 65
   translation:
     text: and take risks in actions;
     title: 論語 (en)
@@ -878,7 +878,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.7
   pos: 1
   bucket: body
-  offset: 72
+  offset: 70
   translation:
     text: take risks in actions,
     title: 論語 (en)
@@ -903,7 +903,7 @@ annotations:
   seg_id: KR1h0004_tls_014-4a.7
   pos: 2
   bucket: body
-  offset: 73
+  offset: 71
   translation:
     text: take risks in actions,
     title: 論語 (en)
@@ -928,7 +928,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.1
   pos: null
   bucket: body
-  offset: 74
+  offset: 72
   translation:
     text: but in public statements be docile."
     title: 論語 (en)
@@ -956,7 +956,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.3
   pos: 2
   bucket: body
-  offset: 79
+  offset: 77
   translation:
     text: '"He who is possessed of virtue'
     title: 論語 (en)
@@ -981,7 +981,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.3
   pos: 3
   bucket: body
-  offset: 80
+  offset: 78
   translation:
     text: '"He who is possessed of virtue'
     title: 論語 (en)
@@ -1006,7 +1006,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.3
   pos: 4
   bucket: body
-  offset: 81
+  offset: 79
   translation:
     text: '"He who is possessed of virtue'
     title: 論語 (en)
@@ -1031,7 +1031,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.4
   pos: 1
   bucket: body
-  offset: 81
+  offset: 79
   translation:
     text: is sure to have the gift of speech;
     title: 論語 (en)
@@ -1055,7 +1055,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.4
   pos: 2
   bucket: body
-  offset: 82
+  offset: 80
   translation:
     text: is sure to have the gift of speech;
     title: 論語 (en)
@@ -1080,7 +1080,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.4
   pos: 3
   bucket: body
-  offset: 83
+  offset: 81
   translation:
     text: is sure to have the gift of speech;
     title: 論語 (en)
@@ -1105,7 +1105,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.5
   pos: 2
   bucket: body
-  offset: 85
+  offset: 83
   translation:
     text: he who has the gift of speech
     title: 論語 (en)
@@ -1130,7 +1130,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.5
   pos: 3
   bucket: body
-  offset: 86
+  offset: 84
   translation:
     text: he who has the gift of speech
     title: 論語 (en)
@@ -1155,7 +1155,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.6
   pos: 2
   bucket: body
-  offset: 88
+  offset: 86
   translation:
     text: is not necessarily possessed of virtue.
     title: 論語 (en)
@@ -1179,7 +1179,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.7
   pos: 1
   bucket: body
-  offset: 91
+  offset: 89
   translation:
     text: He who is Good
     title: 論語 (en)
@@ -1203,7 +1203,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.7
   pos: 1
   bucket: body
-  offset: 91
+  offset: 89
   translation:
     text: He who is Good
     title: 論語 (en)
@@ -1226,7 +1226,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.7
   pos: 2
   bucket: body
-  offset: 92
+  offset: 90
   translation:
     text: He who is Good
     title: 論語 (en)
@@ -1251,7 +1251,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.8
   pos: 3
   bucket: body
-  offset: 95
+  offset: 93
   translation:
     text: is bound to have courage,
     title: 論語 (en)
@@ -1276,7 +1276,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.9
   pos: 1
   bucket: body
-  offset: 96
+  offset: 94
   translation:
     text: but he who has courage
     title: 論語 (en)
@@ -1299,7 +1299,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.9
   pos: 1
   bucket: body
-  offset: 96
+  offset: 94
   translation:
     text: but he who has courage
     title: 論語 (en)
@@ -1324,7 +1324,7 @@ annotations:
   seg_id: KR1h0004_tls_014-5a.9
   pos: 2
   bucket: body
-  offset: 97
+  offset: 95
   translation:
     text: but he who has courage
     title: 論語 (en)
@@ -1349,7 +1349,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.1
   pos: 4
   bucket: body
-  offset: 101
+  offset: 99
   translation:
     text: does not necessarily have goodness."
     title: 論語 (en)
@@ -1374,7 +1374,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.2
   pos: 8
   bucket: body
-  offset: 109
+  offset: 107
   translation:
     text: 'Nángōng<1> Kuò asked Confucius:'
     title: 論語 (en)
@@ -1398,7 +1398,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.3
   pos: 3
   bucket: body
-  offset: 112
+  offset: 110
   translation:
     text: Yì was good at archery,
     title: 論語 (en)
@@ -1422,7 +1422,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.3
   pos: 4
   bucket: body
-  offset: 113
+  offset: 111
   translation:
     text: Yì was good at archery,
     title: 論語 (en)
@@ -1447,7 +1447,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.4
   pos: 3
   bucket: body
-  offset: 115
+  offset: 113
   translation:
     text: Ào<2> dealt successfully with the boat,
     title: 論語 (en)
@@ -1471,7 +1471,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.5
   pos: 1
   bucket: body
-  offset: 116
+  offset: 114
   translation:
     text: but both of them did not get to die a natural death.
     title: 論語 (en)
@@ -1496,7 +1496,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.5
   pos: 4
   bucket: body
-  offset: 119
+  offset: 117
   translation:
     text: but both of them did not get to die a natural death.
     title: 論語 (en)
@@ -1520,7 +1520,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.5
   pos: 5
   bucket: body
-  offset: 120
+  offset: 118
   translation:
     text: but both of them did not get to die a natural death.
     title: 論語 (en)
@@ -1545,7 +1545,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.6
   pos: 1
   bucket: body
-  offset: 121
+  offset: 119
   translation:
     text: By contrast Yǔjì personally tilled the land and got to rule the whole world."
     title: 論語 (en)
@@ -1569,7 +1569,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.6
   pos: 6
   bucket: body
-  offset: 126
+  offset: 124
   translation:
     text: By contrast Yǔjì personally tilled the land and got to rule the whole world."
     title: 論語 (en)
@@ -1593,7 +1593,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.6
   pos: 7
   bucket: body
-  offset: 127
+  offset: 125
   translation:
     text: By contrast Yǔjì personally tilled the land and got to rule the whole world."
     title: 論語 (en)
@@ -1616,7 +1616,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.6
   pos: 8
   bucket: body
-  offset: 128
+  offset: 126
   translation:
     text: By contrast Yǔjì personally tilled the land and got to rule the whole world."
     title: 論語 (en)
@@ -1641,7 +1641,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.6
   pos: 9
   bucket: body
-  offset: 129
+  offset: 127
   translation:
     text: By contrast Yǔjì personally tilled the land and got to rule the whole world."
     title: 論語 (en)
@@ -1666,7 +1666,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.6
   pos: 9
   bucket: body
-  offset: 129
+  offset: 127
   translation:
     text: By contrast Yǔjì personally tilled the land and got to rule the whole world."
     title: 論語 (en)
@@ -1690,7 +1690,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.7
   pos: 1
   bucket: body
-  offset: 130
+  offset: 128
   translation:
     text: Our Master did not give an immediate response.
     title: 論語 (en)
@@ -1714,7 +1714,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.6
   pos: 10
   bucket: body
-  offset: 130
+  offset: 128
   translation:
     text: By contrast Yǔjì personally tilled the land and got to rule the whole world."
     title: 論語 (en)
@@ -1738,7 +1738,7 @@ annotations:
   seg_id: KR1h0004_tls_014-6a.7
   pos: 4
   bucket: body
-  offset: 133
+  offset: 131
   translation:
     text: Our Master did not give an immediate response.
     title: 論語 (en)
@@ -1763,7 +1763,7 @@ annotations:
   seg_id: KR1h0004_tls_014-7a.2
   pos: 4
   bucket: body
-  offset: 137
+  offset: 135
   translation:
     text: Nángōng Kuò left.
     title: 論語 (en)
@@ -1787,7 +1787,7 @@ annotations:
   seg_id: KR1h0004_tls_014-7a.4
   pos: 2
   bucket: body
-  offset: 141
+  offset: 139
   translation:
     text: '"How superior this man is!'
     title: 論語 (en)
@@ -1812,7 +1812,7 @@ annotations:
   seg_id: KR1h0004_tls_014-7a.4
   pos: 5
   bucket: body
-  offset: 144
+  offset: 142
   translation:
     text: '"How superior this man is!'
     title: 論語 (en)
@@ -1836,7 +1836,7 @@ annotations:
   seg_id: KR1h0004_tls_014-8a.3
   pos: 2
   bucket: body
-  offset: 153
+  offset: 151
   translation:
     text: '"There are those who are superior men but who are devoid of Goodness, aren''t there?'
     title: 論語 (en)
@@ -1861,7 +1861,7 @@ annotations:
   seg_id: KR1h0004_tls_014-8a.3
   pos: 4
   bucket: body
-  offset: 155
+  offset: 153
   translation:
     text: '"There are those who are superior men but who are devoid of Goodness, aren''t there?'
     title: 論語 (en)
@@ -1883,7 +1883,7 @@ annotations:
   seg_id: KR1h0004_tls_014-8a.3
   pos: 4
   bucket: body
-  offset: 155
+  offset: 153
   translation:
     text: '"There are those who are superior men but who are devoid of Goodness, aren''t there?'
     title: 論語 (en)
@@ -1909,7 +1909,7 @@ annotations:
   seg_id: KR1h0004_tls_014-8a.3
   pos: 5
   bucket: body
-  offset: 156
+  offset: 154
   translation:
     text: '"There are those who have the status of gentlemen but who are inhumane, aren''t there? /  There are those who are gentlemen but less than morally perfect/benevolent,'
     title: 論語 (en)
@@ -1932,7 +1932,7 @@ annotations:
   seg_id: KR1h0004_tls_014-8a.3
   pos: 7
   bucket: body
-  offset: 158
+  offset: 156
   translation:
     text: '"There are those who are superior men but who are devoid of Goodness, aren''t there?'
     title: 論語 (en)
@@ -1957,7 +1957,7 @@ annotations:
   seg_id: KR1h0004_tls_014-8a.3
   pos: 8
   bucket: body
-  offset: 159
+  offset: 157
   translation:
     text: '"There are those who are superior men but who are devoid of Goodness, aren''t there?'
     title: 論語 (en)
@@ -1982,7 +1982,7 @@ annotations:
   seg_id: KR1h0004_tls_014-8a.3
   pos: 9
   bucket: body
-  offset: 160
+  offset: 158
   translation:
     text: '"There are those who are superior men but who are devoid of Goodness, aren''t there?'
     title: 論語 (en)
@@ -2006,7 +2006,7 @@ annotations:
   seg_id: KR1h0004_tls_014-8a.3
   pos: 10
   bucket: body
-  offset: 161
+  offset: 159
   translation:
     text: '"There are those who are superior men but who are devoid of Goodness, aren''t there?'
     title: 論語 (en)
@@ -2030,7 +2030,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.1
   pos: 3
   bucket: body
-  offset: 163
+  offset: 161
   translation:
     text: There has never been any such thing as a petty man who was Good."
     title: 論語 (en)
@@ -2053,7 +2053,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.1
   pos: 5
   bucket: body
-  offset: 165
+  offset: 163
   translation:
     text: There has never been any such thing as a petty man who was Good."
     title: 論語 (en)
@@ -2075,7 +2075,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.1
   pos: 5
   bucket: body
-  offset: 165
+  offset: 163
   translation:
     text: There has never been any such thing as a petty man who was Good."
     title: 論語 (en)
@@ -2101,7 +2101,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.1
   pos: 7
   bucket: body
-  offset: 167
+  offset: 165
   translation:
     text: There has never been any such thing as a petty man who was Good."
     title: 論語 (en)
@@ -2124,7 +2124,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.1
   pos: 7
   bucket: body
-  offset: 167
+  offset: 165
   translation:
     text: There has never been any such thing as a petty man who was Good."
     title: 論語 (en)
@@ -2149,7 +2149,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.1
   pos: 8
   bucket: body
-  offset: 168
+  offset: 166
   translation:
     text: There has never been any such thing as a petty man who was Good."
     title: 論語 (en)
@@ -2173,7 +2173,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.3
   pos: 2
   bucket: body
-  offset: 172
+  offset: 170
   translation:
     text: '"If one loves people,'
     title: 論語 (en)
@@ -2197,7 +2197,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.3
   pos: 3
   bucket: body
-  offset: 173
+  offset: 171
   translation:
     text: '"If one loves people,'
     title: 論語 (en)
@@ -2222,7 +2222,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.4
   pos: 1
   bucket: body
-  offset: 173
+  offset: 171
   translation:
     text: can one possibly avoid to work hard for them?
     title: 論語 (en)
@@ -2246,7 +2246,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.4
   pos: 3
   bucket: body
-  offset: 175
+  offset: 173
   translation:
     text: can one possibly avoid to work hard for them?
     title: 論語 (en)
@@ -2271,7 +2271,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.4
   pos: 4
   bucket: body
-  offset: 176
+  offset: 174
   translation:
     text: can one possibly avoid to work hard for them?
     title: 論語 (en)
@@ -2295,7 +2295,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.5
   pos: 1
   bucket: body
-  offset: 177
+  offset: 175
   translation:
     text: If one is doing one's loyal best for someone
     title: 論語 (en)
@@ -2317,7 +2317,7 @@ annotations:
   seg_id: KR1h0004_tls_014-9a.5
   pos: 2
   bucket: body
-  offset: 178
+  offset: 176
   translation:
     text: If one is doing one's loyal best for someone
     title: 論語 (en)
@@ -2342,7 +2342,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.1
   pos: 2
   bucket: body
-  offset: 180
+  offset: 178
   translation:
     text: can one possibly avoid to instruct them (truths that are hard to take)?"
     title: 論語 (en)
@@ -2365,7 +2365,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.1
   pos: 3
   bucket: body
-  offset: 181
+  offset: 179
   translation:
     text: can one possibly avoid to instruct them (truths that are hard to take)?"
     title: 論語 (en)
@@ -2389,7 +2389,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.1
   pos: 4
   bucket: body
-  offset: 182
+  offset: 180
   translation:
     text: can one possibly avoid to instruct them (truths that are hard to take)?"
     title: 論語 (en)
@@ -2413,7 +2413,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.3
   pos: 2
   bucket: body
-  offset: 186
+  offset: 184
   translation:
     text: '"In producing a public order'
     title: 論語 (en)
@@ -2437,7 +2437,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.3
   pos: 3
   bucket: body
-  offset: 187
+  offset: 185
   translation:
     text: '"In producing a public order'
     title: 論語 (en)
@@ -2459,7 +2459,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.3
   pos: 3
   bucket: body
-  offset: 187
+  offset: 185
   translation:
     text: '"In producing a public order'
     title: 論語 (en)
@@ -2484,7 +2484,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.4
   pos: 3
   bucket: body
-  offset: 189
+  offset: 187
   translation:
     text: Pí Chén wrote a rough draft,
     title: 論語 (en)
@@ -2508,7 +2508,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.4
   pos: 3
   bucket: body
-  offset: 189
+  offset: 187
   translation:
     text: Pí Chén wrote a rough draft,
     title: 論語 (en)
@@ -2532,7 +2532,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.4
   pos: 4
   bucket: body
-  offset: 190
+  offset: 188
   translation:
     text: Pí Chén wrote a rough draft,
     title: 論語 (en)
@@ -2554,7 +2554,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.5
   pos: 3
   bucket: body
-  offset: 194
+  offset: 192
   translation:
     text: Shì Shū commented on it,
     title: 論語 (en)
@@ -2578,7 +2578,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.6
   pos: 1
   bucket: body
-  offset: 197
+  offset: 195
   translation:
     text: emissary Zǐyǔ polished it up,
     title: 論語 (en)
@@ -2602,7 +2602,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.6
   pos: null
   bucket: body
-  offset: 197
+  offset: 195
   translation:
     text: emissary Zǐyǔ polished it up,
     title: 論語 (en)
@@ -2626,7 +2626,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.6
   pos: null
   bucket: body
-  offset: 197
+  offset: 195
   translation:
     text: emissary Zǐyǔ polished it up,
     title: 論語 (en)
@@ -2651,7 +2651,7 @@ annotations:
   seg_id: KR1h0004_tls_014-10a.6
   pos: 6
   bucket: body
-  offset: 202
+  offset: 200
   translation:
     text: emissary Zǐyǔ polished it up,
     title: 論語 (en)
@@ -2676,7 +2676,7 @@ annotations:
   seg_id: KR1h0004_tls_014-11a.1
   pos: 5
   bucket: body
-  offset: 208
+  offset: 206
   translation:
     text: and Zǐchǎn from Dōnglǐ gave it its final sheen."
     title: 論語 (en)
@@ -2700,7 +2700,7 @@ annotations:
   seg_id: KR1h0004_tls_014-11a.1
   pos: 5
   bucket: body
-  offset: 208
+  offset: 206
   translation:
     text: and Zǐchǎn from Dōnglǐ gave it its final sheen."
     title: 論語 (en)
@@ -2724,7 +2724,7 @@ annotations:
   seg_id: KR1h0004_tls_014-11a.1
   pos: 6
   bucket: body
-  offset: 209
+  offset: 207
   translation:
     text: and Zǐchǎn from Dōnglǐ gave it its final sheen."
     title: 論語 (en)
@@ -2749,7 +2749,7 @@ annotations:
   seg_id: KR1h0004_tls_014-11a.2
   pos: 5
   bucket: body
-  offset: 215
+  offset: 213
   translation:
     text: Someone asked about Zǐchǎn.
     title: 論語 (en)
@@ -2771,7 +2771,7 @@ annotations:
   seg_id: KR1h0004_tls_014-11a.2
   pos: 6
   bucket: body
-  offset: 216
+  offset: 214
   translation:
     text: Someone asked about Zǐchǎn.
     title: 論語 (en)
@@ -2796,7 +2796,7 @@ annotations:
   seg_id: KR1h0004_tls_014-12a.1
   pos: 2
   bucket: body
-  offset: 218
+  offset: 216
   translation:
     text: '"He was a generous man."'
     title: 論語 (en)
@@ -2820,7 +2820,7 @@ annotations:
   seg_id: KR1h0004_tls_014-12a.1
   pos: 4
   bucket: body
-  offset: 220
+  offset: 218
   translation:
     text: '"He was a generous man."'
     title: 論語 (en)
@@ -2846,7 +2846,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.1
   pos: null
   bucket: body
-  offset: 224
+  offset: 222
   translation:
     text: '"Oh, that man! That man!"'
     title: 論語 (en)
@@ -2871,7 +2871,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.1
   pos: null
   bucket: body
-  offset: 224
+  offset: 222
   translation:
     text: '"Oh, that man! That man!"'
     title: 論語 (en)
@@ -2896,7 +2896,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.2
   pos: 1
   bucket: body
-  offset: 228
+  offset: 226
   translation:
     text: He asked about Guǎn Zhòng.
     title: 論語 (en)
@@ -2921,7 +2921,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.5
   pos: 1
   bucket: body
-  offset: 234
+  offset: 232
   translation:
     text: He took three hundred families from the Pián and from the Bó family,
     title: 論語 (en)
@@ -2945,7 +2945,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.4
   pos: 3
   bucket: body
-  offset: 234
+  offset: 232
   translation:
     text: '"As for that man,'
     title: 論語 (en)
@@ -2968,7 +2968,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.5
   pos: 5
   bucket: body
-  offset: 238
+  offset: 236
   translation:
     text: He took three hundred families from the Pián and from the Bó family,
     title: 論語 (en)
@@ -2992,7 +2992,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.6
   pos: 1
   bucket: body
-  offset: 241
+  offset: 239
   translation:
     text: but he feed on coarse food.
     title: 論語 (en)
@@ -3016,7 +3016,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.6
   pos: 2
   bucket: body
-  offset: 242
+  offset: 240
   translation:
     text: but he feed on coarse food.
     title: 論語 (en)
@@ -3040,7 +3040,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.6
   pos: 2
   bucket: body
-  offset: 242
+  offset: 240
   translation:
     text: but he feed on coarse food.
     title: 論語 (en)
@@ -3062,7 +3062,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.6
   pos: 3
   bucket: body
-  offset: 243
+  offset: 241
   translation:
     text: but he feed on coarse food.
     title: 論語 (en)
@@ -3086,7 +3086,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.7
   pos: 1
   bucket: body
-  offset: 244
+  offset: 242
   translation:
     text: Until he lost his teeth
     title: 論語 (en)
@@ -3110,7 +3110,7 @@ annotations:
   seg_id: KR1h0004_tls_014-13a.7
   pos: 2
   bucket: body
-  offset: 245
+  offset: 243
   translation:
     text: Until he lost his teeth
     title: 論語 (en)
@@ -3134,7 +3134,7 @@ annotations:
   seg_id: KR1h0004_tls_014-14a.1
   pos: 2
   bucket: body
-  offset: 247
+  offset: 245
   translation:
     text: he did not come up with one resentful statement of opinion."
     title: 論語 (en)
@@ -3158,7 +3158,7 @@ annotations:
   seg_id: KR1h0004_tls_014-14a.1
   pos: 3
   bucket: body
-  offset: 248
+  offset: 246
   translation:
     text: he did not come up with one resentful statement of opinion."
     title: 論語 (en)
@@ -3183,7 +3183,7 @@ annotations:
   seg_id: KR1h0004_tls_014-14a.3
   pos: 2
   bucket: body
-  offset: 252
+  offset: 250
   translation:
     text: '"To be poor and without resentment'
     title: 論語 (en)
@@ -3208,7 +3208,7 @@ annotations:
   seg_id: KR1h0004_tls_014-14a.3
   pos: 3
   bucket: body
-  offset: 253
+  offset: 251
   translation:
     text: '"To be poor and without resentment'
     title: 論語 (en)
@@ -3233,7 +3233,7 @@ annotations:
   seg_id: KR1h0004_tls_014-14a.3
   pos: 5
   bucket: body
-  offset: 255
+  offset: 253
   translation:
     text: '"To be poor and without resentment'
     title: 論語 (en)
@@ -3258,7 +3258,7 @@ annotations:
   seg_id: KR1h0004_tls_014-14a.4
   pos: 1
   bucket: body
-  offset: 255
+  offset: 253
   translation:
     text: that is difficult;
     title: 論語 (en)
@@ -3283,7 +3283,7 @@ annotations:
   seg_id: KR1h0004_tls_014-14a.5
   pos: 1
   bucket: body
-  offset: 256
+  offset: 254
   translation:
     text: to be rich without arrogance
     title: 論語 (en)
@@ -3308,7 +3308,7 @@ annotations:
   seg_id: KR1h0004_tls_014-14a.5
   pos: 2
   bucket: body
-  offset: 257
+  offset: 255
   translation:
     text: to be rich without arrogance
     title: 論語 (en)
@@ -3333,7 +3333,7 @@ annotations:
   seg_id: KR1h0004_tls_014-14a.5
   pos: 4
   bucket: body
-  offset: 259
+  offset: 257
   translation:
     text: to be rich without arrogance
     title: 論語 (en)
@@ -3358,7 +3358,7 @@ annotations:
   seg_id: KR1h0004_tls_014-15a.1
   pos: 1
   bucket: body
-  offset: 260
+  offset: 258
   translation:
     text: is much easier.
     title: 論語 (en)
@@ -3383,7 +3383,7 @@ annotations:
   seg_id: KR1h0004_tls_014-15a.4
   pos: 1
   bucket: body
-  offset: 266
+  offset: 264
   translation:
     text: when it comes to being an elder in Zhào or Wèi, was more than good enough,
     title: 論語 (en)
@@ -3407,7 +3407,7 @@ annotations:
   seg_id: KR1h0004_tls_014-15a.4
   pos: 5
   bucket: body
-  offset: 270
+  offset: 268
   translation:
     text: when it comes to being an elder in Zhào or Wèi, was more than good enough,
     title: 論語 (en)
@@ -3431,7 +3431,7 @@ annotations:
   seg_id: KR1h0004_tls_014-15a.4
   pos: 7
   bucket: body
-  offset: 272
+  offset: 270
   translation:
     text: when it comes to being an elder in Zhào or Wèi, was more than good enough,
     title: 論語 (en)
@@ -3455,7 +3455,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.1
   pos: 4
   bucket: body
-  offset: 275
+  offset: 273
   translation:
     text: but he could not possibly become a dignitary in Téng or in Xuē."
     title: 論語 (en)
@@ -3479,7 +3479,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.1
   pos: 8
   bucket: body
-  offset: 279
+  offset: 277
   translation:
     text: but he could not possibly become a dignitary in Téng or in Xuē."
     title: 論語 (en)
@@ -3503,7 +3503,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.1
   pos: 9
   bucket: body
-  offset: 280
+  offset: 278
   translation:
     text: but he could not possibly become a dignitary in Téng or in Xuē, coud he."
     title: 論語 (en)
@@ -3527,7 +3527,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.2
   pos: 8
   bucket: body
-  offset: 287
+  offset: 285
   translation:
     text: Zǐlù asked about the successful man.
     title: 論語 (en)
@@ -3552,7 +3552,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.2
   pos: 9
   bucket: body
-  offset: 288
+  offset: 286
   translation:
     text: Zǐlù asked about the successful man.
     title: 論語 (en)
@@ -3576,7 +3576,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.2
   pos: 9
   bucket: body
-  offset: 288
+  offset: 286
   translation:
     text: Zǐlù asked about the successful man.
     title: 論語 (en)
@@ -3600,7 +3600,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.4
   pos: 2
   bucket: body
-  offset: 288
+  offset: 286
   translation:
     text: '"As for a person no wiser than (as wise as) Wǔ Zhòng,'
     title: 論語 (en)
@@ -3624,7 +3624,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.5
   pos: 4
   bucket: body
-  offset: 296
+  offset: 294
   translation:
     text: no freer from lusts as Gōngchuò,
     title: 論語 (en)
@@ -3648,7 +3648,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.7
   pos: 4
   bucket: body
-  offset: 306
+  offset: 304
   translation:
     text: no more talented in the arts than Rǎn Qiú,
     title: 論語 (en)
@@ -3672,7 +3672,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.8
   pos: 1
   bucket: body
-  offset: 307
+  offset: 305
   translation:
     text: if one adds the polite arts of ritual and of music,
     title: 論語 (en)
@@ -3696,7 +3696,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.8
   pos: 4
   bucket: body
-  offset: 310
+  offset: 308
   translation:
     text: if one adds the polite arts of ritual and of music,
     title: 論語 (en)
@@ -3721,7 +3721,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.9
   pos: 1
   bucket: body
-  offset: 312
+  offset: 310
   translation:
     text: surely they can become fully successful men.
     title: 論語 (en)
@@ -3745,7 +3745,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.9
   pos: 3
   bucket: body
-  offset: 314
+  offset: 312
   translation:
     text: surely they can become fully successful men.
     title: 論語 (en)
@@ -3770,7 +3770,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.9
   pos: 4
   bucket: body
-  offset: 315
+  offset: 313
   translation:
     text: surely they can become fully successful men.
     title: 論語 (en)
@@ -3794,7 +3794,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.9
   pos: 5
   bucket: body
-  offset: 316
+  offset: 314
   translation:
     text: surely they can become fully successful men.
     title: 論語 (en)
@@ -3818,7 +3818,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.9
   pos: 5
   bucket: body
-  offset: 316
+  offset: 314
   translation:
     text: surely they can become fully successful men.
     title: 論語 (en)
@@ -3842,7 +3842,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.9
   pos: 7
   bucket: body
-  offset: 318
+  offset: 316
   translation:
     text: surely they can become fully successful men.
     title: 論語 (en)
@@ -3865,7 +3865,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.11
   pos: 2
   bucket: body
-  offset: 321
+  offset: 319
   translation:
     text: '"Successful men in our time,'
     title: 論語 (en)
@@ -3889,7 +3889,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.11
   pos: 4
   bucket: body
-  offset: 323
+  offset: 321
   translation:
     text: '"Successful men in our time,'
     title: 論語 (en)
@@ -3913,7 +3913,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.11
   pos: 4
   bucket: body
-  offset: 323
+  offset: 321
   translation:
     text: '"Successful men in our time,'
     title: 論語 (en)
@@ -3937,7 +3937,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.12
   pos: 1
   bucket: body
-  offset: 325
+  offset: 323
   translation:
     text: why do they have to be like that?
     title: 論語 (en)
@@ -3960,7 +3960,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.12
   pos: 1
   bucket: body
-  offset: 325
+  offset: 323
   translation:
     text: why do they have to be like that?
     title: 論語 (en)
@@ -3985,7 +3985,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.11
   pos: 6
   bucket: body
-  offset: 325
+  offset: 323
   translation:
     text: '"Successful men in our time,'
     title: 論語 (en)
@@ -4008,7 +4008,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.12
   pos: 2
   bucket: body
-  offset: 326
+  offset: 324
   translation:
     text: why do they have to be like that?
     title: 論語 (en)
@@ -4032,7 +4032,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.12
   pos: 3
   bucket: body
-  offset: 327
+  offset: 325
   translation:
     text: why do they have to be like that?
     title: 論語 (en)
@@ -4056,7 +4056,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.13
   pos: 1
   bucket: body
-  offset: 328
+  offset: 326
   translation:
     text: When they see profit they think of rectitude,
     title: 論語 (en)
@@ -4080,7 +4080,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.13
   pos: 2
   bucket: body
-  offset: 329
+  offset: 327
   translation:
     text: When they see profit they think of rectitude,
     title: 論語 (en)
@@ -4105,7 +4105,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.13
   pos: 3
   bucket: body
-  offset: 330
+  offset: 328
   translation:
     text: When they see profit they think of rectitude,
     title: 論語 (en)
@@ -4129,7 +4129,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.13
   pos: 4
   bucket: body
-  offset: 331
+  offset: 329
   translation:
     text: When they see profit they think of rectitude,
     title: 論語 (en)
@@ -4154,7 +4154,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.14
   pos: 2
   bucket: body
-  offset: 333
+  offset: 331
   translation:
     text: when they face danger they will give up their lives (in service),
     title: 論語 (en)
@@ -4179,7 +4179,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.14
   pos: 3
   bucket: body
-  offset: 334
+  offset: 332
   translation:
     text: when they face danger they will give up their lives (in service),
     title: 論語 (en)
@@ -4204,7 +4204,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.14
   pos: 4
   bucket: body
-  offset: 335
+  offset: 333
   translation:
     text: when they face danger they will give up their lives (in service),
     title: 論語 (en)
@@ -4227,7 +4227,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.15
   pos: 4
   bucket: body
-  offset: 339
+  offset: 337
   translation:
     text: even if in a tight spot for a long time they will not fail to be mindful of the words they live by.
     title: 論語 (en)
@@ -4254,7 +4254,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.15
   pos: 5
   bucket: body
-  offset: 340
+  offset: 338
   translation:
     text: even if in a tight spot for a long time they will not fail to be mindful of the words they live by.
     title: 論語 (en)
@@ -4276,7 +4276,7 @@ annotations:
   seg_id: KR1h0004_tls_014-16a.15
   pos: 8
   bucket: body
-  offset: 343
+  offset: 341
   translation:
     text: even if in a tight spot for a long time they will not fail to be mindful of the words they live by.
     title: 論語 (en)
@@ -4301,7 +4301,7 @@ annotations:
   seg_id: KR1h0004_tls_014-17a.1
   pos: 3
   bucket: body
-  offset: 346
+  offset: 344
   translation:
     text: They can surely be regarded as successful people.
     title: 論語 (en)
@@ -4326,7 +4326,7 @@ annotations:
   seg_id: KR1h0004_tls_014-17a.1
   pos: 7
   bucket: body
-  offset: 350
+  offset: 348
   translation:
     text: They can surely be regarded as successful people.
     title: 論語 (en)
@@ -4349,7 +4349,7 @@ annotations:
   seg_id: KR1h0004_tls_014-17a.2
   pos: 7
   bucket: body
-  offset: 357
+  offset: 355
   translation:
     text: The Master asked Gōngmíng Jiǎ about Gōngshū Wénzǐ
     title: 論語 (en)
@@ -4373,7 +4373,7 @@ annotations:
   seg_id: KR1h0004_tls_014-17a.4
   pos: 2
   bucket: body
-  offset: 363
+  offset: 361
   translation:
     text: '"Is it true'
     title: 論語 (en)
@@ -4397,7 +4397,7 @@ annotations:
   seg_id: KR1h0004_tls_014-17a.4
   pos: 3
   bucket: body
-  offset: 364
+  offset: 362
   translation:
     text: '"Is it true'
     title: 論語 (en)
@@ -4421,7 +4421,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.1
   pos: null
   bucket: body
-  offset: 368
+  offset: 366
   translation:
     text: that your Master did not make pronouncements, did not sneer, and did not make choices?"
     title: 論語 (en)
@@ -4445,7 +4445,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.1
   pos: null
   bucket: body
-  offset: 368
+  offset: 366
   translation:
     text: that your Master did not make pronouncements, did not sneer, and did not make choices?"
     title: 論語 (en)
@@ -4469,7 +4469,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.1
   pos: 2
   bucket: body
-  offset: 369
+  offset: 367
   translation:
     text: that your Master did not make pronouncements, did not sneer, and did not make choices?"
     title: 論語 (en)
@@ -4492,7 +4492,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.1
   pos: 5
   bucket: body
-  offset: 372
+  offset: 370
   translation:
     text: that your Master did not make pronouncements, did not sneer, and did not make choices?"
     title: 論語 (en)
@@ -4516,7 +4516,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.1
   pos: 6
   bucket: body
-  offset: 373
+  offset: 371
   translation:
     text: that your Master did not make pronouncements, did not sneer, and did not make choices?"
     title: 論語 (en)
@@ -4542,7 +4542,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.2
   pos: 4
   bucket: body
-  offset: 376
+  offset: 374
   translation:
     text: 'Gōngmíng Jiǎ replied politely:'
     title: 論語 (en)
@@ -4566,7 +4566,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.3
   pos: 2
   bucket: body
-  offset: 379
+  offset: 377
   translation:
     text: '"He who reported that was making a mistake.'
     title: 論語 (en)
@@ -4590,7 +4590,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.3
   pos: 3
   bucket: body
-  offset: 380
+  offset: 378
   translation:
     text: '"He who reported that was making a mistake.'
     title: 論語 (en)
@@ -4612,7 +4612,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.3
   pos: 4
   bucket: body
-  offset: 381
+  offset: 379
   translation:
     text: '"He who reported that was making a mistake.'
     title: 論語 (en)
@@ -4635,7 +4635,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.3
   pos: 5
   bucket: body
-  offset: 382
+  offset: 380
   translation:
     text: '"He who reported that was making a mistake.'
     title: 論語 (en)
@@ -4660,7 +4660,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.4
   pos: 1
   bucket: body
-  offset: 383
+  offset: 381
   translation:
     text: The Master expressed an opinion only at the right time,
     title: 論語 (en)
@@ -4684,7 +4684,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.3
   pos: 6
   bucket: body
-  offset: 383
+  offset: 381
   translation:
     text: '"He who reported that was making a mistake.'
     title: 論語 (en)
@@ -4708,7 +4708,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.4
   pos: 4
   bucket: body
-  offset: 386
+  offset: 384
   translation:
     text: The Master expressed an opinion only at the right time,
     title: 論語 (en)
@@ -4733,7 +4733,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.4
   pos: 6
   bucket: body
-  offset: 388
+  offset: 386
   translation:
     text: The Master expressed an opinion only at the right time,
     title: 論語 (en)
@@ -4757,7 +4757,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.5
   pos: 3
   bucket: body
-  offset: 391
+  offset: 389
   translation:
     text: therefore others did not get tired of his speaking up;
     title: 論語 (en)
@@ -4782,7 +4782,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.5
   pos: 5
   bucket: body
-  offset: 393
+  offset: 391
   translation:
     text: therefore others did not get tired of his speaking up;
     title: 論語 (en)
@@ -4807,7 +4807,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.6
   pos: 1
   bucket: body
-  offset: 394
+  offset: 392
   translation:
     text: he laughted only when he was full of joy,
     title: 論語 (en)
@@ -4832,7 +4832,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.6
   pos: 4
   bucket: body
-  offset: 397
+  offset: 395
   translation:
     text: he laughted only when he was full of joy,
     title: 論語 (en)
@@ -4855,7 +4855,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.6
   pos: 4
   bucket: body
-  offset: 397
+  offset: 395
   translation:
     text: he laughted only when he was full of joy,
     title: 論語 (en)
@@ -4880,7 +4880,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.7
   pos: 1
   bucket: body
-  offset: 398
+  offset: 396
   translation:
     text: and others did not get tired of his laughing;
     title: 論語 (en)
@@ -4905,7 +4905,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.7
   pos: 3
   bucket: body
-  offset: 400
+  offset: 398
   translation:
     text: and others did not get tired of his laughing;
     title: 論語 (en)
@@ -4930,7 +4930,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.7
   pos: 5
   bucket: body
-  offset: 402
+  offset: 400
   translation:
     text: and others did not get tired of his laughing;
     title: 論語 (en)
@@ -4953,7 +4953,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.7
   pos: 5
   bucket: body
-  offset: 402
+  offset: 400
   translation:
     text: and others did not get tired of his laughing;
     title: 論語 (en)
@@ -4978,7 +4978,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.8
   pos: 2
   bucket: body
-  offset: 404
+  offset: 402
   translation:
     text: he made choices only when this was right,
     title: 論語 (en)
@@ -5003,7 +5003,7 @@ annotations:
   seg_id: KR1h0004_tls_014-18a.8
   pos: 4
   bucket: body
-  offset: 406
+  offset: 404
   translation:
     text: he made choices only when this was right,
     title: 論語 (en)
@@ -5027,7 +5027,7 @@ annotations:
   seg_id: KR1h0004_tls_014-19a.1
   pos: 3
   bucket: body
-  offset: 409
+  offset: 407
   translation:
     text: and others did not get tired of his choosing."
     title: 論語 (en)
@@ -5052,7 +5052,7 @@ annotations:
   seg_id: KR1h0004_tls_014-19a.1
   pos: 5
   bucket: body
-  offset: 411
+  offset: 409
   translation:
     text: and others did not get tired of his choosing."
     title: 論語 (en)
@@ -5077,7 +5077,7 @@ annotations:
   seg_id: KR1h0004_tls_014-19a.3
   pos: 3
   bucket: body
-  offset: 416
+  offset: 414
   translation:
     text: '"Well, I suppose that is right."'
     title: 論語 (en)
@@ -5102,7 +5102,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.1
   pos: 1
   bucket: body
-  offset: 416
+  offset: 414
   translation:
     text: But how could it be right?"
     title: 論語 (en)
@@ -5124,7 +5124,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.1
   pos: 4
   bucket: body
-  offset: 419
+  offset: 417
   translation:
     text: But how could it be right?"
     title: 論語 (en)
@@ -5148,7 +5148,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.3
   pos: 7
   bucket: body
-  offset: 428
+  offset: 426
   translation:
     text: Zàng Wǔzhòng used Fáng to seek to provide for Wéi his successor in Lǔ.
     title: 論語 (en)
@@ -5170,7 +5170,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.3
   pos: 8
   bucket: body
-  offset: 429
+  offset: 427
   translation:
     text: Zàng Wǔzhòng used Fáng to seek to provide for Wéi his successor in Lǔ.
     title: 論語 (en)
@@ -5194,7 +5194,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.3
   pos: 9
   bucket: body
-  offset: 430
+  offset: 428
   translation:
     text: Zàng Wǔzhòng used Fáng to seek to provide for Wéi his successor in Lǔ.
     title: 論語 (en)
@@ -5218,7 +5218,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.3
   pos: 9
   bucket: body
-  offset: 430
+  offset: 428
   translation:
     text: Zàng Wǔzhòng used Fáng to seek to provide for Wéi his successor in Lǔ.
     title: 論語 (en)
@@ -5242,7 +5242,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.4
   pos: 1
   bucket: body
-  offset: 432
+  offset: 430
   translation:
     text: 'Even if one were to say: he did not coerce the ruler,'
     title: 論語 (en)
@@ -5266,7 +5266,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.4
   pos: 2
   bucket: body
-  offset: 433
+  offset: 431
   translation:
     text: 'Even if one were to say: he did not coerce the ruler,'
     title: 論語 (en)
@@ -5290,7 +5290,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.4
   pos: 4
   bucket: body
-  offset: 435
+  offset: 433
   translation:
     text: 'Even if one were to say: he did not coerce the ruler,'
     title: 論語 (en)
@@ -5314,7 +5314,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.4
   pos: 5
   bucket: body
-  offset: 436
+  offset: 434
   translation:
     text: 'Even if one were to say: he did not coerce the ruler,'
     title: 論語 (en)
@@ -5339,7 +5339,7 @@ annotations:
   seg_id: KR1h0004_tls_014-20a.4
   pos: 5
   bucket: body
-  offset: 436
+  offset: 434
   translation:
     text: 'Even if one were to say: he did not coerce the ruler,'
     title: 論語 (en)
@@ -5361,7 +5361,7 @@ annotations:
   seg_id: KR1h0004_tls_014-21a.3
   pos: 5
   bucket: body
-  offset: 447
+  offset: 445
   translation:
     text: '"Duke Wén of Jìn was deceitful and not straight.'
     title: 論語 (en)
@@ -5386,7 +5386,7 @@ annotations:
   seg_id: KR1h0004_tls_014-21a.3
   pos: 6
   bucket: body
-  offset: 448
+  offset: 446
   translation:
     text: '"Duke Wén of Jìn was deceitful and not straight.'
     title: 論語 (en)
@@ -5411,7 +5411,7 @@ annotations:
   seg_id: KR1h0004_tls_014-21a.3
   pos: 6
   bucket: body
-  offset: 448
+  offset: 446
   translation:
     text: '"Duke Wén of Jìn was deceitful and not straight.'
     title: 論語 (en)
@@ -5436,7 +5436,7 @@ annotations:
   seg_id: KR1h0004_tls_014-21a.3
   pos: 8
   bucket: body
-  offset: 450
+  offset: 448
   translation:
     text: '"Duke Wén of Jìn was deceitful and not straight.'
     title: 論語 (en)
@@ -5458,7 +5458,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.1
   pos: 4
   bucket: body
-  offset: 453
+  offset: 451
   translation:
     text: Duke Huán of Qí was straight and not deceitful.
     title: 論語 (en)
@@ -5480,7 +5480,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.1
   pos: 5
   bucket: body
-  offset: 454
+  offset: 452
   translation:
     text: Duke Huán of Qí was straight and not deceitful.
     title: 論語 (en)
@@ -5505,7 +5505,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.1
   pos: 5
   bucket: body
-  offset: 454
+  offset: 452
   translation:
     text: Duke Huán of Qí was straight and not deceitful.
     title: 論語 (en)
@@ -5530,7 +5530,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.1
   pos: 7
   bucket: body
-  offset: 456
+  offset: 454
   translation:
     text: Duke Huán of Qí was straight and not deceitful.
     title: 論語 (en)
@@ -5555,7 +5555,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.4
   pos: 3
   bucket: body
-  offset: 468
+  offset: 466
   translation:
     text: Shào Hū died for his ruler [the Prince],
     title: 論語 (en)
@@ -5579,7 +5579,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.5
   pos: 4
   bucket: body
-  offset: 473
+  offset: 471
   translation:
     text: whereas Guǎn Zhòng did not die for him."
     title: 論語 (en)
@@ -5603,7 +5603,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.6
   pos: 1
   bucket: body
-  offset: 474
+  offset: 472
   translation:
     text: 'He added:'
     title: 論語 (en)
@@ -5628,7 +5628,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.7
   pos: 2
   bucket: body
-  offset: 476
+  offset: 474
   translation:
     text: '"That does not quite amount to Goodness."'
     title: 論語 (en)
@@ -5653,7 +5653,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.7
   pos: 2
   bucket: body
-  offset: 476
+  offset: 474
   translation:
     text: '"That does not quite amount to perfect morality does it?"'
     title: 論語 (en)
@@ -5676,7 +5676,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.7
   pos: 3
   bucket: body
-  offset: 477
+  offset: 475
   translation:
     text: '"That does not quite amount to Goodness."'
     title: 論語 (en)
@@ -5700,7 +5700,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.9
   pos: 5
   bucket: body
-  offset: 484
+  offset: 482
   translation:
     text: '"Duke Huán gathered together the feudal lords nine times'
     title: 論語 (en)
@@ -5724,7 +5724,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.10
   pos: 3
   bucket: body
-  offset: 488
+  offset: 486
   translation:
     text: and he did not use armed vehicles [in the process].
     title: 論語 (en)
@@ -5748,7 +5748,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.10
   pos: 3
   bucket: body
-  offset: 488
+  offset: 486
   translation:
     text: and he did not use armed vehicles [in the process].
     title: 論語 (en)
@@ -5770,7 +5770,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.10
   pos: 4
   bucket: body
-  offset: 489
+  offset: 487
   translation:
     text: and he did not use armed vehicles [in the process].
     title: 論語 (en)
@@ -5795,7 +5795,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.11
   pos: 5
   bucket: body
-  offset: 494
+  offset: 492
   translation:
     text: That was due to Guǎn Zhòng's effort and influence.
     title: 論語 (en)
@@ -5819,7 +5819,7 @@ annotations:
   seg_id: KR1h0004_tls_014-22a.12
   pos: 1
   bucket: body
-  offset: 495
+  offset: 493
   translation:
     text: What Goodness!
     title: 論語 (en)
@@ -5844,7 +5844,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.3
   pos: 4
   bucket: body
-  offset: 507
+  offset: 505
   translation:
     text: '"Guǎn Zhòng was not be a Good person, was he?'
     title: 論語 (en)
@@ -5869,7 +5869,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.2
   pos: 8
   bucket: body
-  offset: 508
+  offset: 506
   translation:
     text: 'Zǐgòng asked:'
     title: 論語 (en)
@@ -5893,7 +5893,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.3
   pos: 5
   bucket: body
-  offset: 508
+  offset: 506
   translation:
     text: '"Guǎn Zhòng was not be a Good person, was he?'
     title: 論語 (en)
@@ -5917,7 +5917,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.3
   pos: 5
   bucket: body
-  offset: 508
+  offset: 506
   translation:
     text: '"Guǎn Zhòng was not be a Good person, was he?'
     title: 論語 (en)
@@ -5939,7 +5939,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.3
   pos: 6
   bucket: body
-  offset: 509
+  offset: 507
   translation:
     text: '"Guǎn Zhòng was not be a Good person, was he?'
     title: 論語 (en)
@@ -5962,7 +5962,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.3
   pos: 7
   bucket: body
-  offset: 510
+  offset: 508
   translation:
     text: '"Guǎn Zhòng was not be a Good person, was he?'
     title: 論語 (en)
@@ -5988,7 +5988,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.4
   pos: 2
   bucket: body
-  offset: 511
+  offset: 509
   translation:
     text: When Duke Huan had his elder brother Prince Qiu killed, not only did Guanzhong not die with him, he became the prime minister for Duke Huan!”The Master replied, “When Guanzhong served as prime minister for Duke Huan, he enabled the duke to become
     title: The Analects of Confucius.A Philosophical Translation
@@ -6017,7 +6017,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.5
   pos: 2
   bucket: body
-  offset: 517
+  offset: 515
   translation:
     text: he was unable to die for his ruler,
     title: 論語 (en)
@@ -6041,7 +6041,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.5
   pos: 3
   bucket: body
-  offset: 518
+  offset: 516
   translation:
     text: he was unable to die for his ruler,
     title: 論語 (en)
@@ -6065,7 +6065,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.5
   pos: 3
   bucket: body
-  offset: 518
+  offset: 516
   translation:
     src: TLS Project
   form:
@@ -6088,7 +6088,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.6
   pos: 1
   bucket: body
-  offset: 519
+  offset: 517
   translation:
     text: and moreover he went on to act as prime minister for Duke Huán."
     title: 論語 (en)
@@ -6112,7 +6112,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.6
   pos: 2
   bucket: body
-  offset: 520
+  offset: 518
   translation:
     text: and moreover he went on to act as prime minister for Duke Huán."
     title: 論語 (en)
@@ -6137,7 +6137,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.8
   pos: 3
   bucket: body
-  offset: 526
+  offset: 524
   translation:
     text: “When Guanzhong served as prime minister for Duke Huan,
     title: The Analects of Confucius.A Philosophical Translation
@@ -6160,7 +6160,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.8
   pos: 4
   bucket: body
-  offset: 527
+  offset: 525
   translation:
     text: '"Guǎn Zhòng served as prime minister to Duke Huán,'
     title: 論語 (en)
@@ -6185,7 +6185,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.9
   pos: 1
   bucket: body
-  offset: 529
+  offset: 527
   translation:
     text: dominated the feudal lords like a hegemon,
     title: 論語 (en)
@@ -6213,7 +6213,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.9
   pos: 1
   bucket: body
-  offset: 529
+  offset: 527
   translation:
     text: dominated the feudal lords like a hegemon,
     title: 論語 (en)
@@ -6241,7 +6241,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.9
   pos: 2
   bucket: body
-  offset: 530
+  offset: 528
   translation:
     text: dominated the feudal lords like a hegemon,
     title: 論語 (en)
@@ -6266,7 +6266,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.10
   pos: 1
   bucket: body
-  offset: 532
+  offset: 530
   translation:
     text: united all under Heaven
     title: 論語 (en)
@@ -6290,7 +6290,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.10
   pos: 2
   bucket: body
-  offset: 533
+  offset: 531
   translation:
     text: united all under Heaven
     title: 論語 (en)
@@ -6314,7 +6314,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.10
   pos: 2
   bucket: body
-  offset: 533
+  offset: 531
   translation:
     text: united all under Heaven
     title: 論語 (en)
@@ -6338,7 +6338,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.11
   pos: 2
   bucket: body
-  offset: 537
+  offset: 535
   translation:
     text: and the people down to present times enjoy the benefits thereof.
     title: 論語 (en)
@@ -6363,7 +6363,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.11
   pos: 4
   bucket: body
-  offset: 539
+  offset: 537
   translation:
     text: and the people down to present times enjoy the benefits thereof.
     title: 論語 (en)
@@ -6387,7 +6387,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.11
   pos: 5
   bucket: body
-  offset: 540
+  offset: 538
   translation:
     text: and the people down to present times enjoy the benefits thereof.
     title: 論語 (en)
@@ -6411,7 +6411,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.11
   pos: 7
   bucket: body
-  offset: 542
+  offset: 540
   translation:
     text: and the people down to present times enjoy the benefits thereof.
     title: 論語 (en)
@@ -6436,7 +6436,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.12
   pos: 1
   bucket: body
-  offset: 543
+  offset: 541
   translation:
     text: But for Guǎn Zhòng
     title: 論語 (en)
@@ -6461,7 +6461,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.13
   pos: 3
   bucket: body
-  offset: 548
+  offset: 546
   translation:
     text: we should [still] have our hair hanging loose,<1> and lapping our robes to the left.
     title: 論語 (en)
@@ -6485,7 +6485,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.13
   pos: 5
   bucket: body
-  offset: 550
+  offset: 548
   translation:
     text: we should [still] have our hair hanging loose,<1> and lapping our robes to the left.
     title: 論語 (en)
@@ -6510,7 +6510,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.13
   pos: 6
   bucket: body
-  offset: 551
+  offset: 549
   translation:
     text: we should [still] have our hair hanging loose,<1> and lapping our robes to the left.
     title: 論語 (en)
@@ -6535,7 +6535,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.13
   pos: 7
   bucket: body
-  offset: 552
+  offset: 550
   translation:
     text: we should [still] have our hair hanging loose,<1> and lapping our robes to the left.
     title: 論語 (en)
@@ -6558,7 +6558,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.14
   pos: 2
   bucket: body
-  offset: 554
+  offset: 552
   translation:
     text: How should he have been trusty like a common man or woman
     title: 論語 (en)
@@ -6582,7 +6582,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.14
   pos: 3
   bucket: body
-  offset: 555
+  offset: 553
   translation:
     text: How should he have been trusty like a common man or woman
     title: 論語 (en)
@@ -6607,7 +6607,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.14
   pos: 5
   bucket: body
-  offset: 557
+  offset: 555
   translation:
     text: How should he have been trusty like a common man or woman
     title: 論語 (en)
@@ -6632,7 +6632,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.14
   pos: 9
   bucket: body
-  offset: 561
+  offset: 559
   translation:
     text: How should he have been trusty like a common man or woman
     title: 論語 (en)
@@ -6656,7 +6656,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.14
   pos: 10
   bucket: body
-  offset: 562
+  offset: 560
   translation:
     text: How should he have been trusty like a common man or woman
     title: 論語 (en)
@@ -6679,7 +6679,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.15
   pos: 1
   bucket: body
-  offset: 563
+  offset: 561
   translation:
     text: and kill himself in the ditches
     title: 論語 (en)
@@ -6703,7 +6703,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.15
   pos: 2
   bucket: body
-  offset: 564
+  offset: 562
   translation:
     text: and kill himself in the ditches
     title: 論語 (en)
@@ -6726,7 +6726,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.15
   pos: 2
   bucket: body
-  offset: 564
+  offset: 562
   translation:
     text: and kill himself in the ditches
     title: 論語 (en)
@@ -6750,7 +6750,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.15
   pos: 4
   bucket: body
-  offset: 566
+  offset: 564
   translation:
     text: and kill himself in the ditches
     title: 論語 (en)
@@ -6775,7 +6775,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.15
   pos: 4
   bucket: body
-  offset: 566
+  offset: 564
   translation:
     text: and kill himself in the ditches
     title: 論語 (en)
@@ -6799,7 +6799,7 @@ annotations:
   seg_id: KR1h0004_tls_014-23a.15
   pos: 5
   bucket: body
-  offset: 567
+  offset: 565
   translation:
     text: and kill himself in the ditches
     title: 論語 (en)
@@ -6823,7 +6823,7 @@ annotations:
   seg_id: KR1h0004_tls_014-24a.1
   pos: 5
   bucket: body
-  offset: 572
+  offset: 570
   translation:
     text: with no one knowing about it?"
     title: 論語 (en)
@@ -6847,7 +6847,7 @@ annotations:
   seg_id: KR1h0004_tls_014-24a.3
   pos: 1
   bucket: body
-  offset: 582
+  offset: 580
   translation:
     text: rose to high office with the duke together with Wénzǐ.
     title: 論語 (en)
@@ -6870,7 +6870,7 @@ annotations:
   seg_id: KR1h0004_tls_014-24a.3
   pos: 4
   bucket: body
-  offset: 585
+  offset: 583
   translation:
     text: rose to high office with the duke together with Wénzǐ.
     title: 論語 (en)
@@ -6892,7 +6892,7 @@ annotations:
   seg_id: KR1h0004_tls_014-24a.3
   pos: 5
   bucket: body
-  offset: 586
+  offset: 584
   translation:
     text: rose to high office with the duke together with Wénzǐ.
     title: 論語 (en)
@@ -6917,7 +6917,7 @@ annotations:
   seg_id: KR1h0004_tls_014-24a.4
   pos: 2
   bucket: body
-  offset: 590
+  offset: 588
   translation:
     text: 'When the Master heard about this he said:'
     title: 論語 (en)
@@ -6942,7 +6942,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.1
   pos: 2
   bucket: body
-  offset: 594
+  offset: 592
   translation:
     text: '"He should indeed be regarded as wén 文 of high culture."'
     title: 論語 (en)
@@ -6966,7 +6966,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.1
   pos: 3
   bucket: body
-  offset: 595
+  offset: 593
   translation:
     text: '"He should indeed be regarded as wén 文 of high culture."'
     title: 論語 (en)
@@ -6991,7 +6991,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.1
   pos: 6
   bucket: body
-  offset: 598
+  offset: 596
   translation:
     text: '"He should indeed be regarded as wén 文 of high culture."'
     title: 論語 (en)
@@ -7015,7 +7015,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.1
   pos: 8
   bucket: body
-  offset: 600
+  offset: 598
   translation:
     text: '"He should indeed be regarded as wén 文 of high culture."'
     title: 論語 (en)
@@ -7041,7 +7041,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.2
   pos: 7
   bucket: body
-  offset: 604
+  offset: 602
   translation:
     text: The Master expounded on Duke Líng of Wèy being wayward.
     title: 論語 (en)
@@ -7065,7 +7065,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.2
   pos: 12
   bucket: body
-  offset: 609
+  offset: 607
   translation:
     text: The Master expounded on Duke Líng of Wèy being wayward.
     title: 論語 (en)
@@ -7090,7 +7090,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.4
   pos: 3
   bucket: body
-  offset: 612
+  offset: 610
   translation:
     text: '"Supposing that it is like this'
     title: 論語 (en)
@@ -7115,7 +7115,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.5
   pos: 1
   bucket: body
-  offset: 613
+  offset: 611
   translation:
     text: why did he not lose control [of his state]?"
     title: 論語 (en)
@@ -7140,7 +7140,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.5
   pos: 1
   bucket: body
-  offset: 613
+  offset: 611
   translation:
     text: why did he not lose control [of his state]?"
     title: 論語 (en)
@@ -7165,7 +7165,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.5
   pos: 4
   bucket: body
-  offset: 616
+  offset: 614
   translation:
     text: why did he not lose control [of his state]?"
     title: 論語 (en)
@@ -7189,7 +7189,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.7
   pos: 5
   bucket: body
-  offset: 624
+  offset: 622
   translation:
     text: '"Zhòngshū Yǔ was in charge of various visitors,'
     title: 論語 (en)
@@ -7213,7 +7213,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.7
   pos: 6
   bucket: body
-  offset: 625
+  offset: 623
   translation:
     text: '"Zhòngshū Yǔ was in charge of various visitors,'
     title: 論語 (en)
@@ -7238,7 +7238,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.8
   pos: 1
   bucket: body
-  offset: 626
+  offset: 624
   translation:
     text: while Zhù Tuó was in charge of the ancestral temples<1>
     title: 論語 (en)
@@ -7261,7 +7261,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.8
   pos: 3
   bucket: body
-  offset: 628
+  offset: 626
   translation:
     text: while Zhù Tuó was in charge of the ancestral temples<1>
     title: 論語 (en)
@@ -7285,7 +7285,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.8
   pos: 4
   bucket: body
-  offset: 629
+  offset: 627
   translation:
     text: while Zhù Tuó was in charge of the ancestral temples<1>
     title: 論語 (en)
@@ -7309,7 +7309,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.9
   pos: 4
   bucket: body
-  offset: 634
+  offset: 632
   translation:
     text: and Wángsūn Jiǎ was in charge of military affairs.
     title: 論語 (en)
@@ -7333,7 +7333,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.9
   pos: 5
   bucket: body
-  offset: 635
+  offset: 633
   translation:
     text: and Wángsūn Jiǎ was in charge of military affairs.
     title: 論語 (en)
@@ -7358,7 +7358,7 @@ annotations:
   seg_id: KR1h0004_tls_014-25a.10
   pos: 1
   bucket: body
-  offset: 637
+  offset: 635
   translation:
     text: Things being like this,
     title: 論語 (en)
@@ -7382,7 +7382,7 @@ annotations:
   seg_id: KR1h0004_tls_014-26a.3
   pos: 2
   bucket: body
-  offset: 646
+  offset: 644
   translation:
     text: '"If in making public commitments one is not shy'
     title: 論語 (en)
@@ -7407,7 +7407,7 @@ annotations:
   seg_id: KR1h0004_tls_014-26a.3
   pos: 3
   bucket: body
-  offset: 647
+  offset: 645
   translation:
     text: '"If in making public commitments one is not shy'
     title: 論語 (en)
@@ -7431,7 +7431,7 @@ annotations:
   seg_id: KR1h0004_tls_014-26a.3
   pos: 4
   bucket: body
-  offset: 648
+  offset: 646
   translation:
     text: '"If in making public commitments one is not shy'
     title: 論語 (en)
@@ -7456,7 +7456,7 @@ annotations:
   seg_id: KR1h0004_tls_014-26a.3
   pos: 6
   bucket: body
-  offset: 650
+  offset: 648
   translation:
     text: '"If in making public commitments one is not shy'
     title: 論語 (en)
@@ -7481,7 +7481,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.1
   pos: 2
   bucket: body
-  offset: 651
+  offset: 649
   translation:
     text: then when it comes to acting on these, one will have a hard time."
     title: 論語 (en)
@@ -7505,7 +7505,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.1
   pos: 3
   bucket: body
-  offset: 652
+  offset: 650
   translation:
     text: then when it comes to acting on these, one will have a hard time."
     title: 論語 (en)
@@ -7530,7 +7530,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.1
   pos: 4
   bucket: body
-  offset: 653
+  offset: 651
   translation:
     text: then when it comes to acting on these, one will have a hard time."
     title: 論語 (en)
@@ -7556,7 +7556,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.1
   pos: 5
   bucket: body
-  offset: 654
+  offset: 652
   translation:
     src: TLS Project
   form:
@@ -7580,7 +7580,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.2
   pos: 9
   bucket: body
-  offset: 663
+  offset: 661
   translation:
     text: Chéngzǐ of Chén assassinated Duke Jiǎn.
     title: 論語 (en)
@@ -7604,7 +7604,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.3
   pos: 3
   bucket: body
-  offset: 663
+  offset: 661
   translation:
     text: Confucius took a ritual bath and went to court.
     title: 論語 (en)
@@ -7628,7 +7628,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.3
   pos: 5
   bucket: body
-  offset: 665
+  offset: 663
   translation:
     text: Confucius took a ritual bath and went to court.
     title: 論語 (en)
@@ -7653,7 +7653,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.3
   pos: 6
   bucket: body
-  offset: 666
+  offset: 664
   translation:
     text: Confucius took a ritual bath and went to court.
     title: 論語 (en)
@@ -7678,7 +7678,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.4
   pos: 1
   bucket: body
-  offset: 667
+  offset: 665
   translation:
     text: 'He reported to Duke Āi:'
     title: 論語 (en)
@@ -7702,7 +7702,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.4
   pos: 1
   bucket: body
-  offset: 667
+  offset: 665
   translation:
     text: 'He reported to Duke Āi:'
     title: 論語 (en)
@@ -7725,7 +7725,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.6
   pos: 1
   bucket: body
-  offset: 677
+  offset: 675
   translation:
     text: I beg permission to launch a pu8nitive expedition against him.
     title: 論語 (en)
@@ -7749,7 +7749,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.6
   pos: 2
   bucket: body
-  offset: 678
+  offset: 676
   translation:
     text: I beg permission to launch a pu8nitive expedition against him.
     title: 論語 (en)
@@ -7772,7 +7772,7 @@ annotations:
   seg_id: KR1h0004_tls_014-27a.6
   pos: 2
   bucket: body
-  offset: 678
+  offset: 676
   translation:
     text: I beg permission to launch a pu8nitive expedition against him.
     title: 論語 (en)
@@ -7796,7 +7796,7 @@ annotations:
   seg_id: KR1h0004_tls_014-28a.3
   pos: 5
   bucket: body
-  offset: 693
+  offset: 691
   translation:
     text: '"Since I rank behind the senior officers'
     title: 論語 (en)
@@ -7821,7 +7821,7 @@ annotations:
   seg_id: KR1h0004_tls_014-28a.3
   pos: 8
   bucket: body
-  offset: 696
+  offset: 694
   translation:
     text: '"Since I rank behind the senior officers'
     title: 論語 (en)
@@ -7843,7 +7843,7 @@ annotations:
   seg_id: KR1h0004_tls_014-28a.5
   pos: 1
   bucket: body
-  offset: 701
+  offset: 699
   translation:
     text: 'Now you, my ruler say:'
     title: 論語 (en)
@@ -7866,7 +7866,7 @@ annotations:
   seg_id: KR1h0004_tls_014-29a.2
   pos: 1
   bucket: body
-  offset: 708
+  offset: 706
   translation:
     text: He went to the Three Masters
     title: 論語 (en)
@@ -7890,7 +7890,7 @@ annotations:
   seg_id: KR1h0004_tls_014-29a.1
   pos: 6
   bucket: body
-  offset: 708
+  offset: 706
   translation:
     text: '''Report to the Three Masters.''"'
     title: 論語 (en)
@@ -7913,7 +7913,7 @@ annotations:
   seg_id: KR1h0004_tls_014-29a.2
   pos: 3
   bucket: body
-  offset: 710
+  offset: 708
   translation:
     text: He went to the Three Masters
     title: 論語 (en)
@@ -7937,7 +7937,7 @@ annotations:
   seg_id: KR1h0004_tls_014-29a.2
   pos: 4
   bucket: body
-  offset: 711
+  offset: 709
   translation:
     text: He went to the Three Masters
     title: 論語 (en)
@@ -7961,7 +7961,7 @@ annotations:
   seg_id: KR1h0004_tls_014-29a.3
   pos: 2
   bucket: body
-  offset: 713
+  offset: 711
   translation:
     text: but they did not accede to the request.
     title: 論語 (en)
@@ -7986,7 +7986,7 @@ annotations:
   seg_id: KR1h0004_tls_014-29a.5
   pos: 5
   bucket: body
-  offset: 721
+  offset: 719
   translation:
     text: '"Since I rank behind the great dignitaries'
     title: 論語 (en)
@@ -8011,7 +8011,7 @@ annotations:
   seg_id: KR1h0004_tls_014-30a.1
   pos: 5
   bucket: body
-  offset: 728
+  offset: 726
   translation:
     text: I did not dare not to make this report."
     title: 論語 (en)
@@ -8035,7 +8035,7 @@ annotations:
   seg_id: KR1h0004_tls_014-30a.2
   pos: 8
   bucket: body
-  offset: 736
+  offset: 734
   translation:
     text: Zǐlù asked about serving a ruler.
     title: 論語 (en)
@@ -8060,7 +8060,7 @@ annotations:
   seg_id: KR1h0004_tls_014-30a.2
   pos: 9
   bucket: body
-  offset: 737
+  offset: 735
   translation:
     text: Zǐlù asked about serving a ruler.
     title: 論語 (en)
@@ -8084,7 +8084,7 @@ annotations:
   seg_id: KR1h0004_tls_014-30a.4
   pos: 2
   bucket: body
-  offset: 737
+  offset: 735
   translation:
     text: '"Avoid cheating him,'
     title: 論語 (en)
@@ -8107,7 +8107,7 @@ annotations:
   seg_id: KR1h0004_tls_014-30a.2
   pos: 10
   bucket: body
-  offset: 738
+  offset: 736
   translation:
     text: Zǐlù asked about serving a ruler.
     title: 論語 (en)
@@ -8132,7 +8132,7 @@ annotations:
   seg_id: KR1h0004_tls_014-30a.2
   pos: 10
   bucket: body
-  offset: 738
+  offset: 736
   translation:
     text: Zǐlù asked about serving a ruler.
     title: 論語 (en)
@@ -8154,7 +8154,7 @@ annotations:
   seg_id: KR1h0004_tls_014-30a.4
   pos: 3
   bucket: body
-  offset: 738
+  offset: 736
   translation:
     text: '"Avoid cheating him,'
     title: 論語 (en)
@@ -8181,7 +8181,7 @@ annotations:
   seg_id: KR1h0004_tls_014-30a.4
   pos: 4
   bucket: body
-  offset: 739
+  offset: 737
   translation:
     text: '"Avoid cheating him,'
     title: 論語 (en)
@@ -8206,7 +8206,7 @@ annotations:
   seg_id: KR1h0004_tls_014-31a.1
   pos: 1
   bucket: body
-  offset: 739
+  offset: 737
   translation:
     text: but go against him.
     title: 論語 (en)
@@ -8231,7 +8231,7 @@ annotations:
   seg_id: KR1h0004_tls_014-31a.1
   pos: 2
   bucket: body
-  offset: 740
+  offset: 738
   translation:
     text: but go against him.
     title: 論語 (en)
@@ -8256,7 +8256,7 @@ annotations:
   seg_id: KR1h0004_tls_014-31a.3
   pos: 2
   bucket: body
-  offset: 745
+  offset: 743
   translation:
     text: '"The superior man succeeds on a high level,'
     title: 論語 (en)
@@ -8281,7 +8281,7 @@ annotations:
   seg_id: KR1h0004_tls_014-31a.3
   pos: 4
   bucket: body
-  offset: 747
+  offset: 745
   translation:
     text: '"The superior man succeeds on a high level,'
     title: 論語 (en)
@@ -8306,7 +8306,7 @@ annotations:
   seg_id: KR1h0004_tls_014-31a.3
   pos: 5
   bucket: body
-  offset: 748
+  offset: 746
   translation:
     text: '"The superior man succeeds on a high level,'
     title: 論語 (en)
@@ -8331,7 +8331,7 @@ annotations:
   seg_id: KR1h0004_tls_014-32a.1
   pos: 1
   bucket: body
-  offset: 748
+  offset: 746
   translation:
     text: while the petty man succeeds on a low level.
     title: 論語 (en)
@@ -8356,7 +8356,7 @@ annotations:
   seg_id: KR1h0004_tls_014-32a.1
   pos: 3
   bucket: body
-  offset: 750
+  offset: 748
   translation:
     text: while the petty man succeeds on a low level.
     title: 論語 (en)
@@ -8381,7 +8381,7 @@ annotations:
   seg_id: KR1h0004_tls_014-32a.3
   pos: 2
   bucket: body
-  offset: 755
+  offset: 753
   translation:
     src: TLS Project
   form:
@@ -8402,7 +8402,7 @@ annotations:
   seg_id: KR1h0004_tls_014-32a.3
   pos: 4
   bucket: body
-  offset: 757
+  offset: 755
   translation:
     text: '"Those who engaged in study in ancient times did this for their own sake,'
     title: 論語 (en)
@@ -8427,7 +8427,7 @@ annotations:
   seg_id: KR1h0004_tls_014-32a.3
   pos: 5
   bucket: body
-  offset: 758
+  offset: 756
   translation:
     text: '"Those who engaged in study in ancient times did this for their own sake,'
     title: 論語 (en)
@@ -8452,7 +8452,7 @@ annotations:
   seg_id: KR1h0004_tls_014-32a.3
   pos: 6
   bucket: body
-  offset: 759
+  offset: 757
   translation:
     text: '"Those who engaged in study in ancient times did this for their own sake,'
     title: 論語 (en)
@@ -8477,7 +8477,7 @@ annotations:
   seg_id: KR1h0004_tls_014-32a.3
   pos: 7
   bucket: body
-  offset: 760
+  offset: 758
   translation:
     text: '"Those who engaged in study in ancient times did this for their own sake,'
     title: 論語 (en)
@@ -8500,7 +8500,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.1
   pos: 1
   bucket: body
-  offset: 760
+  offset: 758
   translation:
     text: those who engage in study in our times do this to impress others.
     title: 論語 (en)
@@ -8524,7 +8524,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.1
   pos: 4
   bucket: body
-  offset: 763
+  offset: 761
   translation:
     text: those who engage in study in our times do this to impress others.
     title: 論語 (en)
@@ -8549,7 +8549,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.1
   pos: 6
   bucket: body
-  offset: 765
+  offset: 763
   translation:
     text: those who engage in study in our times do this to impress others.
     title: 論語 (en)
@@ -8574,7 +8574,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.2
   pos: 5
   bucket: body
-  offset: 770
+  offset: 768
   translation:
     text: Jù Bó3yù sent someone else to Confucius.
     title: 論語 (en)
@@ -8597,7 +8597,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.2
   pos: 9
   bucket: body
-  offset: 774
+  offset: 772
   translation:
     text: Jù Bó3yù sent someone else to Confucius.
     title: 論語 (en)
@@ -8621,7 +8621,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.3
   pos: 3
   bucket: body
-  offset: 776
+  offset: 774
   translation:
     text: Confucius sat with him
     title: 論語 (en)
@@ -8644,7 +8644,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.3
   pos: 5
   bucket: body
-  offset: 778
+  offset: 776
   translation:
     text: Confucius sat with him
     title: 論語 (en)
@@ -8668,7 +8668,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.4
   pos: 2
   bucket: body
-  offset: 780
+  offset: 778
   translation:
     text: and put a question to him
     title: 論語 (en)
@@ -8692,7 +8692,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.6
   pos: 2
   bucket: body
-  offset: 784
+  offset: 782
   translation:
     text: '"What is your Master''s main concern?"'
     title: 論語 (en)
@@ -8716,7 +8716,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.6
   pos: 4
   bucket: body
-  offset: 786
+  offset: 784
   translation:
     text: '"What is your Master''s main concern?"'
     title: 論語 (en)
@@ -8740,7 +8740,7 @@ annotations:
   seg_id: KR1h0004_tls_014-33a.6
   pos: 5
   bucket: body
-  offset: 787
+  offset: 785
   translation:
     text: '"What is your Master''s main concern?"'
     title: 論語 (en)
@@ -8764,7 +8764,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.1
   pos: 2
   bucket: body
-  offset: 790
+  offset: 788
   translation:
     text: '"My master wishes he could reduce his mistakes but is not quite able to do this."'
     title: 論語 (en)
@@ -8788,7 +8788,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.1
   pos: 4
   bucket: body
-  offset: 792
+  offset: 790
   translation:
     text: '"My master wishes he could reduce his mistakes but is not quite able to do this."'
     title: 論語 (en)
@@ -8815,7 +8815,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.1
   pos: 5
   bucket: body
-  offset: 793
+  offset: 791
   translation:
     text: '"My master wishes he could reduce his mistakes but is not quite able to do this."'
     title: 論語 (en)
@@ -8840,7 +8840,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.1
   pos: 8
   bucket: body
-  offset: 796
+  offset: 794
   translation:
     text: '"My master wishes he could reduce his mistakes but is not quite able to do this."'
     title: 論語 (en)
@@ -8865,7 +8865,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.1
   pos: 9
   bucket: body
-  offset: 797
+  offset: 795
   translation:
     text: '"My master wishes he could reduce his mistakes but is not quite able to do this."'
     title: 論語 (en)
@@ -8890,7 +8890,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.1
   pos: 10
   bucket: body
-  offset: 798
+  offset: 796
   translation:
     text: '"My master wishes he could reduce his mistakes but is not quite able to do this."'
     title: 論語 (en)
@@ -8914,7 +8914,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.2
   pos: 1
   bucket: body
-  offset: 799
+  offset: 797
   translation:
     text: When the emissary left
     title: 論語 (en)
@@ -8936,7 +8936,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.1
   pos: 11
   bucket: body
-  offset: 799
+  offset: 797
   translation:
     text: '"My master wishes he could reduce his mistakes but is not quite able to do this."'
     title: 論語 (en)
@@ -8960,7 +8960,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.2
   pos: 2
   bucket: body
-  offset: 800
+  offset: 798
   translation:
     text: When the emissary left
     title: 論語 (en)
@@ -8983,7 +8983,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.2
   pos: 3
   bucket: body
-  offset: 801
+  offset: 799
   translation:
     text: When the emissary left
     title: 論語 (en)
@@ -9007,7 +9007,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.4
   pos: 3
   bucket: body
-  offset: 806
+  offset: 804
   translation:
     text: '"What an emissary!'
     title: 論語 (en)
@@ -9029,7 +9029,7 @@ annotations:
   seg_id: KR1h0004_tls_014-34a.4
   pos: 3
   bucket: body
-  offset: 806
+  offset: 804
   translation:
     text: '"What an emissary!'
     title: 論語 (en)
@@ -9052,7 +9052,7 @@ annotations:
   seg_id: KR1h0004_tls_014-35a.1
   pos: 2
   bucket: body
-  offset: 807
+  offset: 805
   translation:
     text: What an emissary!"
     title: 論語 (en)
@@ -9075,7 +9075,7 @@ annotations:
   seg_id: KR1h0004_tls_014-35a.3
   pos: 3
   bucket: body
-  offset: 812
+  offset: 810
   translation:
     text: '"If one does not hold the relevant office'
     title: 論語 (en)
@@ -9103,7 +9103,7 @@ annotations:
   seg_id: KR1h0004_tls_014-35a.3
   pos: 4
   bucket: body
-  offset: 813
+  offset: 811
   translation:
     text: '"If one does not hold the relevant office'
     title: 論語 (en)
@@ -9128,7 +9128,7 @@ annotations:
   seg_id: KR1h0004_tls_014-35a.3
   pos: 5
   bucket: body
-  offset: 814
+  offset: 812
   translation:
     text: '"If one does not hold the relevant office'
     title: 論語 (en)
@@ -9153,7 +9153,7 @@ annotations:
   seg_id: KR1h0004_tls_014-36a.1
   pos: 2
   bucket: body
-  offset: 815
+  offset: 813
   translation:
     text: one does not offer advice on its administration.
     title: 論語 (en)
@@ -9177,7 +9177,7 @@ annotations:
   seg_id: KR1h0004_tls_014-36a.1
   pos: 3
   bucket: body
-  offset: 816
+  offset: 814
   translation:
     text: one does not offer advice on its administration.
     title: 論語 (en)
@@ -9202,7 +9202,7 @@ annotations:
   seg_id: KR1h0004_tls_014-36a.1
   pos: 4
   bucket: body
-  offset: 817
+  offset: 815
   translation:
     text: one does not offer advice on its administration.
     title: 論語 (en)
@@ -9227,7 +9227,7 @@ annotations:
   seg_id: KR1h0004_tls_014-37a.1
   pos: 2
   bucket: body
-  offset: 822
+  offset: 820
   translation:
     text: '"As for the gentleman, in thinking do not go beyond his office."'
     title: 論語 (en)
@@ -9252,7 +9252,7 @@ annotations:
   seg_id: KR1h0004_tls_014-37a.1
   pos: 4
   bucket: body
-  offset: 824
+  offset: 822
   translation:
     text: '"As for the gentleman, in thinking do not go beyond his office."'
     title: 論語 (en)
@@ -9277,7 +9277,7 @@ annotations:
   seg_id: KR1h0004_tls_014-37a.1
   pos: 6
   bucket: body
-  offset: 826
+  offset: 824
   translation:
     text: '"As for the gentleman, in thinking do not go beyond his office."'
     title: 論語 (en)
@@ -9302,7 +9302,7 @@ annotations:
   seg_id: KR1h0004_tls_014-37a.1
   pos: 8
   bucket: body
-  offset: 828
+  offset: 826
   translation:
     text: '"As for the gentleman, in thinking do not go beyond his office."'
     title: 論語 (en)
@@ -9327,7 +9327,7 @@ annotations:
   seg_id: KR1h0004_tls_014-37a.3
   pos: 4
   bucket: body
-  offset: 833
+  offset: 831
   translation:
     text: '"The man of superior character is bashful in his public commitments,'
     title: 論語 (en)
@@ -9350,7 +9350,7 @@ annotations:
   seg_id: KR1h0004_tls_014-37a.3
   pos: 5
   bucket: body
-  offset: 834
+  offset: 832
   translation:
     text: '"The man of superior character is bashful in his public commitments,'
     title: 論語 (en)
@@ -9375,7 +9375,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.1
   pos: 1
   bucket: body
-  offset: 835
+  offset: 833
   translation:
     text: and he exceeds them in his actions."
     title: 論語 (en)
@@ -9400,7 +9400,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.1
   pos: 4
   bucket: body
-  offset: 838
+  offset: 836
   translation:
     text: and he exceeds them in his actions."
     title: 論語 (en)
@@ -9425,7 +9425,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.3
   pos: 2
   bucket: body
-  offset: 842
+  offset: 840
   translation:
     text: '"What the superior man talks about are three things:'
     title: 論語 (en)
@@ -9450,7 +9450,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.3
   pos: 4
   bucket: body
-  offset: 844
+  offset: 842
   translation:
     text: '"What the superior man talks about are three things:'
     title: 論語 (en)
@@ -9474,7 +9474,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.4
   pos: 2
   bucket: body
-  offset: 847
+  offset: 845
   translation:
     text: 'and I am capable of none of these:'
     title: 論語 (en)
@@ -9499,7 +9499,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.5
   pos: 1
   bucket: body
-  offset: 850
+  offset: 848
   translation:
     text: The Good will not worry,
     title: 論語 (en)
@@ -9523,7 +9523,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.5
   pos: 1
   bucket: body
-  offset: 850
+  offset: 848
   translation:
     text: The Good will not worry,
     title: 論語 (en)
@@ -9546,7 +9546,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.5
   pos: 2
   bucket: body
-  offset: 851
+  offset: 849
   translation:
     text: The Good will not worry,
     title: 論語 (en)
@@ -9571,7 +9571,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.5
   pos: 4
   bucket: body
-  offset: 853
+  offset: 851
   translation:
     text: The Good will not worry,
     title: 論語 (en)
@@ -9596,7 +9596,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.6
   pos: 1
   bucket: body
-  offset: 854
+  offset: 852
   translation:
     text: the intelligent will not be confused,
     title: 論語 (en)
@@ -9619,7 +9619,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.6
   pos: null
   bucket: body
-  offset: 854
+  offset: 852
   translation:
     text: the intelligent will not be confused,
     title: 論語 (en)
@@ -9646,7 +9646,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.6
   pos: 2
   bucket: body
-  offset: 855
+  offset: 853
   translation:
     text: the intelligent will not be confused,
     title: 論語 (en)
@@ -9671,7 +9671,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.6
   pos: 4
   bucket: body
-  offset: 857
+  offset: 855
   translation:
     text: the intelligent will not be confused,
     title: 論語 (en)
@@ -9696,7 +9696,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.7
   pos: 1
   bucket: body
-  offset: 858
+  offset: 856
   translation:
     text: the courageous man will not be afraid."
     title: 論語 (en)
@@ -9719,7 +9719,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.7
   pos: 1
   bucket: body
-  offset: 858
+  offset: 856
   translation:
     text: the courageous man will not be afraid."
     title: 論語 (en)
@@ -9744,7 +9744,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.7
   pos: 2
   bucket: body
-  offset: 859
+  offset: 857
   translation:
     text: the courageous man will not be afraid."
     title: 論語 (en)
@@ -9769,7 +9769,7 @@ annotations:
   seg_id: KR1h0004_tls_014-38a.7
   pos: 4
   bucket: body
-  offset: 861
+  offset: 859
   translation:
     text: the courageous man will not be afraid."
     title: 論語 (en)
@@ -9794,7 +9794,7 @@ annotations:
   seg_id: KR1h0004_tls_014-39a.1
   pos: 2
   bucket: body
-  offset: 866
+  offset: 864
   translation:
     text: '"But you, our Master describe yourself!"'
     title: 論語 (en)
@@ -9819,7 +9819,7 @@ annotations:
   seg_id: KR1h0004_tls_014-39a.1
   pos: 4
   bucket: body
-  offset: 868
+  offset: 866
   translation:
     text: '"But you, our Master describe yourself!"'
     title: 論語 (en)
@@ -9843,7 +9843,7 @@ annotations:
   seg_id: KR1h0004_tls_014-39a.1
   pos: 5
   bucket: body
-  offset: 869
+  offset: 867
   translation:
     text: '"But you, our Master describe yourself!"'
     title: 論語 (en)
@@ -9866,7 +9866,7 @@ annotations:
   seg_id: KR1h0004_tls_014-39a.1
   pos: 6
   bucket: body
-  offset: 870
+  offset: 868
   translation:
     text: '"But you, our Master describe yourself!"'
     title: 論語 (en)
@@ -9890,7 +9890,7 @@ annotations:
   seg_id: KR1h0004_tls_014-39a.2
   pos: 8
   bucket: body
-  offset: 877
+  offset: 875
   translation:
     text: Zǐgòng compared and categorised others.
     title: 論語 (en)
@@ -9914,7 +9914,7 @@ annotations:
   seg_id: KR1h0004_tls_014-39a.2
   pos: 9
   bucket: body
-  offset: 878
+  offset: 876
   translation:
     text: Zǐgòng compared and categorised others.
     title: 論語 (en)
@@ -9939,7 +9939,7 @@ annotations:
   seg_id: KR1h0004_tls_014-39a.4
   pos: 3
   bucket: body
-  offset: 878
+  offset: 876
   translation:
     text: '"Zǐgòng'
     title: 論語 (en)
@@ -9964,7 +9964,7 @@ annotations:
   seg_id: KR1h0004_tls_014-39a.5
   pos: 2
   bucket: body
-  offset: 879
+  offset: 877
   translation:
     text: supposed to be talented?
     title: 論語 (en)
@@ -9988,7 +9988,7 @@ annotations:
   seg_id: KR1h0004_tls_014-40a.1
   pos: 2
   bucket: body
-  offset: 882
+  offset: 880
   translation:
     text: When it comes to me I have no time for such things."
     title: 論語 (en)
@@ -10013,7 +10013,7 @@ annotations:
   seg_id: KR1h0004_tls_014-40a.1
   pos: 3
   bucket: body
-  offset: 883
+  offset: 881
   translation:
     text: When it comes to me I have no time for such things."
     title: 論語 (en)
@@ -10039,7 +10039,7 @@ annotations:
   seg_id: KR1h0004_tls_014-40a.1
   pos: 5
   bucket: body
-  offset: 885
+  offset: 883
   translation:
     text: When it comes to me I have no time for such things."
     title: 論語 (en)
@@ -10064,7 +10064,7 @@ annotations:
   seg_id: KR1h0004_tls_014-40a.3
   pos: 3
   bucket: body
-  offset: 890
+  offset: 888
   translation:
     text: '"I''m not upset by the failure of others to recognise me,'
     title: 論語 (en)
@@ -10088,7 +10088,7 @@ annotations:
   seg_id: KR1h0004_tls_014-40a.3
   pos: 4
   bucket: body
-  offset: 891
+  offset: 889
   translation:
     text: '"I''m not upset by the failure of others to recognise me,'
     title: 論語 (en)
@@ -10113,7 +10113,7 @@ annotations:
   seg_id: KR1h0004_tls_014-40a.3
   pos: 7
   bucket: body
-  offset: 894
+  offset: 892
   translation:
     text: '"I''m not upset by the failure of others to recognise me,'
     title: 論語 (en)
@@ -10135,7 +10135,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.1
   pos: 1
   bucket: body
-  offset: 895
+  offset: 893
   translation:
     text: I'm upset by (my own) lack of abilities."
     title: 論語 (en)
@@ -10159,7 +10159,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.1
   pos: 2
   bucket: body
-  offset: 896
+  offset: 894
   translation:
     text: I'm upset by (my own) lack of abilities."
     title: 論語 (en)
@@ -10184,7 +10184,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.1
   pos: 4
   bucket: body
-  offset: 898
+  offset: 896
   translation:
     text: I'm upset by (my own) lack of abilities."
     title: 論語 (en)
@@ -10208,7 +10208,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.1
   pos: 5
   bucket: body
-  offset: 899
+  offset: 897
   translation:
     text: I'm upset by (my own) lack of abilities."
     title: 論語 (en)
@@ -10232,7 +10232,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.3
   pos: 3
   bucket: body
-  offset: 904
+  offset: 902
   translation:
     text: '"I do not anticipate deception'
     title: 論語 (en)
@@ -10256,7 +10256,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.3
   pos: 4
   bucket: body
-  offset: 905
+  offset: 903
   translation:
     text: '"I do not anticipate deception'
     title: 論語 (en)
@@ -10281,7 +10281,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.4
   pos: 2
   bucket: body
-  offset: 906
+  offset: 904
   translation:
     text: I do not presume that there will be lack of good faith.
     title: 論語 (en)
@@ -10306,7 +10306,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.5
   pos: 1
   bucket: body
-  offset: 909
+  offset: 907
   translation:
     text: But surely he who anticipates things before they become virulent
     title: 論語 (en)
@@ -10331,7 +10331,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.5
   pos: 1
   bucket: body
-  offset: 909
+  offset: 907
   translation:
     text: But surely he who anticipates things before they become virulent
     title: 論語 (en)
@@ -10356,7 +10356,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.5
   pos: 3
   bucket: body
-  offset: 911
+  offset: 909
   translation:
     text: But surely he who anticipates things before they become virulent
     title: 論語 (en)
@@ -10380,7 +10380,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.5
   pos: 4
   bucket: body
-  offset: 912
+  offset: 910
   translation:
     text: But surely he who anticipates things before they become virulent
     title: 論語 (en)
@@ -10405,7 +10405,7 @@ annotations:
   seg_id: KR1h0004_tls_014-41a.5
   pos: 5
   bucket: body
-  offset: 913
+  offset: 911
   translation:
     text: But surely he who anticipates things before they become virulent
     title: 論語 (en)
@@ -10430,7 +10430,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.1
   pos: 2
   bucket: body
-  offset: 915
+  offset: 913
   translation:
     text: such a person is of worthy talent."
     title: 論語 (en)
@@ -10455,7 +10455,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.1
   pos: 3
   bucket: body
-  offset: 916
+  offset: 914
   translation:
     text: such a person is of worthy talent."
     title: 論語 (en)
@@ -10481,7 +10481,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.3
   pos: 3
   bucket: body
-  offset: 926
+  offset: 924
   translation:
     text: '"Why are you making so much of a fidgeting busibody of yourself?'
     title: 論語 (en)
@@ -10505,7 +10505,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.3
   pos: 6
   bucket: body
-  offset: 929
+  offset: 927
   translation:
     text: '"Why are you making so much of a fidgeting busibody of yourself?'
     title: 論語 (en)
@@ -10528,7 +10528,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.3
   pos: 8
   bucket: body
-  offset: 931
+  offset: 929
   translation:
     text: '"Why are you making so much of a fidgeting busibody of yourself?'
     title: 論語 (en)
@@ -10551,7 +10551,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.4
   pos: 1
   bucket: body
-  offset: 932
+  offset: 930
   translation:
     text: Aren't you aiming for eloquence?"
     title: 論語 (en)
@@ -10576,7 +10576,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.4
   pos: 4
   bucket: body
-  offset: 935
+  offset: 933
   translation:
     text: Aren't you aiming for eloquence?"
     title: 論語 (en)
@@ -10601,7 +10601,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.4
   pos: 5
   bucket: body
-  offset: 936
+  offset: 934
   translation:
     text: Aren't you aiming for eloquence?"
     title: 論語 (en)
@@ -10625,7 +10625,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.6
   pos: 2
   bucket: body
-  offset: 941
+  offset: 939
   translation:
     text: '"I would not presume to aim for eloquence.'
     title: 論語 (en)
@@ -10650,7 +10650,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.6
   pos: 3
   bucket: body
-  offset: 942
+  offset: 940
   translation:
     text: '"I would not presume to aim for eloquence.'
     title: 論語 (en)
@@ -10674,7 +10674,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.6
   pos: 5
   bucket: body
-  offset: 944
+  offset: 942
   translation:
     text: '"I would not presume to aim for eloquence.'
     title: 論語 (en)
@@ -10699,7 +10699,7 @@ annotations:
   seg_id: KR1h0004_tls_014-43a.1
   pos: 1
   bucket: body
-  offset: 945
+  offset: 943
   translation:
     text: It is just that I resent boorishness."
     title: 論語 (en)
@@ -10724,7 +10724,7 @@ annotations:
   seg_id: KR1h0004_tls_014-42a.6
   pos: 6
   bucket: body
-  offset: 945
+  offset: 943
   translation:
     text: '"I would not presume to aim for eloquence.'
     title: 論語 (en)
@@ -10750,7 +10750,7 @@ annotations:
   seg_id: KR1h0004_tls_014-43a.1
   pos: 2
   bucket: body
-  offset: 946
+  offset: 944
   translation:
     text: It is just that I resent boorishness."
     title: 論語 (en)
@@ -10778,7 +10778,7 @@ annotations:
   seg_id: KR1h0004_tls_014-43a.1
   pos: 3
   bucket: body
-  offset: 947
+  offset: 945
   translation:
     text: It is just that I resent boorishness."
     title: 論語 (en)
@@ -10804,7 +10804,7 @@ annotations:
   seg_id: KR1h0004_tls_014-43a.3
   pos: 2
   bucket: body
-  offset: 951
+  offset: 949
   translation:
     text: '"When it comes to an excellent horse one does not praise its force'
     title: 論語 (en)
@@ -10826,7 +10826,7 @@ annotations:
   seg_id: KR1h0004_tls_014-43a.3
   pos: 4
   bucket: body
-  offset: 953
+  offset: 951
   translation:
     text: '"When it comes to an excellent horse one does not praise its force'
     title: 論語 (en)
@@ -10850,7 +10850,7 @@ annotations:
   seg_id: KR1h0004_tls_014-43a.3
   pos: 6
   bucket: body
-  offset: 955
+  offset: 953
   translation:
     text: '"When it comes to an excellent horse one does not praise its force'
     title: 論語 (en)
@@ -10875,7 +10875,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.1
   pos: 1
   bucket: body
-  offset: 955
+  offset: 953
   translation:
     text: one praises its superior qualities."
     title: 論語 (en)
@@ -10899,7 +10899,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.1
   pos: 3
   bucket: body
-  offset: 957
+  offset: 955
   translation:
     text: one praises its superior qualities."
     title: 論語 (en)
@@ -10924,7 +10924,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.1
   pos: 4
   bucket: body
-  offset: 958
+  offset: 956
   translation:
     text: one praises its superior qualities."
     title: 論語 (en)
@@ -10948,7 +10948,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.2
   pos: 6
   bucket: body
-  offset: 964
+  offset: 962
   translation:
     text: 'Someone said:'
     title: 論語 (en)
@@ -10970,7 +10970,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.3
   pos: 4
   bucket: body
-  offset: 964
+  offset: 962
   translation:
     text: '"Responding with generosity to resentment,'
     title: 論語 (en)
@@ -10998,7 +10998,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.3
   pos: 5
   bucket: body
-  offset: 965
+  offset: 963
   translation:
     text: '"Responding with generosity to resentment,'
     title: 論語 (en)
@@ -11022,7 +11022,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.4
   pos: 1
   bucket: body
-  offset: 965
+  offset: 963
   translation:
     text: what about that?"
     title: 論語 (en)
@@ -11046,7 +11046,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.4
   pos: 1
   bucket: body
-  offset: 965
+  offset: 963
   translation:
     text: what about that?"
     title: 論語 (en)
@@ -11070,7 +11070,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.3
   pos: 6
   bucket: body
-  offset: 966
+  offset: 964
   translation:
     text: '"Responding with generosity to resentment,'
     title: 論語 (en)
@@ -11095,7 +11095,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.6
   pos: 2
   bucket: body
-  offset: 970
+  offset: 968
   translation:
     text: '"Ah, but how to respond to generosity then?'
     title: 論語 (en)
@@ -11119,7 +11119,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.6
   pos: 4
   bucket: body
-  offset: 972
+  offset: 970
   translation:
     text: '"Ah, but how to respond to generosity then?'
     title: 論語 (en)
@@ -11143,7 +11143,7 @@ annotations:
   seg_id: KR1h0004_tls_014-44a.7
   pos: 3
   bucket: body
-  offset: 975
+  offset: 973
   translation:
     text: One responds with moral straightforwardness to resentment,
     title: 論語 (en)
@@ -11168,7 +11168,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.1
   pos: null
   bucket: body
-  offset: 977
+  offset: 975
   translation:
     text: and one responds with generosity to generosity."
     title: 論語 (en)
@@ -11196,7 +11196,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.3
   pos: 2
   bucket: body
-  offset: 984
+  offset: 982
   translation:
     text: '"No one appreciates me, do they?"'
     title: 論語 (en)
@@ -11221,7 +11221,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.3
   pos: 4
   bucket: body
-  offset: 986
+  offset: 984
   translation:
     text: '"No one appreciates me, do they?"'
     title: 論語 (en)
@@ -11245,7 +11245,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.3
   pos: 5
   bucket: body
-  offset: 987
+  offset: 985
   translation:
     text: '"No one appreciates me, do they?"'
     title: 論語 (en)
@@ -11268,7 +11268,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.3
   pos: 6
   bucket: body
-  offset: 988
+  offset: 986
   translation:
     text: '"No one appreciates me, do they?"'
     title: 論語 (en)
@@ -11292,7 +11292,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.5
   pos: 2
   bucket: body
-  offset: 992
+  offset: 990
   translation:
     text: '"Why is it that no one apparently appreciates you, Sir?"'
     title: 論語 (en)
@@ -11316,7 +11316,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.5
   pos: 4
   bucket: body
-  offset: 994
+  offset: 992
   translation:
     text: '"Why is it that no one apparently appreciates you, Sir?"'
     title: 論語 (en)
@@ -11341,7 +11341,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.5
   pos: 5
   bucket: body
-  offset: 995
+  offset: 993
   translation:
     text: '"Why is it that no one apparently appreciates you, Sir?"'
     title: 論語 (en)
@@ -11366,7 +11366,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.5
   pos: 8
   bucket: body
-  offset: 998
+  offset: 996
   translation:
     text: '"Why is it that no one apparently appreciates you, Sir?"'
     title: 論語 (en)
@@ -11392,7 +11392,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.7
   pos: 3
   bucket: body
-  offset: 1002
+  offset: 1000
   translation:
     text: '"I bear no grudge against Heaven,'
     title: 論語 (en)
@@ -11416,7 +11416,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.7
   pos: 4
   bucket: body
-  offset: 1003
+  offset: 1001
   translation:
     text: '"I bear no grudge against Heaven,'
     title: 論語 (en)
@@ -11439,7 +11439,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.8
   pos: 2
   bucket: body
-  offset: 1004
+  offset: 1002
   translation:
     text: I do not blame men.
     title: 論語 (en)
@@ -11463,7 +11463,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.9
   pos: 3
   bucket: body
-  offset: 1008
+  offset: 1006
   translation:
     text: I study on the basic level, and I reach high up.
     title: 論語 (en)
@@ -11488,7 +11488,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.9
   pos: 4
   bucket: body
-  offset: 1009
+  offset: 1007
   translation:
     text: I study on the basic level, and I reach high up.
     title: 論語 (en)
@@ -11513,7 +11513,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.9
   pos: 5
   bucket: body
-  offset: 1010
+  offset: 1008
   translation:
     text: I study on the basic level, and I reach high up.
     title: 論語 (en)
@@ -11538,7 +11538,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.10
   pos: 1
   bucket: body
-  offset: 1011
+  offset: 1009
   translation:
     text: The one who appreciates me
     title: 論語 (en)
@@ -11562,7 +11562,7 @@ annotations:
   seg_id: KR1h0004_tls_014-45a.10
   pos: 3
   bucket: body
-  offset: 1013
+  offset: 1011
   translation:
     text: The one who appreciates me
     title: 論語 (en)
@@ -11585,7 +11585,7 @@ annotations:
   seg_id: KR1h0004_tls_014-46a.1
   pos: 3
   bucket: body
-  offset: 1016
+  offset: 1014
   translation:
     text: must be Heaven, I suppose!"
     title: 論語 (en)
@@ -11611,7 +11611,7 @@ annotations:
   seg_id: KR1h0004_tls_014-46a.2
   pos: 6
   bucket: body
-  offset: 1022
+  offset: 1020
   translation:
     text: Gōngbó Liáo made complaints against Zǐlù to the Jìsūn [family].
     title: 論語 (en)
@@ -11634,7 +11634,7 @@ annotations:
   seg_id: KR1h0004_tls_014-46a.2
   pos: 9
   bucket: body
-  offset: 1025
+  offset: 1023
   translation:
     text: Gōngbó Liáo made complaints against Zǐlù to the Jìsūn [family].
     title: 論語 (en)
@@ -11658,7 +11658,7 @@ annotations:
   seg_id: KR1h0004_tls_014-46a.3
   pos: 5
   bucket: body
-  offset: 1030
+  offset: 1028
   translation:
     text: Zǐfú Jǐngbó reported on this
     title: 論語 (en)
@@ -11682,7 +11682,7 @@ annotations:
   seg_id: KR1h0004_tls_014-46a.5
   pos: 2
   bucket: body
-  offset: 1034
+  offset: 1032
   translation:
     text: '"Our Master certainly must have some misunderstandings with Gōngbó Liáo.'
     title: 論語 (en)
@@ -11706,7 +11706,7 @@ annotations:
   seg_id: KR1h0004_tls_014-46a.5
   pos: 4
   bucket: body
-  offset: 1036
+  offset: 1034
   translation:
     text: '"Our Master certainly must have some misunderstandings with Gōngbó Liáo.'
     title: 論語 (en)
@@ -11730,7 +11730,7 @@ annotations:
   seg_id: KR1h0004_tls_014-46a.5
   pos: 6
   bucket: body
-  offset: 1038
+  offset: 1036
   translation:
     text: '"Our Master certainly must have some misunderstandings with Gōngbó Liáo.'
     title: 論語 (en)
@@ -11755,7 +11755,7 @@ annotations:
   seg_id: KR1h0004_tls_014-46a.5
   pos: 7
   bucket: body
-  offset: 1039
+  offset: 1037
   translation:
     text: '"Our Master certainly must have some misunderstandings with Gōngbó Liáo.'
     title: 論語 (en)
@@ -11780,7 +11780,7 @@ annotations:
   seg_id: KR1h0004_tls_014-47a.1
   pos: 2
   bucket: body
-  offset: 1044
+  offset: 1042
   translation:
     text: But my influence is such that I can still have his dead body exposed in the market or at court."
     title: 論語 (en)
@@ -11805,7 +11805,7 @@ annotations:
   seg_id: KR1h0004_tls_014-47a.1
   pos: 5
   bucket: body
-  offset: 1047
+  offset: 1045
   translation:
     text: But my influence is such that I can still have his dead body exposed in the market or at court."
     title: 論語 (en)
@@ -11829,7 +11829,7 @@ annotations:
   seg_id: KR1h0004_tls_014-47a.1
   pos: 7
   bucket: body
-  offset: 1049
+  offset: 1047
   translation:
     text: But my influence is such that I can still have his dead body exposed in the market or at court."
     title: 論語 (en)
@@ -11853,7 +11853,7 @@ annotations:
   seg_id: KR1h0004_tls_014-47a.3
   pos: 5
   bucket: body
-  offset: 1057
+  offset: 1055
   translation:
     text: '"Is the Way about to be put into practice?'
     title: 論語 (en)
@@ -11878,7 +11878,7 @@ annotations:
   seg_id: KR1h0004_tls_014-47a.3
   pos: 6
   bucket: body
-  offset: 1058
+  offset: 1056
   translation:
     text: '"Is the Way about to be put into practice?'
     title: 論語 (en)
@@ -11901,7 +11901,7 @@ annotations:
   seg_id: KR1h0004_tls_014-47a.4
   pos: 1
   bucket: body
-  offset: 1059
+  offset: 1057
   translation:
     text: Well, it is fate.
     title: 論語 (en)
@@ -11926,7 +11926,7 @@ annotations:
   seg_id: KR1h0004_tls_014-47a.4
   pos: 2
   bucket: body
-  offset: 1060
+  offset: 1058
   translation:
     text: Well, it is fate.
     title: 論語 (en)
@@ -11949,7 +11949,7 @@ annotations:
   seg_id: KR1h0004_tls_014-47a.5
   pos: 4
   bucket: body
-  offset: 1064
+  offset: 1062
   translation:
     text: Will the Way be abandoned?
     title: 論語 (en)
@@ -11974,7 +11974,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.1
   pos: 4
   bucket: body
-  offset: 1072
+  offset: 1070
   translation:
     text: How can Gōngbó Liáo compete with fate?
     title: 論語 (en)
@@ -11999,7 +11999,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.1
   pos: 5
   bucket: body
-  offset: 1073
+  offset: 1071
   translation:
     text: How can Gōngbó Liáo compete with fate?
     title: 論語 (en)
@@ -12024,7 +12024,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.1
   pos: 7
   bucket: body
-  offset: 1075
+  offset: 1073
   translation:
     text: How can Gōngbó Liáo compete with fate?
     title: 論語 (en)
@@ -12049,7 +12049,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.3
   pos: null
   bucket: body
-  offset: 1078
+  offset: 1076
   translation:
     text: '"Men of worth shun the world,'
     title: 論語 (en)
@@ -12076,7 +12076,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.3
   pos: 2
   bucket: body
-  offset: 1079
+  offset: 1077
   translation:
     text: '"Men of worth shun the world,'
     title: 論語 (en)
@@ -12101,7 +12101,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.3
   pos: 3
   bucket: body
-  offset: 1080
+  offset: 1078
   translation:
     text: '"Men of worth shun the world,'
     title: 論語 (en)
@@ -12126,7 +12126,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.3
   pos: 5
   bucket: body
-  offset: 1082
+  offset: 1080
   translation:
     text: '"Men of worth shun the world,'
     title: 論語 (en)
@@ -12150,7 +12150,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.4
   pos: 2
   bucket: body
-  offset: 1083
+  offset: 1081
   translation:
     text: the next best men will [at least] shun their parochial origins,
     title: 論語 (en)
@@ -12175,7 +12175,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.4
   pos: 4
   bucket: body
-  offset: 1085
+  offset: 1083
   translation:
     text: the next best men will [at least] shun their parochial origins,
     title: 論語 (en)
@@ -12199,7 +12199,7 @@ annotations:
   seg_id: KR1h0004_tls_014-48a.5
   pos: 4
   bucket: body
-  offset: 1089
+  offset: 1087
   translation:
     text: the next best men will [at least] shun female beauty,
     title: 論語 (en)
@@ -12224,7 +12224,7 @@ annotations:
   seg_id: KR1h0004_tls_014-49a.1
   pos: 4
   bucket: body
-  offset: 1093
+  offset: 1091
   translation:
     text: the next best men will [at least] shun the public expression of personal opinion.
     title: 論語 (en)
@@ -12249,7 +12249,7 @@ annotations:
   seg_id: KR1h0004_tls_014-50a.1
   pos: 2
   bucket: body
-  offset: 1097
+  offset: 1095
   translation:
     text: '"Those who arose were seven men."'
     title: 論語 (en)
@@ -12277,7 +12277,7 @@ annotations:
   seg_id: KR1h0004_tls_014-50a.1
   pos: 6
   bucket: body
-  offset: 1101
+  offset: 1099
   translation:
     text: '"Those who arose were seven men."'
     title: 論語 (en)
@@ -12301,7 +12301,7 @@ annotations:
   seg_id: KR1h0004_tls_014-50a.2
   pos: 3
   bucket: body
-  offset: 1103
+  offset: 1101
   translation:
     text: Zǐlù spent a night at Shímén.
     title: 論語 (en)
@@ -12325,7 +12325,7 @@ annotations:
   seg_id: KR1h0004_tls_014-50a.3
   pos: 1
   bucket: body
-  offset: 1107
+  offset: 1105
   translation:
     text: 'The gatekeeper said:'
     title: 論語 (en)
@@ -12349,7 +12349,7 @@ annotations:
   seg_id: KR1h0004_tls_014-50a.2
   pos: 8
   bucket: body
-  offset: 1108
+  offset: 1106
   translation:
     text: Zǐlù spent a night at Shímén.
     title: 論語 (en)
@@ -12373,7 +12373,7 @@ annotations:
   seg_id: KR1h0004_tls_014-50a.4
   pos: 2
   bucket: body
-  offset: 1111
+  offset: 1109
   translation:
     text: '"Where are you from?"'
     title: 論語 (en)
@@ -12397,7 +12397,7 @@ annotations:
   seg_id: KR1h0004_tls_014-50a.4
   pos: 3
   bucket: body
-  offset: 1112
+  offset: 1110
   translation:
     text: '"Where are you from?"'
     title: 論語 (en)
@@ -12421,7 +12421,7 @@ annotations:
   seg_id: KR1h0004_tls_014-50a.6
   pos: 2
   bucket: body
-  offset: 1116
+  offset: 1114
   translation:
     text: '"I come from Mr Kǒng."'
     title: 論語 (en)
@@ -12445,7 +12445,7 @@ annotations:
   seg_id: KR1h0004_tls_014-50a.7
   pos: 1
   bucket: body
-  offset: 1118
+  offset: 1116
   translation:
     text: 'He asked:'
     title: 論語 (en)
@@ -12469,7 +12469,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.1
   pos: 3
   bucket: body
-  offset: 1121
+  offset: 1119
   translation:
     text: '"Ah, is that the one who knows it is impossible but goes ahead and does it?"'
     title: 論語 (en)
@@ -12493,7 +12493,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.1
   pos: 4
   bucket: body
-  offset: 1122
+  offset: 1120
   translation:
     text: '"Ah, is that the one who knows it is impossible but goes ahead and does it?"'
     title: 論語 (en)
@@ -12518,7 +12518,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.1
   pos: 6
   bucket: body
-  offset: 1124
+  offset: 1122
   translation:
     text: '"Ah, is that the one who knows it is impossible but goes ahead and does it?"'
     title: 論語 (en)
@@ -12542,7 +12542,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.1
   pos: 7
   bucket: body
-  offset: 1125
+  offset: 1123
   translation:
     text: '"Ah, is that the one who knows it is impossible but goes ahead and does it?"'
     title: 論語 (en)
@@ -12567,7 +12567,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.1
   pos: 8
   bucket: body
-  offset: 1126
+  offset: 1124
   translation:
     text: '"Ah, is that the one who knows it is impossible but goes ahead and does it?"'
     title: 論語 (en)
@@ -12591,7 +12591,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.1
   pos: 9
   bucket: body
-  offset: 1127
+  offset: 1125
   translation:
     text: '"Ah, is that the one who knows it is impossible but goes ahead and does it?"'
     title: 論語 (en)
@@ -12616,7 +12616,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.1
   pos: 10
   bucket: body
-  offset: 1128
+  offset: 1126
   translation:
     text: '"Ah, is that the one who knows it is impossible but goes ahead and does it?"'
     title: 論語 (en)
@@ -12639,7 +12639,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.1
   pos: 11
   bucket: body
-  offset: 1129
+  offset: 1127
   translation:
     text: '"Ah, is that the one who knows it is impossible but goes ahead and does it?"'
     title: 論語 (en)
@@ -12662,7 +12662,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.2
   pos: 3
   bucket: body
-  offset: 1131
+  offset: 1129
   translation:
     text: The Master was playing music on the music stones in Wèy.
     title: 論語 (en)
@@ -12686,7 +12686,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.3
   pos: 2
   bucket: body
-  offset: 1135
+  offset: 1133
   translation:
     text: Someone passed by Confucius' gate carrying a basket on his back
     title: 論語 (en)
@@ -12708,7 +12708,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.2
   pos: 7
   bucket: body
-  offset: 1135
+  offset: 1133
   translation:
     text: The Master was playing music on the music stones in Wèy.
     title: 論語 (en)
@@ -12733,7 +12733,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.2
   pos: 8
   bucket: body
-  offset: 1136
+  offset: 1134
   translation:
     text: The Master was playing music on the music stones in Wèy.
     title: 論語 (en)
@@ -12755,7 +12755,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.3
   pos: 3
   bucket: body
-  offset: 1136
+  offset: 1134
   translation:
     text: Someone passed by Confucius' gate carrying a basket on his back
     title: 論語 (en)
@@ -12779,7 +12779,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.3
   pos: 4
   bucket: body
-  offset: 1137
+  offset: 1135
   translation:
     text: Someone passed by Confucius' gate carrying a basket on his back
     title: 論語 (en)
@@ -12803,7 +12803,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.3
   pos: 5
   bucket: body
-  offset: 1138
+  offset: 1136
   translation:
     text: Someone passed by Confucius' gate carrying a basket on his back
     title: 論語 (en)
@@ -12827,7 +12827,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.3
   pos: 9
   bucket: body
-  offset: 1142
+  offset: 1140
   translation:
     text: Someone passed by Confucius' gate carrying a basket on his back
     title: 論語 (en)
@@ -12851,7 +12851,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.3
   pos: 10
   bucket: body
-  offset: 1143
+  offset: 1141
   translation:
     text: Someone passed by Confucius' gate carrying a basket on his back
     title: 論語 (en)
@@ -12874,7 +12874,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.5
   pos: 3
   bucket: body
-  offset: 1147
+  offset: 1145
   translation:
     text: '"How soulful'
     title: 論語 (en)
@@ -12899,7 +12899,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.5
   pos: 4
   bucket: body
-  offset: 1148
+  offset: 1146
   translation:
     text: '"How soulful'
     title: 論語 (en)
@@ -12924,7 +12924,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.7
   pos: 1
   bucket: body
-  offset: 1151
+  offset: 1149
   translation:
     text: 'But in the end he added:'
     title: 論語 (en)
@@ -12948,7 +12948,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.8
   pos: 2
   bucket: body
-  offset: 1155
+  offset: 1153
   translation:
     text: '"How vulgar'
     title: 論語 (en)
@@ -12972,7 +12972,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.9
   pos: 1
   bucket: body
-  offset: 1156
+  offset: 1154
   translation:
     text: all this insistence!
     title: 論語 (en)
@@ -12997,7 +12997,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.8
   pos: 3
   bucket: body
-  offset: 1156
+  offset: 1154
   translation:
     text: '"How vulgar'
     title: 論語 (en)
@@ -13022,7 +13022,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.9
   pos: 3
   bucket: body
-  offset: 1158
+  offset: 1156
   translation:
     text: all this insistence!
     title: 論語 (en)
@@ -13048,7 +13048,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.10
   pos: 1
   bucket: body
-  offset: 1159
+  offset: 1157
   translation:
     text: If no one will recognise one
     title: 論語 (en)
@@ -13073,7 +13073,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.10
   pos: 2
   bucket: body
-  offset: 1160
+  offset: 1158
   translation:
     text: If no one will recognise one
     title: 論語 (en)
@@ -13095,7 +13095,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.11
   pos: 1
   bucket: body
-  offset: 1163
+  offset: 1161
   translation:
     text: then one gives it a break, that is all.
     title: 論語 (en)
@@ -13119,7 +13119,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.11
   pos: null
   bucket: body
-  offset: 1163
+  offset: 1161
   translation:
     text: then one gives it a break, that is all.
     title: 論語 (en)
@@ -13144,7 +13144,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.11
   pos: 3
   bucket: body
-  offset: 1165
+  offset: 1163
   translation:
     text: then one gives it a break, that is all.
     title: 論語 (en)
@@ -13169,7 +13169,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.12
   pos: 2
   bucket: body
-  offset: 1169
+  offset: 1167
   translation:
     text: '''If it is deep, then cross it wading,'
     title: 論語 (en)
@@ -13197,7 +13197,7 @@ annotations:
   seg_id: KR1h0004_tls_014-51a.12
   pos: 4
   bucket: body
-  offset: 1171
+  offset: 1169
   translation:
     text: '''If it is deep, then cross it wading,'
     title: 論語 (en)
@@ -13221,7 +13221,7 @@ annotations:
   seg_id: KR1h0004_tls_014-52a.1
   pos: 1
   bucket: body
-  offset: 1171
+  offset: 1169
   translation:
     text: when it is shallow, then just lift your skirt.'"
     title: 論語 (en)
@@ -13243,7 +13243,7 @@ annotations:
   seg_id: KR1h0004_tls_014-52a.1
   pos: 3
   bucket: body
-  offset: 1173
+  offset: 1171
   translation:
     text: when it is shallow, then just lift your skirt.'"
     title: 論語 (en)
@@ -13267,7 +13267,7 @@ annotations:
   seg_id: KR1h0004_tls_014-52a.3
   pos: 2
   bucket: body
-  offset: 1177
+  offset: 1175
   translation:
     text: '"What resoluteness!'
     title: 論語 (en)
@@ -13291,7 +13291,7 @@ annotations:
   seg_id: KR1h0004_tls_014-52a.3
   pos: 3
   bucket: body
-  offset: 1178
+  offset: 1176
   translation:
     text: '"What resoluteness!'
     title: 論語 (en)
@@ -13316,7 +13316,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.3
   pos: 3
   bucket: body
-  offset: 1187
+  offset: 1185
   translation:
     text: 'The Document says:'
     title: 論語 (en)
@@ -13340,7 +13340,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.3
   pos: 5
   bucket: body
-  offset: 1189
+  offset: 1187
   translation:
     text: 'The Document says:'
     title: 論語 (en)
@@ -13365,7 +13365,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.4
   pos: 4
   bucket: body
-  offset: 1190
+  offset: 1188
   translation:
     text: '''Gāozōng stayed in his mourning hut for three years and did not come up with statements of opinion.'''
     title: 論語 (en)
@@ -13389,7 +13389,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.5
   pos: 1
   bucket: body
-  offset: 1195
+  offset: 1193
   translation:
     text: what does that mean?
     title: 論語 (en)
@@ -13413,7 +13413,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.4
   pos: 10
   bucket: body
-  offset: 1196
+  offset: 1194
   translation:
     text: '''Gāozōng stayed in his mourning hut for three years and did not come up with statements of opinion.'''
     title: 論語 (en)
@@ -13437,7 +13437,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.5
   pos: 2
   bucket: body
-  offset: 1196
+  offset: 1194
   translation:
     text: what does that mean?
     title: 論語 (en)
@@ -13461,7 +13461,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.4
   pos: 10
   bucket: body
-  offset: 1196
+  offset: 1194
   translation:
     text: '''Gāozōng stayed in his mourning hut for three years and did not speak up.'' [侵/侵 ʔjəm/ʔjəm][言 元/元 ŋjan/ŋjɐn][音 侵/侵 ʔjəm/ʔjəm](韻讀)'
     title: 論語 (en)
@@ -13485,7 +13485,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.5
   pos: 3
   bucket: body
-  offset: 1197
+  offset: 1195
   translation:
     text: what does that mean?
     title: 論語 (en)
@@ -13511,7 +13511,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.7
   pos: 2
   bucket: body
-  offset: 1201
+  offset: 1199
   translation:
     text: '"Why does it have to be Gāozōng?'
     title: 論語 (en)
@@ -13536,7 +13536,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.7
   pos: 2
   bucket: body
-  offset: 1201
+  offset: 1199
   translation:
     text: '"Why does it have to be Gāozōng?'
     title: 論語 (en)
@@ -13559,7 +13559,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.7
   pos: 3
   bucket: body
-  offset: 1202
+  offset: 1200
   translation:
     text: '"Why does it have to be Gāozōng?'
     title: 論語 (en)
@@ -13583,7 +13583,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.8
   pos: 1
   bucket: body
-  offset: 1204
+  offset: 1202
   translation:
     src: TLS Project
   form:
@@ -13604,7 +13604,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.8
   pos: 3
   bucket: body
-  offset: 1206
+  offset: 1204
   translation:
     text: The men of antiquity were all like that.
     title: 論語 (en)
@@ -13629,7 +13629,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.8
   pos: 4
   bucket: body
-  offset: 1207
+  offset: 1205
   translation:
     text: The men of antiquity were all like that.
     title: 論語 (en)
@@ -13653,7 +13653,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.9
   pos: 1
   bucket: body
-  offset: 1209
+  offset: 1207
   translation:
     text: When the ruler died
     title: 論語 (en)
@@ -13678,7 +13678,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.9
   pos: 2
   bucket: body
-  offset: 1210
+  offset: 1208
   translation:
     text: When the ruler died
     title: 論語 (en)
@@ -13701,7 +13701,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.10
   pos: 1
   bucket: body
-  offset: 1211
+  offset: 1209
   translation:
     text: all the officials formed a group and served under the temporary head
     title: 論語 (en)
@@ -13723,7 +13723,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.10
   pos: 1
   bucket: body
-  offset: 1211
+  offset: 1209
   translation:
     text: all the officials formed a group and served under the temporary head
     title: 論語 (en)
@@ -13746,7 +13746,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.10
   pos: 2
   bucket: body
-  offset: 1212
+  offset: 1210
   translation:
     text: all the officials formed a group and served under the temporary head
     title: 論語 (en)
@@ -13771,7 +13771,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.10
   pos: 3
   bucket: body
-  offset: 1213
+  offset: 1211
   translation:
     text: all the officials formed a group and served under the temporary head
     title: 論語 (en)
@@ -13796,7 +13796,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.10
   pos: 4
   bucket: body
-  offset: 1214
+  offset: 1212
   translation:
     text: all the officials formed a group and served under the temporary head
     title: 論語 (en)
@@ -13818,7 +13818,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.10
   pos: 6
   bucket: body
-  offset: 1216
+  offset: 1214
   translation:
     text: all the officials formed a group and served under the temporary head
     title: 論語 (en)
@@ -13845,7 +13845,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.10
   pos: 6
   bucket: body
-  offset: 1216
+  offset: 1214
   translation:
     text: all the officials formed a group and served under the temporary head
     title: 論語 (en)
@@ -13868,7 +13868,7 @@ annotations:
   seg_id: KR1h0004_tls_014-53a.10
   pos: 8
   bucket: body
-  offset: 1218
+  offset: 1216
   translation:
     text: all the officials formed a group and served under the temporary head
     title: 論語 (en)
@@ -13890,7 +13890,7 @@ annotations:
   seg_id: KR1h0004_tls_014-54a.3
   pos: 2
   bucket: body
-  offset: 1225
+  offset: 1223
   translation:
     text: '"If the leadership is fond of ritual'
     title: 論語 (en)
@@ -13915,7 +13915,7 @@ annotations:
   seg_id: KR1h0004_tls_014-54a.3
   pos: 3
   bucket: body
-  offset: 1226
+  offset: 1224
   translation:
     text: '"If the leadership is fond of ritual'
     title: 論語 (en)
@@ -13940,7 +13940,7 @@ annotations:
   seg_id: KR1h0004_tls_014-55a.1
   pos: 3
   bucket: body
-  offset: 1229
+  offset: 1227
   translation:
     text: then the people will be easy to employ."
     title: 論語 (en)
@@ -13965,7 +13965,7 @@ annotations:
   seg_id: KR1h0004_tls_014-55a.1
   pos: 4
   bucket: body
-  offset: 1230
+  offset: 1228
   translation:
     text: then the people will be easy to employ."
     title: 論語 (en)
@@ -13990,7 +13990,7 @@ annotations:
   seg_id: KR1h0004_tls_014-55a.1
   pos: 5
   bucket: body
-  offset: 1231
+  offset: 1229
   translation:
     text: then the people will be easy to employ."
     title: 論語 (en)
@@ -14014,7 +14014,7 @@ annotations:
   seg_id: KR1h0004_tls_014-55a.2
   pos: 8
   bucket: body
-  offset: 1239
+  offset: 1237
   translation:
     text: Zǐlù asked about the superior man.
     title: 論語 (en)
@@ -14039,7 +14039,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.1
   pos: null
   bucket: body
-  offset: 1239
+  offset: 1237
   translation:
     text: '"He cultivates himself so as to become diligent (in one''s service to others)."'
     title: 論語 (en)
@@ -14065,7 +14065,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.1
   pos: null
   bucket: body
-  offset: 1239
+  offset: 1237
   translation:
     text: '"He cultivates himself so as to become diligent (in one''s service to others)."'
     title: 論語 (en)
@@ -14092,7 +14092,7 @@ annotations:
   seg_id: KR1h0004_tls_014-55a.2
   pos: 9
   bucket: body
-  offset: 1240
+  offset: 1238
   translation:
     text: Zǐlù asked about the superior man.
     title: 論語 (en)
@@ -14117,7 +14117,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.1
   pos: 2
   bucket: body
-  offset: 1240
+  offset: 1238
   form:
     orig: ''
     orth: 己
@@ -14137,7 +14137,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.1
   pos: 3
   bucket: body
-  offset: 1241
+  offset: 1239
   translation:
     text: '"He cultivates himself so as to become diligent (in one''s service to others)."'
     title: 論語 (en)
@@ -14160,7 +14160,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.1
   pos: 4
   bucket: body
-  offset: 1242
+  offset: 1240
   translation:
     text: '"He cultivates himself so as to become diligent (in one''s service to others)."'
     title: 論語 (en)
@@ -14184,7 +14184,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.1
   pos: 5
   bucket: body
-  offset: 1243
+  offset: 1241
   translation:
     text: '"He cultivates himself so as to become diligent (in one''s service to others)."'
     title: 論語 (en)
@@ -14209,7 +14209,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.2
   pos: 1
   bucket: body
-  offset: 1243
+  offset: 1241
   translation:
     text: 'Zǐlù continued (to ask):'
     title: 論語 (en)
@@ -14233,7 +14233,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.3
   pos: 2
   bucket: body
-  offset: 1245
+  offset: 1243
   translation:
     text: '"One just lives up to this?"'
     title: 論語 (en)
@@ -14258,7 +14258,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.3
   pos: 3
   bucket: body
-  offset: 1246
+  offset: 1244
   translation:
     text: '"One just lives up to this?"'
     title: 論語 (en)
@@ -14283,7 +14283,7 @@ annotations:
   seg_id: KR1h0004_tls_014-56a.3
   pos: 4
   bucket: body
-  offset: 1247
+  offset: 1245
   translation:
     text: '"One just lives up to this?"'
     title: 論語 (en)
@@ -14306,7 +14306,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.1
   pos: null
   bucket: body
-  offset: 1250
+  offset: 1248
   translation:
     text: '"He cultivates himself in order to bring peace to others."'
     title: 論語 (en)
@@ -14333,7 +14333,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.1
   pos: null
   bucket: body
-  offset: 1250
+  offset: 1248
   translation:
     text: '"He cultivates himself in order to bring peace to others."'
     title: 論語 (en)
@@ -14359,7 +14359,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.1
   pos: 2
   bucket: body
-  offset: 1251
+  offset: 1249
   form:
     orig: ''
     orth: 己
@@ -14379,7 +14379,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.1
   pos: 3
   bucket: body
-  offset: 1252
+  offset: 1250
   translation:
     text: '"He cultivates himself in order to bring peace to others."'
     title: 論語 (en)
@@ -14400,7 +14400,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.1
   pos: 3
   bucket: body
-  offset: 1252
+  offset: 1250
   translation:
     text: '"He cultivates himself in order to bring peace to others."'
     title: 論語 (en)
@@ -14423,7 +14423,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.1
   pos: 3
   bucket: body
-  offset: 1252
+  offset: 1250
   translation:
     text: '"He cultivates himself in order to bring peace to others."'
     title: 論語 (en)
@@ -14446,7 +14446,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.1
   pos: 5
   bucket: body
-  offset: 1254
+  offset: 1252
   translation:
     text: '"He cultivates himself in order to bring peace to others."'
     title: 論語 (en)
@@ -14471,7 +14471,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.2
   pos: 1
   bucket: body
-  offset: 1255
+  offset: 1253
   translation:
     text: 'Zǐlù went on to ask:'
     title: 論語 (en)
@@ -14495,7 +14495,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.3
   pos: 3
   bucket: body
-  offset: 1258
+  offset: 1256
   translation:
     text: '"One just lives up to this?"'
     title: 論語 (en)
@@ -14520,7 +14520,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.3
   pos: 4
   bucket: body
-  offset: 1259
+  offset: 1257
   translation:
     text: '"One just lives up to this?"'
     title: 論語 (en)
@@ -14543,7 +14543,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.5
   pos: null
   bucket: body
-  offset: 1262
+  offset: 1260
   translation:
     text: '"He cultivates himself so as to bring peace to the Hundred Families.'
     title: 論語 (en)
@@ -14569,7 +14569,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.5
   pos: 2
   bucket: body
-  offset: 1263
+  offset: 1261
   form:
     orig: ''
     orth: 己
@@ -14589,7 +14589,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.5
   pos: 3
   bucket: body
-  offset: 1264
+  offset: 1262
   translation:
     text: '"He cultivates himself so as to bring peace to the Hundred Families.'
     title: 論語 (en)
@@ -14610,7 +14610,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.5
   pos: 3
   bucket: body
-  offset: 1264
+  offset: 1262
   translation:
     text: '"He cultivates himself so as to bring peace to the Hundred Families.'
     title: 論語 (en)
@@ -14633,7 +14633,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.5
   pos: 5
   bucket: body
-  offset: 1266
+  offset: 1264
   translation:
     text: '"He cultivates himself so as to bring peace to the Hundred Families.'
     title: 論語 (en)
@@ -14658,7 +14658,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.5
   pos: 6
   bucket: body
-  offset: 1267
+  offset: 1265
   translation:
     text: '"He cultivates himself so as to bring peace to the Hundred Families.'
     title: 論語 (en)
@@ -14680,7 +14680,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.6
   pos: null
   bucket: body
-  offset: 1268
+  offset: 1266
   translation:
     text: As for cultivating oneself so as to bring peace to the Hundred Families
     title: 論語 (en)
@@ -14706,7 +14706,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.6
   pos: 1
   bucket: body
-  offset: 1268
+  offset: 1266
   form:
     orig: ''
     orth: 己
@@ -14726,7 +14726,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.6
   pos: 2
   bucket: body
-  offset: 1269
+  offset: 1267
   translation:
     text: As for cultivating oneself so as to bring peace to the Hundred Families
     title: 論語 (en)
@@ -14747,7 +14747,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.6
   pos: 2
   bucket: body
-  offset: 1269
+  offset: 1267
   translation:
     text: As for cultivating oneself so as to bring peace to the Hundred Families
     title: 論語 (en)
@@ -14770,7 +14770,7 @@ annotations:
   seg_id: KR1h0004_tls_014-57a.6
   pos: 5
   bucket: body
-  offset: 1272
+  offset: 1270
   translation:
     text: As for cultivating oneself so as to bring peace to the Hundred Families
     title: 論語 (en)
@@ -14792,7 +14792,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.1
   pos: 4
   bucket: body
-  offset: 1277
+  offset: 1275
   translation:
     text: even Yáo and Shùn, I suppose, would find this a hard task to perform."
     title: 論語 (en)
@@ -14817,7 +14817,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.1
   pos: 5
   bucket: body
-  offset: 1278
+  offset: 1276
   translation:
     text: even Yáo and Shùn, I suppose, would find this a hard task to perform."
     title: 論語 (en)
@@ -14839,7 +14839,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.1
   pos: 6
   bucket: body
-  offset: 1279
+  offset: 1277
   translation:
     text: even Yáo and Shùn, I suppose, would find this a hard task to perform."
     title: 論語 (en)
@@ -14864,7 +14864,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.4
   pos: null
   bucket: body
-  offset: 1286
+  offset: 1284
   translation:
     text: '"If at a tender age one is not obedient,'
     title: 論語 (en)
@@ -14892,7 +14892,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.2
   pos: 8
   bucket: body
-  offset: 1287
+  offset: 1285
   translation:
     text: Yuán Rǎng sprawled on the ground and was waiting.
     title: 論語 (en)
@@ -14917,7 +14917,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.4
   pos: 2
   bucket: body
-  offset: 1287
+  offset: 1285
   translation:
     text: '"If at a tender age one is not obedient,'
     title: 論語 (en)
@@ -14941,7 +14941,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.2
   pos: 9
   bucket: body
-  offset: 1288
+  offset: 1286
   translation:
     text: Yuán Rǎng sprawled on the ground and was waiting.
     title: 論語 (en)
@@ -14966,7 +14966,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.4
   pos: 5
   bucket: body
-  offset: 1290
+  offset: 1288
   translation:
     text: '"If at a tender age one is not obedient,'
     title: 論語 (en)
@@ -14994,7 +14994,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.5
   pos: 1
   bucket: body
-  offset: 1291
+  offset: 1289
   translation:
     text: and if as a grown up nothing is passed down to one,
     title: 論語 (en)
@@ -15018,7 +15018,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.5
   pos: 4
   bucket: body
-  offset: 1294
+  offset: 1292
   translation:
     text: and if as a grown up nothing is passed down to one,
     title: 論語 (en)
@@ -15043,7 +15043,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.6
   pos: 1
   bucket: body
-  offset: 1296
+  offset: 1294
   translation:
     text: and then one grows old, refuses to die,
     title: 論語 (en)
@@ -15067,7 +15067,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.7
   pos: 2
   bucket: body
-  offset: 1301
+  offset: 1299
   translation:
     text: such a person is a thief.”
     title: The Analects of Confucius.A Philosophical Translation
@@ -15092,7 +15092,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.7
   pos: 3
   bucket: body
-  offset: 1302
+  offset: 1300
   translation:
     text: such a person is a villain."
     title: 論語 (en)
@@ -15116,7 +15116,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.8
   pos: 2
   bucket: body
-  offset: 1304
+  offset: 1302
   translation:
     text: With his staff he struck his shins.
     title: 論語 (en)
@@ -15140,7 +15140,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.8
   pos: 3
   bucket: body
-  offset: 1305
+  offset: 1303
   translation:
     text: With his staff he struck his shins.
     title: 論語 (en)
@@ -15164,7 +15164,7 @@ annotations:
   seg_id: KR1h0004_tls_014-58a.8
   pos: 5
   bucket: body
-  offset: 1307
+  offset: 1305
   translation:
     text: With his staff he struck his shins.
     title: 論語 (en)
@@ -15188,7 +15188,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.3
   pos: 1
   bucket: body
-  offset: 1314
+  offset: 1312
   translation:
     text: 'Somebody asked about him:'
     title: 論語 (en)
@@ -15210,7 +15210,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.2
   pos: 8
   bucket: body
-  offset: 1315
+  offset: 1313
   translation:
     text: A boy from Quēdǎng was passing along visitor's messages.
     title: 論語 (en)
@@ -15234,7 +15234,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.3
   pos: 2
   bucket: body
-  offset: 1315
+  offset: 1313
   translation:
     text: 'Somebody asked about him:'
     title: 論語 (en)
@@ -15257,7 +15257,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.2
   pos: 10
   bucket: body
-  offset: 1317
+  offset: 1315
   translation:
     text: A boy from Quēdǎng was passing along visitor's messages.
     title: 論語 (en)
@@ -15282,7 +15282,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.4
   pos: 2
   bucket: body
-  offset: 1319
+  offset: 1317
   translation:
     text: '"Is he someone who has made some progress?"'
     title: 論語 (en)
@@ -15307,7 +15307,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.4
   pos: 4
   bucket: body
-  offset: 1321
+  offset: 1319
   translation:
     text: '"Is he someone who has made some progress?"'
     title: 論語 (en)
@@ -15330,7 +15330,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.6
   pos: 3
   bucket: body
-  offset: 1325
+  offset: 1323
   translation:
     text: '"I have seen him fulfilling his assigned position,'
     title: 論語 (en)
@@ -15354,7 +15354,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.6
   pos: 5
   bucket: body
-  offset: 1327
+  offset: 1325
   translation:
     text: '"I have seen him fulfilling his assigned position,'
     title: 論語 (en)
@@ -15379,7 +15379,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.6
   pos: 5
   bucket: body
-  offset: 1327
+  offset: 1325
   translation:
     text: '"I have seen him fulfilling his assigned position,'
     title: 論語 (en)
@@ -15403,7 +15403,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.6
   pos: 7
   bucket: body
-  offset: 1329
+  offset: 1327
   translation:
     text: '"I have seen him fulfilling his assigned position,'
     title: 論語 (en)
@@ -15428,7 +15428,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.6
   pos: 8
   bucket: body
-  offset: 1330
+  offset: 1328
   translation:
     text: '"I have seen him fulfilling his assigned position,'
     title: 論語 (en)
@@ -15451,7 +15451,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.7
   pos: 3
   bucket: body
-  offset: 1332
+  offset: 1330
   translation:
     text: and I have seen him walk along together with his master.
     title: 論語 (en)
@@ -15474,7 +15474,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.7
   pos: 4
   bucket: body
-  offset: 1333
+  offset: 1331
   translation:
     text: and I have seen him walk along together with his master.
     title: 論語 (en)
@@ -15496,7 +15496,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.7
   pos: 6
   bucket: body
-  offset: 1335
+  offset: 1333
   translation:
     text: and I have seen him walk along together with his master.
     title: 論語 (en)
@@ -15520,7 +15520,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.7
   pos: 8
   bucket: body
-  offset: 1337
+  offset: 1335
   translation:
     text: and I have seen him walk along together with his master.
     title: 論語 (en)
@@ -15543,7 +15543,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.8
   pos: 1
   bucket: body
-  offset: 1338
+  offset: 1336
   translation:
     text: He is not the sort of person who is trying to make progress.
     title: 論語 (en)
@@ -15568,7 +15568,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.8
   pos: 2
   bucket: body
-  offset: 1339
+  offset: 1337
   translation:
     text: He is not the sort of person who is trying to make progress.
     title: 論語 (en)
@@ -15590,7 +15590,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.8
   pos: 3
   bucket: body
-  offset: 1340
+  offset: 1338
   translation:
     text: He is not the sort of person who is trying to make progress.
     title: 論語 (en)
@@ -15615,7 +15615,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.8
   pos: 4
   bucket: body
-  offset: 1341
+  offset: 1339
   translation:
     text: He is not the sort of person who is trying to make progress.
     title: 論語 (en)
@@ -15638,7 +15638,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.8
   pos: 5
   bucket: body
-  offset: 1342
+  offset: 1340
   translation:
     text: He is not the sort of person who is trying to make progress.
     title: 論語 (en)
@@ -15664,7 +15664,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.9
   pos: 1
   bucket: body
-  offset: 1343
+  offset: 1341
   translation:
     text: He is the sort of person who wishes to score a quick success."
     title: 論語 (en)
@@ -15691,7 +15691,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.9
   pos: 2
   bucket: body
-  offset: 1344
+  offset: 1342
   translation:
     text: He is the sort of person who wishes to score a quick success."
     title: 論語 (en)
@@ -15715,7 +15715,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.9
   pos: 4
   bucket: body
-  offset: 1346
+  offset: 1344
   translation:
     text: He is the sort of person who wishes to score a quick success."
     title: 論語 (en)
@@ -15738,7 +15738,7 @@ annotations:
   seg_id: KR1h0004_tls_014-59a.9
   pos: 5
   bucket: body
-  offset: 1347
+  offset: 1345
   translation:
     text: He is the sort of person who wishes to score a quick success."
     title: 論語 (en)
