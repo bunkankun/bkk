@@ -516,7 +516,8 @@ def _split_sections_into_juans(
         # boundary.
         first_label: str | None = None
         last_seen: str | None = None
-        boundaries: list[tuple[int, str]] = []
+        boundaries: list[tuple[int, int, str]] = []  # (offset, orig_idx, label)
+        marker_pos = {id(m): i for i, m in enumerate(sec.markers)}
         for m in sorted(sec.markers, key=lambda x: x.offset):
             if m.type not in _LABEL_BEARING_MARKERS:
                 continue
@@ -527,7 +528,7 @@ def _split_sections_into_juans(
                 first_label = label
                 last_seen = label
             elif label != last_seen:
-                boundaries.append((m.offset, label))
+                boundaries.append((m.offset, marker_pos[id(m)], label))
                 last_seen = label
 
         entry_label = first_label or running_label or "001"
@@ -539,10 +540,16 @@ def _split_sections_into_juans(
         cursor_label = entry_label
         head = sec
         accumulated = 0
-        for offset, new_label in boundaries:
-            front, head = _split_section_at(head, offset - accumulated)
+        front_count = 0
+        for offset, orig_idx, new_label in boundaries:
+            # Pass split_marker_index so markers before the boundary marker
+            # (e.g. trailing punctuation) stay in the front (current juan).
+            front, head = _split_section_at(
+                head, offset - accumulated, orig_idx - front_count,
+            )
             append(cursor_label, front)
             accumulated += len(front.text)
+            front_count += len(front.markers)
             cursor_label = new_label
         append(cursor_label, head)
         running_label = cursor_label
