@@ -350,6 +350,36 @@ export interface TranslationAlignmentResponse {
   rows: TranslationAlignedRow[];
 }
 
+export type TranslationSort = "textid" | "trans_date" | "source_date";
+
+export interface TranslationSegmentHit {
+  bundle_id: string;
+  source_textid: string;
+  juan_seq: number;
+  corresp: string | null;
+  text: string;
+  source_text: string | null;
+  language: string | null;
+  title: string | null;
+  responsibility: TranslationResponsibility[];
+  date: string | null;
+}
+
+export interface TranslationSearchFacets {
+  language: SearchFacetValue[];
+  category: SearchFacetValue[];
+  date: SearchDateFacets;
+}
+
+export interface TranslationSearchResponse {
+  hits: TranslationSegmentHit[];
+  total: number;
+  offset: number;
+  limit: number;
+  q: string;
+  facets: TranslationSearchFacets;
+}
+
 // Server identity
 export interface ServerInfo {
   service?: string;

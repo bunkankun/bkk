@@ -240,6 +240,34 @@ class SegmentTranslationsResponse(BaseModel):
     entries: list[SegmentTranslationEntry] = Field(default_factory=list)
 
 
+class TranslationSegmentHit(BaseModel):
+    bundle_id: str
+    source_textid: str
+    juan_seq: int
+    corresp: str | None
+    text: str
+    source_text: str | None = None
+    language: str | None = None
+    title: str | None = None
+    responsibility: list[TranslationResponsibility] = Field(default_factory=list)
+    date: str | None = None
+
+
+class TranslationSearchFacets(BaseModel):
+    language: list[SearchFacetValue] = Field(default_factory=list)
+    category: list[SearchFacetValue] = Field(default_factory=list)
+    date: SearchDateFacets = Field(default_factory=SearchDateFacets)
+
+
+class TranslationSearchResponse(BaseModel):
+    hits: list[TranslationSegmentHit]
+    total: int
+    offset: int
+    limit: int
+    q: str
+    facets: TranslationSearchFacets = Field(default_factory=TranslationSearchFacets)
+
+
 class CollisionCandidate(BaseModel):
     """One bundle that matched an ambiguous identifier lookup."""
 

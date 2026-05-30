@@ -15,12 +15,15 @@ import {
   putWorkspaceFile,
   searchCorpus,
   searchTextids,
+  searchTranslationSegments,
 } from "../api/client";
 import type {
   AuthSession,
   SearchHit,
   SearchResponse,
   SearchSort,
+  TranslationSearchResponse,
+  TranslationSort,
   TranslationSummary,
 } from "../api/types";
 import {
@@ -81,6 +84,13 @@ export interface SearchFilters {
   aroundBinomExclude: string[];
 }
 
+export interface TranslationSearchFilters {
+  lang: string | null;
+  category: string | null;
+  dateBefore: number | null;
+  dateAfter: number | null;
+}
+
 export interface SearchState {
   query: string;
   target: SearchTarget;
@@ -90,6 +100,9 @@ export interface SearchState {
   status: "idle" | "loading" | "ok" | "error";
   error: string | null;
   response: SearchResponse | null;
+  translationResponse: TranslationSearchResponse | null;
+  translationSort: TranslationSort;
+  translationFilters: TranslationSearchFilters;
 }
 
 export interface SearchHistoryEntry {
@@ -480,6 +493,9 @@ let state: WorkspaceState = {
     status: "idle",
     error: null,
     response: null,
+    translationResponse: null,
+    translationSort: "textid",
+    translationFilters: { lang: null, category: null, dateBefore: null, dateAfter: null },
   },
   searchHistory: [],
   textHistory: [],
@@ -596,9 +612,50 @@ function cancelSearchRequest(): void {
   searchAbort = null;
 }
 
+async function runTranslationSearch(offset: number): Promise<void> {
+  const { query, translationSort, translationFilters } = state.search;
+  cancelSearchRequest();
+  state = {
+    ...state,
+    search: { ...state.search, status: "loading", error: null },
+    rightTab: "search",
+  };
+  notify();
+  try {
+    const response = await searchTranslationSegments({
+      q: query,
+      sort: translationSort,
+      lang: translationFilters.lang ?? undefined,
+      category: translationFilters.category ?? undefined,
+      dateBefore: translationFilters.dateBefore ?? undefined,
+      dateAfter: translationFilters.dateAfter ?? undefined,
+      limit: 50,
+      offset,
+    });
+    state = {
+      ...state,
+      search: { ...state.search, status: "ok", error: null, translationResponse: response },
+    };
+    notify();
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") return;
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+      },
+    };
+    notify();
+  }
+}
+
 async function runSearchInternal(offset: number): Promise<void> {
   const { query, target, sort, filters } = state.search;
-  if (!query.trim() || target !== "fulltext") return;
+  if (!query.trim()) return;
+  if (target === "translations") return runTranslationSearch(offset);
+  if (target !== "fulltext") return;
   cancelSearchRequest();
   const runId = searchRunId;
   const controller = new AbortController();
@@ -1508,6 +1565,37 @@ export const workspace = {
         /* TOC component will surface the same error to the user */
       });
   },
+  openTranslationHit(summary: TranslationSummary, seq: number) {
+    const tabId = `${summary.source_textid}:${seq}`;
+    const target = activePaneLeaf(state.pane);
+    const sourceTab = activeTabForLeaf(target);
+    const tab = {
+      id: tabId,
+      type: "text" as const,
+      textid: summary.source_textid,
+      seq,
+      pinned: false,
+      readMode: "trans" as const,
+      lineMode: sourceTab?.lineMode ?? state.readPrefs.lineMode,
+    };
+    const pane = paneForOpenTab(tab);
+    const focusedPaneId = leafIdForTab(pane, tabId);
+    state = {
+      ...state,
+      activeTextid: summary.source_textid,
+      activeSeq: seq,
+      focusedPaneId,
+      selection: null,
+      currentPage: null,
+      pane,
+      activity: "overlays",
+      selectedTranslation: summary,
+      readMode: "trans",
+    };
+    rememberTextVisit({ textid: summary.source_textid, seq, pinned: false });
+    notify();
+    scheduleSessionSave();
+  },
   openJuan(textid: string, seq: number, options: { pinned?: boolean } = {}) {
     const tabId = `${textid}:${seq}`;
     const target = activePaneLeaf(state.pane);
@@ -1675,6 +1763,7 @@ export const workspace = {
         status: "idle",
         error: null,
         response: null,
+        translationResponse: null,
       },
     };
     notify();
@@ -1690,9 +1779,38 @@ export const workspace = {
         status: "idle",
         error: null,
         response: null,
+        translationResponse: null,
       },
     };
     notify();
+  },
+  setTranslationSort(sort: TranslationSort) {
+    cancelSearchRequest();
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        translationSort: sort,
+        status: "idle",
+        error: null,
+        translationResponse: null,
+      },
+    };
+    notify();
+  },
+  setTranslationFilter(key: keyof TranslationSearchFilters, value: string | number | null) {
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        translationFilters: { ...state.search.translationFilters, [key]: value },
+        status: "idle",
+        error: null,
+        translationResponse: null,
+      },
+    };
+    notify();
+    return runTranslationSearch(0);
   },
   setSearchSort(sort: SearchSort) {
     cancelSearchRequest();
@@ -1970,6 +2088,7 @@ export const workspace = {
         status: "idle",
         error: null,
         response: null,
+        translationResponse: null,
       },
     };
     notify();

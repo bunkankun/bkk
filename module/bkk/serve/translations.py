@@ -12,9 +12,14 @@ from typing import Any
 import yaml
 
 from .schemas import (
+    SearchDateFacets,
+    SearchFacetValue,
     TranslationAlignedRow,
     TranslationAlignmentResponse,
     TranslationResponsibility,
+    TranslationSearchFacets,
+    TranslationSearchResponse,
+    TranslationSegmentHit,
     TranslationSummary,
 )
 from bkk.index.catalog import normalize_search_text
@@ -626,3 +631,195 @@ def _segment_translations_from_fs(
                 ))
                 break
     return entries
+
+
+def search_translation_segments(
+    search_conn: sqlite3.Connection,
+    catalog_conn: sqlite3.Connection,
+    *,
+    q: str,
+    sort: str = "textid",
+    lang: str | None = None,
+    category: str | None = None,
+    date_before: int | None = None,
+    date_after: int | None = None,
+    corpus_root: Path | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[TranslationSegmentHit], int, TranslationSearchFacets]:
+    # 1. Filter bundle metadata from catalog (JOIN catalog_translation + catalog_bundle).
+    cat_where: list[str] = []
+    cat_params: list[Any] = []
+    if lang:
+        cat_where.append("ct.language = ?")
+        cat_params.append(lang)
+    if category:
+        cat_where.append("(cb.section_code = ? OR cb.section_code LIKE ?)")
+        cat_params.extend([category, f"{category}%"])
+    if date_before is not None:
+        cat_where.append("cb.index_date <= ?")
+        cat_params.append(date_before)
+    if date_after is not None:
+        cat_where.append("cb.index_date >= ?")
+        cat_params.append(date_after)
+    cat_where_sql = f"WHERE {' AND '.join(cat_where)}" if cat_where else ""
+    cat_rows = catalog_conn.execute(
+        "SELECT ct.id, ct.source_textid, ct.language, ct.title, ct.responsibility, "
+        "ct.date, cb.index_date, cb.section_code "
+        "FROM catalog_translation ct "
+        f"JOIN catalog_bundle cb ON cb.textid = ct.source_textid {cat_where_sql}",
+        cat_params,
+    ).fetchall()
+
+    bundle_meta: dict[str, dict[str, Any]] = {}
+    for row in cat_rows:
+        bid, src, blang, title, resp_raw, bdate, idate, sec = row
+        try:
+            resp = json.loads(resp_raw or "[]")
+        except json.JSONDecodeError:
+            resp = []
+        bundle_meta[bid] = {
+            "source_textid": src,
+            "language": blang,
+            "title": title,
+            "responsibility": resp,
+            "date": bdate,
+            "index_date": idate,
+            "section_code": sec,
+        }
+
+    if not bundle_meta:
+        return [], 0, TranslationSearchFacets()
+
+    # 2. Search segments restricted to filtered bundle IDs.
+    q_norm = normalize_search_text(q) or q.casefold()
+    like = f"%{q_norm}%"
+    bundle_ids = list(bundle_meta)
+    placeholders = ",".join("?" * len(bundle_ids))
+    total = int(search_conn.execute(
+        f"SELECT COUNT(*) FROM translation_segment "
+        f"WHERE text_search LIKE ? AND translation_id IN ({placeholders})",
+        [like, *bundle_ids],
+    ).fetchone()[0])
+
+    # 3. Compute facets from actual matching segments (counts per source section/language).
+    agg_rows = search_conn.execute(
+        f"SELECT translation_id, COUNT(*) "
+        f"FROM translation_segment "
+        f"WHERE text_search LIKE ? AND translation_id IN ({placeholders}) "
+        f"GROUP BY translation_id",
+        [like, *bundle_ids],
+    ).fetchall()
+    lang_counts: dict[str, int] = {}
+    sec_counts: dict[str, int] = {}
+    dates: list[int] = []
+    for tid, hit_count in agg_rows:
+        meta = bundle_meta.get(tid, {})
+        lv = meta.get("language") or ""
+        lang_counts[lv] = lang_counts.get(lv, 0) + hit_count
+        sv = meta.get("section_code") or ""
+        sec_counts[sv] = sec_counts.get(sv, 0) + hit_count
+        if meta.get("index_date") is not None:
+            dates.append(meta["index_date"])
+
+    language_facet = [
+        SearchFacetValue(value=k, count=v, selected=(k == (lang or "")))
+        for k, v in sorted(lang_counts.items(), key=lambda x: -x[1])
+        if k
+    ]
+    sec_labels: dict[str, str | None] = {}
+    if sec_counts:
+        sec_placeholders = ",".join("?" * len(sec_counts))
+        for code, label in catalog_conn.execute(
+            f"SELECT code, title_english FROM catalog_section WHERE code IN ({sec_placeholders})",
+            list(sec_counts),
+        ).fetchall():
+            sec_labels[code] = label
+    category_facet = [
+        SearchFacetValue(value=k, label=sec_labels.get(k), count=v, selected=(k == (category or "")))
+        for k, v in sorted(sec_counts.items(), key=lambda x: -x[1])
+        if k
+    ]
+    date_facet = SearchDateFacets(
+        min=min(dates) if dates else None,
+        max=max(dates) if dates else None,
+    )
+    facets = TranslationSearchFacets(
+        language=language_facet,
+        category=category_facet,
+        date=date_facet,
+    )
+
+    # 4. Fetch the current page of matching segments.
+    rows = search_conn.execute(
+        f"SELECT translation_id, juan_seq, corresp, text "
+        f"FROM translation_segment "
+        f"WHERE text_search LIKE ? AND translation_id IN ({placeholders}) "
+        f"ORDER BY translation_id, juan_seq "
+        f"LIMIT ? OFFSET ?",
+        [like, *bundle_ids, limit, offset],
+    ).fetchall()
+
+    # 5. Build hit list with metadata.
+    hits: list[TranslationSegmentHit] = []
+    for tid, jseq, corresp, text in rows:
+        meta = bundle_meta.get(tid, {})
+        resp_list = [
+            TranslationResponsibility(
+                role=item.get("role") if isinstance(item, dict) else None,
+                name=item.get("name") if isinstance(item, dict) else None,
+            )
+            for item in (meta.get("responsibility") or [])
+            if isinstance(item, dict)
+        ]
+        hits.append(TranslationSegmentHit(
+            bundle_id=tid,
+            source_textid=meta.get("source_textid", ""),
+            juan_seq=jseq,
+            corresp=corresp,
+            text=text,
+            language=meta.get("language"),
+            title=meta.get("title"),
+            responsibility=resp_list,
+            date=meta.get("date"),
+        ))
+
+    # 6. Apply date-based sort (textid sort is already done in SQL).
+    if sort == "trans_date":
+        hits.sort(key=lambda h: (h.date or "", h.bundle_id))
+    elif sort == "source_date":
+        hits.sort(
+            key=lambda h: (-(bundle_meta.get(h.bundle_id, {}).get("index_date") or 0), h.bundle_id)
+        )
+
+    # 7. Optionally look up source segment text.
+    if corpus_root is not None:
+        from .selection import load_juan  # noqa: PLC0415
+        source_cache: dict[tuple[str, int], dict[str, Any]] = {}
+        for hit in hits:
+            if not hit.corresp:
+                continue
+            key = (hit.source_textid, hit.juan_seq)
+            if key not in source_cache:
+                try:
+                    _, juan = load_juan(corpus_root, hit.source_textid, hit.juan_seq)
+                    body = juan.get("body") or {}
+                    body_text = body.get("text") or ""
+                    body_markers = body.get("markers") or []
+                    source_cache[key] = {
+                        seg["corresp"]: body_text[seg["start"]:seg["end"]]
+                        for seg in _source_segments(body_text, body_markers)
+                        if "corresp" in seg
+                    }
+                except Exception:
+                    source_cache[key] = {}
+            seg_texts = source_cache[key]
+            # _source_segments uses relative corresp; match the hit's corresp
+            rel = _relative_marker_id(hit.corresp)
+            src_text = seg_texts.get(rel) or seg_texts.get(hit.corresp)
+            if src_text:
+                hits[hits.index(hit)] = TranslationSegmentHit(
+                    **{**hit.model_dump(), "source_text": src_text}
+                )
+
+    return hits, total, facets

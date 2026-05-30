@@ -11,6 +11,7 @@ from bkk.serve.schemas import (
     SegmentTranslationsResponse,
     TranslationAlignmentResponse,
     TranslationListResponse,
+    TranslationSearchResponse,
 )
 from bkk.serve.state import AppState
 from bkk.serve.translations import (
@@ -20,6 +21,7 @@ from bkk.serve.translations import (
     list_translation_bundles,
     load_translation_bundle_from_catalog,
     load_translation_bundle,
+    search_translation_segments,
 )
 
 router = APIRouter(tags=["translations"])
@@ -99,6 +101,52 @@ def translations(
         offset=offset,
         limit=limit,
     )
+
+
+@router.get(
+    "/translations/search",
+    response_model=TranslationSearchResponse,
+    summary="Search translation segments (KWIC-style)",
+)
+def translation_search(
+    request: Request,
+    q: str = Query(..., min_length=1, description="search term"),
+    sort: str = Query("textid", pattern="^(textid|trans_date|source_date)$"),
+    lang: str | None = Query(None, description="filter by translation language"),
+    category: str | None = Query(None, description="filter by source text section code"),
+    date_before: int | None = Query(None, description="filter by source text index_date upper bound"),
+    date_after: int | None = Query(None, description="filter by source text index_date lower bound"),
+    include_source: bool = Query(True, description="include source segment text"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> TranslationSearchResponse:
+    state: AppState = request.app.state.bkk
+    search_conn = state.open_translation_search()
+    catalog_conn = state.open_catalog()
+    if search_conn is None or catalog_conn is None:
+        if search_conn is not None:
+            search_conn.close()
+        if catalog_conn is not None:
+            catalog_conn.close()
+        return TranslationSearchResponse(hits=[], total=0, offset=offset, limit=limit, q=q)
+    try:
+        hits, total, facets = search_translation_segments(
+            search_conn,
+            catalog_conn,
+            q=q,
+            sort=sort,
+            lang=lang,
+            category=category,
+            date_before=date_before,
+            date_after=date_after,
+            corpus_root=state.corpus_root if include_source else None,
+            limit=limit,
+            offset=offset,
+        )
+    finally:
+        search_conn.close()
+        catalog_conn.close()
+    return TranslationSearchResponse(hits=hits, total=total, offset=offset, limit=limit, q=q, facets=facets)
 
 
 @router.get(

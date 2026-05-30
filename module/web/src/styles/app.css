@@ -1841,6 +1841,19 @@ button {
   border-radius: 2px;
   font-weight: 600;
 }
+.kwic-line-source {
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 1px;
+  color: var(--t3);
+  letter-spacing: 0.05em;
+}
+.kwic-line-trans {
+  display: block;
+  text-align: center;
+  white-space: normal;
+  overflow: visible;
+}
 .kwic-line-witness {
   font-size: 12px;
   line-height: 1.5;

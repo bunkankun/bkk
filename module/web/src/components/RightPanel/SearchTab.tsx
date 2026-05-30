@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import type { SearchFacetValue, SearchFacets, SearchHit } from "../../api/types";
+import type {
+  SearchFacetValue,
+  SearchFacets,
+  SearchHit,
+  TranslationSearchFacets,
+  TranslationSearchResponse,
+  TranslationSegmentHit,
+  TranslationSummary,
+} from "../../api/types";
 import { listColor, listPathFromName } from "../../lib/textLists";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import type {
@@ -7,6 +15,7 @@ import type {
   SearchFacetKind,
   SearchFilters,
   TextList,
+  TranslationSearchFilters,
 } from "../../state/useWorkspace";
 
 const PAGE_SIZE = 50;
@@ -455,11 +464,207 @@ function HitRow({ hit }: { hit: SearchHit }) {
   );
 }
 
+function highlightQuery(text: string, query: string) {
+  if (!query.trim()) return text;
+  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
+  return parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase()
+      ? <mark key={i} className="kwic-match">{part}</mark>
+      : part
+  );
+}
+
+function hitToSummary(hit: TranslationSegmentHit): TranslationSummary {
+  return {
+    id: hit.bundle_id,
+    source_textid: hit.source_textid,
+    language: hit.language ?? null,
+    title: hit.title ?? null,
+    responsibility: hit.responsibility,
+    date: hit.date ?? null,
+    juan_count: 0,
+    segment_count: 0,
+    source_juans: [],
+  };
+}
+
+function TranslationHitRow({ hit, query }: { hit: TranslationSegmentHit; query: string }) {
+  const names = hit.responsibility.map((r) => r.name).filter(Boolean).join(", ");
+  const onClick = () => {
+    workspace.openTranslationHit(hitToSummary(hit), hit.juan_seq);
+  };
+  return (
+    <button type="button" className="kwic-row" onClick={onClick}>
+      <div className="kwic-meta">
+        <span className="kwic-textid">{hit.source_textid}</span>
+        <span className="kwic-juan">juan {hit.juan_seq}</span>
+        {hit.language ? <span className="kwic-chip">{hit.language}</span> : null}
+        {names ? <span className="kwic-label">{names}</span> : null}
+        {hit.date ? <span className="kwic-label">{hit.date.slice(0, 4)}</span> : null}
+      </div>
+      {hit.source_text ? (
+        <div className="kwic-line kwic-line-source kwic-line-trans">{hit.source_text}</div>
+      ) : null}
+      <div className="kwic-line kwic-line-trans">{highlightQuery(hit.text, query)}</div>
+    </button>
+  );
+}
+
+function TranslationFacetChip({
+  v,
+  active,
+  disabled,
+  onClick,
+}: {
+  v: SearchFacetValue;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`kwic-facet-chip${active ? " on" : ""}`}
+      disabled={disabled}
+      onClick={onClick}
+      title={v.label ?? v.value}
+    >
+      <span className="kwic-facet-value">{v.value}</span>
+      <span className="kwic-facet-count">{v.count}</span>
+    </button>
+  );
+}
+
+function TranslationFacets({
+  facets,
+  filters,
+  disabled,
+}: {
+  facets: TranslationSearchFacets;
+  filters: TranslationSearchFilters;
+  disabled: boolean;
+}) {
+  return (
+    <div className="kwic-facets">
+      {facets.language.length > 0 && (
+        <div className="kwic-facet-group">
+          <div className="kwic-facet-label">Language</div>
+          <div className="kwic-facet-values">
+            {facets.language.map((v) => (
+              <TranslationFacetChip
+                key={v.value}
+                v={v}
+                active={filters.lang === v.value}
+                disabled={disabled}
+                onClick={() =>
+                  void workspace.setTranslationFilter("lang", filters.lang === v.value ? null : v.value)
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {facets.category.length > 0 && (
+        <div className="kwic-facet-group">
+          <div className="kwic-facet-label">Category</div>
+          <div className="kwic-facet-values">
+            {facets.category.map((v) => (
+              <TranslationFacetChip
+                key={v.value}
+                v={v}
+                active={filters.category === v.value}
+                disabled={disabled}
+                onClick={() =>
+                  void workspace.setTranslationFilter("category", filters.category === v.value ? null : v.value)
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TranslationResultsView({
+  response,
+  query,
+  filters,
+  status,
+}: {
+  response: TranslationSearchResponse;
+  query: string;
+  filters: TranslationSearchFilters;
+  status: string;
+}) {
+  const disabled = status === "loading";
+  const hasPrev = response.offset > 0;
+  const hasNext = response.offset + response.limit < response.total;
+  const start = response.offset + 1;
+  const end = Math.min(response.offset + response.limit, response.total);
+  const hasFilters = filters.lang != null || filters.category != null ||
+    filters.dateBefore != null || filters.dateAfter != null;
+
+  return (
+    <div className="rc kwic-list">
+      <div className="kwic-summary">
+        <span>
+          {start}–{end} of {response.total} for "{response.q}"
+        </span>
+        {hasFilters ? (
+          <button
+            type="button"
+            className="kwic-clear-filters"
+            disabled={disabled}
+            onClick={() => {
+              void workspace.setTranslationFilter("lang", null);
+              void workspace.setTranslationFilter("category", null);
+              void workspace.setTranslationFilter("dateBefore", null);
+              void workspace.setTranslationFilter("dateAfter", null);
+            }}
+          >
+            clear facets
+          </button>
+        ) : null}
+      </div>
+      <TranslationFacets facets={response.facets} filters={filters} disabled={disabled} />
+      {response.hits.map((hit, i) => (
+        <TranslationHitRow
+          key={`${hit.bundle_id}:${hit.juan_seq}:${hit.corresp ?? i}`}
+          hit={hit}
+          query={query}
+        />
+      ))}
+      {(hasPrev || hasNext) && (
+        <div className="kwic-pager">
+          <button
+            type="button"
+            disabled={!hasPrev || disabled}
+            onClick={() => void workspace.runSearchAt(Math.max(0, response.offset - PAGE_SIZE))}
+          >
+            ← Prev
+          </button>
+          <button
+            type="button"
+            disabled={!hasNext || disabled}
+            onClick={() => void workspace.runSearchAt(response.offset + PAGE_SIZE)}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SearchTab() {
   const [expandedFacets, setExpandedFacets] = useState<Set<FacetGroupKey>>(() => new Set());
   const status = useWorkspace((s) => s.search.status);
   const error = useWorkspace((s) => s.search.error);
   const response = useWorkspace((s) => s.search.response);
+  const translationResponse = useWorkspace((s) => s.search.translationResponse);
+  const translationFilters = useWorkspace((s) => s.search.translationFilters);
+  const target = useWorkspace((s) => s.search.target);
   const query = useWorkspace((s) => s.search.query);
   const filters = useWorkspace((s) => s.search.filters);
   const facetLimit = useWorkspace((s) => s.search.facetLimit);
@@ -492,12 +697,30 @@ export function SearchTab() {
   if (status === "idle") {
     return <div className="rc empty">Enter a query in the menu bar to search.</div>;
   }
-  if (status === "loading" && response == null) {
+  if (status === "loading" && response == null && translationResponse == null) {
     return <div className="rc empty">Searching…</div>;
   }
   if (status === "error") {
     return <div className="rc empty">Search failed: {error}</div>;
   }
+
+  if (target === "translations") {
+    if (translationResponse == null) {
+      return <div className="rc empty">No results.</div>;
+    }
+    if (translationResponse.total === 0) {
+      return <div className="rc empty">No matches for "{query}".</div>;
+    }
+    return (
+      <TranslationResultsView
+        response={translationResponse}
+        query={query}
+        filters={translationFilters}
+        status={status}
+      />
+    );
+  }
+
   if (response == null) {
     return <div className="rc empty">No results.</div>;
   }

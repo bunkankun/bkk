@@ -1,11 +1,11 @@
-import type { SearchSort } from "../../api/types";
+import type { SearchSort, TranslationSort } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import type { SearchTarget } from "../../state/useWorkspace";
 
-const TARGETS: { value: SearchTarget; label: string; v2: boolean }[] = [
-  { value: "fulltext", label: "Full text", v2: false },
-  { value: "dictionary", label: "Dictionary", v2: true },
-  { value: "translations", label: "Translations", v2: true },
+const TARGETS: { value: SearchTarget; label: string; disabled: boolean }[] = [
+  { value: "fulltext", label: "Full text", disabled: false },
+  { value: "dictionary", label: "Dictionary", disabled: true },
+  { value: "translations", label: "Translations", disabled: false },
 ];
 
 const SORTS: { value: SearchSort; label: string }[] = [
@@ -16,14 +16,22 @@ const SORTS: { value: SearchSort; label: string }[] = [
   { value: "closeness", label: "by closeness" },
 ];
 
+const TRANS_SORTS: { value: TranslationSort; label: string }[] = [
+  { value: "textid", label: "by text id" },
+  { value: "trans_date", label: "by translation date" },
+  { value: "source_date", label: "by source date" },
+];
+
 export function SearchBar() {
   const query = useWorkspace((s) => s.search.query);
   const target = useWorkspace((s) => s.search.target);
   const sort = useWorkspace((s) => s.search.sort);
+  const translationSort = useWorkspace((s) => s.search.translationSort);
   const status = useWorkspace((s) => s.search.status);
   const history = useWorkspace((s) => s.searchHistory);
 
-  const canSubmit = query.trim().length > 0 && target === "fulltext";
+  const canSubmit =
+    query.trim().length > 0 && (target === "fulltext" || target === "translations");
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,24 +62,34 @@ export function SearchBar() {
         aria-label="Search target"
       >
         {TARGETS.map((t) => (
-          <option key={t.value} value={t.value} disabled={t.v2} title={t.v2 ? "v2" : undefined}>
+          <option key={t.value} value={t.value} disabled={t.disabled}>
             {t.label}
-            {t.v2 ? " (v2)" : ""}
           </option>
         ))}
       </select>
-      <select
-        className="mb-select"
-        value={sort}
-        onChange={(e) => workspace.setSearchSort(e.target.value as SearchSort)}
-        aria-label="Sort order"
-      >
-        {SORTS.map((s) => (
-          <option key={s.value} value={s.value}>
-            {s.label}
-          </option>
-        ))}
-      </select>
+      {target === "translations" ? (
+        <select
+          className="mb-select"
+          value={translationSort}
+          onChange={(e) => workspace.setTranslationSort(e.target.value as TranslationSort)}
+          aria-label="Sort order"
+        >
+          {TRANS_SORTS.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+      ) : (
+        <select
+          className="mb-select"
+          value={sort}
+          onChange={(e) => workspace.setSearchSort(e.target.value as SearchSort)}
+          aria-label="Sort order"
+        >
+          {SORTS.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+      )}
       <button
         type="submit"
         className="mb-search-go"

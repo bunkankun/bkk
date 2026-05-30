@@ -23,6 +23,8 @@ import type {
   TimelineResponse,
   TranslationAlignmentResponse,
   TranslationListResponse,
+  TranslationSearchResponse,
+  TranslationSort,
   SegmentTranslationsResponse,
   WorkspaceFile,
   WorkspaceFileList,
@@ -216,6 +218,29 @@ export async function searchTranslations(params?: {
   return fetchJson<TranslationListResponse>(
     `${apiBase}/translations${qs ? `?${qs}` : ""}`,
   );
+}
+
+export async function searchTranslationSegments(params: {
+  q: string;
+  sort?: TranslationSort;
+  lang?: string;
+  category?: string;
+  dateBefore?: number;
+  dateAfter?: number;
+  includeSource?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<TranslationSearchResponse> {
+  const q = new URLSearchParams({ q: params.q });
+  if (params.sort) q.set("sort", params.sort);
+  if (params.lang) q.set("lang", params.lang);
+  if (params.category) q.set("category", params.category);
+  if (params.dateBefore != null) q.set("date_before", String(params.dateBefore));
+  if (params.dateAfter != null) q.set("date_after", String(params.dateAfter));
+  if (params.includeSource != null) q.set("include_source", String(params.includeSource));
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.offset != null) q.set("offset", String(params.offset));
+  return fetchJson<TranslationSearchResponse>(`${apiBase}/translations/search?${q}`);
 }
 
 export async function getBundleTranslations(
