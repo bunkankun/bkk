@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
-from bkk.importer.cli import _find_cbeta_text, run
+from bkk.importer.cli import _find_cbeta_text, _find_cbeta_texts, run
 from bkk.importer.read.cbeta import read_cbeta
 
 
@@ -247,3 +247,112 @@ def test_cli_imports_native_cbeta_p5_shape(tmp_path: Path):
         if marker.get("type") == "page-break"
     }
     assert "KR6v0348_B_000-0076a" in front_ids
+
+
+# ── _find_cbeta_texts ────────────────────────────────────────────────────────
+
+
+def _make_cbeta_file(root: Path, collection: str, volume: str, stem: str) -> Path:
+    p = root / collection / volume / f"{stem}.xml"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("<TEI/>", encoding="utf-8")
+    return p
+
+
+def test_find_cbeta_texts_single(tmp_path: Path):
+    root = tmp_path / "cbeta"
+    target = _make_cbeta_file(root, "T", "T01", "T01n0001")
+    result = _find_cbeta_texts(root, "T01n0001")
+    assert result == [target]
+
+
+def test_find_cbeta_texts_letter_suffix_no_glob(tmp_path: Path):
+    """old_id with a letter suffix triggers exact match, not glob."""
+    root = tmp_path / "cbeta"
+    target = _make_cbeta_file(root, "T", "T08", "T08n0236a")
+    # Distractor that the glob would wrongly pick up:
+    _make_cbeta_file(root, "T", "T08", "T08n0236b")
+    result = _find_cbeta_texts(root, "T08n0236a")
+    assert result == [target]
+
+
+def test_find_cbeta_texts_multivolume_letter_suffix(tmp_path: Path):
+    """T05n0220-style: no exact file, letter-suffixed parts across volumes."""
+    root = tmp_path / "cbeta"
+    fa = _make_cbeta_file(root, "T", "T05", "T05n0220a")
+    fb = _make_cbeta_file(root, "T", "T06", "T06n0220b")
+    fc = _make_cbeta_file(root, "T", "T07", "T07n0220c")
+    result = _find_cbeta_texts(root, "T05n0220")
+    assert [p.stem for p in result] == ["T05n0220a", "T06n0220b", "T07n0220c"]
+    assert result == [fa, fb, fc]
+
+
+def test_find_cbeta_texts_multivolume_no_letter_suffix(tmp_path: Path):
+    """X81n1571-style: primary file exists, companion volume also present."""
+    root = tmp_path / "cbeta"
+    f81 = _make_cbeta_file(root, "X", "X81", "X81n1571")
+    f82 = _make_cbeta_file(root, "X", "X82", "X82n1571")
+    result = _find_cbeta_texts(root, "X81n1571")
+    assert [p.stem for p in result] == ["X81n1571", "X82n1571"]
+    assert result == [f81, f82]
+
+
+def _minimal_cbeta_xml(xml_id: str, juan_nums: list[int]) -> str:
+    juans = "\n".join(
+        f'<cb:juan fun="open" n="{n}"/><p>文{n}</p>'
+        for n in juan_nums
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"
+     xmlns:cb="http://www.cbeta.org/ns/1.0"
+     xml:id="{xml_id}">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title xml:lang="zh-Hant">測試</title></titleStmt>
+      <publicationStmt><p/></publicationStmt>
+      <sourceDesc><p/></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text><body>{juans}</body></text>
+</TEI>"""
+
+
+def _write_mapping_multi(path: Path, kr_id: str, old_id: str) -> Path:
+    path.write_text(
+        "kr_id,kr_subsection,old_id,authorityID,json_key,title,category,alt\n"
+        f"{kr_id},KR9x,{old_id},CA9999999,X999,Test,,\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_run_cbeta_multivolume_manifest_rebuilt(tmp_path: Path):
+    """End-to-end: two-file multi-volume text; manifest covers all juans."""
+    root = tmp_path / "cbeta"
+    fa = root / "X" / "X81" / "X81n1571.xml"
+    fb = root / "X" / "X82" / "X82n1571.xml"
+    fa.parent.mkdir(parents=True)
+    fb.parent.mkdir(parents=True)
+    fa.write_text(_minimal_cbeta_xml("X81n1571", [1, 2]), encoding="utf-8")
+    fb.write_text(_minimal_cbeta_xml("X82n1571", [3, 4]), encoding="utf-8")
+
+    mapping = _write_mapping_multi(tmp_path / "mapping.csv", "KR9x0099", "X81n1571")
+    out = tmp_path / "out"
+
+    rc = run([
+        "--format", "cbeta",
+        "--in", str(root),
+        "--mapping", str(mapping),
+        "--text-id", "KR9x0099",
+        "--out", str(out),
+        "--yes",
+    ])
+
+    assert rc == 0
+    bundle_root = out / "KR9x0099"
+    manifest = yaml.safe_load(
+        (bundle_root / "KR9x0099.manifest.yaml").read_text(encoding="utf-8")
+    )
+    parts = manifest["assets"]["parts"]
+    juan_seqs = [p["seq"] for p in parts]
+    assert juan_seqs == [1, 2, 3, 4]

@@ -698,6 +698,11 @@ def _run_cbeta(args) -> int:
                   file=sys.stderr)
             return 0
 
+    from collections import Counter
+    multi_kr_ids = {
+        kr for kr, n in Counter(r["kr_id"] for r, _ in pairs).items() if n > 1
+    }
+
     if len(pairs) > 1 and not args.yes:
         if not _confirm_bulk([(row["kr_id"], path) for row, path in pairs]):
             print("aborted.", file=sys.stderr)
@@ -714,6 +719,13 @@ def _run_cbeta(args) -> int:
             label = row.get("old_id") or row.get("kr_id") or text_xml.name
             print(f"error importing {label}: {exc}", file=sys.stderr)
             rc = 1
+
+    if multi_kr_ids:
+        from bkk.repair.manifest import rebuild_manifests
+        for kr_id in sorted(multi_kr_ids):
+            eff = _effective_out_root(args.out_root, kr_id, args.by_section)
+            rebuild_manifests(eff / kr_id)
+
     return rc
 
 
@@ -759,7 +771,10 @@ def _resolve_cbeta_targets(
                 f"{needle!r} maps to multiple rows in {args.mapping_csv}"
             )
         row = matches[0]
-        return [(row, _find_cbeta_text(args.in_root, row["old_id"]))]
+        return [
+            ({**row, "old_id": p.stem}, p)
+            for p in _find_cbeta_texts(args.in_root, row["old_id"])
+        ]
 
     selected = rows
     if args.section:
@@ -772,7 +787,8 @@ def _resolve_cbeta_targets(
     pairs: list[tuple[dict[str, str], Path]] = []
     for row in selected:
         try:
-            pairs.append((row, _find_cbeta_text(args.in_root, row["old_id"])))
+            for p in _find_cbeta_texts(args.in_root, row["old_id"]):
+                pairs.append(({**row, "old_id": p.stem}, p))
         except FileNotFoundError as exc:
             print(f"warning: skipping {row['old_id']}: {exc}",
                   file=sys.stderr)
@@ -787,6 +803,53 @@ def _cbeta_collection(old_id: str) -> str:
 def _cbeta_volume(old_id: str) -> str:
     m = re.match(r"^([A-Za-z]+\d+)", old_id)
     return m.group(1) if m else old_id
+
+
+def _find_cbeta_texts(in_root: Path, old_id: str) -> list[Path]:
+    """Return all CBETA XML files that belong to ``old_id``.
+
+    When ``old_id`` already ends in a letter (e.g. ``T08n0236a``) the text is
+    a separate KR entry and only the exact file is returned.  Otherwise the
+    collection directory is globbed for every volume-file with the same text
+    number — covering both letter-suffix multi-part texts (T05n0220a …
+    T07n0220o) and plain cross-volume companions (X81n1571 + X82n1571).
+    Falls back to :func:`_find_cbeta_text` if the glob yields nothing.
+    """
+    if re.search(r"[a-z]$", old_id):
+        return [_find_cbeta_text(in_root, old_id)]
+
+    collection = _cbeta_collection(old_id)
+    m = re.match(r"^[A-Za-z]+\d+n(\d+)$", old_id)
+    if not m:
+        return [_find_cbeta_text(in_root, old_id)]
+    number = m.group(1)
+
+    coll_roots = [
+        in_root / collection,
+        in_root / "xml" / collection,
+        in_root / "CBETA_XML" / collection,
+    ]
+    # Stop at the first layout root that contains results, mirroring the
+    # priority order of _find_cbeta_text() so we don't mix paths from
+    # different root layouts (e.g. B/B10/ and xml/B/B10/).
+    paths: set[Path] = set()
+    for cr in coll_roots:
+        if not cr.is_dir():
+            continue
+        paths.update(cr.glob(f"*/{collection}*n{number}.xml"))
+        paths.update(cr.glob(f"*/{collection}*n{number}[a-z].xml"))
+        if paths:
+            break
+
+    if not paths:
+        return [_find_cbeta_text(in_root, old_id)]
+
+    def _sort_key(p: Path) -> tuple:
+        stem = p.stem
+        lm = re.search(r"[a-z]+$", stem)
+        return (1, lm.group()) if lm else (0, stem)
+
+    return sorted(paths, key=_sort_key)
 
 
 def _find_cbeta_text(in_root: Path, old_id: str) -> Path:
