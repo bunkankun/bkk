@@ -198,6 +198,7 @@ export interface WorkspaceState {
   readMode: ReadMode;
   openMode: OpenMode;
   selectedTranslation: TranslationSummary | null;
+  selectedSegment: { textid: string; seq: number; corresp: string; sourceText: string } | null;
   // info from GET /api/info (loaded once at startup).
   serverInfo: { upstream_repo?: string | null; version?: string } | null;
   auth: {
@@ -435,6 +436,7 @@ let state: WorkspaceState = {
   readMode: "read",
   openMode: "read",
   selectedTranslation: null,
+  selectedSegment: null,
   serverInfo: null,
   auth: {
     status: "unknown",
@@ -1436,6 +1438,10 @@ export const workspace = {
   },
   setSelection(sel: SelectionRange | null) {
     state = { ...state, selection: sel };
+    notify();
+  },
+  setSelectedSegment(seg: WorkspaceState["selectedSegment"]) {
+    state = { ...state, selectedSegment: seg };
     notify();
   },
   focusPane(paneId: string) {

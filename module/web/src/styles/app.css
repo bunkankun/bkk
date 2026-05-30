@@ -1014,6 +1014,9 @@ button {
   font-size: 18px;
   line-height: 1.8;
   word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 .trans-ref {
   font-family: var(--fm);
@@ -1038,9 +1041,44 @@ button {
   color: var(--t3);
   font-style: italic;
 }
+.trans-resp {
+  color: var(--t2);
+}
+.trans-row.active .trans-source {
+  background: var(--sel-bg, rgba(255, 200, 0, 0.12));
+  border-radius: 3px;
+}
+.trans-source {
+  cursor: pointer;
+}
 .trans-row.continued .trans-source,
 .trans-row.continued .trans-target {
   opacity: 0.68;
+}
+.ov-row-dim {
+  opacity: 0.45;
+}
+.seg-trans-panel {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--bdr);
+}
+.seg-trans-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-family: var(--fm);
+}
+.seg-trans-corresp {
+  color: var(--t3);
+}
+.seg-trans-text {
+  font-family: var(--fc);
+  font-size: 15px;
+  color: var(--t1);
+  flex: 1;
 }
 
 @media (max-width: 760px) {

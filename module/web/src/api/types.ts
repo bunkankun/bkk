@@ -306,6 +306,7 @@ export interface TranslationSummary {
   license?: string | null;
   juan_count: number;
   segment_count: number;
+  source_juans: number[];
 }
 
 export interface TranslationListResponse {
@@ -324,6 +325,21 @@ export interface TranslationAlignedRow {
   translation_text: string;
   translation_refs: string[];
   continued: boolean;
+  resp?: string | null;
+}
+
+export interface SegmentTranslationEntry {
+  bundle_id: string;
+  title?: string | null;
+  language?: string | null;
+  translator?: string | null;
+  text: string;
+}
+
+export interface SegmentTranslationsResponse {
+  corresp: string;
+  source_text: string;
+  entries: SegmentTranslationEntry[];
 }
 
 export interface TranslationAlignmentResponse {

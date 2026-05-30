@@ -23,6 +23,7 @@ import type {
   TimelineResponse,
   TranslationAlignmentResponse,
   TranslationListResponse,
+  SegmentTranslationsResponse,
   WorkspaceFile,
   WorkspaceFileList,
   WorkspaceDeleteResult,
@@ -232,6 +233,18 @@ export async function getTranslationAlignment(
 ): Promise<TranslationAlignmentResponse> {
   return fetchJson<TranslationAlignmentResponse>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/translations/${encodeURIComponent(translationId)}`,
+  );
+}
+
+export async function getSegmentTranslations(
+  textid: string,
+  seq: number,
+  corresp: string,
+  sourceText: string,
+): Promise<SegmentTranslationsResponse> {
+  const params = new URLSearchParams({ corresp, source_text: sourceText });
+  return fetchJson<SegmentTranslationsResponse>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/segment-translations?${params}`,
   );
 }
 

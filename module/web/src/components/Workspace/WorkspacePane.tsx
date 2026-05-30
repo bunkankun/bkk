@@ -161,6 +161,8 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
         ) : showTranslation ? (
           <TranslationViewer
             key={`${activeTab.textid}:${activeTab.seq}:${selectedTranslation?.id ?? ""}`}
+            paneId={pane.id}
+            tabId={activeTab.id}
             textid={activeTab.textid}
             seq={activeTab.seq}
             translationId={

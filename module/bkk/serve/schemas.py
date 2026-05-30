@@ -196,6 +196,7 @@ class TranslationSummary(BaseModel):
     license: str | None = None
     juan_count: int = 0
     segment_count: int = 0
+    source_juans: list[int] = Field(default_factory=list)
 
 
 class TranslationListResponse(BaseModel):
@@ -214,6 +215,7 @@ class TranslationAlignedRow(BaseModel):
     translation_text: str = ""
     translation_refs: list[str] = Field(default_factory=list)
     continued: bool = False
+    resp: str | None = None
 
 
 class TranslationAlignmentResponse(BaseModel):
@@ -222,6 +224,20 @@ class TranslationAlignmentResponse(BaseModel):
     translation: TranslationSummary | None = None
     status: str
     rows: list[TranslationAlignedRow] = Field(default_factory=list)
+
+
+class SegmentTranslationEntry(BaseModel):
+    bundle_id: str
+    title: str | None = None
+    language: str | None = None
+    translator: str | None = None
+    text: str
+
+
+class SegmentTranslationsResponse(BaseModel):
+    corresp: str
+    source_text: str
+    entries: list[SegmentTranslationEntry] = Field(default_factory=list)
 
 
 class CollisionCandidate(BaseModel):
