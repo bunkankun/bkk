@@ -79,7 +79,8 @@ CREATE TABLE catalog_translation (
   date TEXT,
   license TEXT,
   juan_count INTEGER NOT NULL,
-  seg_count INTEGER NOT NULL
+  seg_count INTEGER NOT NULL,
+  source_juans TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE INDEX idx_catalog_translation_source ON catalog_translation(source_textid);
@@ -246,8 +247,8 @@ def build_catalog_index(
             "INSERT INTO catalog_translation("
             "id, source_textid, path, canonical_identifier, "
             "source_canonical_identifier, language, title, original_title, "
-            "responsibility, date, license, juan_count, seg_count"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "responsibility, date, license, juan_count, seg_count, source_juans"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             translation_records,
         )
         conn.commit()
@@ -590,6 +591,14 @@ def _translation_records(corpus: Path) -> list[tuple]:
             entry["segs"] for entry in juan_entries
             if isinstance(entry.get("segs"), int)
         )
+        source_juans: list[int] = []
+        for entry in (manifest.get("juan") or []):
+            if not isinstance(entry, dict):
+                continue
+            try:
+                source_juans.append(int(entry["label"]))
+            except (KeyError, TypeError, ValueError):
+                pass
         records.append((
             bundle_id,
             source_textid,
@@ -604,6 +613,7 @@ def _translation_records(corpus: Path) -> list[tuple]:
             manifest.get("license"),
             juan_count,
             seg_count,
+            json.dumps(source_juans),
         ))
     return records
 

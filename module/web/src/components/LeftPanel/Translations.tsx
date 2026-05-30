@@ -23,6 +23,7 @@ function TranslationButton({ item, dimmed }: { item: TranslationSummary; dimmed:
         {item.language ? `${item.language}` : ""}
         {names(item) ? ` · ${names(item)}` : ""}
         {item.date ? ` · ${item.date.slice(0, 4)}` : ""}
+        {item.segment_count > 0 ? ` · ${item.segment_count} segs` : ""}
       </span>
     </button>
   );

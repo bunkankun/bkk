@@ -150,7 +150,7 @@ def list_translation_bundles_from_catalog(
     rows = conn.execute(
         "SELECT id, source_textid, path, canonical_identifier, "
         "source_canonical_identifier, language, title, original_title, "
-        "responsibility, date, license, juan_count "
+        "responsibility, date, license, juan_count, seg_count, source_juans "
         f"FROM catalog_translation t {where_sql} "
         "ORDER BY source_textid, language, id LIMIT ? OFFSET ?",
         [*params, limit, offset],
@@ -173,7 +173,7 @@ def load_translation_bundle_from_catalog(
     row = conn.execute(
         "SELECT id, source_textid, path, canonical_identifier, "
         "source_canonical_identifier, language, title, original_title, "
-        "responsibility, date, license, juan_count "
+        "responsibility, date, license, juan_count, seg_count, source_juans "
         f"FROM catalog_translation WHERE {' AND '.join(where)}",
         params,
     ).fetchone()
@@ -252,11 +252,17 @@ def _bundle_from_catalog_row(row: sqlite3.Row | tuple) -> TranslationBundle:
         date,
         license_,
         juan_count,
+        seg_count,
+        source_juans_raw,
     ) = row
     try:
         responsibility = json.loads(responsibility_raw or "[]")
     except json.JSONDecodeError:
         responsibility = []
+    try:
+        source_juans = [x for x in json.loads(source_juans_raw or "[]") if isinstance(x, int)]
+    except json.JSONDecodeError:
+        source_juans = []
     resp = [
         TranslationResponsibility(
             role=item.get("role") if isinstance(item.get("role"), str) else None,
@@ -277,6 +283,8 @@ def _bundle_from_catalog_row(row: sqlite3.Row | tuple) -> TranslationBundle:
         date=date,
         license=license_,
         juan_count=juan_count,
+        segment_count=seg_count,
+        source_juans=source_juans,
     )
     return TranslationBundle(
         id=bundle_id,
