@@ -251,12 +251,14 @@ class TranslationSegmentHit(BaseModel):
     title: str | None = None
     responsibility: list[TranslationResponsibility] = Field(default_factory=list)
     date: str | None = None
+    is_ai: bool = False
 
 
 class TranslationSearchFacets(BaseModel):
     language: list[SearchFacetValue] = Field(default_factory=list)
     category: list[SearchFacetValue] = Field(default_factory=list)
     date: SearchDateFacets = Field(default_factory=SearchDateFacets)
+    type: list[SearchFacetValue] = Field(default_factory=list)
 
 
 class TranslationSearchResponse(BaseModel):

@@ -3,6 +3,11 @@ import { getBundleTranslations } from "../../api/client";
 import type { TranslationSummary } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 
+function isAiTranslation(item: TranslationSummary): boolean {
+  if (/\bAI\b/.test(item.title ?? "")) return true;
+  return item.responsibility.some((r) => /\bAI\b/.test(r.name ?? ""));
+}
+
 function names(t: TranslationSummary): string {
   return t.responsibility
     .map((r) => r.name)
@@ -14,7 +19,7 @@ function TranslationButton({ item, dimmed }: { item: TranslationSummary; dimmed:
   const selected = useWorkspace((s) => s.selectedTranslation?.id === item.id);
   return (
     <button
-      className={`ov-row${selected ? " on" : ""}${dimmed ? " ov-row-dim" : ""}`}
+      className={`ov-row${selected ? " on" : ""}${dimmed ? " ov-row-dim" : ""}${isAiTranslation(item) ? " ov-row-ai" : ""}`}
       onClick={() => workspace.selectTranslation(item)}
       title={`${item.title ?? item.id}${dimmed ? " · no translation for this juan" : ""}`}
     >

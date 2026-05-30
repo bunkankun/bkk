@@ -491,10 +491,10 @@ function hitToSummary(hit: TranslationSegmentHit): TranslationSummary {
 function TranslationHitRow({ hit, query }: { hit: TranslationSegmentHit; query: string }) {
   const names = hit.responsibility.map((r) => r.name).filter(Boolean).join(", ");
   const onClick = () => {
-    workspace.openTranslationHit(hitToSummary(hit), hit.juan_seq);
+    workspace.openTranslationHit(hitToSummary(hit), hit.juan_seq, hit.corresp, hit.source_text ?? null);
   };
   return (
-    <button type="button" className="kwic-row" onClick={onClick}>
+    <button type="button" className={`kwic-row${hit.is_ai ? " kwic-row-ai" : ""}`} onClick={onClick}>
       <div className="kwic-meta">
         <span className="kwic-textid">{hit.source_textid}</span>
         <span className="kwic-juan">juan {hit.juan_seq}</span>
@@ -582,6 +582,24 @@ function TranslationFacets({
           </div>
         </div>
       )}
+      {facets.type.length > 1 && (
+        <div className="kwic-facet-group">
+          <div className="kwic-facet-label">Type</div>
+          <div className="kwic-facet-values">
+            {facets.type.map((v) => (
+              <TranslationFacetChip
+                key={v.value}
+                v={v}
+                active={filters.type === v.value}
+                disabled={disabled}
+                onClick={() =>
+                  void workspace.setTranslationFilter("type", filters.type === v.value ? null : v.value as "AI" | "human")
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -603,7 +621,7 @@ function TranslationResultsView({
   const start = response.offset + 1;
   const end = Math.min(response.offset + response.limit, response.total);
   const hasFilters = filters.lang != null || filters.category != null ||
-    filters.dateBefore != null || filters.dateAfter != null;
+    filters.type != null || filters.dateBefore != null || filters.dateAfter != null;
 
   return (
     <div className="rc kwic-list">
@@ -619,6 +637,7 @@ function TranslationResultsView({
             onClick={() => {
               void workspace.setTranslationFilter("lang", null);
               void workspace.setTranslationFilter("category", null);
+              void workspace.setTranslationFilter("type", null);
               void workspace.setTranslationFilter("dateBefore", null);
               void workspace.setTranslationFilter("dateAfter", null);
             }}

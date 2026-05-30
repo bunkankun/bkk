@@ -363,12 +363,14 @@ export interface TranslationSegmentHit {
   title: string | null;
   responsibility: TranslationResponsibility[];
   date: string | null;
+  is_ai: boolean;
 }
 
 export interface TranslationSearchFacets {
   language: SearchFacetValue[];
   category: SearchFacetValue[];
   date: SearchDateFacets;
+  type: SearchFacetValue[];
 }
 
 export interface TranslationSearchResponse {

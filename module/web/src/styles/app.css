@@ -1058,6 +1058,12 @@ button {
 .ov-row-dim {
   opacity: 0.45;
 }
+.ov-row.ov-row-ai {
+  background: rgba(255, 100, 150, 0.07);
+}
+.ov-row.ov-row-ai:hover {
+  background: rgba(255, 100, 150, 0.14);
+}
 .seg-trans-panel {
   margin-bottom: 12px;
   padding-bottom: 12px;
@@ -1755,6 +1761,12 @@ button {
 }
 .kwic-row:hover {
   background: var(--hov);
+}
+.kwic-row.kwic-row-ai {
+  background: rgba(255, 100, 150, 0.07);
+}
+.kwic-row.kwic-row-ai:hover {
+  background: rgba(255, 100, 150, 0.14);
 }
 .kwic-meta {
   display: flex;

@@ -104,6 +104,13 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
     return () => { cancelled = true; };
   }, [textid, seq, translationId]);
 
+  useEffect(() => {
+    if (!selectedSegment || !alignment) return;
+    if (selectedSegment.textid !== textid || selectedSegment.seq !== seq) return;
+    const el = containerRef.current?.querySelector<HTMLElement>(".trans-row.active");
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [selectedSegment, alignment, textid, seq]);
+
   const handleMouseUp = useCallback(() => {
     if (isResizing()) return;
     const sel = window.getSelection();

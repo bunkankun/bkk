@@ -26,6 +26,16 @@ from bkk.index.catalog import normalize_search_text
 
 
 FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?(.*)\Z", re.S)
+_AI_RE = re.compile(r"\bAI\b")
+
+
+def _is_ai_translation(title: str | None, responsibility: list[Any] | None = None) -> bool:
+    if _AI_RE.search(title or ""):
+        return True
+    for item in (responsibility or []):
+        if isinstance(item, dict) and _AI_RE.search(item.get("name") or ""):
+            return True
+    return False
 SPAN_RE = re.compile(r"\[((?:\\.|[^\]\\])*)\]\{([^}]*)\}")
 SOURCE_ID_RE = re.compile(r"bkk:[^/]+/([^/]+)/")
 
@@ -643,6 +653,7 @@ def search_translation_segments(
     category: str | None = None,
     date_before: int | None = None,
     date_after: int | None = None,
+    is_ai: bool | None = None,
     corpus_root: Path | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -688,6 +699,12 @@ def search_translation_segments(
             "section_code": sec,
         }
 
+    if is_ai is not None:
+        bundle_meta = {
+            k: v for k, v in bundle_meta.items()
+            if _is_ai_translation(v.get("title"), v.get("responsibility")) == is_ai
+        }
+
     if not bundle_meta:
         return [], 0, TranslationSearchFacets()
 
@@ -712,6 +729,7 @@ def search_translation_segments(
     ).fetchall()
     lang_counts: dict[str, int] = {}
     sec_counts: dict[str, int] = {}
+    type_counts: dict[str, int] = {}
     dates: list[int] = []
     for tid, hit_count in agg_rows:
         meta = bundle_meta.get(tid, {})
@@ -719,6 +737,8 @@ def search_translation_segments(
         lang_counts[lv] = lang_counts.get(lv, 0) + hit_count
         sv = meta.get("section_code") or ""
         sec_counts[sv] = sec_counts.get(sv, 0) + hit_count
+        tv = "AI" if _is_ai_translation(meta.get("title"), meta.get("responsibility")) else "human"
+        type_counts[tv] = type_counts.get(tv, 0) + hit_count
         if meta.get("index_date") is not None:
             dates.append(meta["index_date"])
 
@@ -744,10 +764,17 @@ def search_translation_segments(
         min=min(dates) if dates else None,
         max=max(dates) if dates else None,
     )
+    type_facet = [
+        SearchFacetValue(value=k, count=v, selected=(
+            (k == "AI" and is_ai is True) or (k == "human" and is_ai is False)
+        ))
+        for k, v in sorted(type_counts.items(), key=lambda x: -x[1])
+    ]
     facets = TranslationSearchFacets(
         language=language_facet,
         category=category_facet,
         date=date_facet,
+        type=type_facet,
     )
 
     # 4. Fetch the current page of matching segments.
@@ -782,6 +809,7 @@ def search_translation_segments(
             title=meta.get("title"),
             responsibility=resp_list,
             date=meta.get("date"),
+            is_ai=_is_ai_translation(meta.get("title"), meta.get("responsibility")),
         ))
 
     # 6. Apply date-based sort (textid sort is already done in SQL).

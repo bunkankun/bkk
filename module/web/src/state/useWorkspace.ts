@@ -87,6 +87,7 @@ export interface SearchFilters {
 export interface TranslationSearchFilters {
   lang: string | null;
   category: string | null;
+  type: "AI" | "human" | null;
   dateBefore: number | null;
   dateAfter: number | null;
 }
@@ -495,7 +496,7 @@ let state: WorkspaceState = {
     response: null,
     translationResponse: null,
     translationSort: "textid",
-    translationFilters: { lang: null, category: null, dateBefore: null, dateAfter: null },
+    translationFilters: { lang: null, category: null, type: null, dateBefore: null, dateAfter: null },
   },
   searchHistory: [],
   textHistory: [],
@@ -627,6 +628,7 @@ async function runTranslationSearch(offset: number): Promise<void> {
       sort: translationSort,
       lang: translationFilters.lang ?? undefined,
       category: translationFilters.category ?? undefined,
+      isAi: translationFilters.type === "AI" ? true : translationFilters.type === "human" ? false : undefined,
       dateBefore: translationFilters.dateBefore ?? undefined,
       dateAfter: translationFilters.dateAfter ?? undefined,
       limit: 50,
@@ -1498,7 +1500,7 @@ export const workspace = {
     notify();
   },
   setSelectedSegment(seg: WorkspaceState["selectedSegment"]) {
-    state = { ...state, selectedSegment: seg };
+    state = { ...state, selectedSegment: seg, rightTab: seg ? "annotations" : state.rightTab };
     notify();
   },
   focusPane(paneId: string) {
@@ -1565,7 +1567,12 @@ export const workspace = {
         /* TOC component will surface the same error to the user */
       });
   },
-  openTranslationHit(summary: TranslationSummary, seq: number) {
+  openTranslationHit(
+    summary: TranslationSummary,
+    seq: number,
+    corresp: string | null,
+    sourceText: string | null,
+  ) {
     const tabId = `${summary.source_textid}:${seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
@@ -1591,6 +1598,9 @@ export const workspace = {
       activity: "overlays",
       selectedTranslation: summary,
       readMode: "trans",
+      selectedSegment: corresp
+        ? { textid: summary.source_textid, seq, corresp, sourceText: sourceText ?? "" }
+        : state.selectedSegment,
     };
     rememberTextVisit({ textid: summary.source_textid, seq, pinned: false });
     notify();

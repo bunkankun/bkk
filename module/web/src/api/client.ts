@@ -227,6 +227,7 @@ export async function searchTranslationSegments(params: {
   category?: string;
   dateBefore?: number;
   dateAfter?: number;
+  isAi?: boolean;
   includeSource?: boolean;
   limit?: number;
   offset?: number;
@@ -237,6 +238,7 @@ export async function searchTranslationSegments(params: {
   if (params.category) q.set("category", params.category);
   if (params.dateBefore != null) q.set("date_before", String(params.dateBefore));
   if (params.dateAfter != null) q.set("date_after", String(params.dateAfter));
+  if (params.isAi != null) q.set("is_ai", String(params.isAi));
   if (params.includeSource != null) q.set("include_source", String(params.includeSource));
   if (params.limit != null) q.set("limit", String(params.limit));
   if (params.offset != null) q.set("offset", String(params.offset));
