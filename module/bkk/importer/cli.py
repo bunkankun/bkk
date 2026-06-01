@@ -254,6 +254,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--section", default=None,
                    help="krp: import every text under a corpus prefix "
                         "(e.g. KR3a); requires confirmation")
+    p.add_argument("--exclude-section", dest="exclude_section", default=None,
+                   help="krp: skip all texts whose id starts with this prefix "
+                        "(e.g. KR6); applied after --section filtering")
     p.add_argument("--by-section", dest="by_section", action="store_true",
                    default=False,
                    help="slice output by KR sub-section: bundles land under "
@@ -1139,6 +1142,9 @@ def _resolve_targets(args) -> list[tuple[str, Path]]:
         ids = source.list_github_text_ids(github_user, args.section)
     else:
         ids = source.list_local_text_ids(args.in_root, args.section)
+
+    if args.exclude_section:
+        ids = [tid for tid in ids if not tid.startswith(args.exclude_section)]
 
     pairs: list[tuple[str, Path]] = []
     for tid in ids:

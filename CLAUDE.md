@@ -2,7 +2,7 @@
 
 This is the main folder for the Bunkankun project. The project consolidates premodern Chinese texts from various sources, especially Kanripo (KRP) and HXWD/TLS and CBETA to a new YAML based format.
 
-The basics of the project, including a discussion of this format is in `bunkankun.md`.  Some important facts are recorded in `MEMORy.md`.  The configuration of the live corpus is in `.bkkrc`
+The basics of the project, including a discussion of this format is in `bunkankun.md`.  Some important facts are recorded in `MEMORy.md`.  The configuration of the live corpus and the import directories for tls, cbeta and krp input files is in `.bkkrc`
 
 ## BKK module
 

@@ -7,6 +7,8 @@ Durable notes about this project that are awkward to re-derive each session.
 This is the working corpus we are surveying to define `bkk-cjk-v1`,
 the first canonical character set under bunkankun.md §Canonicalization.
 
+CBETA source is defined in .bkkrc, it sits at '/home/chris/src/xml-p5'
+
 ### Tree shape
 
 - ~94 top-level directories named `KR1a` … `KR6v`, one per Kanripo
