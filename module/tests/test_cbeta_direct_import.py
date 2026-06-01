@@ -356,3 +356,47 @@ def test_run_cbeta_multivolume_manifest_rebuilt(tmp_path: Path):
     parts = manifest["assets"]["parts"]
     juan_seqs = [p["seq"] for p in parts]
     assert juan_seqs == [1, 2, 3, 4]
+    # Primary volume's identifier must survive companion-volume import.
+    identifiers = manifest["metadata"]["identifiers"]
+    assert identifiers["cbeta"] == "X81n1571"
+    assert identifiers["cbeta_old_id"] == "X81n1571"
+
+
+def _minimal_cbeta_xml_milestone(xml_id: str, juan_nums: list[int]) -> str:
+    """Build a minimal CBETA XML file that uses <milestone unit="juan">
+    instead of <cb:juan> for juan boundaries (LC/TX/GA collections)."""
+    juans = "\n".join(
+        f'<milestone unit="juan" n="{n}"/><p>文{n}</p>'
+        for n in juan_nums
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"
+     xmlns:cb="http://www.cbeta.org/ns/1.0"
+     xml:id="{xml_id}">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title xml:lang="zh-Hant">測試</title></titleStmt>
+      <publicationStmt><p/></publicationStmt>
+      <sourceDesc><p/></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text><body>{juans}</body></text>
+</TEI>"""
+
+
+def test_milestone_juan_splits_into_separate_juans(tmp_path: Path):
+    """Files using <milestone unit="juan"> (LC/TX/GA style) must produce one
+    BKK juan per milestone, not one giant juan_000."""
+    xml_path = tmp_path / "LC03n0003.xml"
+    xml_path.write_text(
+        _minimal_cbeta_xml_milestone("LC03n0003", [1, 2, 3]),
+        encoding="utf-8",
+    )
+    row = {
+        "kr_id": "KR6v0553", "old_id": "LC03n0003",
+        "kr_subsection": "KR6v", "authorityID": "", "json_key": "",
+        "title": "", "category": "", "alt": "",
+    }
+    bundle = read_cbeta(xml_path, row)
+    assert len(bundle.juans) == 3
+    assert [j.seq for j in bundle.juans] == [1, 2, 3]

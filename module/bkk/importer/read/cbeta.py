@@ -93,6 +93,7 @@ class _DirectReader:
     def __init__(
         self, kr_id: str, old_id: str, edition: str, *,
         xml_elements=None,
+        use_milestone_juan: bool = False,
     ):
         self.kr_id = kr_id
         self.old_id = old_id
@@ -106,6 +107,7 @@ class _DirectReader:
         self.seen_ids: dict[str, int] = {}
         self.anchor_offsets: dict[str, tuple[str, int]] = {}
         self.xml_elements = normalize_xml_element_names(xml_elements)
+        self.use_milestone_juan = use_milestone_juan
 
     def offset(self) -> int:
         return sum(len(p) for p in self.text_buf)
@@ -231,6 +233,18 @@ class _DirectReader:
                 extras=extras,
             ))
 
+    def emit_milestone_juan(self, el) -> None:
+        label = _normalize_juan_n(el.get("n", ""))
+        self.finish_juan()
+        self.current_label = label
+        self.current_jhead = ""
+        self.markers.append(Marker(
+            type="cbeta:juan-start", offset=self.offset(),
+            content="",
+            id=_marker_id(self.kr_id, self.edition, label, "juan-start"),
+            extras={"juan_n": label},
+        ))
+
     def record_anchor(self, el) -> None:
         xml_id = _xmlid(el)
         if xml_id.startswith(("beg", "end")):
@@ -281,6 +295,12 @@ class _DirectReader:
                 self.emit_mulu(child)
             elif tag == "juan" and ns == CB_NS:
                 self.emit_juan(child)
+            elif (
+                tag == "milestone" and ns == TEI_NS
+                and child.get("unit") == "juan"
+                and self.use_milestone_juan
+            ):
+                self.emit_milestone_juan(child)
             elif tag == "anchor" and ns == TEI_NS:
                 self.record_anchor(child)
             elif tag == "caesura":
@@ -427,7 +447,13 @@ def read_cbeta(text_xml: Path, row: dict[str, str], *, xml_elements=None) -> Bun
         raise ValueError(f"no <body> element in {text_xml}")
 
     edition = _derive_edition(tree, old_id)
-    reader = _DirectReader(kr_id, old_id, edition, xml_elements=xml_elements)
+    has_cb_juan = body.find(f".//{_q('juan', CB_NS)}") is not None
+    use_milestone_juan = not has_cb_juan
+    reader = _DirectReader(
+        kr_id, old_id, edition,
+        xml_elements=xml_elements,
+        use_milestone_juan=use_milestone_juan,
+    )
     reader.walk(body)
     reader.finish_juan()
     wit_map = _witness_map(tree)

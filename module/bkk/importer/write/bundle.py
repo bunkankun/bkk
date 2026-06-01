@@ -397,9 +397,17 @@ def _build_ann_file(
 # ---------- top-level entry -------------------------------------------------
 
 
-def write_bundle(bundle: Bundle, out_root: Path) -> dict:
+def write_bundle(
+    bundle: Bundle, out_root: Path, *, skip_manifest_writes: bool = False,
+) -> dict:
     """Write the BKK tree for ``bundle`` under ``out_root``. Return a small
-    summary dict describing what was written."""
+    summary dict describing what was written.
+
+    ``skip_manifest_writes`` suppresses writing the edition and master
+    manifests (but still writes all juan/marker/annotation files). Use this
+    when appending a companion volume to an existing CBETA bundle so that the
+    first volume's manifest — and its primary identifier — are not overwritten
+    before :func:`rebuild_manifests` consolidates everything."""
     text_id = bundle.text_id
     edition_short = bundle.edition_short
     bundle_root = out_root / text_id
@@ -508,28 +516,29 @@ def write_bundle(bundle: Bundle, out_root: Path) -> dict:
         toc_edition.extend(juan_toc)
         toc_master.extend(juan_toc)
 
-    # ---- edition manifest ----
-    edition_manifest = build_manifest(
-        text_id, edition_short, juan_edition_files, [], marker_edition_files,
-        toc_edition,
-        bundle.metadata,
-    )
-    edition_manifest["hash"] = manifest_hash(edition_manifest)
-    edition_manifest_filename = f"{text_id}-{edition_short}.manifest.yaml"
-    (edition_root / edition_manifest_filename).write_text(
-        dump(edition_manifest), encoding="utf-8",
-    )
+    if not skip_manifest_writes:
+        # ---- edition manifest ----
+        edition_manifest = build_manifest(
+            text_id, edition_short, juan_edition_files, [], marker_edition_files,
+            toc_edition,
+            bundle.metadata,
+        )
+        edition_manifest["hash"] = manifest_hash(edition_manifest)
+        edition_manifest_filename = f"{text_id}-{edition_short}.manifest.yaml"
+        (edition_root / edition_manifest_filename).write_text(
+            dump(edition_manifest), encoding="utf-8",
+        )
 
-    # ---- master manifest ----
-    master_manifest = build_manifest(
-        text_id, None, juan_master_files, ann_files, marker_master_files,
-        toc_master, bundle.metadata,
-    )
-    master_manifest["hash"] = manifest_hash(master_manifest)
-    master_manifest_filename = f"{text_id}.manifest.yaml"
-    (bundle_root / master_manifest_filename).write_text(
-        dump(master_manifest), encoding="utf-8"
-    )
+        # ---- master manifest ----
+        master_manifest = build_manifest(
+            text_id, None, juan_master_files, ann_files, marker_master_files,
+            toc_master, bundle.metadata,
+        )
+        master_manifest["hash"] = manifest_hash(master_manifest)
+        master_manifest_filename = f"{text_id}.manifest.yaml"
+        (bundle_root / master_manifest_filename).write_text(
+            dump(master_manifest), encoding="utf-8"
+        )
 
     # ---- source sidecar ----
     # Captures source-format-specific information (full teiHeader, div/head/

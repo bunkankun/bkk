@@ -709,11 +709,16 @@ def _run_cbeta(args) -> int:
             return 1
 
     rc = 0
+    seen_kr_ids: set[str] = set()
     for row, text_xml in pairs:
+        kr_id = row["kr_id"]
+        is_companion = kr_id in seen_kr_ids and kr_id in multi_kr_ids
+        seen_kr_ids.add(kr_id)
         try:
             _import_one_cbeta(
                 args, row, text_xml,
                 sample=args.sample if len(pairs) == 1 else None,
+                skip_manifest_writes=is_companion,
             )
         except Exception as exc:  # noqa: BLE001
             label = row.get("old_id") or row.get("kr_id") or text_xml.name
@@ -925,7 +930,9 @@ def _skip_filter_cbeta_pairs(
 
 
 def _import_one_cbeta(
-    args, row: dict[str, str], text_xml: Path, *, sample: Path | None,
+    args, row: dict[str, str], text_xml: Path, *,
+    sample: Path | None,
+    skip_manifest_writes: bool = False,
 ) -> str:
     kr_id = row["kr_id"]
     old_id = row["old_id"]
@@ -961,7 +968,7 @@ def _import_one_cbeta(
         _report_skipped(bundle_dir, kind="cbeta", label=old_id)
         return ""
 
-    summary = write_bundle(bundle, effective_out)
+    summary = write_bundle(bundle, effective_out, skip_manifest_writes=skip_manifest_writes)
     print(
         f"wrote {len(summary['juans'])} juan(s) for {summary['text_id']} "
         f"from CBETA {old_id} under {summary['out_root']}"
