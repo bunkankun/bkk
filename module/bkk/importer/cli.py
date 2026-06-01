@@ -128,7 +128,13 @@ def _on_exists_skip(args) -> bool:
     setting the attribute — defaults to ``False`` (the pre-existing
     "overwrite" behavior).
     """
-    return getattr(args, "on_exists", "overwrite") == "skip"
+    return getattr(args, "on_exists", "overwrite") in ("skip", "skip-merged")
+
+
+def _on_exists_skip_merged_only(args) -> bool:
+    """True iff --on-exists skip-merged: skip already-merged bundles but
+    still process TLS-only bundles that haven't had KRP merged yet."""
+    return getattr(args, "on_exists", "overwrite") == "skip-merged"
 
 
 def _report_skipped(bundle_dir: Path, *, kind: str, label: str) -> None:
@@ -276,11 +282,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--yes", action="store_true",
                    help="skip the bulk-import confirmation prompt")
     p.add_argument("--on-exists", dest="on_exists",
-                   choices=["overwrite", "skip"], default="overwrite",
+                   choices=["overwrite", "skip", "skip-merged"],
+                   default="overwrite",
                    help="behavior when a target bundle directory already "
                         "exists: 'overwrite' (default; pre-existing "
-                        "behavior, including the KRP-into-TLS merge) or "
-                        "'skip' (leave the on-disk bundle alone). "
+                        "behavior, including the KRP-into-TLS merge); "
+                        "'skip' (leave the on-disk bundle alone); "
+                        "'skip-merged' (skip KRP-state bundles and "
+                        "TLS bundles that already have KRP editions merged "
+                        "in, but still merge into TLS-only bundles — "
+                        "use this to resume an aborted bulk KRP merge run). "
                         "Conflict errors (TLS into existing KRP, unknown "
                         "bundle state) are unaffected.")
     p.add_argument("--sample", type=Path, default=None,
@@ -1025,10 +1036,6 @@ def _run_krp(args) -> int:
         print("error: no texts found to import", file=sys.stderr)
         return 2
 
-    # --on-exists skip: drop any text whose bundle already exists on disk
-    # (KRP- or TLS-shaped — the merge case is treated as "already there"
-    # per the design). Unknown-state bundles are *not* filtered; those
-    # still produce a hard error inside `_import_one`.
     if _on_exists_skip(args) and args.text_id is None:
         pairs = _skip_filter_krp_pairs(args, pairs)
         if not pairs:
@@ -1086,11 +1093,17 @@ def _run_krp_recipe(args) -> int:
 def _skip_filter_krp_pairs(
     args, pairs: list[tuple[str, Path]],
 ) -> list[tuple[str, Path]]:
-    """Drop pairs whose KRP- or TLS-shaped bundle already exists on disk.
+    """Drop pairs whose bundle should be skipped given --on-exists.
+
+    ``skip``: skip KRP- and TLS-state bundles.
+    ``skip-merged``: skip KRP-state bundles and TLS bundles that already
+    have KRP editions merged in (non-empty editions list); pass through
+    TLS-only bundles so the merge can still run.
 
     Unknown-state bundles are *not* filtered: those produce a hard
     error in ``_import_one`` and should remain visible.
     """
+    resume_mode = _on_exists_skip_merged_only(args)
     kept: list[tuple[str, Path]] = []
     skipped = 0
     for tid, repo_path in pairs:
@@ -1098,7 +1111,14 @@ def _skip_filter_krp_pairs(
             args.out_root, tid, args.by_section,
         )
         existing = inspect_existing_bundle(effective_out, tid)
-        if existing.state in ("krp", "tls"):
+        if existing.state == "krp":
+            should_skip = True
+        elif existing.state == "tls":
+            # skip-merged: only skip if KRP editions are already present
+            should_skip = not resume_mode or bool(existing.editions)
+        else:
+            should_skip = False
+        if should_skip:
             bundle_dir = (
                 existing.manifest_path.parent if existing.manifest_path
                 else effective_out / tid
@@ -1209,17 +1229,19 @@ def _import_one(
             f"source can't be classified. Inspect manually or run "
             f"`bkk repair manifest {bundle_dir}` and retry."
         )
-    if (
-        on_exists == "skip"
-        and existing is not None
-        and existing.state in ("krp", "tls")
-    ):
-        bundle_dir = (
-            existing.manifest_path.parent if existing.manifest_path
-            else out_root / text_id
+    if existing is not None and on_exists in ("skip", "skip-merged"):
+        e = existing
+        skip = (
+            e.state == "krp"
+            or (e.state == "tls" and (on_exists == "skip" or bool(e.editions)))
         )
-        _report_skipped(bundle_dir, kind=existing.state, label=text_id)
-        return
+        if skip:
+            bundle_dir = (
+                e.manifest_path.parent if e.manifest_path
+                else out_root / text_id
+            )
+            _report_skipped(bundle_dir, kind=e.state, label=text_id)
+            return
     merge_into_tls = bool(existing and existing.state == "tls")
 
     documentary, master = read_krp(recipe)
