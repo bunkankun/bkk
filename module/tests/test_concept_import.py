@@ -628,9 +628,17 @@ def test_import_words_writes_super_entry_and_entry_notes(tmp_path: Path):
     assert "Xǐ 喜 (ant. yōu 憂 \"worry\")" in entry_body
     assert "[FOGUANG](../../bibliography/2/2389c812-8053-4187-8f7a-19f6e856050f.md)" in entry_body
     assert "## Senses" in entry_body
-    assert "1. delight (in someone N), joy about (something N)" in entry_body
-    assert "   - Syntax: [nab.t](../../syntactic-functions/d/d128d787-1ecb-4c4f-8e89-5dd3edea91d1.md)" in entry_body
-    assert "   - Semantic features: [psych](../../semantic-features/9/98e7674b-b362-466f-9568-d0c14470282a.md)" in entry_body
+    assert (
+        "1. **[nab.t](../../syntactic-functions/d/"
+        "d128d787-1ecb-4c4f-8e89-5dd3edea91d1.md)** "
+        "*[psych](../../semantic-features/9/"
+        "98e7674b-b362-466f-9568-d0c14470282a.md)* "
+        "delight (in someone N), joy about (something N) "
+        "**2 Attributions**"
+    ) in entry_body
+    assert "   - Usage: warring-states-currency: 3" in entry_body
+    assert "Syntax:" not in entry_body
+    assert "Semantic features:" not in entry_body
     assert "- 45ddee60-d2a7-4973-9289-b93f0f921ac4" not in entry_body
     assert "pos=N" not in entry_body
     assert "|" not in entry_body

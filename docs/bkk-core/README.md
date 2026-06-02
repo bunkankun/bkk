@@ -603,9 +603,7 @@ Xǐ 喜 ... is openly manifested delight...
 - [FOGUANG](../../bibliography/2/2389c812-8053-4187-8f7a-19f6e856050f.md) - 佛光大辭典 ...; page 4899b
 
 ## Senses
-1. delight (in someone N), joy about (something N)
-   - Syntax: [nab.t](../../syntactic-functions/d/d128d787-1ecb-4c4f-8e89-5dd3edea91d1.md)
-   - Semantic features: [psych](../../semantic-features/9/98e7674b-b362-466f-9568-d0c14470282a.md)
+1. **[nab.t](../../syntactic-functions/d/d128d787-1ecb-4c4f-8e89-5dd3edea91d1.md)** *[psych](../../semantic-features/9/98e7674b-b362-466f-9568-d0c14470282a.md)* delight (in someone N), joy about (something N) **2 Attributions**
    - Usage: warring-states-currency: 3
 ```
 
@@ -616,6 +614,9 @@ Important behavior:
 - `senses[].body_number` maps a frontmatter sense UUID to the numbered body
   item.
 - POS is frontmatter-only and is not repeated in the body.
+- Sense syntax is rendered inline in bold before the definition.
+- Sense semantic features are rendered inline in italics after syntax.
+- If the sense has an `n` value, the body line ends with `**<n> Attributions**`.
 
 Index hints:
 

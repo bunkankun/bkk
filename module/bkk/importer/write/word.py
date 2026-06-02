@@ -336,27 +336,27 @@ def _sense_bullets(
     source_path: Path,
     out_root: Path,
 ) -> list[str]:
-    lines = [f"{number}. {sense.definition or '(no definition)'}"]
-    if sense.syntactic_functions:
-        lines.append(
-            "   - Syntax: "
-            + _grammar_links(
-                sense.syntactic_functions,
-                target_type="syntactic-functions",
-                source_path=source_path,
-                out_root=out_root,
-            )
-        )
-    if sense.semantic_features:
-        lines.append(
-            "   - Semantic features: "
-            + _grammar_links(
-                sense.semantic_features,
-                target_type="semantic-features",
-                source_path=source_path,
-                out_root=out_root,
-            )
-        )
+    parts = []
+    syntax = _grammar_links(
+        sense.syntactic_functions,
+        target_type="syntactic-functions",
+        source_path=source_path,
+        out_root=out_root,
+    )
+    if syntax:
+        parts.append(f"**{syntax}**")
+    semantic_features = _grammar_links(
+        sense.semantic_features,
+        target_type="semantic-features",
+        source_path=source_path,
+        out_root=out_root,
+    )
+    if semantic_features:
+        parts.append(f"*{semantic_features}*")
+    parts.append(sense.definition or "(no definition)")
+    if sense.n:
+        parts.append(f"**{sense.n} Attributions**")
+    lines = [f"{number}. {' '.join(parts)}"]
     if sense.usages:
         lines.append(
             "   - Usage: "
