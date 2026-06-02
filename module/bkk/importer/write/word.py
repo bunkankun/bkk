@@ -355,7 +355,7 @@ def _sense_bullets(
         parts.append(f"*{semantic_features}*")
     parts.append(sense.definition or "(no definition)")
     if sense.n:
-        parts.append(f"**{sense.n} Attributions**")
+        parts.append(f"**[{sense.n} Attributions](#{sense.uuid})**")
     lines = [f"{number}. {' '.join(parts)}"]
     if sense.usages:
         lines.append(

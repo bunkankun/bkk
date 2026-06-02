@@ -603,7 +603,7 @@ Xǐ 喜 ... is openly manifested delight...
 - [FOGUANG](../../bibliography/2/2389c812-8053-4187-8f7a-19f6e856050f.md) - 佛光大辭典 ...; page 4899b
 
 ## Senses
-1. **[nab.t](../../syntactic-functions/d/d128d787-1ecb-4c4f-8e89-5dd3edea91d1.md)** *[psych](../../semantic-features/9/98e7674b-b362-466f-9568-d0c14470282a.md)* delight (in someone N), joy about (something N) **2 Attributions**
+1. **[nab.t](../../syntactic-functions/d/d128d787-1ecb-4c4f-8e89-5dd3edea91d1.md)** *[psych](../../semantic-features/9/98e7674b-b362-466f-9568-d0c14470282a.md)* delight (in someone N), joy about (something N) **[2 Attributions](#45ddee60-d2a7-4973-9289-b93f0f921ac4)**
    - Usage: warring-states-currency: 3
 ```
 
@@ -616,7 +616,9 @@ Important behavior:
 - POS is frontmatter-only and is not repeated in the body.
 - Sense syntax is rendered inline in bold before the definition.
 - Sense semantic features are rendered inline in italics after syntax.
-- If the sense has an `n` value, the body line ends with `**<n> Attributions**`.
+- If the sense has an `n` value, the body line ends with
+  `**[<n> Attributions](#<sense-uuid>)**`. The fragment target is the
+  prefixless sense UUID and is intended for frontend attribution lookup.
 
 Index hints:
 

@@ -634,7 +634,7 @@ def test_import_words_writes_super_entry_and_entry_notes(tmp_path: Path):
         "*[psych](../../semantic-features/9/"
         "98e7674b-b362-466f-9568-d0c14470282a.md)* "
         "delight (in someone N), joy about (something N) "
-        "**2 Attributions**"
+        "**[2 Attributions](#45ddee60-d2a7-4973-9289-b93f0f921ac4)**"
     ) in entry_body
     assert "   - Usage: warring-states-currency: 3" in entry_body
     assert "Syntax:" not in entry_body
