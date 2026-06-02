@@ -95,3 +95,224 @@ class TranslationBundle:
     metadata: dict            # title, responsibility[], publication, license, date, ...
     segments: list[TranslationSegment]
     source_info: dict | None = None  # raw teiHeader for round-trip; sidecar
+
+
+# ---------- Concepts -------------------------------------------------------
+#
+# Concept records are standalone Markdown notes sourced from TLS concept TEI.
+# They are not text bundles and do not participate in the juan/edition model.
+
+
+@dataclass
+class ConceptSection:
+    type: str
+    paragraphs: list[str]
+
+
+@dataclass
+class ConceptRelation:
+    type: str
+    refs: list[tuple[str, str]]
+
+
+@dataclass
+class ConceptBibliographyEntry:
+    ref_uuid: str | None
+    ref_label: str | None
+    title: str | None
+    scope_unit: str | None
+    scope: str | None
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ConceptBundle:
+    uuid: str                  # normalized without leading "uuid-"
+    concept: str
+    labels: list[str] = field(default_factory=list)
+    translations: dict[str, str] = field(default_factory=dict)
+    definition: list[str] = field(default_factory=list)
+    notes: list[ConceptSection] = field(default_factory=list)
+    relations: list[ConceptRelation] = field(default_factory=list)
+    bibliography: list[ConceptBibliographyEntry] = field(default_factory=list)
+    words: list[str] = field(default_factory=list)
+
+
+# ---------- Bibliography ---------------------------------------------------
+
+
+@dataclass
+class BibliographyTitle:
+    title: str
+    subtitle: str | None = None
+    type: str | None = None
+    lang: str | None = None
+    script: str | None = None
+    transliteration: str | None = None
+
+
+@dataclass
+class BibliographyContributor:
+    type: str | None = None
+    roles: list[str] = field(default_factory=list)
+    given: str | None = None
+    family: str | None = None
+    lang: str | None = None
+    script: str | None = None
+    names: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class BibliographyGenre:
+    value: str
+    authority: str | None = None
+
+
+@dataclass
+class BibliographyNote:
+    type: str | None
+    text: str
+
+
+@dataclass
+class BibliographyBundle:
+    uuid: str
+    citation_label: str | None = None
+    ref_usage: str | None = None
+    resource_type: str | None = None
+    genres: list[BibliographyGenre] = field(default_factory=list)
+    titles: list[BibliographyTitle] = field(default_factory=list)
+    contributors: list[BibliographyContributor] = field(default_factory=list)
+    origin: dict = field(default_factory=dict)
+    notes: list[BibliographyNote] = field(default_factory=list)
+    source: dict = field(default_factory=dict)
+
+
+# ---------- Graphs ---------------------------------------------------------
+
+
+@dataclass
+class GraphBundle:
+    uuid: str
+    graphs: dict = field(default_factory=dict)
+    gloss: str | None = None
+    xiaoyun: dict = field(default_factory=dict)
+    fanqie: dict = field(default_factory=dict)
+    ids: dict = field(default_factory=dict)
+    locations: dict = field(default_factory=dict)
+    notes: dict = field(default_factory=dict)
+    pronunciation: dict = field(default_factory=dict)
+
+
+# ---------- Syntactic functions -------------------------------------------
+
+
+@dataclass
+class SyntacticFunctionRelation:
+    type: str
+    refs: list[tuple[str, str]]
+
+
+@dataclass
+class SyntacticFunctionBundle:
+    uuid: str
+    code: str
+    descriptions: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    relations: list[SyntacticFunctionRelation] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
+
+
+# ---------- Semantic features ---------------------------------------------
+
+
+@dataclass
+class SemanticFeatureRelation:
+    type: str
+    target_type: str
+    refs: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class SemanticFeatureBundle:
+    uuid: str
+    code: str
+    descriptions: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    relations: list[SemanticFeatureRelation] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
+
+
+# ---------- Words ---------------------------------------------------------
+
+
+@dataclass
+class WordPronunciation:
+    lang: str
+    value: str
+    resp: str | None = None
+
+
+@dataclass
+class WordForm:
+    orth: str | None = None
+    graph_uuid: str | None = None
+    pronunciations: list[WordPronunciation] = field(default_factory=list)
+
+
+@dataclass
+class WordBibliographyRef:
+    uuid: str | None
+    label: str | None
+    title: str | None = None
+    scope_unit: str | None = None
+    scope: str | None = None
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class WordGrammarLink:
+    type: str
+    uuid: str | None
+    label: str
+
+
+@dataclass
+class WordUsage:
+    type: str | None
+    value: str
+
+
+@dataclass
+class WordSense:
+    uuid: str
+    n: str | None = None
+    pos: str | None = None
+    syntactic_functions: list[WordGrammarLink] = field(default_factory=list)
+    semantic_features: list[WordGrammarLink] = field(default_factory=list)
+    usages: list[WordUsage] = field(default_factory=list)
+    definition: str | None = None
+    provenance: dict = field(default_factory=dict)
+
+
+@dataclass
+class WordEntry:
+    uuid: str
+    concept: str | None = None
+    concept_uuid: str | None = None
+    n: str | None = None
+    form: WordForm | None = None
+    definition: str | None = None
+    bibliography: list[WordBibliographyRef] = field(default_factory=list)
+    senses: list[WordSense] = field(default_factory=list)
+    provenance: dict = field(default_factory=dict)
+
+
+@dataclass
+class WordBundle:
+    uuid: str
+    orth: str | None = None
+    n: str | None = None
+    forms: list[WordForm] = field(default_factory=list)
+    entries: list[WordEntry] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)

@@ -52,6 +52,14 @@ Translation invocation::
     python -m bkk.importer --format translation --in <tls-root> \\
                            --out <out> --text-id KR1h0004 --lang en
 
+Concept invocation::
+
+    # import every TEI concept XML file from a concept directory
+    python -m bkk.importer concepts --in <concept-xml-dir> --out <concepts-dir>
+
+    # equivalent explicit form
+    python -m bkk.importer --format concepts --in <concept-xml-dir> --out <concepts-dir>
+
 Each input XML file becomes one bundle at
 ``<out>/translations/<file-stem>/``; the stem (e.g.
 ``KR1h0004-en-588d9aad``) preserves snapshot suffixes so revisions are
@@ -231,8 +239,8 @@ def _find_tls_texts(in_root: Path, text_id: str) -> list[Path]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk.importer")
-    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation"], default=None,
-                   help="source format: tls, krp, cbeta, or translation "
+    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation", "concepts", "bibliography", "graphs", "syntactic-functions", "semantic-features", "words"], default=None,
+                   help="source format: tls, krp, cbeta, translation, concepts, bibliography, graphs, syntactic-functions, semantic-features, or words "
                         "(required; or set import.format in .bkkrc)")
     p.add_argument("--recipe", type=Path, default=None,
                    help="recipe YAML pinning per-text knobs (krp); when given, "
@@ -340,7 +348,13 @@ def run(argv: list[str] | None = None) -> int:
     if defaults:
         parser.set_defaults(**defaults)
 
-    args = parser.parse_args(argv)
+    arg_list = list(sys.argv[1:] if argv is None else argv)
+    if arg_list and arg_list[0] in (
+        "concepts", "bibliography", "graphs",
+        "syntactic-functions", "semantic-features", "words",
+    ):
+        arg_list = ["--format", arg_list[0], *arg_list[1:]]
+    args = parser.parse_args(arg_list)
 
     # If --in wasn't supplied by rc or CLI, derive it from the resolved format.
     if args.in_root is None and "in" not in imp and args.format is not None:
@@ -353,7 +367,7 @@ def run(argv: list[str] | None = None) -> int:
                 args.in_root = cbeta["root"]
             elif "cbeta_root" in g:
                 args.in_root = g["cbeta_root"]
-        else:
+        elif args.format in ("tls", "translation"):
             root_key = "tls_root"
             if root_key in g:
                 args.in_root = g[root_key]
@@ -369,6 +383,18 @@ def run(argv: list[str] | None = None) -> int:
         return _run_cbeta(args)
     if args.format == "translation":
         return _run_translation(args)
+    if args.format == "concepts":
+        return _run_concepts(args)
+    if args.format == "bibliography":
+        return _run_bibliography(args)
+    if args.format == "graphs":
+        return _run_graphs(args)
+    if args.format == "syntactic-functions":
+        return _run_syntactic_functions(args)
+    if args.format == "semantic-features":
+        return _run_semantic_features(args)
+    if args.format == "words":
+        return _run_words(args)
     print(f"error: unknown format {args.format!r}", file=sys.stderr)
     return 2
 
@@ -1637,6 +1663,494 @@ def _import_one_translation(args, xml_path: Path) -> None:
         f"wrote translation bundle {summary['bundle_id']} "
         f"({len(summary['juans'])} juan file(s)) under {summary['out_root']}"
     )
+
+
+def _run_concepts(args) -> int:
+    """Dispatch the concept-note import path."""
+    if args.in_root is None or args.out_root is None:
+        print("error: --in and --out are required for --format concepts",
+              file=sys.stderr)
+        return 2
+
+    paths = _resolve_concept_targets(args)
+    if not paths:
+        print("error: no concept XML files found to import", file=sys.stderr)
+        return 2
+
+    if len(paths) > 1 and not args.yes:
+        if not _confirm_bulk([(p.stem, p) for p in paths]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    written = 0
+    for xml_path in paths:
+        try:
+            did_write = _import_one_concept(args, xml_path)
+            if did_write:
+                written += 1
+        except Exception as exc:  # noqa: BLE001
+            print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+
+    if args.sample is not None:
+        _emit_divergence(args.sample, args.out_root, args.out_root)
+
+    print(f"wrote {written} concept note(s) under {args.out_root / 'concepts'}")
+    return rc
+
+
+def _resolve_core_note_targets(args, *, label: str) -> list[Path]:
+    """Map core-note CLI flags to XML files.
+
+    ``--in`` is the source XML directory itself. XML files are discovered
+    recursively so sharded layouts like ``bibliography/6/uuid-....xml`` work.
+    ``--text-id`` is accepted as a practical single-file filter by source stem
+    or by the prefixless UUID stem.
+    """
+    base = args.in_root
+    if not base.exists():
+        print(f"error: {base} does not exist", file=sys.stderr)
+        return []
+    if not base.is_dir():
+        print(f"error: {base} is not a directory", file=sys.stderr)
+        return []
+
+    text_filter = (args.text_id or "").strip() or None
+    paths = sorted(base.rglob("*.xml"))
+    if text_filter is None:
+        return paths
+    return [
+        p for p in paths
+        if p.stem == text_filter
+        or (
+            p.stem.startswith("uuid-")
+            and p.stem[len("uuid-"):] == text_filter
+        )
+    ]
+
+
+def _resolve_concept_targets(args) -> list[Path]:
+    """Map concept CLI flags to XML files."""
+    return _resolve_core_note_targets(args, label="concept")
+
+
+def _import_one_concept(args, xml_path: Path) -> bool:
+    """Read one concept XML and write its Markdown note.
+
+    Returns ``True`` when a file was written, ``False`` when skipped.
+    """
+    from .read.concept import read_concept
+    from .write.concept import concept_note_path, write_concept
+
+    concept = read_concept(xml_path)
+    out_path = concept_note_path(args.out_root, concept.uuid)
+
+    if _on_exists_skip(args) and out_path.exists():
+        _report_skipped(out_path, kind="concept", label=concept.concept)
+        return False
+
+    written = write_concept(concept, args.out_root)
+    print(f"wrote concept {concept.concept} under {written}")
+    return True
+
+
+def _run_bibliography(args) -> int:
+    """Dispatch the bibliography-note import path."""
+    if args.in_root is None or args.out_root is None:
+        print("error: --in and --out are required for --format bibliography",
+              file=sys.stderr)
+        return 2
+
+    paths = _resolve_core_note_targets(args, label="bibliography")
+    if not paths:
+        print("error: no bibliography XML files found to import",
+              file=sys.stderr)
+        return 2
+
+    if len(paths) > 1 and not args.yes:
+        if not _confirm_bulk([(p.stem, p) for p in paths]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    written = 0
+    for xml_path in paths:
+        try:
+            did_write = _import_one_bibliography(args, xml_path)
+            if did_write:
+                written += 1
+        except Exception as exc:  # noqa: BLE001
+            print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+
+    if args.sample is not None:
+        _emit_divergence(args.sample, args.out_root, args.out_root)
+
+    print(
+        f"wrote {written} bibliography note(s) under "
+        f"{args.out_root / 'bibliography'}"
+    )
+    return rc
+
+
+def _import_one_bibliography(args, xml_path: Path) -> bool:
+    """Read one MODS bibliography XML file and write its Markdown note."""
+    from .read.bibliography import read_bibliography
+    from .write.bibliography import (
+        bibliography_note_path, write_bibliography,
+    )
+
+    entry = read_bibliography(xml_path)
+    out_path = bibliography_note_path(args.out_root, entry.uuid)
+
+    if _on_exists_skip(args) and out_path.exists():
+        label = entry.citation_label or entry.uuid
+        _report_skipped(out_path, kind="bibliography", label=label)
+        return False
+
+    written = write_bibliography(entry, args.out_root)
+    print(
+        f"wrote bibliography {entry.citation_label or entry.uuid} "
+        f"under {written}"
+    )
+    return True
+
+
+def _run_graphs(args) -> int:
+    """Dispatch the graph-note import path."""
+    if args.in_root is None or args.out_root is None:
+        print("error: --in and --out are required for --format graphs",
+              file=sys.stderr)
+        return 2
+
+    paths = _resolve_core_note_targets(args, label="graphs")
+    if not paths:
+        print("error: no graph XML files found to import", file=sys.stderr)
+        return 2
+
+    if len(paths) > 1 and not args.yes:
+        if not _confirm_bulk([(p.stem, p) for p in paths]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    written = 0
+    for xml_path in paths:
+        try:
+            did_write = _import_one_graph(args, xml_path)
+            if did_write:
+                written += 1
+        except Exception as exc:  # noqa: BLE001
+            print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+
+    if args.sample is not None:
+        _emit_divergence(args.sample, args.out_root, args.out_root)
+
+    print(f"wrote {written} graph note(s) under {args.out_root / 'graphs'}")
+    return rc
+
+
+def _import_one_graph(args, xml_path: Path) -> bool:
+    """Read one graph XML file and write its Markdown note."""
+    from .read.graph import read_graph
+    from .write.graph import graph_note_path, write_graph
+
+    graph = read_graph(xml_path)
+    out_path = graph_note_path(args.out_root, graph.uuid)
+
+    if _on_exists_skip(args) and out_path.exists():
+        label = graph.graphs.get("attested") or graph.uuid
+        _report_skipped(out_path, kind="graph", label=label)
+        return False
+
+    written = write_graph(graph, args.out_root)
+    print(
+        f"wrote graph {graph.graphs.get('attested') or graph.uuid} "
+        f"under {written}"
+    )
+    return True
+
+
+def _run_syntactic_functions(args) -> int:
+    """Dispatch the syntactic-function import path."""
+    if args.in_root is None or args.out_root is None:
+        print(
+            "error: --in and --out are required for "
+            "--format syntactic-functions",
+            file=sys.stderr,
+        )
+        return 2
+
+    paths = _resolve_syntactic_function_sources(args)
+    if not paths:
+        print("error: no syntactic-function XML files found to import",
+              file=sys.stderr)
+        return 2
+
+    if len(paths) > 1 and not args.yes:
+        if not _confirm_bulk([(p.stem, p) for p in paths]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    written = 0
+    for xml_path in paths:
+        try:
+            written += _import_one_syntactic_functions_file(args, xml_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+
+    if args.sample is not None:
+        _emit_divergence(args.sample, args.out_root, args.out_root)
+
+    print(
+        f"wrote {written} syntactic-function note(s) under "
+        f"{args.out_root / 'syntactic-functions'}"
+    )
+    return rc
+
+
+def _resolve_syntactic_function_sources(args) -> list[Path]:
+    """Return TEI XML files that may contain syn-func divisions.
+
+    Unlike the one-record-per-file core importers, ``--text-id`` is applied
+    after parsing because one source XML file contains many records.
+    """
+    base = args.in_root
+    if not base.exists():
+        print(f"error: {base} does not exist", file=sys.stderr)
+        return []
+    if not base.is_dir():
+        print(f"error: {base} is not a directory", file=sys.stderr)
+        return []
+    return sorted(base.rglob("*.xml"))
+
+
+def _import_one_syntactic_functions_file(args, xml_path: Path) -> int:
+    """Read one TEI file and write every contained syn-func note."""
+    from .read.syntactic_function import read_syntactic_functions
+    from .write.syntactic_function import (
+        syntactic_function_note_path,
+        write_syntactic_function,
+    )
+
+    records = read_syntactic_functions(xml_path)
+    text_filter = (args.text_id or "").strip() or None
+    if text_filter:
+        records = [
+            record for record in records
+            if record.uuid == text_filter
+            or f"uuid-{record.uuid}" == text_filter
+            or record.code == text_filter
+        ]
+
+    written = 0
+    for record in records:
+        out_path = syntactic_function_note_path(args.out_root, record.uuid)
+        if _on_exists_skip(args) and out_path.exists():
+            _report_skipped(
+                out_path, kind="syntactic-function", label=record.code,
+            )
+            continue
+        written_path = write_syntactic_function(record, args.out_root)
+        print(f"wrote syntactic-function {record.code} under {written_path}")
+        written += 1
+    return written
+
+
+def _run_semantic_features(args) -> int:
+    """Dispatch the semantic-feature import path."""
+    if args.in_root is None or args.out_root is None:
+        print(
+            "error: --in and --out are required for "
+            "--format semantic-features",
+            file=sys.stderr,
+        )
+        return 2
+
+    paths = _resolve_semantic_feature_sources(args)
+    if not paths:
+        print("error: no semantic-feature XML files found to import",
+              file=sys.stderr)
+        return 2
+
+    if len(paths) > 1 and not args.yes:
+        if not _confirm_bulk([(p.stem, p) for p in paths]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    written = 0
+    for xml_path in paths:
+        try:
+            written += _import_one_semantic_features_file(args, xml_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+
+    if args.sample is not None:
+        _emit_divergence(args.sample, args.out_root, args.out_root)
+
+    print(
+        f"wrote {written} semantic-feature note(s) under "
+        f"{args.out_root / 'semantic-features'}"
+    )
+    return rc
+
+
+def _resolve_semantic_feature_sources(args) -> list[Path]:
+    """Return TEI XML files that may contain sem-feat divisions.
+
+    Like syntactic functions, semantic features are currently stored as many
+    records in a single XML file, so ``--text-id`` is applied after parsing.
+    """
+    base = args.in_root
+    if not base.exists():
+        print(f"error: {base} does not exist", file=sys.stderr)
+        return []
+    if not base.is_dir():
+        print(f"error: {base} is not a directory", file=sys.stderr)
+        return []
+    return sorted(base.rglob("*.xml"))
+
+
+def _import_one_semantic_features_file(args, xml_path: Path) -> int:
+    """Read one TEI file and write every contained sem-feat note."""
+    from .read.semantic_feature import read_semantic_features
+    from .write.semantic_feature import (
+        semantic_feature_note_path,
+        write_semantic_feature,
+    )
+
+    records = read_semantic_features(xml_path)
+    text_filter = (args.text_id or "").strip() or None
+    if text_filter:
+        records = [
+            record for record in records
+            if record.uuid == text_filter
+            or f"uuid-{record.uuid}" == text_filter
+            or record.code == text_filter
+        ]
+
+    written = 0
+    for record in records:
+        out_path = semantic_feature_note_path(args.out_root, record.uuid)
+        if _on_exists_skip(args) and out_path.exists():
+            _report_skipped(
+                out_path, kind="semantic-feature", label=record.code,
+            )
+            continue
+        written_path = write_semantic_feature(record, args.out_root)
+        print(f"wrote semantic-feature {record.code} under {written_path}")
+        written += 1
+    return written
+
+
+def _run_words(args) -> int:
+    """Dispatch the word-note import path."""
+    if args.in_root is None or args.out_root is None:
+        print("error: --in and --out are required for --format words",
+              file=sys.stderr)
+        return 2
+
+    paths = _resolve_word_targets(args)
+    if not paths:
+        print("error: no word XML files found to import", file=sys.stderr)
+        return 2
+
+    if len(paths) > 1 and not args.yes:
+        if not _confirm_bulk([(p.stem, p) for p in paths]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    written = 0
+    for xml_path in paths:
+        try:
+            did_write = _import_one_word(args, xml_path)
+            if did_write:
+                written += 1
+        except Exception as exc:  # noqa: BLE001
+            print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+
+    if args.sample is not None:
+        _emit_divergence(args.sample, args.out_root, args.out_root)
+
+    print(
+        f"wrote {written} word import(s) under "
+        f"{args.out_root / 'super-entries'} and {args.out_root / 'words'}"
+    )
+    return rc
+
+
+def _resolve_word_targets(args) -> list[Path]:
+    """Map word CLI flags to XML files.
+
+    Filename/UUID filters can be applied before parse; orthograph filters are
+    applied in ``_import_one_word`` because they require reading the XML.
+    """
+    base = args.in_root
+    if not base.exists():
+        print(f"error: {base} does not exist", file=sys.stderr)
+        return []
+    if not base.is_dir():
+        print(f"error: {base} is not a directory", file=sys.stderr)
+        return []
+    return sorted(base.rglob("*.xml"))
+
+
+def _import_one_word(args, xml_path: Path) -> bool:
+    """Read one word XML file and write its Markdown note."""
+    from .read.word import read_word
+    from .write.word import write_word
+
+    word = read_word(xml_path)
+    text_filter = (args.text_id or "").strip() or None
+    selected_entries = None
+    if text_filter:
+        parent_match = (
+            word.uuid == text_filter
+            or f"uuid-{word.uuid}" == text_filter
+            or xml_path.stem == text_filter
+            or (
+                xml_path.stem.startswith("uuid-")
+                and xml_path.stem[len("uuid-"):] == text_filter
+            )
+            or word.orth == text_filter
+        )
+        if not parent_match:
+            selected_entries = [
+                entry for entry in word.entries
+                if entry.uuid == text_filter
+                or f"uuid-{entry.uuid}" == text_filter
+                or entry.concept == text_filter
+            ]
+            if not selected_entries:
+                return False
+
+    written = write_word(
+        word,
+        args.out_root,
+        entries=selected_entries,
+        skip_existing=_on_exists_skip(args),
+    )
+    if not written:
+        _report_skipped(
+            args.out_root / "super-entries",
+            kind="word",
+            label=word.orth or word.uuid,
+        )
+        return False
+
+    print(
+        f"wrote word {word.orth or word.uuid}: "
+        f"{len(written)} note(s)"
+    )
+    return True
 
 
 def _emit_divergence(sample: Path, ours_root: Path, out_root: Path) -> None:
