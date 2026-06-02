@@ -3,6 +3,7 @@ import { getManifest } from "../../api/client";
 import { krClass } from "../../lib/krClass";
 import { setResizing, useWorkspace, workspace, type PaneLeaf } from "../../state/useWorkspace";
 import { CharInfoBar } from "../CharInfoBar";
+import { CoreRecord } from "./CoreRecord";
 import { ImagePanel } from "./ImagePanel";
 import { TextViewer } from "./TextViewer";
 import { TranslationViewer } from "./TranslationViewer";
@@ -49,15 +50,20 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
   const [seqsMap, setSeqsMap] = useState<Record<string, number[]>>({});
   const activeTab =
     pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0] ?? null;
+  const activeTextTab = activeTab?.type === "text" ? activeTab : null;
+  const activeCoreTab = activeTab?.type === "core-record" ? activeTab : null;
 
-  const readMode = activeTab?.readMode ?? defaultReadMode;
-  const lineMode = activeTab?.lineMode ?? defaultLineMode;
-  const showInspect = readMode === "inspect" && activeTab != null;
-  const showTranslation = readMode === "trans" && activeTab != null;
+  const readMode = activeTextTab?.readMode ?? defaultReadMode;
+  const lineMode = activeTextTab?.lineMode ?? defaultLineMode;
+  const showInspect = readMode === "inspect" && activeTextTab != null;
+  const showTranslation = readMode === "trans" && activeTextTab != null;
 
   useEffect(() => {
     let cancelled = false;
-    const missing = [...new Set(pane.tabs.map((t) => t.textid))].filter(
+    const textTextids = pane.tabs
+      .filter((t): t is typeof t & { type: "text" } => t.type === "text")
+      .map((t) => t.textid);
+    const missing = [...new Set(textTextids)].filter(
       (textid) => titles[textid] == null,
     );
     if (missing.length === 0) return;
@@ -106,6 +112,38 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
         )}
         {pane.tabs.map((t) => {
           const isActive = t.id === activeTab?.id;
+          if (t.type === "core-record") {
+            return (
+              <button
+                key={t.id}
+                className={`tab${isActive ? " on" : ""}`}
+                title={`${t.collection}/${t.uuid}`}
+                onClick={() => workspace.focusPane(pane.id)}
+              >
+                <span className="tab-title">
+                  {t.collection} · {t.uuid.slice(0, 8)}
+                </span>
+                <span
+                  className={`tab-pin${t.pinned ? " on" : ""}`}
+                  role="button"
+                  tabIndex={0}
+                  title={t.pinned ? "Unpin record" : "Pin record"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    workspace.togglePinnedTab(pane.id, t.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    workspace.togglePinnedTab(pane.id, t.id);
+                  }}
+                >
+                  {t.pinned ? "●" : "○"}
+                </span>
+              </button>
+            );
+          }
           const seqs = isActive ? (seqsMap[t.textid] ?? []) : [];
           const curIdx = seqs.indexOf(t.seq);
           const prevSeq = curIdx > 0 ? seqs[curIdx - 1] : null;
@@ -180,55 +218,68 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
           </button>
         )}
       </div>
-      {activeTab ? (
+      {activeCoreTab ? (
+        <CoreRecord
+          key={`${activeCoreTab.collection}:${activeCoreTab.uuid}`}
+          paneId={pane.id}
+          tabId={activeCoreTab.id}
+          collection={activeCoreTab.collection}
+          uuid={activeCoreTab.uuid}
+        />
+      ) : activeTextTab ? (
         showInspect ? (
           <div className="ws-split">
             <div className="ws-split-left">
               <TextViewer
-                key={`${activeTab.textid}:${activeTab.seq}`}
+                key={`${activeTextTab.textid}:${activeTextTab.seq}`}
                 paneId={pane.id}
-                tabId={activeTab.id}
-                textid={activeTab.textid}
-                seq={activeTab.seq}
+                tabId={activeTextTab.id}
+                textid={activeTextTab.textid}
+                seq={activeTextTab.seq}
                 lineMode={lineMode}
               />
             </div>
             <InspectResizer />
             <div className="ws-split-right" style={{ width: inspectWidth }}>
               <ImagePanel
-                key={`${activeTab.textid}:${activeTab.seq}`}
-                textid={activeTab.textid}
-                seq={activeTab.seq}
+                key={`${activeTextTab.textid}:${activeTextTab.seq}`}
+                textid={activeTextTab.textid}
+                seq={activeTextTab.seq}
               />
             </div>
           </div>
         ) : showTranslation ? (
           <TranslationViewer
-            key={`${activeTab.textid}:${activeTab.seq}:${selectedTranslation?.id ?? ""}`}
+            key={`${activeTextTab.textid}:${activeTextTab.seq}:${selectedTranslation?.id ?? ""}`}
             paneId={pane.id}
-            tabId={activeTab.id}
-            textid={activeTab.textid}
-            seq={activeTab.seq}
+            tabId={activeTextTab.id}
+            textid={activeTextTab.textid}
+            seq={activeTextTab.seq}
             translationId={
-              selectedTranslation?.source_textid === activeTab.textid
+              selectedTranslation?.source_textid === activeTextTab.textid
                 ? selectedTranslation.id
                 : null
             }
           />
         ) : (
           <TextViewer
-            key={`${activeTab.textid}:${activeTab.seq}`}
+            key={`${activeTextTab.textid}:${activeTextTab.seq}`}
             paneId={pane.id}
-            tabId={activeTab.id}
-            textid={activeTab.textid}
-            seq={activeTab.seq}
+            tabId={activeTextTab.id}
+            textid={activeTextTab.textid}
+            seq={activeTextTab.seq}
             lineMode={lineMode}
           />
         )
       ) : (
         <div className="empty-pane">Select a text from the catalog or TOC.</div>
       )}
-      <CharInfoBar ch={activeTab?.hoverChar ?? null} cp={activeTab?.hoverCodepoint ?? null} />
+      {!activeCoreTab && (
+        <CharInfoBar
+          ch={activeTextTab?.hoverChar ?? null}
+          cp={activeTextTab?.hoverCodepoint ?? null}
+        />
+      )}
     </div>
   );
 }

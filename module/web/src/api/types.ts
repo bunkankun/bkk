@@ -444,3 +444,106 @@ export interface AuthSession {
   authenticated: boolean;
   user: AuthUser | null;
 }
+
+export interface CoreCollectionInfo {
+  id: string;
+  label: string;
+  count: number;
+}
+
+export interface CoreCollectionsResponse {
+  collections: CoreCollectionInfo[];
+}
+
+export interface CoreMatch {
+  uuid: string;
+  type: string;
+  display_label: string;
+  alt_labels: string[];
+}
+
+export interface CoreSuperEntryMatch {
+  super_entry_uuid: string;
+  orth: string;
+  word_count: number;
+}
+
+export interface CoreListResponse {
+  collection: string;
+  total: number;
+  offset: number;
+  limit: number;
+  matches: CoreMatch[];
+  super_entries: CoreSuperEntryMatch[];
+}
+
+export interface CoreSuperEntryWord {
+  uuid: string;
+  display_label: string | null;
+  concept: string | null;
+  n: string | null;
+}
+
+export interface CoreSuperEntryExpansion {
+  uuid: string;
+  orth: string;
+  words: CoreSuperEntryWord[];
+}
+
+export interface CoreRecordLink {
+  target_uuid: string;
+  target_type: string | null;
+  target_collection: string | null;
+  target_label: string | null;
+  relation: string | null;
+}
+
+export interface CoreRecordResponse {
+  uuid: string;
+  type: string;
+  collection: string;
+  display_label: string;
+  path: string;
+  frontmatter: Record<string, unknown>;
+  body_markdown: string;
+  links: CoreRecordLink[];
+}
+
+export interface CoreSuperEntryByOrth {
+  uuid: string;
+  orth: string;
+}
+
+export interface CoreConceptWord {
+  uuid: string;
+  display_label: string | null;
+  super_entry_uuid: string | null;
+  super_entry_orth: string | null;
+  n: string | null;
+}
+
+export interface CoreConceptWordsResponse {
+  concept_uuid: string;
+  words: CoreConceptWord[];
+}
+
+export interface CoreBacklinkItem {
+  uuid: string;
+  type: string;
+  collection: string;
+  display_label: string;
+  relation: string | null;
+}
+
+export interface CoreBacklinkGroup {
+  collection: string;
+  type: string;
+  total: number;
+  items: CoreBacklinkItem[];
+}
+
+export interface CoreBacklinksResponse {
+  uuid: string;
+  total: number;
+  groups: CoreBacklinkGroup[];
+}

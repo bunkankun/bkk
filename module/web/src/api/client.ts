@@ -12,6 +12,13 @@ import type {
   AuthSession,
   CatalogResponse,
   CategoriesResponse,
+  CoreBacklinksResponse,
+  CoreCollectionsResponse,
+  CoreConceptWordsResponse,
+  CoreListResponse,
+  CoreRecordResponse,
+  CoreSuperEntryByOrth,
+  CoreSuperEntryExpansion,
   Juan,
   Manifest,
   ManifestPart,
@@ -342,6 +349,64 @@ export async function searchCorpus(params: {
   return fetchJson<SearchResponse>(`${apiBase}/search?${q.toString()}`, {
     signal: params.signal,
   });
+}
+
+export async function getCoreCollections(): Promise<CoreCollectionsResponse> {
+  return fetchJson<CoreCollectionsResponse>(`${apiBase}/core/collections`);
+}
+
+export async function getCoreList(
+  collection: string,
+  params?: { q?: string; limit?: number; offset?: number },
+): Promise<CoreListResponse> {
+  const q = new URLSearchParams();
+  if (params?.q) q.set("q", params.q);
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  if (params?.offset != null) q.set("offset", String(params.offset));
+  const qs = q.toString();
+  return fetchJson<CoreListResponse>(
+    `${apiBase}/core/${encodeURIComponent(collection)}${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function getCoreSuperEntry(uuid: string): Promise<CoreSuperEntryExpansion> {
+  return fetchJson<CoreSuperEntryExpansion>(
+    `${apiBase}/core/words/super-entry/${encodeURIComponent(uuid)}`,
+  );
+}
+
+export async function getCoreRecord(
+  collection: string,
+  uuid: string,
+): Promise<CoreRecordResponse> {
+  return fetchJson<CoreRecordResponse>(
+    `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}`,
+  );
+}
+
+export async function getCoreSuperEntryByOrth(
+  orth: string,
+): Promise<CoreSuperEntryByOrth> {
+  return fetchJson<CoreSuperEntryByOrth>(
+    `${apiBase}/core/super-entries/by-orth/${encodeURIComponent(orth)}`,
+  );
+}
+
+export async function getCoreConceptWords(
+  uuid: string,
+): Promise<CoreConceptWordsResponse> {
+  return fetchJson<CoreConceptWordsResponse>(
+    `${apiBase}/core/concepts/${encodeURIComponent(uuid)}/words`,
+  );
+}
+
+export async function getCoreBacklinks(
+  collection: string,
+  uuid: string,
+): Promise<CoreBacklinksResponse> {
+  return fetchJson<CoreBacklinksResponse>(
+    `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}/backlinks`,
+  );
 }
 
 export async function searchTextids(params: {

@@ -40,9 +40,10 @@ export function StatusBar() {
   const defaultMode = useWorkspace((s) => s.readMode);
   const defaultLineMode = useWorkspace((s) => s.readPrefs.lineMode);
   const tab = focusedTab(pane, focusedPaneId);
-  const mode = tab?.readMode ?? defaultMode;
-  const lineMode = tab?.lineMode ?? defaultLineMode;
-  const cp = tab?.hoverCodepoint ?? null;
+  const textTab = tab?.type === "text" ? tab : null;
+  const mode = textTab?.readMode ?? defaultMode;
+  const lineMode = textTab?.lineMode ?? defaultLineMode;
+  const cp = textTab?.hoverCodepoint ?? null;
 
   return (
     <div className="sb">

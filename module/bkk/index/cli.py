@@ -8,6 +8,7 @@ Subcommands::
     python -m bkk.index translations <corpus> [--out PATH]
     python -m bkk.index merge <corpus> [--out PATH] [--prefix KR3a]
                                        [--rebuild | --no-build]
+    python -m bkk.index core <core_root> [--out PATH]
     python -m bkk.index search <bkkx_path> <query> [--context N]
                                                    [--witness LABEL]...
                                                    [--textid ID]
@@ -21,6 +22,7 @@ from pathlib import Path
 
 from .build import build_index
 from .catalog import build_catalog_index, default_catalog_csv
+from .core import build_core_index
 from .ir import Hit
 from .merge import merge_bundles
 from .query import Index
@@ -79,6 +81,14 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--no-build", action="store_true",
                      help="error if any per-bundle .bkkt is missing or stale")
 
+    pco = sub.add_parser("core", help="build a .bkki index over the bkk-core knowledge layer")
+    pco.add_argument("core_root", type=Path, nargs="?", default=None,
+                     help="core root directory (or set core.root in .bkkrc)")
+    pco.add_argument("--out", type=Path, default=None,
+                     help="core .bkki output path "
+                          "(default: core.index from .bkkrc, "
+                          "else <core_root>/_core.bkki)")
+
     ps = sub.add_parser("search", help="run a KWIC query against a .bkkx index")
     ps.add_argument("index_path", type=Path)
     ps.add_argument("query")
@@ -101,6 +111,7 @@ def run(argv: list[str] | None = None) -> int:
     rc = load_rc()
     g = rc.get("global", {})
     idx = rc.get("index", {})
+    core_rc = rc.get("core", {})
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -126,6 +137,13 @@ def run(argv: list[str] | None = None) -> int:
                 "--csv is required (could not find catalog/frontmatter.csv "
                 "from the current directory or its parents)"
             )
+    if args.cmd == "core":
+        if args.core_root is None:
+            args.core_root = core_rc.get("root")
+        if args.core_root is None:
+            parser.error("core_root is required (or set core.root in .bkkrc)")
+        if args.out is None:
+            args.out = Path(core_rc.get("index") or args.core_root / "_core.bkki")
 
     if args.cmd == "build":
         path = build_index(args.bundle_dir, args.out)
@@ -155,6 +173,10 @@ def run(argv: list[str] | None = None) -> int:
         print(f"wrote {path}")
         if args.csv_stub:
             print(f"stubs → {args.csv_stub}")
+        return 0
+    if args.cmd == "core":
+        path = build_core_index(args.core_root, args.out)
+        print(f"wrote {path}")
         return 0
     if args.cmd == "search":
         with Index(args.index_path) as ix:

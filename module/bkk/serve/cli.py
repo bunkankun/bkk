@@ -19,6 +19,8 @@ from .config import ServeConfig
 def app_factory():
     """Uvicorn import-string entry point used in --reload mode."""
     from .app import create_app
+    # core_root/core_index_path are picked up from BKK_CORE_* env vars set by
+    # the parent process before uvicorn forks the reload worker.
     return create_app(ServeConfig.from_env())
 
 
@@ -32,6 +34,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--catalog", type=Path, default=None, dest="catalog_path",
                    help="catalog .bkkc index path "
                         "(default: <corpus>/_catalog.bkkc)")
+    p.add_argument("--core-root", type=Path, default=None, dest="core_root",
+                   help="bkk-core knowledge layer root directory "
+                        "(default: core.root from .bkkrc; enables /core/* endpoints)")
+    p.add_argument("--core-index", type=Path, default=None, dest="core_index_path",
+                   help="core .bkki index path "
+                        "(default: core.index from .bkkrc, else <core-root>/_core.bkki)")
     p.add_argument("--host", default=None, help="bind address (default: 127.0.0.1)")
     p.add_argument("--port", type=int, default=None, help="port (default: 8000)")
     p.add_argument("--admin-token", default=None,
@@ -67,12 +75,17 @@ def run(argv: list[str] | None = None) -> int:
     from bkk.config import load_rc
     rc = load_rc()
     rc_serve = {**rc.get("global", {}), **rc.get("serve", {})}
+    rc_core = rc.get("core", {})
 
-    base = ServeConfig.from_env(corpus_root=args.corpus, rc=rc_serve)
+    base = ServeConfig.from_env(
+        corpus_root=args.corpus, rc=rc_serve, core_rc=rc_core,
+    )
     config = base.merge_cli(
         corpus_root=args.corpus,
         index_path=args.index,
         catalog_path=args.catalog_path,
+        core_root=args.core_root,
+        core_index_path=args.core_index_path,
         host=args.host,
         port=args.port,
         admin_token=args.admin_token,
@@ -96,6 +109,10 @@ def run(argv: list[str] | None = None) -> int:
         os.environ["BKK_INDEX_PATH"] = str(config.index_path)
         if config.catalog_path is not None:
             os.environ["BKK_CATALOG_PATH"] = str(config.catalog_path)
+        if config.core_root is not None:
+            os.environ["BKK_CORE_ROOT"] = str(config.core_root)
+        if config.core_index_path is not None:
+            os.environ["BKK_CORE_INDEX_PATH"] = str(config.core_index_path)
         os.environ["BKK_HOST"] = config.host
         os.environ["BKK_PORT"] = str(config.port)
         if config.admin_token is not None:

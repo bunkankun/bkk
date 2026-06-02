@@ -42,6 +42,7 @@ export type Activity =
   | "overlays"
   | "lists"
   | "history"
+  | "core"
   | "settings";
 export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
@@ -172,20 +173,33 @@ export interface SelectionRange {
   anchorOffset: number;
 }
 
+export interface TextTab {
+  id: string;
+  type: "text";
+  textid: string;
+  seq: number;
+  pinned?: boolean;
+  readMode?: ReadMode;
+  lineMode?: LineMode;
+  hoverChar?: string | null;
+  hoverCodepoint?: number | null;
+}
+
+export interface CoreRecordTab {
+  id: string;
+  type: "core-record";
+  collection: string;
+  uuid: string;
+  pinned?: boolean;
+  history?: Array<{ collection: string; uuid: string }>;
+}
+
+export type PaneTab = TextTab | CoreRecordTab;
+
 export interface PaneLeaf {
   kind: "leaf";
   id: string;
-  tabs: {
-    id: string;
-    type: "text";
-    textid: string;
-    seq: number;
-    pinned?: boolean;
-    readMode?: ReadMode;
-    lineMode?: LineMode;
-    hoverChar?: string | null;
-    hoverCodepoint?: number | null;
-  }[];
+  tabs: PaneTab[];
   activeTabId: string | null;
 }
 
@@ -525,6 +539,14 @@ function paneLeaves(node: PaneNode): PaneLeaf[] {
   return node.children.flatMap(paneLeaves);
 }
 
+export function findTab(node: PaneNode, paneId: string, tabId: string): PaneTab | null {
+  for (const leaf of paneLeaves(node)) {
+    if (leaf.id !== paneId) continue;
+    return leaf.tabs.find((t) => t.id === tabId) ?? null;
+  }
+  return null;
+}
+
 function mapPaneLeaves(node: PaneNode, fn: (leaf: PaneLeaf) => PaneLeaf): PaneNode {
   if (node.kind === "leaf") return fn(node);
   return { ...node, children: node.children.map((child) => mapPaneLeaves(child, fn)) };
@@ -535,7 +557,12 @@ function activePaneLeaf(node: PaneNode): PaneLeaf | null {
   return (
     (state.focusedPaneId ? leaves.find((leaf) => leaf.id === state.focusedPaneId) : null) ??
     leaves.find((leaf) =>
-      leaf.tabs.some((tab) => tab.id === leaf.activeTabId && tab.textid === state.activeTextid),
+      leaf.tabs.some(
+        (tab) =>
+          tab.id === leaf.activeTabId &&
+          tab.type === "text" &&
+          tab.textid === state.activeTextid,
+      ),
     ) ??
     leaves.find((leaf) => leaf.tabs.every((tab) => !tab.pinned)) ??
     leaves[0] ??
@@ -553,7 +580,7 @@ function nextPaneId(): string {
 
 function leafWithTab(
   id: string,
-  tab: PaneLeaf["tabs"][number],
+  tab: PaneTab,
 ): PaneLeaf {
   return {
     kind: "leaf",
@@ -573,7 +600,7 @@ function removePaneLeaf(node: PaneNode, paneId: string): PaneNode {
 }
 
 function paneForOpenTab(
-  tab: PaneLeaf["tabs"][number],
+  tab: PaneTab,
 ): PaneNode {
   const target = activePaneLeaf(state.pane);
   const activeTab = target?.tabs.find((item) => item.id === target.activeTabId) ?? target?.tabs[0];
@@ -602,9 +629,13 @@ function leafIdForTab(node: PaneNode, tabId: string): string | null {
   return null;
 }
 
-function activeTabForLeaf(leaf: PaneLeaf | null): PaneLeaf["tabs"][number] | null {
+function activeTabForLeaf(leaf: PaneLeaf | null): PaneTab | null {
   if (!leaf) return null;
   return leaf.tabs.find((tab) => tab.id === leaf.activeTabId) ?? leaf.tabs[0] ?? null;
+}
+
+function isTextTab(tab: PaneTab | null | undefined): tab is TextTab {
+  return tab?.type === "text";
 }
 
 function cancelSearchRequest(): void {
@@ -1427,7 +1458,9 @@ export const workspace = {
           return {
             ...leaf,
             tabs: leaf.tabs.map((tab) =>
-              tab.id === leaf.activeTabId ? { ...tab, readMode } : tab,
+              tab.id === leaf.activeTabId && tab.type === "text"
+                ? { ...tab, readMode }
+                : tab,
             ),
           };
         }),
@@ -1469,7 +1502,9 @@ export const workspace = {
           return {
             ...leaf,
             tabs: leaf.tabs.map((tab) =>
-              tab.id === leaf.activeTabId ? { ...tab, readMode: "trans" } : tab,
+              tab.id === leaf.activeTabId && tab.type === "text"
+                ? { ...tab, readMode: "trans" }
+                : tab,
             ),
           };
         }),
@@ -1488,7 +1523,9 @@ export const workspace = {
         return {
           ...leaf,
           tabs: leaf.tabs.map((tab) =>
-            tab.id === tabId ? { ...tab, hoverChar, hoverCodepoint } : tab,
+            tab.id === tabId && tab.type === "text"
+              ? { ...tab, hoverChar, hoverCodepoint }
+              : tab,
           ),
         };
       }),
@@ -1506,11 +1543,12 @@ export const workspace = {
   focusPane(paneId: string) {
     const leaf = paneLeaves(state.pane).find((item) => item.id === paneId);
     const tab = activeTabForLeaf(leaf ?? null);
+    const textTab = isTextTab(tab) ? tab : null;
     state = {
       ...state,
       focusedPaneId: paneId,
-      activeTextid: tab?.textid ?? state.activeTextid,
-      activeSeq: tab?.seq ?? state.activeSeq,
+      activeTextid: textTab?.textid ?? state.activeTextid,
+      activeSeq: textTab?.seq ?? state.activeSeq,
     };
     notify();
   },
@@ -1576,14 +1614,15 @@ export const workspace = {
     const tabId = `${summary.source_textid}:${seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
-    const tab = {
+    const sourceTextTab = isTextTab(sourceTab) ? sourceTab : null;
+    const tab: TextTab = {
       id: tabId,
-      type: "text" as const,
+      type: "text",
       textid: summary.source_textid,
       seq,
       pinned: false,
-      readMode: "trans" as const,
-      lineMode: sourceTab?.lineMode ?? state.readPrefs.lineMode,
+      readMode: "trans",
+      lineMode: sourceTextTab?.lineMode ?? state.readPrefs.lineMode,
     };
     const pane = paneForOpenTab(tab);
     const focusedPaneId = leafIdForTab(pane, tabId);
@@ -1610,18 +1649,19 @@ export const workspace = {
     const tabId = `${textid}:${seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
-    const tab = {
+    const sourceText = isTextTab(sourceTab) ? sourceTab : null;
+    const tab: TextTab = {
       id: tabId,
-      type: "text" as const,
+      type: "text",
       textid,
       seq,
       pinned: options.pinned === true,
       readMode: state.openMode === "sticky"
-        ? (sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode)
+        ? (sourceText?.pinned ? state.readMode : sourceText?.readMode ?? state.readMode)
         : state.openMode,
-      lineMode: sourceTab?.pinned
+      lineMode: sourceText?.pinned
         ? state.readPrefs.lineMode
-        : sourceTab?.lineMode ?? state.readPrefs.lineMode,
+        : sourceText?.lineMode ?? state.readPrefs.lineMode,
     };
     const pane = paneForOpenTab(tab);
     const focusedPaneId = leafIdForTab(pane, tabId);
@@ -1636,6 +1676,109 @@ export const workspace = {
       activity: "texts",
     };
     rememberTextVisit({ textid, seq, pinned: tab.pinned });
+    notify();
+    scheduleSessionSave();
+  },
+  openCoreRecord(collection: string, uuid: string) {
+    const tabId = `core:${collection}:${uuid}`;
+    const tab: CoreRecordTab = {
+      id: tabId,
+      type: "core-record",
+      collection,
+      uuid,
+      pinned: false,
+    };
+    const pane = paneForOpenTab(tab);
+    const focusedPaneId = leafIdForTab(pane, tabId);
+    state = {
+      ...state,
+      focusedPaneId,
+      pane,
+      activity: "core",
+    };
+    notify();
+    scheduleSessionSave();
+  },
+  replaceCoreRecord(paneId: string, tabId: string, collection: string, uuid: string) {
+    const newTabId = `core:${collection}:${uuid}`;
+    let replaced = false;
+    const pane = mapPaneLeaves(state.pane, (leaf) => {
+      if (leaf.id !== paneId) return leaf;
+      const idx = leaf.tabs.findIndex((t) => t.id === tabId);
+      if (idx < 0) return leaf;
+      const current = leaf.tabs[idx];
+      // If the new tab id already exists elsewhere in this leaf, just activate it.
+      const existing = leaf.tabs.findIndex((t) => t.id === newTabId);
+      if (existing >= 0) {
+        replaced = true;
+        return { ...leaf, activeTabId: newTabId };
+      }
+      replaced = true;
+      const prevHistory =
+        current.type === "core-record" ? current.history ?? [] : [];
+      const pushed =
+        current.type === "core-record"
+          ? [...prevHistory, { collection: current.collection, uuid: current.uuid }]
+          : prevHistory;
+      const newTab: CoreRecordTab = {
+        id: newTabId,
+        type: "core-record",
+        collection,
+        uuid,
+        pinned: current.type === "core-record" ? current.pinned : false,
+        history: pushed,
+      };
+      const nextTabs = leaf.tabs.slice();
+      nextTabs[idx] = newTab;
+      return { ...leaf, tabs: nextTabs, activeTabId: newTabId };
+    });
+    if (!replaced) {
+      // Fall back to opening as a new tab.
+      workspace.openCoreRecord(collection, uuid);
+      return;
+    }
+    state = {
+      ...state,
+      pane,
+      focusedPaneId: paneId,
+    };
+    notify();
+    scheduleSessionSave();
+  },
+  coreRecordBack(paneId: string, tabId: string) {
+    let changed = false;
+    const pane = mapPaneLeaves(state.pane, (leaf) => {
+      if (leaf.id !== paneId) return leaf;
+      const idx = leaf.tabs.findIndex((t) => t.id === tabId);
+      if (idx < 0) return leaf;
+      const current = leaf.tabs[idx];
+      if (current.type !== "core-record") return leaf;
+      const history = current.history ?? [];
+      if (history.length === 0) return leaf;
+      const prev = history[history.length - 1];
+      const nextHistory = history.slice(0, -1);
+      const newTabId = `core:${prev.collection}:${prev.uuid}`;
+      // If a tab with the target id already exists elsewhere, just activate it.
+      const existing = leaf.tabs.findIndex((t) => t.id === newTabId);
+      if (existing >= 0) {
+        changed = true;
+        return { ...leaf, activeTabId: newTabId };
+      }
+      changed = true;
+      const newTab: CoreRecordTab = {
+        id: newTabId,
+        type: "core-record",
+        collection: prev.collection,
+        uuid: prev.uuid,
+        pinned: current.pinned,
+        history: nextHistory,
+      };
+      const nextTabs = leaf.tabs.slice();
+      nextTabs[idx] = newTab;
+      return { ...leaf, tabs: nextTabs, activeTabId: newTabId };
+    });
+    if (!changed) return;
+    state = { ...state, pane, focusedPaneId: paneId };
     notify();
     scheduleSessionSave();
   },
@@ -1654,7 +1797,7 @@ export const workspace = {
           ),
         };
       }),
-      textHistory: tab
+      textHistory: isTextTab(tab)
         ? state.textHistory.map((entry) =>
             entry.textid === tab.textid && entry.seq === tab.seq
               ? { ...entry, pinned: nextPinned }
@@ -2108,18 +2251,19 @@ export const workspace = {
     const tabId = `${hit.textid}:${hit.juan_seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
-    const tab = {
+    const sourceText = isTextTab(sourceTab) ? sourceTab : null;
+    const tab: TextTab = {
       id: tabId,
-      type: "text" as const,
+      type: "text",
       textid: hit.textid,
       seq: hit.juan_seq,
       pinned: false,
       readMode: state.openMode === "sticky"
-        ? (sourceTab?.pinned ? state.readMode : sourceTab?.readMode ?? state.readMode)
+        ? (sourceText?.pinned ? state.readMode : sourceText?.readMode ?? state.readMode)
         : state.openMode,
-      lineMode: sourceTab?.pinned
+      lineMode: sourceText?.pinned
         ? state.readPrefs.lineMode
-        : sourceTab?.lineMode ?? state.readPrefs.lineMode,
+        : sourceText?.lineMode ?? state.readPrefs.lineMode,
     };
     const pane = paneForOpenTab(tab);
     const focusedPaneId = leafIdForTab(pane, tabId);

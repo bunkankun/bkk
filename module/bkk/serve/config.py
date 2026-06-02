@@ -13,6 +13,8 @@ class ServeConfig:
     index_path: Path
     catalog_path: Path | None = None
     translation_search_path: Path | None = None
+    core_root: Path | None = None
+    core_index_path: Path | None = None
     host: str = "127.0.0.1"
     port: int = 8000
     admin_token: str | None = None
@@ -42,6 +44,7 @@ class ServeConfig:
         *,
         corpus_root: Path | str | None = None,
         rc: dict | None = None,
+        core_rc: dict | None = None,
     ) -> "ServeConfig":
         """Build config from defaults < rc file < env vars.
 
@@ -77,6 +80,25 @@ class ServeConfig:
             catalog = Path(rc_catalog).resolve()
         else:
             catalog = root / "_catalog.bkkc"
+
+        core_rc = core_rc or {}
+        env_core_root = os.environ.get("BKK_CORE_ROOT")
+        if env_core_root:
+            core_root: Path | None = Path(env_core_root).resolve()
+        elif core_rc.get("root"):
+            core_root = Path(core_rc["root"]).resolve()
+        else:
+            core_root = None
+
+        env_core_index = os.environ.get("BKK_CORE_INDEX_PATH")
+        if env_core_index:
+            core_index: Path | None = Path(env_core_index).resolve()
+        elif core_rc.get("index"):
+            core_index = Path(core_rc["index"]).resolve()
+        elif core_root is not None:
+            core_index = core_root / "_core.bkki"
+        else:
+            core_index = None
 
         env_translation_search = os.environ.get("BKK_TRANSLATION_SEARCH_PATH")
         rc_translation_search = rc.get("translation_search")
@@ -158,6 +180,8 @@ class ServeConfig:
             index_path=index,
             catalog_path=catalog,
             translation_search_path=translation_search,
+            core_root=core_root,
+            core_index_path=core_index,
             host=host,
             port=port,
             admin_token=admin_token,
@@ -179,6 +203,8 @@ class ServeConfig:
         index_path: Path | str | None = None,
         catalog_path: Path | str | None = None,
         translation_search_path: Path | str | None = None,
+        core_root: Path | str | None = None,
+        core_index_path: Path | str | None = None,
         host: str | None = None,
         port: int | None = None,
         admin_token: str | None = None,
@@ -201,6 +227,10 @@ class ServeConfig:
             updates["catalog_path"] = Path(catalog_path).resolve()
         if translation_search_path is not None:
             updates["translation_search_path"] = Path(translation_search_path).resolve()
+        if core_root is not None:
+            updates["core_root"] = Path(core_root).resolve()
+        if core_index_path is not None:
+            updates["core_index_path"] = Path(core_index_path).resolve()
         if host is not None:
             updates["host"] = host
         if port is not None:

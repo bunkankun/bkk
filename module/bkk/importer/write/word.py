@@ -319,11 +319,27 @@ def _form_bullets(
     out_root: Path,
 ) -> list[str]:
     lines: list[str] = []
-    orth = form.orth or "(no orthograph)"
+    orth_text = form.orth or "(no orthograph)"
     if form.graph_uuid:
-        graph_path = knowledge_path(out_root, "graphs", form.graph_uuid)
-        orth = _markdown_link(orth, relative_note_link(source_path, graph_path))
-    lines.append(f"- Orth: {orth}")
+        uuids = _parse_graph_uuids(form.graph_uuid)
+        if form.orth and len(uuids) > 1 and len(uuids) == len(form.orth):
+            parts = []
+            for ch, uid in zip(form.orth, uuids):
+                graph_path = knowledge_path(out_root, "graphs", uid)
+                parts.append(
+                    _markdown_link(ch, relative_note_link(source_path, graph_path))
+                )
+            orth_rendered = "".join(parts)
+        elif uuids:
+            graph_path = knowledge_path(out_root, "graphs", uuids[0])
+            orth_rendered = _markdown_link(
+                orth_text, relative_note_link(source_path, graph_path)
+            )
+        else:
+            orth_rendered = orth_text
+    else:
+        orth_rendered = orth_text
+    lines.append(f"- Orth: {orth_rendered}")
     for label, values in _pronunciations_by_role(form.pronunciations).items():
         if values:
             lines.append(f"  - {label}: {', '.join(values)}")
@@ -464,8 +480,18 @@ def _link_label_escape(value: str) -> str:
     return _md_text(value).replace("[", "\\[").replace("]", "\\]")
 
 
-def _normalize_uuid(value: str) -> str:
-    value = (value or "").strip().lstrip("#")
-    if value.startswith("uuid-"):
-        return value[len("uuid-"):]
-    return value
+def _parse_graph_uuids(value: str) -> list[str]:
+    """Split a possibly multi-UUID corresp string into normalized UUIDs.
+
+    The source ``corresp`` for multi-character orths comes through as
+    ``"<uuid1> #uuid-<uuid2>"`` (only the leading ``#uuid-`` is stripped by
+    the reader). Split on whitespace and normalize each piece.
+    """
+    out: list[str] = []
+    for part in (value or "").split():
+        p = part.strip().lstrip("#")
+        if p.startswith("uuid-"):
+            p = p[len("uuid-"):]
+        if p:
+            out.append(p)
+    return out
