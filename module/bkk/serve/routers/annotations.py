@@ -114,8 +114,12 @@ def _coerce_record(raw: dict[str, Any]) -> AnnotationOut | None:
     )
 
 
-def _load_annotations(path: Path) -> list[AnnotationOut]:
-    out: list[AnnotationOut] = []
+def read_raw_records(path: Path) -> list[dict[str, Any]]:
+    """Return one dict per JSONL line, skipping blanks and decode errors.
+
+    Shared by the harvester and the read endpoint so both see the same view.
+    """
+    out: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -125,11 +129,17 @@ def _load_annotations(path: Path) -> list[AnnotationOut]:
                 raw = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if not isinstance(raw, dict):
-                continue
-            ann = _coerce_record(raw)
-            if ann is not None:
-                out.append(ann)
+            if isinstance(raw, dict):
+                out.append(raw)
+    return out
+
+
+def _load_annotations(path: Path) -> list[AnnotationOut]:
+    out: list[AnnotationOut] = []
+    for raw in read_raw_records(path):
+        ann = _coerce_record(raw)
+        if ann is not None:
+            out.append(ann)
     out.sort(key=lambda a: a.offset)
     return out
 

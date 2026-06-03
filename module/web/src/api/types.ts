@@ -177,6 +177,8 @@ export interface Annotation {
   id?: string;
   offset: number;
   length?: number;
+  marker_id?: string;
+  bucket?: string;
   concept?: string;
   concept_id?: string;
   seg_id?: string;
@@ -185,6 +187,40 @@ export interface Annotation {
   sense?: AnnotationSense;
   translation?: AnnotationTranslation;
   metadata?: Record<string, unknown>;
+}
+
+// Annotation write path (Bluesky).
+export interface BlueskyStatus {
+  handle: string | null;
+  did: string | null;
+}
+
+export interface BlueskyLoginRequest {
+  handle: string;
+  app_password: string;
+}
+
+export interface AnnotationAnchor {
+  marker_id: string;
+  offset: number;
+  length: number;
+  end_marker_id?: string | null;
+  end_length?: number | null;
+}
+
+export interface AnnotationPostRequest {
+  text_id: string;
+  edition: string;
+  anchor: AnnotationAnchor;
+  payload: Record<string, unknown>;
+  source_role?: string | null;
+  supersedes?: string | null;
+}
+
+export interface AnnotationPostResponse {
+  uri: string;
+  cid: string;
+  did: string;
 }
 
 // Search
@@ -438,6 +474,7 @@ export interface AuthUser {
   avatar_url?: string | null;
   html_url?: string | null;
   workspace: WorkspaceInfo;
+  bluesky?: { handle: string; did: string } | null;
 }
 
 export interface AuthSession {

@@ -142,3 +142,13 @@ serve:
 #                                # set, /bundles/{textid}/juan/{seq}/annotations
 #                                # reads from <annotations_root>/<text-id>/. If
 #                                # unset, the endpoint returns an empty list.
+
+# ── Annotations harvester ──────────────────────────────────────────────────
+# `bkk annotations harvest` walks each DID below via
+# com.atproto.repo.listRecords and merges new records into the archive
+# (annotations_root falls back to [serve].annotations_root).
+annotations:
+#   dids:                          # YAML list — one DID per line, prefixed with `- `
+#     - did:plc:exampledid123
+#     - did:plc:anotherdid456
+#   annotations_root: /data/bkk-annotations  # optional override of [serve]

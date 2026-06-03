@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { getAnnotations, getSegmentTranslations } from "../../api/client";
+import { getAnnotations, getManifest, getSegmentTranslations } from "../../api/client";
 import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
+import { AnnotationCompose } from "./AnnotationCompose";
+import { BlueskyPanel } from "./BlueskyPanel";
 
 function AnnCard({ a }: { a: Annotation }) {
   return (
@@ -61,8 +63,10 @@ export function AnnotationsTab() {
   const seq = useWorkspace((s) => s.activeSeq);
   const sel = useWorkspace((s) => s.selection);
   const selectedSegment = useWorkspace((s) => s.selectedSegment);
+  const localAnnotations = useWorkspace((s) => s.localAnnotations);
   const [anns, setAnns] = useState<Annotation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [edition, setEdition] = useState<string | null>(null);
   const [includePin, setIncludePin] = useState(false);
   const [segTranslations, setSegTranslations] = useState<SegmentTranslationEntry[] | null>(null);
   const [segError, setSegError] = useState<string | null>(null);
@@ -80,6 +84,23 @@ export function AnnotationsTab() {
       .catch((e) => { if (!cancelled) setError(String(e)); });
     return () => { cancelled = true; };
   }, [textid, seq]);
+
+  useEffect(() => {
+    if (textid == null) {
+      setEdition(null);
+      return;
+    }
+    let cancelled = false;
+    getManifest(textid)
+      .then((m) => {
+        if (cancelled) return;
+        setEdition(m.metadata?.edition?.short ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setEdition(null);
+      });
+    return () => { cancelled = true; };
+  }, [textid]);
 
   useEffect(() => {
     if (
@@ -111,10 +132,14 @@ export function AnnotationsTab() {
   if (error) return <div className="rc empty">Failed to load: {error}</div>;
   if (!anns) return <div className="rc empty">Loading annotations…</div>;
 
+  const localKey = `${textid}_${seq}`;
+  const locals = localAnnotations[localKey] ?? [];
+  const merged = locals.length > 0 ? [...locals, ...anns] : anns;
+
   // Filter by selection if present.
-  let visible = anns;
+  let visible = merged;
   if (sel && sel.textid === textid && sel.seq === seq && sel.bucket === "body") {
-    visible = anns.filter((a) => a.offset >= sel.start && a.offset < sel.end);
+    visible = merged.filter((a) => a.offset >= sel.start && a.offset < sel.end);
   } else if (sel && sel.textid === textid && sel.seq === seq) {
     visible = [];
   }
@@ -166,6 +191,7 @@ export function AnnotationsTab() {
 
   return (
     <div className="rc">
+      <BlueskyPanel />
       {sel && sel.textid === textid && sel.seq === seq && (
         <>
           <div className="sel-summary">{sel.chars.join("")}</div>
@@ -195,6 +221,7 @@ export function AnnotationsTab() {
               Search this
             </button>
           </div>
+          {edition && <AnnotationCompose selection={sel} edition={edition} />}
           <label className="sel-pin-toggle">
             <input
               type="checkbox"
@@ -233,7 +260,7 @@ export function AnnotationsTab() {
 
       {visible.length === 0 ? (
         <div className="empty">
-          {anns.length === 0
+          {merged.length === 0
             ? "No annotations for this juan."
             : "No annotations in selection."}
         </div>

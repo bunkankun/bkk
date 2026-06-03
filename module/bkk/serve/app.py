@@ -11,6 +11,7 @@ from . import errors
 from .config import ServeConfig
 from .routers import admin as admin_router
 from .routers import annotations as annotations_router
+from .routers import annotations_write as annotations_write_router
 from .routers import auth as auth_router
 from .routers import bundles as bundles_router
 from .routers import catalog as catalog_router
@@ -47,6 +48,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             {"name": "bundles", "description": "Direct-by-textid bundle access."},
             {"name": "texts", "description": "Bundle access by any identifier in metadata.identifiers."},
             {"name": "annotations", "description": "Per-juan annotations pinned to text offsets (sibling *.ann.yaml)."},
+            {"name": "annotations-write", "description": "Compose annotations: Bluesky session + record creation."},
             {"name": "catalog", "description": "Browse the corpus with curated metadata filters."},
             {"name": "core", "description": "Browse the bkk-core knowledge layer (concepts, graphs, words, …)."},
             {"name": "search", "description": "Variant-aware KWIC search across the corpus."},
@@ -78,6 +80,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     # Register specific sub-routes BEFORE bundles/texts so they win over the
     # generic /juan/{seq}/{bucket} wildcard in bundles_router.
     app.include_router(annotations_router.router)
+    app.include_router(annotations_write_router.router)
     app.include_router(translations_router.router)
     app.include_router(bundles_router.router)
     app.include_router(texts_router.router)

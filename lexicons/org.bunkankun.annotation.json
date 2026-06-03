@@ -1,0 +1,76 @@
+{
+  "lexicon": 1,
+  "id": "org.bunkankun.annotation",
+  "description": "A BKK annotation pinned to a span in a premodern Chinese text, anchored by a stable marker id plus an offset and length in canonical PUA characters. See docs/bkk-annotations/README.md for the archive-side counterpart.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["textId", "edition", "anchor", "payload", "createdAt"],
+        "properties": {
+          "textId": {
+            "type": "string",
+            "description": "BKK source-text identifier (e.g. KR1h0004)."
+          },
+          "edition": {
+            "type": "string",
+            "description": "Short edition id within the source text (e.g. tls, CK-KZ)."
+          },
+          "anchor": {
+            "type": "ref",
+            "ref": "#anchor"
+          },
+          "payload": {
+            "type": "unknown",
+            "description": "Free-form annotation content. Shape may evolve per source role."
+          },
+          "sourceRole": {
+            "type": "string",
+            "description": "What kind of annotation this is in the source pipeline. Defaults to bsky:org.bunkankun.annotation when produced by this lexicon."
+          },
+          "supersedes": {
+            "type": "string",
+            "format": "cid",
+            "description": "CID of a prior record this one replaces."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "required": ["markerId", "offset", "length"],
+      "description": "Stable anchor: marker id within the bundle + relative offset/length in canonical PUA characters.",
+      "properties": {
+        "markerId": {
+          "type": "string",
+          "description": "Id of a marker in the source bundle that serves as the anchor point."
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-indexed distance in canonical PUA characters from the marker to the start of the span."
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Span length in canonical PUA characters; 0 = point annotation."
+        },
+        "endMarkerId": {
+          "type": "string",
+          "description": "Optional end-anchor marker id when the span crosses another marker."
+        },
+        "endLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Length past endMarkerId when the span crosses another marker."
+        }
+      }
+    }
+  }
+}

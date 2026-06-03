@@ -12,9 +12,9 @@ This layer is the **archive**. In the eventual full architecture
 - **Working store:** a backend DB harvested from Bluesky.
 - **Archive:** this repo — periodic snapshot of the working store.
 
-Until the Bluesky transport and DB land, the archive is written directly by
-the BKK importer from the legacy TLS `tls:ann` corpus, and the serve layer
-reads from the archive directly.
+The Bluesky transport (post + manual harvest) is now wired in — see
+[`workflow.md`](workflow.md). The DB working store is still deferred; harvested
+records land in this archive directly alongside the TLS-seed lines.
 
 ## Layout
 

@@ -96,6 +96,35 @@ def annotation_to_record(
     return record
 
 
+_BUCKET_PRIORITY = {"front": 0, "body": 1, "back": 2}
+
+
+def bucket_sort_key(record: dict) -> tuple:
+    """Stable sort key for archive records: (bucket priority, offset, id)."""
+    return (
+        _BUCKET_PRIORITY.get(record.get("bucket"), 99),
+        record.get("bucket_offset", 0),
+        record.get("id", ""),
+    )
+
+
+def juan_archive_path(annotations_root: Path, text_id: str, juan_seq: int) -> Path:
+    """Canonical archive JSONL path for ``(text_id, juan_seq)``."""
+    return annotations_root / text_id / f"{text_id}_{juan_seq:03d}.ann.jsonl"
+
+
+def write_records_jsonl(out_path: Path, records: list[dict], *, sort: bool = True) -> Path:
+    """Write archive records to ``out_path`` as one JSON object per line."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if sort:
+        records = sorted(records, key=bucket_sort_key)
+    with out_path.open("w", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r, ensure_ascii=False, sort_keys=True))
+            f.write("\n")
+    return out_path
+
+
 def write_juan_annotations(
     annotations: list[tuple[Annotation, int, str]],
     *,
@@ -112,25 +141,13 @@ def write_juan_annotations(
     """
     if not annotations:
         return None
-    text_dir = annotations_root / text_id
-    text_dir.mkdir(parents=True, exist_ok=True)
-    out_path = text_dir / f"{text_id}_{juan_seq:03d}.ann.jsonl"
+    out_path = juan_archive_path(annotations_root, text_id, juan_seq)
 
     records: list[dict] = []
-    bucket_priority = {"front": 0, "body": 1, "back": 2}
     for ann, bucket_offset, bucket in annotations:
         record = annotation_to_record(ann, text_id=text_id, edition=edition)
         record["bucket"] = bucket
         record["bucket_offset"] = bucket_offset
         records.append(record)
-    records.sort(key=lambda r: (
-        bucket_priority.get(r["bucket"], 99),
-        r["bucket_offset"],
-        r["id"],
-    ))
 
-    with out_path.open("w", encoding="utf-8") as f:
-        for r in records:
-            f.write(json.dumps(r, ensure_ascii=False, sort_keys=True))
-            f.write("\n")
-    return out_path
+    return write_records_jsonl(out_path, records, sort=True)

@@ -18,6 +18,7 @@ import {
   searchTranslationSegments,
 } from "../api/client";
 import type {
+  Annotation,
   AuthSession,
   SearchHit,
   SearchResponse,
@@ -262,6 +263,11 @@ export interface WorkspaceState {
     status: "idle" | "loading" | "saving" | "error";
     error: string | null;
   };
+  // Bluesky connection status (handle + did); null when disconnected.
+  blueskyStatus: { handle: string; did: string } | null;
+  // Optimistic annotations keyed by `${textid}_${seq}` — survive the
+  // refetch round-trip until the harvester picks them up.
+  localAnnotations: Record<string, Annotation[]>;
 }
 
 const READ_PREFS_KEY = "bkk.readPrefs";
@@ -523,6 +529,8 @@ let state: WorkspaceState = {
   uiPrefs: loadUiPrefs(),
   panelWidths: loadPanelWidths(),
   persistence: { status: "idle", error: null },
+  blueskyStatus: null,
+  localAnnotations: {},
 };
 
 // monotonically increasing run id so an in-flight stale request can't clobber
@@ -1534,6 +1542,19 @@ export const workspace = {
   },
   setSelection(sel: SelectionRange | null) {
     state = { ...state, selection: sel };
+    notify();
+  },
+  setBlueskyStatus(blueskyStatus: { handle: string; did: string } | null) {
+    state = { ...state, blueskyStatus };
+    notify();
+  },
+  prependLocalAnnotation(textid: string, seq: number, ann: Annotation) {
+    const key = `${textid}_${seq}`;
+    const existing = state.localAnnotations[key] ?? [];
+    state = {
+      ...state,
+      localAnnotations: { ...state.localAnnotations, [key]: [ann, ...existing] },
+    };
     notify();
   },
   setSelectedSegment(seg: WorkspaceState["selectedSegment"]) {

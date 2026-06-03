@@ -9,7 +9,11 @@
 
 import type {
   Annotation,
+  AnnotationPostRequest,
+  AnnotationPostResponse,
   AuthSession,
+  BlueskyLoginRequest,
+  BlueskyStatus,
   CatalogResponse,
   CategoriesResponse,
   CoreBacklinksResponse,
@@ -202,6 +206,36 @@ export async function getAnnotations(
   return fetchJson<Annotation[]>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/annotations`,
   );
+}
+
+export async function getBlueskyStatus(): Promise<BlueskyStatus> {
+  return fetchJson<BlueskyStatus>(`${apiBase}/annotations/bluesky/session`);
+}
+
+export async function postBlueskyLogin(
+  body: BlueskyLoginRequest,
+): Promise<BlueskyStatus> {
+  return fetchJson<BlueskyStatus>(`${apiBase}/annotations/bluesky/session`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteBlueskySession(): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`${apiBase}/annotations/bluesky/session`, {
+    method: "DELETE",
+  });
+}
+
+export async function postAnnotation(
+  body: AnnotationPostRequest,
+): Promise<AnnotationPostResponse> {
+  return fetchJson<AnnotationPostResponse>(`${apiBase}/annotations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function getOverlays(): Promise<OverlaysResponse> {

@@ -97,6 +97,18 @@ class JobRegistry:
 
 
 @dataclass
+class BlueskySession:
+    """Stored in process memory only; never persisted, never logged."""
+
+    did: str
+    handle: str
+    access_jwt: str
+    refresh_jwt: str
+    service_endpoint: str
+    created_at: float = field(default_factory=time.time)
+
+
+@dataclass
 class UserSession:
     id: str
     login: str
@@ -105,6 +117,7 @@ class UserSession:
     html_url: str | None
     access_token: str
     workspace: dict[str, Any]
+    bluesky: BlueskySession | None = None
     created_at: float = field(default_factory=time.time)
 
     def public_dict(self) -> dict[str, Any]:
@@ -114,6 +127,11 @@ class UserSession:
             "avatar_url": self.avatar_url,
             "html_url": self.html_url,
             "workspace": self.workspace,
+            "bluesky": (
+                {"did": self.bluesky.did, "handle": self.bluesky.handle}
+                if self.bluesky is not None
+                else None
+            ),
         }
 
 
@@ -158,6 +176,30 @@ class SessionRegistry:
             return
         with self._lock:
             self._sessions.pop(session_id, None)
+
+    def attach_bluesky(self, session_id: str, bluesky: BlueskySession) -> bool:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                return False
+            session.bluesky = bluesky
+            return True
+
+    def detach_bluesky(self, session_id: str) -> None:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is not None:
+                session.bluesky = None
+
+    def update_bluesky_tokens(
+        self, session_id: str, *, access_jwt: str, refresh_jwt: str,
+    ) -> None:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None or session.bluesky is None:
+                return
+            session.bluesky.access_jwt = access_jwt
+            session.bluesky.refresh_jwt = refresh_jwt
 
 
 @dataclass
