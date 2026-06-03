@@ -113,7 +113,6 @@ def _run_manifest(bundle: str, out_root: Path | None) -> int:
     print(
         f"rebuilt {master['manifest']}: "
         f"{master['parts']} parts, "
-        f"{master['annotations']} annotations, "
         f"{master['toc']} TOC entries"
     )
     for ed in summary["editions"]:

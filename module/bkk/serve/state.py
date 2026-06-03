@@ -187,6 +187,10 @@ class AppState:
         return self.config.translation_search_path
 
     @property
+    def annotations_root(self) -> Path | None:
+        return self.config.annotations_root
+
+    @property
     def core_root(self) -> Path | None:
         return self.config.core_root
 

@@ -253,6 +253,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="output directory (bundle written under "
                         "<out>/<text-id>/, or <out>/<section>/<text-id>/ "
                         "with --by-section)")
+    p.add_argument("--annotations-out", dest="annotations_out", type=Path,
+                   default=None,
+                   help="root of the bkk-annotations archive. When given, "
+                        "per-juan .ann.jsonl files are written under "
+                        "<annotations-out>/<text-id>/. If omitted, the "
+                        "annotation layer is skipped. (Or set "
+                        "import.annotations_out in .bkkrc.)")
     p.add_argument("--text-id", default=None, help="single text id (e.g. KR6q0053)")
     p.add_argument("--mapping", dest="mapping_csv", type=Path, default=None,
                    help="cbeta: CSV mapping old_id to kr_id "
@@ -336,6 +343,7 @@ def run(argv: list[str] | None = None) -> int:
         ("imglist_branch", "imglist_branch"), ("lang", "lang"),
         ("on_exists", "on_exists"), ("mapping", "mapping_csv"),
         ("xml_elements", "xml_elements"),
+        ("annotations_out", "annotations_out"),
     ]:
         if rc_key in imp:
             defaults[dest] = imp[rc_key]
@@ -689,7 +697,10 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
         _report_skipped(bundle_dir, kind="tls", label=bundle.text_id)
         return ""
 
-    summary = write_bundle(bundle, effective_out)
+    summary = write_bundle(
+        bundle, effective_out,
+        annotations_root=getattr(args, "annotations_out", None),
+    )
     print(
         f"wrote {len(summary['juans'])} juan(s) for {summary['text_id']} "
         f"under {summary['out_root']}"
@@ -1008,7 +1019,11 @@ def _import_one_cbeta(
         _report_skipped(bundle_dir, kind="cbeta", label=old_id)
         return ""
 
-    summary = write_bundle(bundle, effective_out, skip_manifest_writes=skip_manifest_writes)
+    summary = write_bundle(
+        bundle, effective_out,
+        skip_manifest_writes=skip_manifest_writes,
+        annotations_root=getattr(args, "annotations_out", None),
+    )
     print(
         f"wrote {len(summary['juans'])} juan(s) for {summary['text_id']} "
         f"from CBETA {old_id} under {summary['out_root']}"

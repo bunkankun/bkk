@@ -20,7 +20,7 @@ TEXT_ID = "KR6q0053"
 
 
 @pytest.fixture(scope="module")
-def bundle_dir(tmp_path_factory) -> Path:
+def bundle_dir(tmp_path_factory) -> tuple[Path, Path]:
     in_root = REPO / "input" / "tls"
     matches = _find_tls_texts(in_root, TEXT_ID)
     assert matches
@@ -32,12 +32,14 @@ def bundle_dir(tmp_path_factory) -> Path:
         TEXT_ID,
     )
     out = tmp_path_factory.mktemp("bkk-out")
-    write_bundle(bundle, out)
-    return out / TEXT_ID
+    archive = tmp_path_factory.mktemp("bkk-annotations")
+    write_bundle(bundle, out, annotations_root=archive)
+    return out / TEXT_ID, archive
 
 
-def test_bundle_basic_shape(bundle_dir: Path):
-    b = read_bundle(bundle_dir)
+def test_bundle_basic_shape(bundle_dir: tuple[Path, Path]):
+    bd, _ = bundle_dir
+    b = read_bundle(bd)
     assert b.text_id == TEXT_ID
     assert b.edition_short == "T"
     assert len(b.juans) == 1
@@ -45,14 +47,16 @@ def test_bundle_basic_shape(bundle_dir: Path):
     assert juan.seq == 1
 
 
-def test_section_count_matches_toc(bundle_dir: Path):
-    b = read_bundle(bundle_dir)
+def test_section_count_matches_toc(bundle_dir: tuple[Path, Path]):
+    bd, _ = bundle_dir
+    b = read_bundle(bd)
     # KR6q0053: 4 front (序) + 3 body sections in TOC.
     assert len(b.juans[0].sections) == 7
 
 
-def test_section_text_and_head(bundle_dir: Path):
-    b = read_bundle(bundle_dir)
+def test_section_text_and_head(bundle_dir: tuple[Path, Path]):
+    bd, _ = bundle_dir
+    b = read_bundle(bd)
     secs = b.juans[0].sections
     # All sections have non-empty text and a head_marker_id.
     for s in secs:
@@ -68,28 +72,31 @@ def test_section_text_and_head(bundle_dir: Path):
     assert body_secs
 
 
-def test_no_tls_ann_markers(bundle_dir: Path):
-    b = read_bundle(bundle_dir)
+def test_no_tls_ann_markers(bundle_dir: tuple[Path, Path]):
+    bd, _ = bundle_dir
+    b = read_bundle(bd)
     for sec in b.juans[0].sections:
         for m in sec.markers:
             assert m.type != "tls:ann"
 
 
-def test_annotation_count_and_provenance(bundle_dir: Path):
-    """Annotations come from the .ann.yaml (one entry per unique xml:id whose
-    seg_id falls within a bucket). Provenance is recovered from the sidecar.
+def test_annotation_count_and_provenance(bundle_dir: tuple[Path, Path]):
+    """Annotations come from the JSONL archive (one record per unique
+    xml:id whose seg_id falls within a bucket). Provenance is recovered
+    from the source sidecar.
 
-    We assert the count against the .ann.yaml entry count and that every
+    We assert the count against the archive's line count and that every
     annotation gets a provenance — the exact swl/doc split depends on the
     fixture and would couple the test to incidental counts.
     """
-    import yaml
-    ann_data = yaml.safe_load(
-        (bundle_dir / f"{TEXT_ID}_001.ann.yaml").read_text(encoding="utf-8")
+    bd, archive = bundle_dir
+    archive_path = archive / TEXT_ID / f"{TEXT_ID}_001.ann.jsonl"
+    expected = sum(
+        1 for line in archive_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
     )
-    expected = len(ann_data["annotations"])
 
-    b = read_bundle(bundle_dir)
+    b = read_bundle(bd, annotations_root=archive)
     anns = b.juans[0].annotations
     assert len(anns) == expected
     assert all(a.provenance in ("swl", "doc") for a in anns)
@@ -97,16 +104,18 @@ def test_annotation_count_and_provenance(bundle_dir: Path):
     assert any(a.provenance == "doc" for a in anns)
 
 
-def test_source_info_loaded(bundle_dir: Path):
-    b = read_bundle(bundle_dir)
+def test_source_info_loaded(bundle_dir: tuple[Path, Path]):
+    bd, _ = bundle_dir
+    b = read_bundle(bd)
     assert b.source_info is not None
     assert b.source_info["format"] == "tls"
     assert "tei" in b.source_info
     assert "ann_files" in b.source_info
 
 
-def test_section_marker_offsets_section_local(bundle_dir: Path):
-    b = read_bundle(bundle_dir)
+def test_section_marker_offsets_section_local(bundle_dir: tuple[Path, Path]):
+    bd, _ = bundle_dir
+    b = read_bundle(bd)
     for sec in b.juans[0].sections:
         for m in sec.markers:
             assert 0 <= m.offset <= len(sec.text)

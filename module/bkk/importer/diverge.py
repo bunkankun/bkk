@@ -107,6 +107,13 @@ def _classify(file: str, path: str, kind: str, sample, ours) -> Divergence:
         status = "expected"
         note = "sample annotations differ in order, offset space, and shape"
 
+    # Annotations left the text bundle (see docs/bkk-annotations/README.md):
+    # the writer no longer emits ``assets.annotations`` in the manifest or any
+    # ``*.ann.yaml`` sidecar. Sample predates the split.
+    elif path == "assets.annotations":
+        status = "expected"
+        note = "annotations moved to the bkk-annotations archive"
+
     return Divergence(file=file, path=path, kind=kind, status=status,
                       sample=sample, ours=ours, note=note)
 
@@ -206,6 +213,13 @@ def diff_trees(sample_root: Path, ours_root: Path) -> list[Divergence]:
                                   note="present in output, missing in sample"))
             continue
         if rel not in ours_files:
+            if rel.name.endswith(".ann.yaml"):
+                out.append(Divergence(
+                    file=str(rel), path="", kind="missing-key",
+                    status="expected",
+                    note="annotations moved to the bkk-annotations archive",
+                ))
+                continue
             out.append(Divergence(file=str(rel), path="", kind="missing-key",
                                   status="unexpected",
                                   note="present in sample, missing from output"))

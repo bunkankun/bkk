@@ -397,19 +397,22 @@ class AnnotationTranslation(BaseModel):
 
 
 class AnnotationOut(BaseModel):
-    """One annotation pinned to a text offset.
+    """One annotation pinned to a bucket-relative text offset.
 
-    Fields mirror the on-disk ``*.ann.yaml`` shape (TLS-derived). Absent
-    fields are omitted rather than emitted as null so the JSON stays small.
+    Records are sourced from the bkk-annotations archive (one JSONL file
+    per (text_id, juan)). Absent fields are omitted rather than emitted as
+    null so the JSON stays small.
     """
 
     id: str | None = None
-    offset: int = Field(..., description="char offset within the master body text")
-    length: int | None = Field(None, description="annotated span length, if recorded")
+    offset: int = Field(..., description="char offset within the juan's bucket text")
+    bucket: str | None = Field(None, description="front | body | back")
+    length: int | None = Field(None, description="annotated span length")
+    marker_id: str | None = Field(
+        None, description="id of the marker the annotation is anchored to",
+    )
     concept: str | None = None
     concept_id: str | None = None
-    seg_id: str | None = None
-    pos: int | None = None
     form: AnnotationForm | None = None
     sense: AnnotationSense | None = None
     translation: AnnotationTranslation | None = None

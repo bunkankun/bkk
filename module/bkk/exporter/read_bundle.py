@@ -7,12 +7,17 @@ sidecar (``<text-id>.source.yaml``), if present, is loaded into
 
 Section recovery: the master manifest's ``table_of_contents`` carries one
 entry per ``<div>`` with a ``[bucket, start, end]`` span, so we slice each
-bucket's text+markers by those spans. ``tls:ann`` markers added at write
-time are dropped (they're rebuilt from the .ann.yaml on the next round-trip).
+bucket's text+markers by those spans.
+
+Annotations: the bundle itself no longer carries them. Pass
+``annotations_root`` (the root of a ``bkk-annotations`` archive) to hydrate
+``Juan.annotations`` from the per-juan JSONL files; without it, every
+juan's annotation list comes back empty.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import yaml
@@ -22,7 +27,9 @@ from bkk.marker_assets import load_marker_asset, hydrate_juan_markers
 from ..importer.ir import Annotation, Bundle, Juan, Marker, Section
 
 
-def read_bundle(bundle_dir: Path) -> Bundle:
+def read_bundle(
+    bundle_dir: Path, *, annotations_root: Path | None = None,
+) -> Bundle:
     """Read the master Bundle from ``<bundle_dir>/<text_id>.manifest.yaml``."""
     bundle_dir = Path(bundle_dir)
     text_id = bundle_dir.name
@@ -30,7 +37,8 @@ def read_bundle(bundle_dir: Path) -> Bundle:
     sidecar_path = bundle_dir / f"{text_id}.source.yaml"
     sidecar = sidecar_path if sidecar_path.exists() else None
     return _bundle_from_manifest(
-        text_id, bundle_dir, manifest_path, sidecar_path=sidecar,
+        text_id, bundle_dir, manifest_path,
+        sidecar_path=sidecar, annotations_root=annotations_root,
     )
 
 
@@ -42,7 +50,9 @@ def read_edition_bundle(text_id: str, edition_dir: Path) -> Bundle:
     return _bundle_from_manifest(text_id, edition_dir, manifest_path)
 
 
-def read_bundles(bundle_dir: Path) -> tuple[Bundle, list[Bundle]]:
+def read_bundles(
+    bundle_dir: Path, *, annotations_root: Path | None = None,
+) -> tuple[Bundle, list[Bundle]]:
     """Read master + every documentary edition under ``bundle_dir``.
 
     Returns ``(master, [documentary, ...])``. Documentary list is sorted by
@@ -50,7 +60,7 @@ def read_bundles(bundle_dir: Path) -> tuple[Bundle, list[Bundle]]:
     """
     bundle_dir = Path(bundle_dir)
     text_id = bundle_dir.name
-    master = read_bundle(bundle_dir)
+    master = read_bundle(bundle_dir, annotations_root=annotations_root)
     documentary: list[Bundle] = []
     editions_dir = bundle_dir / "editions"
     if editions_dir.is_dir():
@@ -63,6 +73,7 @@ def read_bundles(bundle_dir: Path) -> tuple[Bundle, list[Bundle]]:
 def _bundle_from_manifest(
     text_id: str, file_dir: Path, manifest_path: Path,
     sidecar_path: Path | None = None,
+    annotations_root: Path | None = None,
 ) -> Bundle:
     if not manifest_path.exists():
         raise FileNotFoundError(f"manifest not found: {manifest_path}")
@@ -73,10 +84,6 @@ def _bundle_from_manifest(
         source_info = yaml.safe_load(sidecar_path.read_text(encoding="utf-8"))
 
     toc_by_juan = _index_toc(manifest.get("table_of_contents", []))
-    ann_files = {
-        e["seq"]: file_dir / e["filename"]
-        for e in manifest.get("assets", {}).get("annotations", [])
-    }
 
     juans: list[Juan] = []
     for part in manifest["assets"]["parts"]:
@@ -90,10 +97,10 @@ def _bundle_from_manifest(
         sections = _sections_from_juan(juan_data, toc_by_juan.get(seq, {}))
 
         annotations: list[Annotation] = []
-        ann_path = ann_files.get(seq)
-        if ann_path is not None and ann_path.exists():
-            ann_data = yaml.safe_load(ann_path.read_text(encoding="utf-8"))
-            annotations = _annotations_from_ann_file(ann_data, source_info)
+        if annotations_root is not None:
+            ann_path = annotations_root / text_id / f"{text_id}_{seq:03d}.ann.jsonl"
+            if ann_path.exists():
+                annotations = _annotations_from_jsonl(ann_path, source_info)
 
         juan_metadata = juan_data.get("metadata") or {}
         juans.append(Juan(
@@ -294,41 +301,54 @@ def _split_bucket_by_offset(bucket_text: str, bucket_markers: list[dict],
     return out
 
 
-def _annotations_from_ann_file(ann_data: dict,
-                               source_info: dict | None) -> list[Annotation]:
+def _annotations_from_jsonl(
+    path: Path, source_info: dict | None,
+) -> list[Annotation]:
+    """Load one juan's annotations from a ``.ann.jsonl`` archive file.
+
+    The TLS exporter rebuilds the legacy provenance bag from the source
+    sidecar, keyed on the original annotation id; for any record that
+    came from outside the seed corpus the bag is empty so the lookup
+    silently falls through to ``None``.
+    """
     provenance_by_id: dict[str, str | None] = {}
     if source_info is not None:
         for ann_id, info in (source_info.get("annotations") or {}).items():
-            provenance_by_id[ann_id] = info.get("provenance")
+            if isinstance(info, dict):
+                provenance_by_id[ann_id] = info.get("provenance")
 
     out: list[Annotation] = []
-    for entry in ann_data.get("annotations", []):
-        payload = {
-            k: v for k, v in entry.items()
-            if k not in (
-                "marker_id", "anchor_offset", "length",
-                "seg_id", "pos", "bucket", "offset",
-            )
-        }
-        # Prefer the new-shape anchor fields; fall back to legacy seg_id/pos.
-        marker_id = entry.get("marker_id") or entry.get("seg_id") or ""
-        anchor_offset = entry.get("anchor_offset")
-        if anchor_offset is None:
-            pos = entry.get("pos")
-            anchor_offset = (pos - 1) if pos else 0
-        length = entry.get("length", 1)
-        tls_seg_id = entry.get("seg_id")
-        tls_pos = entry.get("pos")
-        out.append(Annotation(
-            marker_id=marker_id,
-            offset=anchor_offset,
-            length=length,
-            payload=payload,
-            source_role="tls:ann",
-            provenance=provenance_by_id.get(payload.get("id", "")),
-            tls_seg_id=tls_seg_id,
-            tls_pos=tls_pos,
-        ))
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(record, dict):
+                continue
+            anchor = record.get("anchor") or {}
+            payload = dict(record.get("payload") or {})
+            rec_id = record.get("id")
+            if isinstance(rec_id, str):
+                payload.setdefault("id", rec_id)
+            tls_block = (record.get("provenance") or {}).get("tls") or {}
+            out.append(Annotation(
+                marker_id=anchor.get("marker_id", ""),
+                offset=int(anchor.get("offset", 0)),
+                length=int(anchor.get("length", 0)),
+                payload=payload,
+                source_role=(record.get("provenance") or {}).get(
+                    "source_role", "tls:ann"
+                ),
+                provenance=provenance_by_id.get(rec_id if isinstance(rec_id, str) else ""),
+                end_marker_id=anchor.get("end_marker_id"),
+                end_length=anchor.get("end_length"),
+                tls_seg_id=tls_block.get("seg_id"),
+                tls_pos=tls_block.get("pos"),
+            ))
     return out
 
 

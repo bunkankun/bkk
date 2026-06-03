@@ -1,18 +1,20 @@
 """Annotation endpoints: per-juan list of offset-pinned annotations.
 
-Annotations live in a sibling ``*.ann.yaml`` file next to each juan YAML.
-The file is optional — when missing, the endpoint returns an empty list so
-the frontend has a single happy path. The on-disk shape is TLS-derived and
-includes ``concept``, ``form``, ``sense.def``, ``translation``, and an
-``offset`` into the master body text.
+Annotations live in the ``bkk-annotations`` archive, separately from the
+text bundles. The archive is configured via ``serve.annotations_root`` in
+.bkkrc (or ``BKK_ANNOTATIONS_ROOT``). When unconfigured or empty, the
+endpoint returns an empty list so the frontend has a single happy path.
+
+On-disk shape: see ``docs/bkk-annotations/README.md``. One JSON object per
+line, sorted by ``(bucket, bucket_offset, id)``.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
-import yaml
 from fastapi import APIRouter, Path as PathParam, Request
 
 from .. import _examples as ex
@@ -33,17 +35,15 @@ router = APIRouter(tags=["annotations"])
 
 
 def _ann_path(state: AppState, textid: str, seq: int) -> Path | None:
-    """Return the first existing ``*_{seq:03d}.ann.yaml`` for the bundle."""
+    """Return the bkk-annotations JSONL path for ``(textid, seq)`` if any."""
+    root = state.annotations_root
+    if root is None:
+        return None
     rec = state.lookup_bundle(textid)
     if rec is None:
         raise errors.bundle_not_found(textid)
-    bundle = rec.bundle_dir
-    seq_str = f"{seq:03d}"
-    direct = bundle / f"{textid}_{seq_str}.ann.yaml"
-    if direct.exists():
-        return direct
-    matches = sorted(bundle.glob(f"*_{seq_str}.ann.yaml"))
-    return matches[0] if matches else None
+    candidate = root / textid / f"{textid}_{seq:03d}.ann.jsonl"
+    return candidate if candidate.exists() else None
 
 
 def _coerce_form(raw: Any) -> AnnotationForm | None:
@@ -91,35 +91,45 @@ def _coerce_translation(raw: Any) -> AnnotationTranslation | None:
     return tr
 
 
-def _coerce(raw: dict[str, Any]) -> AnnotationOut | None:
-    offset = raw.get("offset")
-    if not isinstance(offset, int):
+def _coerce_record(raw: dict[str, Any]) -> AnnotationOut | None:
+    bucket_offset = raw.get("bucket_offset")
+    if not isinstance(bucket_offset, int):
         return None
+    anchor = raw.get("anchor") or {}
+    payload = raw.get("payload") or {}
+    marker_id = anchor.get("marker_id") if isinstance(anchor, dict) else None
+    length = anchor.get("length") if isinstance(anchor, dict) else None
     return AnnotationOut(
         id=raw.get("id"),
-        offset=offset,
-        length=raw.get("length") if isinstance(raw.get("length"), int) else None,
-        concept=raw.get("concept"),
-        concept_id=raw.get("concept_id"),
-        seg_id=raw.get("seg_id"),
-        pos=raw.get("pos") if isinstance(raw.get("pos"), int) else None,
-        form=_coerce_form(raw.get("form")),
-        sense=_coerce_sense(raw.get("sense")),
-        translation=_coerce_translation(raw.get("translation")),
-        metadata=raw.get("metadata") if isinstance(raw.get("metadata"), dict) else None,
+        offset=bucket_offset,
+        bucket=raw.get("bucket") if isinstance(raw.get("bucket"), str) else None,
+        length=length if isinstance(length, int) else None,
+        marker_id=marker_id if isinstance(marker_id, str) else None,
+        concept=payload.get("concept"),
+        concept_id=payload.get("concept_id"),
+        form=_coerce_form(payload.get("form")),
+        sense=_coerce_sense(payload.get("sense")),
+        translation=_coerce_translation(payload.get("translation")),
+        metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None,
     )
 
 
 def _load_annotations(path: Path) -> list[AnnotationOut]:
-    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    raw_list = doc.get("annotations") or []
     out: list[AnnotationOut] = []
-    for raw in raw_list:
-        if not isinstance(raw, dict):
-            continue
-        ann = _coerce(raw)
-        if ann is not None:
-            out.append(ann)
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(raw, dict):
+                continue
+            ann = _coerce_record(raw)
+            if ann is not None:
+                out.append(ann)
     out.sort(key=lambda a: a.offset)
     return out
 

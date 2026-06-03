@@ -15,6 +15,7 @@ class ServeConfig:
     translation_search_path: Path | None = None
     core_root: Path | None = None
     core_index_path: Path | None = None
+    annotations_root: Path | None = None
     host: str = "127.0.0.1"
     port: int = 8000
     admin_token: str | None = None
@@ -100,6 +101,15 @@ class ServeConfig:
         else:
             core_index = None
 
+        env_annotations_root = os.environ.get("BKK_ANNOTATIONS_ROOT")
+        rc_annotations_root = rc.get("annotations_root")
+        if env_annotations_root:
+            annotations_root: Path | None = Path(env_annotations_root).resolve()
+        elif rc_annotations_root:
+            annotations_root = Path(rc_annotations_root).resolve()
+        else:
+            annotations_root = None
+
         env_translation_search = os.environ.get("BKK_TRANSLATION_SEARCH_PATH")
         rc_translation_search = rc.get("translation_search")
         if env_translation_search:
@@ -182,6 +192,7 @@ class ServeConfig:
             translation_search_path=translation_search,
             core_root=core_root,
             core_index_path=core_index,
+            annotations_root=annotations_root,
             host=host,
             port=port,
             admin_token=admin_token,

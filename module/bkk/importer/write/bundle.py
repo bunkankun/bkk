@@ -5,7 +5,6 @@ Lays out:
     <out-root>/<text-id>/
       <text-id>.manifest.yaml          (master)
       <text-id>_NNN.yaml               (master juan — byte-copy of T juan in v1)
-      <text-id>_NNN.ann.yaml           (annotations, role tls:ann)
       editions/T/<text-id>-T.manifest.yaml
       editions/T/<text-id>_NNN-T.yaml
 
@@ -13,6 +12,11 @@ For v1 the master edition is a byte-copy of T (no interpretive changes yet).
 Juan files carry a self-referential ``hash`` field; we use the zero-then-patch
 pattern (see ``hashing.manifest_hash``) so the file's own hash matches the
 manifest's ``parts.hash`` reference.
+
+Annotations no longer live in the bundle. When ``annotations_root`` is
+supplied to :func:`write_bundle`, per-juan JSONL files are written to a
+separate ``bkk-annotations`` archive (see
+``docs/bkk-annotations/README.md``).
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ from ..classify import bucket_sections
 from ..hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
 from ..idassigner import assign_marker_ids
 from ..ir import Annotation, Bundle, Juan, Marker, Section
+from .annotations import write_juan_annotations
 from .yaml_writer import dump, marker_to_flow
 from bkk.marker_assets import (
     build_marker_asset,
@@ -64,17 +69,6 @@ def _marker_dict(m: Marker) -> dict:
     return marker_to_flow(d)
 
 
-def _ann_marker_content(payload: dict) -> str:
-    """Compose the short ``form syn_func`` summary used on tls:ann markers."""
-    form = payload.get("form") or {}
-    sense = payload.get("sense") or {}
-    orth = form.get("orth") or form.get("orig") or ""
-    syn = sense.get("syn_func") or ""
-    if orth and syn:
-        return f"{orth} {syn}"
-    return orth or syn
-
-
 def _resolve_ann_offset(ann: Annotation, seg_offsets: dict[str, int]) -> int | None:
     """Resolve the annotation's anchor to a bucket-relative offset."""
     base = seg_offsets.get(ann.marker_id)
@@ -94,7 +88,8 @@ def _build_bucket(
 ) -> tuple[dict, list[dict], list[tuple[Annotation, int]]]:
     """Build the per-bucket dict (text/hash/markers) plus the list of
     ``(annotation, resolved_offset)`` for annotations that fell in this
-    bucket."""
+    bucket. Annotations no longer leave any trace in the bucket itself —
+    they're returned for the caller to write to the archive layer."""
     text, markers, seg_offsets = merge_sections(sections)
     # Fill in deterministic IDs on markers that have none (importer-inserted
     # markers). Source-derived IDs are left untouched.
@@ -110,16 +105,7 @@ def _build_bucket(
         if offset is None:
             continue
         bucket_anns.append((ann, offset))
-        markers.append(Marker(
-            type="tls:ann",
-            offset=offset,
-            content=_ann_marker_content(ann.payload),
-            id=ann.payload.get("id", ""),
-        ))
 
-    # Stable sort: by (offset, original index). Python's sort is stable, so
-    # text-stream markers (added in order) precede tls:ann markers at the
-    # same offset.
     indexed = list(enumerate(markers))
     indexed.sort(key=lambda p: (p[1].offset, p[0]))
     markers_sorted = [m for _, m in indexed]
@@ -295,7 +281,6 @@ def build_manifest(
     text_id: str,
     edition_short: str | None,           # None → master manifest
     juan_files: list[tuple[int, str, str]],   # (seq, filename, juan_self_hash)
-    ann_files: list[tuple[int, str]],         # TLS-only; KRP passes []
     marker_files: list[tuple[int, str, str]] | None,
     toc: list[dict],
     metadata: dict,
@@ -314,11 +299,6 @@ def build_manifest(
     ]
 
     assets: dict = {"parts": parts}
-    if ann_files:
-        assets["annotations"] = [
-            marker_to_flow({"seq": seq, "role": "tls:ann", "filename": fn})
-            for seq, fn in ann_files
-        ]
     if marker_files:
         assets["markers"] = [
             marker_to_flow({
@@ -364,56 +344,13 @@ def build_manifest(
     return manifest
 
 
-def _build_ann_file(
-    text_id: str, seq: int, edition_short: str,
-    bucket_anns_by_bucket: dict[str, list[tuple[Annotation, int]]],
-) -> dict:
-    """Build the merged .ann.yaml dict for one juan."""
-    entries: list[dict] = []
-    bucket_priority = ["front", "body", "back"]
-    for bucket_name in bucket_priority:
-        items = bucket_anns_by_bucket.get(bucket_name, [])
-        for ann, offset in items:
-            payload = dict(ann.payload)
-            ordered: dict = {}
-            for key in ("id", "concept", "concept_id"):
-                if key in payload:
-                    ordered[key] = payload.pop(key)
-            # Canonical anchor (new shape): marker_id + offset + length.
-            ordered["marker_id"] = ann.marker_id
-            ordered["anchor_offset"] = ann.offset
-            ordered["length"] = ann.length
-            # Round-trip carry-over for TLS-seed records (consumed by the
-            # TLS exporter).
-            if ann.tls_seg_id is not None:
-                ordered["seg_id"] = ann.tls_seg_id
-                ordered["pos"] = ann.tls_pos
-            # Bucket-resolved offset for fast frontend rendering.
-            ordered["bucket"] = bucket_name
-            ordered["offset"] = offset
-            for key, val in payload.items():
-                ordered[key] = val
-            entries.append(ordered)
-
-    entries.sort(key=lambda e: (
-        bucket_priority.index(e["bucket"]),
-        e["offset"],
-        e.get("id", ""),
-    ))
-
-    return {
-        "text_id": text_id,
-        "juan": f"{seq:03d}",
-        "edition": edition_short,
-        "annotations": entries,
-    }
-
-
 # ---------- top-level entry -------------------------------------------------
 
 
 def write_bundle(
-    bundle: Bundle, out_root: Path, *, skip_manifest_writes: bool = False,
+    bundle: Bundle, out_root: Path, *,
+    skip_manifest_writes: bool = False,
+    annotations_root: Path | None = None,
 ) -> dict:
     """Write the BKK tree for ``bundle`` under ``out_root``. Return a small
     summary dict describing what was written.
@@ -434,7 +371,7 @@ def write_bundle(
     juan_master_files: list[tuple[int, str, str]] = []
     marker_edition_files: list[tuple[int, str, str]] = []
     marker_master_files: list[tuple[int, str, str]] = []
-    ann_files: list[tuple[int, str]] = []
+    ann_juans_written: list[int] = []
     toc_master: list[dict] = []
     toc_edition: list[dict] = []
 
@@ -523,14 +460,23 @@ def write_bundle(
                 (juan.seq, master_marker_filename, master_marker_asset["hash"])
             )
 
-        # Annotation file (master only, per plan).
-        if juan.annotations:
-            ann_dict = _build_ann_file(
-                text_id, juan.seq, edition_short, bucket_anns_by_bucket,
-            )
-            ann_filename = f"{text_id}_{juan.seq:03d}.ann.yaml"
-            (bundle_root / ann_filename).write_text(dump(ann_dict), encoding="utf-8")
-            ann_files.append((juan.seq, ann_filename))
+        # Annotations land in the separate bkk-annotations archive when
+        # an annotations_root is configured. When it isn't, the annotation
+        # layer is silently skipped (text-only import).
+        if annotations_root is not None and juan.annotations:
+            flat: list[tuple[Annotation, int, str]] = []
+            for bucket_name in ("front", "body", "back"):
+                for ann, offset in bucket_anns_by_bucket.get(bucket_name, []):
+                    flat.append((ann, offset, bucket_name))
+            if flat:
+                write_juan_annotations(
+                    flat,
+                    text_id=text_id,
+                    edition=edition_short,
+                    juan_seq=juan.seq,
+                    annotations_root=annotations_root,
+                )
+                ann_juans_written.append(juan.seq)
 
         # TOC entries — one per section, computed offsets per spec.
         toc_edition.extend(juan_toc)
@@ -539,7 +485,7 @@ def write_bundle(
     if not skip_manifest_writes:
         # ---- edition manifest ----
         edition_manifest = build_manifest(
-            text_id, edition_short, juan_edition_files, [], marker_edition_files,
+            text_id, edition_short, juan_edition_files, marker_edition_files,
             toc_edition,
             bundle.metadata,
         )
@@ -551,7 +497,7 @@ def write_bundle(
 
         # ---- master manifest ----
         master_manifest = build_manifest(
-            text_id, None, juan_master_files, ann_files, marker_master_files,
+            text_id, None, juan_master_files, marker_master_files,
             toc_master, bundle.metadata,
         )
         master_manifest["hash"] = manifest_hash(master_manifest)
@@ -577,7 +523,7 @@ def write_bundle(
         "text_id": text_id,
         "out_root": str(bundle_root),
         "juans": [s for s, _, _ in juan_edition_files],
-        "annotations": [s for s, _ in ann_files],
+        "annotations": list(ann_juans_written),
     }
     if sidecar_filename is not None:
         summary["source_sidecar"] = sidecar_filename
@@ -802,7 +748,7 @@ def write_krp_edition(bundle: Bundle, out_root: Path) -> dict:
 
     manifest = build_manifest(
         text_id, edition_short=short,
-        juan_files=juan_files, ann_files=[], marker_files=marker_files, toc=toc,
+        juan_files=juan_files, marker_files=marker_files, toc=toc,
         metadata=bundle.metadata, entity_encoding=True,
     )
     manifest["hash"] = manifest_hash(manifest)
@@ -835,7 +781,7 @@ def write_krp_master(bundle: Bundle, out_root: Path) -> dict:
 
     manifest = build_manifest(
         text_id, edition_short=None,
-        juan_files=juan_files, ann_files=[], marker_files=marker_files, toc=toc,
+        juan_files=juan_files, marker_files=marker_files, toc=toc,
         metadata=bundle.metadata, entity_encoding=True,
     )
     manifest["hash"] = manifest_hash(manifest)

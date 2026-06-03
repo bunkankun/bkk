@@ -31,7 +31,6 @@ from bkk.marker_assets import effective_markers_for_bucket, marker_asset_hash
 _JUAN_RE = re.compile(
     r"^(?P<text_id>.+?)_(?P<seq>\d{3})(?:-(?P<short>[A-Za-z0-9]+))?\.yaml$",
 )
-_ANN_RE = re.compile(r"^(?P<text_id>.+?)_(?P<seq>\d{3})\.ann\.yaml$")
 
 
 def rebuild_manifests(bundle_dir: Path) -> dict:
@@ -68,7 +67,6 @@ def _rebuild_master(bundle_dir: Path, text_id: str) -> dict:
     existing = _load_existing(manifest_path)
 
     juans = _collect_juans(bundle_dir, text_id, edition_short=None)
-    anns = _collect_anns(bundle_dir, text_id)
     marker_assets, marker_asset_data = _collect_marker_assets(bundle_dir)
     toc = _toc_from_juans(juans, marker_asset_data)
 
@@ -79,7 +77,6 @@ def _rebuild_master(bundle_dir: Path, text_id: str) -> dict:
         text_id=text_id,
         edition_short=None,
         juan_files=parts,
-        ann_files=anns,
         marker_files=marker_assets,
         toc=toc,
         metadata=metadata,
@@ -90,7 +87,6 @@ def _rebuild_master(bundle_dir: Path, text_id: str) -> dict:
     return {
         "manifest": manifest_path.name,
         "parts": len(parts),
-        "annotations": len(anns),
         "toc": len(toc),
     }
 
@@ -110,7 +106,6 @@ def _rebuild_edition(edition_dir: Path, text_id: str, short: str) -> dict:
         text_id=text_id,
         edition_short=short,
         juan_files=parts,
-        ann_files=[],
         marker_files=marker_assets,
         toc=toc,
         metadata=metadata,
@@ -187,20 +182,6 @@ def _collect_juans(
         if not isinstance(h, str):
             continue
         out.append((seq, entry.name, h, data))
-    out.sort(key=lambda t: t[0])
-    return out
-
-
-def _collect_anns(bundle_dir: Path, text_id: str) -> list[tuple[int, str]]:
-    out: list[tuple[int, str]] = []
-    for entry in sorted(bundle_dir.iterdir()):
-        if not entry.is_file():
-            continue
-        m = _ANN_RE.match(entry.name)
-        if not m or m.group("text_id") != text_id:
-            continue
-        seq = int(m.group("seq"))
-        out.append((seq, entry.name))
     out.sort(key=lambda t: t[0])
     return out
 

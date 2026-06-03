@@ -8,6 +8,7 @@ smoke test that drives an in-memory multi-juan ``Bundle`` through
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -327,13 +328,14 @@ def _build_multi_juan_bundle(text_id: str = "KR0test01") -> Bundle:
 
 def test_write_bundle_emits_per_juan_files(tmp_path: Path):
     bundle = _build_multi_juan_bundle()
-    write_bundle(bundle, tmp_path)
+    archive_root = tmp_path / "bkk-annotations"
+    write_bundle(bundle, tmp_path, annotations_root=archive_root)
 
     root = tmp_path / bundle.text_id
     juan1 = root / f"{bundle.text_id}_001.yaml"
     juan2 = root / f"{bundle.text_id}_002.yaml"
-    ann1 = root / f"{bundle.text_id}_001.ann.yaml"
-    ann2 = root / f"{bundle.text_id}_002.ann.yaml"
+    ann1 = archive_root / bundle.text_id / f"{bundle.text_id}_001.ann.jsonl"
+    ann2 = archive_root / bundle.text_id / f"{bundle.text_id}_002.ann.jsonl"
     manifest = root / f"{bundle.text_id}.manifest.yaml"
 
     assert juan1.exists()
@@ -342,8 +344,9 @@ def test_write_bundle_emits_per_juan_files(tmp_path: Path):
     assert ann2.exists()
     assert manifest.exists()
 
-    # Manifest's parts list both juans with self-hashes that recompute.
+    # Manifest no longer references annotations.
     mf = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    assert "annotations" not in mf.get("assets", {})
     parts = mf["assets"]["parts"]
     assert [p["seq"] for p in parts] == [1, 2]
     assert [p["filename"] for p in parts] == [
@@ -356,11 +359,19 @@ def test_write_bundle_emits_per_juan_files(tmp_path: Path):
         zeroed["hash"] = ZERO_HASH
         assert sha256_jcs(zeroed) == part["hash"]
 
-    # Annotation files are partitioned: each juan has only its own annotation.
-    a1 = yaml.safe_load(ann1.read_text(encoding="utf-8"))
-    a2 = yaml.safe_load(ann2.read_text(encoding="utf-8"))
-    assert {a["id"] for a in a1["annotations"]} == {"ann-juan1"}
-    assert {a["id"] for a in a2["annotations"]} == {"ann-juan2"}
+    # Archive JSONL files are partitioned: each juan has only its own annotation.
+    a1_ids = {
+        json.loads(line)["id"]
+        for line in ann1.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    a2_ids = {
+        json.loads(line)["id"]
+        for line in ann2.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    assert a1_ids == {"ann-juan1"}
+    assert a2_ids == {"ann-juan2"}
 
 
 # ---------- TOC label CJK-only invariant -----------------------------------

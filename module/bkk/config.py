@@ -21,7 +21,8 @@ _PATH_KEYS = frozenset(
     {"corpus", "tls_root", "krp_root", "in", "out", "output_dir",
      "cache_dir", "tls_source", "web_dist", "index", "catalog",
      "cbeta_root",
-     "root", "mapping"}
+     "root", "mapping",
+     "annotations_out", "annotations_root"}
 )
 
 
