@@ -617,7 +617,15 @@ def _detect_variants(master: Juan, witness: Juan) -> list[tuple[int, int, str, s
 
 def _attach_variants(master: Juan, witness: Juan, witness_short: str) -> None:
     """Mutate ``master`` to add variant markers vs ``witness``."""
-    for off, length, m_str, w_str in _detect_variants(master, witness):
+    variants = _detect_variants(master, witness)
+    if variants and not master.sections:
+        # Master juan is empty (e.g. master branch holds only org headers
+        # for this juan) but the witness has content. Create a placeholder
+        # section so the witness text can still be attached as variants.
+        master.sections.append(Section(
+            head_text="", head_marker_id="", text="", markers=[],
+        ))
+    for off, length, m_str, w_str in variants:
         sec_idx, local_off = _section_for_offset(master, off)
         master.sections[sec_idx].markers.append(Marker(
             type="variant",
