@@ -22,6 +22,7 @@ separate ``bkk-annotations`` archive (see
 from __future__ import annotations
 
 import copy
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -372,6 +373,7 @@ def write_bundle(
     marker_edition_files: list[tuple[int, str, str]] = []
     marker_master_files: list[tuple[int, str, str]] = []
     ann_juans_written: list[int] = []
+    skipped_annotation_count = 0
     toc_master: list[dict] = []
     toc_edition: list[dict] = []
 
@@ -461,22 +463,26 @@ def write_bundle(
             )
 
         # Annotations land in the separate bkk-annotations archive when
-        # an annotations_root is configured. When it isn't, the annotation
-        # layer is silently skipped (text-only import).
-        if annotations_root is not None and juan.annotations:
+        # an annotations_root is configured. When it isn't, the count of
+        # would-be-written records is tallied so write_bundle can warn at
+        # the end instead of silently dropping them.
+        if juan.annotations:
             flat: list[tuple[Annotation, int, str]] = []
             for bucket_name in ("front", "body", "back"):
                 for ann, offset in bucket_anns_by_bucket.get(bucket_name, []):
                     flat.append((ann, offset, bucket_name))
             if flat:
-                write_juan_annotations(
-                    flat,
-                    text_id=text_id,
-                    edition=edition_short,
-                    juan_seq=juan.seq,
-                    annotations_root=annotations_root,
-                )
-                ann_juans_written.append(juan.seq)
+                if annotations_root is not None:
+                    write_juan_annotations(
+                        flat,
+                        text_id=text_id,
+                        edition=edition_short,
+                        juan_seq=juan.seq,
+                        annotations_root=annotations_root,
+                    )
+                    ann_juans_written.append(juan.seq)
+                else:
+                    skipped_annotation_count += len(flat)
 
         # TOC entries — one per section, computed offsets per spec.
         toc_edition.extend(juan_toc)
@@ -519,11 +525,20 @@ def write_bundle(
             dump(bundle.source_info), encoding="utf-8"
         )
 
+    if skipped_annotation_count:
+        print(
+            f"warning: dropped {skipped_annotation_count} annotation(s) for "
+            f"{text_id}: no annotations archive configured "
+            f"(pass --annotations-out or set [import].annotations_out in .bkkrc)",
+            file=sys.stderr,
+        )
+
     summary = {
         "text_id": text_id,
         "out_root": str(bundle_root),
         "juans": [s for s, _, _ in juan_edition_files],
         "annotations": list(ann_juans_written),
+        "skipped_annotations": skipped_annotation_count,
     }
     if sidecar_filename is not None:
         summary["source_sidecar"] = sidecar_filename
