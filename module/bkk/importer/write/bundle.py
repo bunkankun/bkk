@@ -24,6 +24,7 @@ from typing import Callable
 from ..canonicalize import merge_sections
 from ..classify import bucket_sections
 from ..hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
+from ..idassigner import assign_marker_ids
 from ..ir import Annotation, Bundle, Juan, Marker, Section
 from .yaml_writer import dump, marker_to_flow
 from bkk.marker_assets import (
@@ -86,12 +87,20 @@ def _build_bucket(
     sections: list[Section],
     annotations: list[Annotation],
     *,
+    text_id: str,
+    edition: str,
+    juan_label: str,
     keep_marker_ids: set[str] | None = None,
 ) -> tuple[dict, list[dict], list[tuple[Annotation, int]]]:
     """Build the per-bucket dict (text/hash/markers) plus the list of
     ``(annotation, resolved_offset)`` for annotations that fell in this
     bucket."""
     text, markers, seg_offsets = merge_sections(sections)
+    # Fill in deterministic IDs on markers that have none (importer-inserted
+    # markers). Source-derived IDs are left untouched.
+    assign_marker_ids(
+        markers, text_id=text_id, edition=edition, juan_label=juan_label,
+    )
 
     bucket_anns: list[tuple[Annotation, int]] = []
     for ann in annotations:
@@ -446,9 +455,14 @@ def write_bundle(
         bucket_dicts: dict[str, dict] = {}
         external_markers_by_bucket: dict[str, list[dict]] = {}
         bucket_anns_by_bucket: dict[str, list[tuple[Annotation, int]]] = {}
+        juan_label = f"{juan.seq:03d}"
         for name, secs in sections_per_bucket.items():
             bdict, external, banns = _build_bucket(
-                secs, juan.annotations, keep_marker_ids=keep_marker_ids,
+                secs, juan.annotations,
+                text_id=text_id,
+                edition=edition_short,
+                juan_label=juan_label,
+                keep_marker_ids=keep_marker_ids,
             )
             bucket_dicts[name] = bdict
             external_markers_by_bucket[name] = external
@@ -724,9 +738,14 @@ def _write_krp_juans(
 
         bucket_dicts: dict[str, dict] = {}
         external_markers_by_bucket: dict[str, list[dict]] = {}
+        juan_label = f"{juan.seq:03d}"
         for name, secs in sections_per_bucket.items():
             bdict, external, _ = _build_bucket(
-                secs, juan.annotations, keep_marker_ids=keep_marker_ids,
+                secs, juan.annotations,
+                text_id=bundle.text_id,
+                edition=slug,
+                juan_label=juan_label,
+                keep_marker_ids=keep_marker_ids,
             )
             bucket_dicts[name] = bdict
             external_markers_by_bucket[name] = external

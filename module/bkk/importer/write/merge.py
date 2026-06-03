@@ -275,9 +275,14 @@ def project_krp_apparatus_onto_tls(
         keep_marker_ids = toc_marker_ids(manifest, juan.seq)
         bucket_dicts: dict[str, dict] = {}
         external_markers_by_bucket: dict[str, list[dict]] = {}
+        juan_label = f"{juan.seq:03d}"
         for name, secs in sections_per_bucket.items():
             bucket_dicts[name], external, _ = _build_bucket(
-                secs, juan.annotations, keep_marker_ids=keep_marker_ids,
+                secs, juan.annotations,
+                text_id=text_id,
+                edition=surface_edition_short,
+                juan_label=juan_label,
+                keep_marker_ids=keep_marker_ids,
             )
             external_markers_by_bucket[name] = external
         back_dict = bucket_dicts["back"] if back_secs else None
