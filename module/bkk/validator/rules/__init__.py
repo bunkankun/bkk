@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from ..context import ValidationContext
-from . import ann, char_count, filesystem, juan, manifest, parens, pua
+from . import char_count, filesystem, juan, manifest, parens, pua
 
 # Order matters only in that filesystem checks gate later checks (they do not
 # short-circuit, but later rules tolerate missing files via context flags).
-_MODULES = (filesystem, manifest, juan, parens, ann, pua, char_count)
+_MODULES = (filesystem, manifest, juan, parens, pua, char_count)
 
 
 def run_all(ctx: ValidationContext) -> None:

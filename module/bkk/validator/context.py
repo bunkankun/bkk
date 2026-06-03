@@ -49,7 +49,6 @@ class ValidationContext:
     master_manifest: LoadedFile
     master_juans: dict[int, LoadedFile] = field(default_factory=dict)
     marker_assets: dict[int, LoadedFile] = field(default_factory=dict)
-    annotations: dict[int, LoadedFile] = field(default_factory=dict)
     pua_map: LoadedFile | None = None
     editions: dict[str, EditionFiles] = field(default_factory=dict)
     tls_source_root: Path | None = None
@@ -89,15 +88,6 @@ def load_context(
             fname = part.get("filename")
             if isinstance(seq, int) and isinstance(fname, str):
                 ctx.master_juans[seq] = _load_yaml(
-                    bundle_dir, bundle_dir / fname,
-                )
-        for ann in assets.get("annotations") or []:
-            if not isinstance(ann, dict):
-                continue
-            seq = ann.get("seq")
-            fname = ann.get("filename")
-            if isinstance(seq, int) and isinstance(fname, str):
-                ctx.annotations[seq] = _load_yaml(
                     bundle_dir, bundle_dir / fname,
                 )
         for marker_asset in assets.get("markers") or []:

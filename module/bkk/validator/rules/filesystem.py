@@ -56,12 +56,6 @@ def _check_referenced_files(ctx: ValidationContext) -> None:
                 "JUAN_FILE_MISSING", "error", lf.rel,
                 f"juan file referenced by manifest (seq={seq}) is missing",
             )
-    for seq, lf in ctx.annotations.items():
-        if not lf.exists:
-            ctx.report.add(
-                "ANN_FILE_MISSING", "error", lf.rel,
-                f"annotation file referenced by manifest (seq={seq}) is missing",
-            )
     for seq, lf in ctx.marker_assets.items():
         if not lf.exists:
             ctx.report.add(
