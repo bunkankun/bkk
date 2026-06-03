@@ -195,7 +195,10 @@ def test_normalize_juan_label_width_mutates_all_marker_carriers():
     divs_info = {"T1_T_01-h": {"div_attrs": {"n": "01"}}}
     markers_info = {"T1_T_01-s1": {"type": "tls:seg", "attrs": {}}}
     annotations = [
-        Annotation(seg_id="T1_T_01-s1", pos=0, payload={}),
+        Annotation(
+            marker_id="T1_T_01-s1", offset=0, length=1, payload={},
+            tls_seg_id="T1_T_01-s1", tls_pos=None,
+        ),
     ]
     annotations_info = {"a1": {"seg_id": "T1_T_01-s1", "tree": {}}}
 
@@ -210,7 +213,7 @@ def test_normalize_juan_label_width_mutates_all_marker_carriers():
     ]
     assert "T1_T_001-h" in divs_info and "T1_T_01-h" not in divs_info
     assert "T1_T_001-s1" in markers_info
-    assert annotations[0].seg_id == "T1_T_001-s1"
+    assert annotations[0].marker_id == "T1_T_001-s1"
     assert annotations_info["a1"]["seg_id"] == "T1_T_001-s1"
 
 

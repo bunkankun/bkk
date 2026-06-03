@@ -317,7 +317,7 @@ def _build_juans(
 
     buckets: list[list[Annotation]] = [[] for _ in groups]
     for ann in annotations:
-        idx = seg_to_idx.get(ann.seg_id)
+        idx = seg_to_idx.get(ann.marker_id)
         if idx is not None:
             buckets[idx].append(ann)
 
@@ -421,7 +421,9 @@ def _normalize_juan_label_width(
                 d[new_key] = d.pop(old_key)
 
     for ann in annotations:
-        ann.seg_id = fix(ann.seg_id)
+        ann.marker_id = fix(ann.marker_id)
+        # tls_seg_id preserves the original (un-normalized) xml:id from the
+        # TLS source for round-trip; leave it alone.
 
     # Annotation entries carry a seg_id pointing back to the body's <seg>;
     # rewrite that too. The dict's own keys are annotation @xml:ids which
@@ -1757,11 +1759,18 @@ def _parse_annotations(path: Path,
         pos_raw = srcline.get("pos") if srcline is not None else None
         pos = _parse_pos(pos_raw)
 
+        # TLS-seed annotations: anchor at the enclosing <seg>'s xml:id, with
+        # offset derived from the 1-indexed ``pos`` (None → 0). Length is
+        # conventionally 1 (single-graph annotation); refine later if the
+        # source carries explicit span info.
         out.append(Annotation(
-            seg_id=seg_id,
-            pos=pos,
+            marker_id=seg_id,
+            offset=(pos - 1) if pos else 0,
+            length=1,
             payload=_annotation_payload(ann),
             provenance=provenance,
+            tls_seg_id=seg_id,
+            tls_pos=pos,
         ))
         ann_id = _xmlid(ann)
         if ann_id:

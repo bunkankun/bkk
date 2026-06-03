@@ -31,12 +31,27 @@ class Section:
 
 @dataclass
 class Annotation:
-    """One annotation entry, with seg_id+pos still un-resolved into an offset."""
-    seg_id: str
-    pos: int | None
+    """One annotation entry, anchored to a marker id + offset + length.
+
+    The canonical anchor is ``(marker_id, offset, length)``: the marker is a
+    stable reference point in the bundle; ``offset`` is the 0-indexed distance
+    (in canonical PUA chars) from the marker to the start of the span, and
+    ``length`` is the span length. ``length=0`` is a point annotation.
+
+    ``tls_seg_id`` / ``tls_pos`` are round-trip carry-over for TLS-seed
+    records (the original ``<seg xml:id>`` and 1-indexed ``pos``), so the
+    TLS exporter can reconstruct source positions. None for non-TLS records.
+    """
+    marker_id: str
+    offset: int
+    length: int
     payload: dict
     source_role: str = "tls:ann"
     provenance: str | None = None
+    end_marker_id: str | None = None
+    end_length: int | None = None
+    tls_seg_id: str | None = None
+    tls_pos: int | None = None
 
 
 @dataclass

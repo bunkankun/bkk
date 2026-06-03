@@ -75,13 +75,11 @@ def _ann_marker_content(payload: dict) -> str:
 
 
 def _resolve_ann_offset(ann: Annotation, seg_offsets: dict[str, int]) -> int | None:
-    base = seg_offsets.get(ann.seg_id)
+    """Resolve the annotation's anchor to a bucket-relative offset."""
+    base = seg_offsets.get(ann.marker_id)
     if base is None:
         return None
-    if ann.pos is None:
-        return base
-    # ``pos`` is 1-indexed in TLS sources.
-    return base + max(0, ann.pos - 1)
+    return base + ann.offset
 
 
 def _build_bucket(
@@ -97,7 +95,7 @@ def _build_bucket(
 
     bucket_anns: list[tuple[Annotation, int]] = []
     for ann in annotations:
-        if ann.seg_id not in seg_offsets:
+        if ann.marker_id not in seg_offsets:
             continue
         offset = _resolve_ann_offset(ann, seg_offsets)
         if offset is None:
@@ -372,8 +370,16 @@ def _build_ann_file(
             for key in ("id", "concept", "concept_id"):
                 if key in payload:
                     ordered[key] = payload.pop(key)
-            ordered["seg_id"] = ann.seg_id
-            ordered["pos"] = ann.pos
+            # Canonical anchor (new shape): marker_id + offset + length.
+            ordered["marker_id"] = ann.marker_id
+            ordered["anchor_offset"] = ann.offset
+            ordered["length"] = ann.length
+            # Round-trip carry-over for TLS-seed records (consumed by the
+            # TLS exporter).
+            if ann.tls_seg_id is not None:
+                ordered["seg_id"] = ann.tls_seg_id
+                ordered["pos"] = ann.tls_pos
+            # Bucket-resolved offset for fast frontend rendering.
             ordered["bucket"] = bucket_name
             ordered["offset"] = offset
             for key, val in payload.items():

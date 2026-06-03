@@ -303,14 +303,31 @@ def _annotations_from_ann_file(ann_data: dict,
 
     out: list[Annotation] = []
     for entry in ann_data.get("annotations", []):
-        payload = {k: v for k, v in entry.items()
-                   if k not in ("seg_id", "pos", "bucket", "offset")}
+        payload = {
+            k: v for k, v in entry.items()
+            if k not in (
+                "marker_id", "anchor_offset", "length",
+                "seg_id", "pos", "bucket", "offset",
+            )
+        }
+        # Prefer the new-shape anchor fields; fall back to legacy seg_id/pos.
+        marker_id = entry.get("marker_id") or entry.get("seg_id") or ""
+        anchor_offset = entry.get("anchor_offset")
+        if anchor_offset is None:
+            pos = entry.get("pos")
+            anchor_offset = (pos - 1) if pos else 0
+        length = entry.get("length", 1)
+        tls_seg_id = entry.get("seg_id")
+        tls_pos = entry.get("pos")
         out.append(Annotation(
-            seg_id=entry["seg_id"],
-            pos=entry.get("pos"),
+            marker_id=marker_id,
+            offset=anchor_offset,
+            length=length,
             payload=payload,
             source_role="tls:ann",
             provenance=provenance_by_id.get(payload.get("id", "")),
+            tls_seg_id=tls_seg_id,
+            tls_pos=tls_pos,
         ))
     return out
 

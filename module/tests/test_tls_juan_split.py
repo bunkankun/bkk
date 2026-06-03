@@ -285,8 +285,9 @@ def _build_multi_juan_bundle(text_id: str = "KR0test01") -> Bundle:
     )
 
     ann1 = Annotation(
-        seg_id=f"{text_id}_T_001-0001a.2",
-        pos=1,
+        marker_id=f"{text_id}_T_001-0001a.2",
+        offset=0,
+        length=1,
         payload={
             "id": "ann-juan1",
             "concept": "X",
@@ -294,10 +295,13 @@ def _build_multi_juan_bundle(text_id: str = "KR0test01") -> Bundle:
             "sense": {"syn_func": "noun"},
         },
         provenance="swl",
+        tls_seg_id=f"{text_id}_T_001-0001a.2",
+        tls_pos=1,
     )
     ann2 = Annotation(
-        seg_id=f"{text_id}_T_002-0002a.1",
-        pos=1,
+        marker_id=f"{text_id}_T_002-0002a.1",
+        offset=0,
+        length=1,
         payload={
             "id": "ann-juan2",
             "concept": "Y",
@@ -305,6 +309,8 @@ def _build_multi_juan_bundle(text_id: str = "KR0test01") -> Bundle:
             "sense": {"syn_func": "verb"},
         },
         provenance="swl",
+        tls_seg_id=f"{text_id}_T_002-0002a.1",
+        tls_pos=1,
     )
 
     juans = [
