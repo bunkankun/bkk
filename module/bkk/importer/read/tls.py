@@ -1227,6 +1227,22 @@ def _section_from_div(
     return section, juan_div_entry, markers_info, nested_divs_info
 
 
+def _iter_p_children(p):
+    """Yield ``<p>``'s element children, descending transparently into
+    ``<s>`` sentence wrappers. TEI-flavoured TLS sources wrap segs in
+    ``<p><s><seg/></s></p>``; flat-flavoured sources have ``<seg>`` directly
+    under ``<p>``. Both shapes parse identically once ``<s>`` is treated as a
+    pass-through.
+    """
+    for child in p.iterchildren():
+        if not isinstance(child.tag, str):  # comments / PIs
+            continue
+        if etree.QName(child).localname == "s":
+            yield from _iter_p_children(child)
+        else:
+            yield child
+
+
 def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
                        markers_info: dict, nested_divs_info: dict,
                        offset, div_entry: dict, head_state: dict,
@@ -1298,9 +1314,7 @@ def _walk_div_children(div, text_buf: list[str], markers: list[Marker],
             if p_attrs:
                 div_entry.setdefault("p_attrs", []).append(p_attrs)
             run_state = _new_seg_run_state(seen_ids)
-            for seg in child.iterchildren():
-                if not isinstance(seg.tag, str):
-                    continue
+            for seg in _iter_p_children(child):
                 seg_tag = etree.QName(seg).localname
                 if seg_tag == "seg":
                     _emit_seg_with_run(seg, run_state, text_buf, markers,
