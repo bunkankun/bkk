@@ -26,3 +26,6 @@ module/input
 module/samples
 wip/*
 .pytest_cache
+bkk.code-workspace
+bkk.egg-info
+bkk_importer.egg-info
