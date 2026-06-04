@@ -138,17 +138,26 @@ serve:
 #                                        # editions not listed here keep the
 #                                        # bundle's value. Keyed by edition short.
 #   annotations_root: /data/bkk-annotations
-#                                # root of the bkk-annotations archive. When
-#                                # set, /bundles/{textid}/juan/{seq}/annotations
-#                                # reads from <annotations_root>/<text-id>/. If
-#                                # unset, the endpoint returns an empty list.
+#                                # root of the bkk-annotations archive. Shared
+#                                # by serve (read path), `bkk annotations
+#                                # harvest|validate|repair`, and `bkk index
+#                                # annotations`. Set it once here; the
+#                                # [annotations] section below only needs an
+#                                # `annotations_root` line in the rare case
+#                                # where you want a per-tool override.
 
 # ── Annotations harvester ──────────────────────────────────────────────────
 # `bkk annotations harvest` walks each DID below via
-# com.atproto.repo.listRecords and merges new records into the archive
-# (annotations_root falls back to [serve].annotations_root).
+# com.atproto.repo.listRecords and merges new records into the archive at
+# [serve].annotations_root. `bkk annotations validate` and `bkk annotations
+# repair` (dry-run by default; pass --write to apply) read the same archive
+# and check each record's anchor against [global].corpus.
 annotations:
 #   dids:                          # YAML list — one DID per line, prefixed with `- `
 #     - did:plc:exampledid123
 #     - did:plc:anotherdid456
-#   annotations_root: /data/bkk-annotations  # optional override of [serve]
+#   annotations_root: /data/bkk-annotations
+#                                # Rarely needed. Overrides [serve].annotations_root
+#                                # for the `bkk annotations` and `bkk index
+#                                # annotations` subcommands only (e.g. harvest into
+#                                # a staging dir before promoting it).
