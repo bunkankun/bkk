@@ -551,6 +551,50 @@ export interface CoreSuperEntryByOrth {
   orth: string;
 }
 
+export interface CoreFullSense {
+  uuid: string;
+  body_number: number | null;
+  pos: string | null;
+  syn_func: string | null;
+  sem_feat: string | null;
+  def: string | null;
+}
+
+export interface CoreFullWord {
+  uuid: string;
+  display_label: string | null;
+  concept: string | null;
+  concept_uuid: string | null;
+  pinyin: string | null;
+  n: string | null;
+  senses: CoreFullSense[];
+}
+
+export interface CoreSuperEntryFull {
+  uuid: string;
+  orth: string;
+  words: CoreFullWord[];
+}
+
+export interface AnnotationBySenseLocation {
+  text_id: string;
+  seq: number;
+  marker_id: string | null;
+  offset: number | null;
+  bucket: string | null;
+  length: number | null;
+  id: string | null;
+  orth: string | null;
+  pron: string | null;
+  note: string | null;
+}
+
+export interface AnnotationsBySenseResponse {
+  sense_uuid: string;
+  total: number;
+  locations: AnnotationBySenseLocation[];
+}
+
 export interface CoreConceptWord {
   uuid: string;
   display_label: string | null;

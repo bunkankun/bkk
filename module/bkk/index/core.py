@@ -26,7 +26,7 @@ from .catalog import normalize_search_text
 
 log = logging.getLogger("bkk.index.core")
 
-CORE_SCHEMA_VERSION = 1
+CORE_SCHEMA_VERSION = 2
 
 COLLECTIONS: tuple[tuple[str, str], ...] = (
     # (collection dir name, type)
@@ -82,8 +82,20 @@ CREATE TABLE super_entry_words (
   super_entry_uuid TEXT NOT NULL,
   word_uuid TEXT NOT NULL,
   concept TEXT,
+  concept_uuid TEXT,
   n TEXT,
+  pinyin TEXT,
   PRIMARY KEY (super_entry_uuid, word_uuid)
+);
+
+CREATE TABLE senses (
+  uuid TEXT PRIMARY KEY,
+  word_uuid TEXT NOT NULL,
+  body_number INTEGER,
+  pos TEXT,
+  syn_func TEXT,
+  sem_feat TEXT,
+  def TEXT
 );
 
 CREATE INDEX idx_notes_collection ON notes(collection);
@@ -94,6 +106,7 @@ CREATE INDEX idx_links_source ON links(source_uuid);
 CREATE INDEX idx_links_target ON links(target_uuid);
 CREATE INDEX idx_super_entries_orth_search ON super_entries(orth_search);
 CREATE INDEX idx_super_entry_words_word ON super_entry_words(word_uuid);
+CREATE INDEX idx_senses_word ON senses(word_uuid);
 """
 
 _FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?(.*)\Z", re.S)
@@ -128,6 +141,24 @@ _BODY_WIKILINK_RE = re.compile(r"\[\[([^\]\n|]+)\]\]")
 # pasted into a record.
 _FENCE_RE = re.compile(r"^\s*```", re.M)
 
+# `## Senses` heading and the next `## ` heading bound the senses section.
+_SENSES_HEADING_RE = re.compile(r"^##\s+Senses\s*$", re.M)
+_NEXT_H2_RE = re.compile(r"^##\s+", re.M)
+
+# Numbered list item: `1. <rest of line>` (rest may contain inline markdown).
+_NUMBERED_ITEM_RE = re.compile(r"^(\d+)\.\s+(.*)$")
+
+# Leading `**[label](href)**` (syntactic function) — optionally followed by
+# `*[label](href)*` (semantic feature).
+_LEADING_BOLD_LINK_RE = re.compile(r"^\*\*\[[^\]\n]+\]\([^)\n]+\)\*\*\s*")
+_LEADING_ITALIC_LINK_RE = re.compile(r"^\*\[[^\]\n]+\]\([^)\n]+\)\*\s*")
+
+# Trailing `**[N Attributions](#<sense-uuid>)**` — when present, also yields
+# the sense uuid for matching to a frontmatter sense.
+_TRAILING_ATTRIBUTIONS_RE = re.compile(
+    r"\s*\*\*\[\d+\s+Attributions?\]\(#(" + _UUID_PATTERN + r")\)\*\*\s*$"
+)
+
 COLLECTION_TO_TYPE: dict[str, str] = {coll: t for coll, t in COLLECTIONS}
 
 
@@ -143,7 +174,11 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
     labels: list[tuple] = []
     links: list[tuple] = []
     super_entries: list[tuple] = []
-    super_entry_words: list[tuple] = []
+    super_entry_word_rows: list[tuple[str, str, str | None, str | None, str | None]] = []
+    senses_rows: list[tuple] = []
+    # word_uuid → pinyin string, populated during the word pass and joined
+    # into super_entry_words at write time.
+    word_pinyin: dict[str, str] = {}
     # (source_uuid, source_type, source_collection, orth) — resolved after the
     # super-entry orth → uuid map is complete.
     pending_wikilinks: list[tuple[str, str, str, str]] = []
@@ -178,6 +213,11 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
                 for orth in _body_wikilink_orths(body_text):
                     pending_wikilinks.append((uuid, type_name, coll_dir, orth))
             counts[type_name] = counts.get(type_name, 0) + 1
+            if type_name == "word":
+                pinyin = _word_pinyin(fm)
+                if pinyin:
+                    word_pinyin[uuid] = pinyin
+                senses_rows.extend(_sense_rows(uuid, fm, body_text))
             if type_name == "super-entry":
                 orth = str(fm.get("orth") or display)
                 entries = [e for e in fm.get("entries") or [] if isinstance(e, dict)]
@@ -188,9 +228,10 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
                     word_uuid = _strip_uuid_prefix(entry.get("uuid"))
                     if not word_uuid:
                         continue
-                    super_entry_words.append((
+                    super_entry_word_rows.append((
                         uuid, word_uuid,
                         entry.get("concept"),
+                        _strip_uuid_prefix(entry.get("concept_uuid")),
                         _str_or_none(entry.get("n")),
                     ))
 
@@ -248,9 +289,21 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
             super_entries,
         )
         conn.executemany(
-            "INSERT INTO super_entry_words(super_entry_uuid, word_uuid, concept, n)"
-            " VALUES (?,?,?,?)",
-            super_entry_words,
+            "INSERT INTO super_entry_words"
+            "(super_entry_uuid, word_uuid, concept, concept_uuid, n, pinyin)"
+            " VALUES (?,?,?,?,?,?)",
+            [
+                (se_uuid, word_uuid, concept, concept_uuid, n,
+                 word_pinyin.get(word_uuid))
+                for (se_uuid, word_uuid, concept, concept_uuid, n)
+                in super_entry_word_rows
+            ],
+        )
+        conn.executemany(
+            "INSERT INTO senses"
+            "(uuid, word_uuid, body_number, pos, syn_func, sem_feat, def)"
+            " VALUES (?,?,?,?,?,?,?)",
+            senses_rows,
         )
         conn.commit()
     finally:
@@ -284,6 +337,108 @@ def _read_record(path: Path) -> tuple[dict[str, Any], str]:
     data = yaml.safe_load(match.group(1)) or {}
     fm = data if isinstance(data, dict) else {}
     return fm, match.group(2)
+
+
+def _word_pinyin(fm: dict) -> str | None:
+    """Pull the pinyin pronunciation out of a word's frontmatter."""
+    form = fm.get("form") if isinstance(fm.get("form"), dict) else {}
+    prons = form.get("pronunciations") if isinstance(form, dict) else None
+    if not isinstance(prons, list):
+        return None
+    for p in prons:
+        if not isinstance(p, dict):
+            continue
+        if p.get("lang") == "zh-Latn-x-pinyin":
+            value = _str_or_none(p.get("value"))
+            if value:
+                return value
+    return None
+
+
+def _parse_body_senses(body: str) -> dict[str, str]:
+    """Return `{sense_uuid: def_text}` parsed from a word body's Senses section.
+
+    The body shape (see ``docs/bkk-core/README.md``) is a numbered list under
+    ``## Senses``. Each item begins with optional inline markup:
+
+        1. **[syn-func](...)** *[sem-feat](...)* def text **[2 Attributions](#uuid)**
+
+    Only items whose trailing attributions link a sense uuid are usable —
+    those without a sense uuid mapping are silently dropped (the def can be
+    re-derived later if a body-number fallback is added).
+    """
+    if not body:
+        return {}
+    heading = _SENSES_HEADING_RE.search(body)
+    if heading is None:
+        return {}
+    section = body[heading.end():]
+    next_h = _NEXT_H2_RE.search(section)
+    if next_h is not None:
+        section = section[:next_h.start()]
+    out: dict[str, str] = {}
+    for line in section.splitlines():
+        m = _NUMBERED_ITEM_RE.match(line)
+        if not m:
+            continue
+        rest = m.group(2)
+        tail = _TRAILING_ATTRIBUTIONS_RE.search(rest)
+        if tail is None:
+            continue
+        sense_uuid = tail.group(1)
+        rest = rest[: tail.start()]
+        rest = _LEADING_BOLD_LINK_RE.sub("", rest, count=1)
+        rest = _LEADING_ITALIC_LINK_RE.sub("", rest, count=1)
+        def_text = rest.strip()
+        if def_text:
+            out[sense_uuid] = def_text
+    return out
+
+
+def _sense_rows(
+    word_uuid: str, fm: dict, body: str,
+) -> list[tuple[str, str, int | None, str | None, str | None, str | None, str | None]]:
+    """Return one row per sense in a word's frontmatter, def from body."""
+    raw = fm.get("senses")
+    if not isinstance(raw, list):
+        return []
+    defs_by_uuid = _parse_body_senses(body)
+    rows = []
+    for sense in raw:
+        if not isinstance(sense, dict):
+            continue
+        sense_uuid = _strip_uuid_prefix(sense.get("uuid"))
+        if not sense_uuid:
+            continue
+        body_number_raw = sense.get("body_number")
+        try:
+            body_number: int | None = (
+                int(body_number_raw) if body_number_raw is not None else None
+            )
+        except (TypeError, ValueError):
+            body_number = None
+        pos = _str_or_none(sense.get("pos"))
+        syn_func = None
+        syn_funcs = sense.get("syntactic_functions")
+        if isinstance(syn_funcs, list):
+            for sf in syn_funcs:
+                if isinstance(sf, dict):
+                    syn_func = _str_or_none(sf.get("label"))
+                    if syn_func:
+                        break
+        sem_feat = None
+        sem_feats = sense.get("semantic_features")
+        if isinstance(sem_feats, list):
+            for sf in sem_feats:
+                if isinstance(sf, dict):
+                    sem_feat = _str_or_none(sf.get("label"))
+                    if sem_feat:
+                        break
+        def_text = defs_by_uuid.get(sense_uuid)
+        rows.append(
+            (sense_uuid, word_uuid, body_number, pos, syn_func, sem_feat, def_text)
+        )
+    return rows
 
 
 def _strip_code_fences(body: str) -> str:

@@ -174,6 +174,19 @@ export interface SelectionRange {
   anchorOffset: number;
 }
 
+export interface CoreTarget {
+  word_uuid: string;
+  super_entry_uuid: string;
+  concept: string | null;
+  concept_id: string | null;
+  form: { orth: string; pron: string | null };
+  sense: {
+    id: string;
+    pos: string | null;
+    syn_func: string | null;
+  };
+}
+
 export interface TextTab {
   id: string;
   type: "text";
@@ -221,6 +234,9 @@ export interface WorkspaceState {
   focusedPaneId: string | null;
   // user selection for filtering the annotations panel.
   selection: SelectionRange | null;
+  // bkk-core record the user picked for the next annotation post; cleared
+  // whenever the text selection changes.
+  coreTarget: CoreTarget | null;
   // right panel
   rightTab: RightTab;
   // upper-right "Read | Trans | Inspect" — Trans/Inspect disabled in v1.
@@ -466,6 +482,7 @@ let state: WorkspaceState = {
   activeSeq: null,
   focusedPaneId: null,
   selection: null,
+  coreTarget: null,
   rightTab: "annotations",
   readMode: "read",
   openMode: "read",
@@ -1541,7 +1558,11 @@ export const workspace = {
     notify();
   },
   setSelection(sel: SelectionRange | null) {
-    state = { ...state, selection: sel };
+    state = { ...state, selection: sel, coreTarget: null };
+    notify();
+  },
+  setCoreTarget(target: CoreTarget | null) {
+    state = { ...state, coreTarget: target };
     notify();
   },
   setBlueskyStatus(blueskyStatus: { handle: string; did: string } | null) {

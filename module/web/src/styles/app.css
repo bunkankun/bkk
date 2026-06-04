@@ -2098,6 +2098,149 @@ button {
   font-size: 11px;
   cursor: pointer;
 }
+.core-target-picker {
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.core-target-header {
+  font-size: 10px;
+  color: var(--t3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.core-target-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.core-target-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--t2);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.core-target-row:hover {
+  background: var(--hov);
+  color: var(--t1);
+  border-color: var(--amb);
+}
+.core-target-row.selected {
+  background: rgba(100, 120, 220, 0.08);
+  border-color: var(--blu);
+  color: var(--t1);
+}
+.core-target-disclose {
+  font-size: 9px;
+  color: var(--t3);
+  width: 10px;
+}
+.core-target-label {
+  font-family: var(--fc);
+}
+.core-target-senses {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 14px;
+  padding-left: 6px;
+  border-left: 1px dashed var(--bdr);
+}
+.core-target-row.sense {
+  font-family: var(--fm);
+  font-size: 11px;
+  padding: 0;
+  gap: 0;
+  align-items: stretch;
+}
+.core-target-sense-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.core-target-sense-pick {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.core-target-sense-summary {
+  color: var(--t3);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.core-target-sense-def {
+  color: var(--t1);
+}
+.core-target-where-toggle {
+  align-self: stretch;
+  padding: 4px 8px;
+  border: none;
+  border-left: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--t3);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.core-target-where-toggle:hover {
+  color: var(--t1);
+  background: var(--hov);
+}
+.core-target-where-used {
+  list-style: none;
+  margin: 2px 0 4px 14px;
+  padding: 4px 6px;
+  border-left: 1px dotted var(--bdr);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--t2);
+}
+.core-target-where-used li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.core-target-where-loc {
+  font-family: var(--fm);
+  color: var(--t2);
+}
+.core-target-where-note {
+  color: var(--t3);
+  font-style: italic;
+}
+.core-target-orth {
+  font-weight: 600;
+}
+.core-target-pinyin {
+  color: var(--t3);
+  font-style: italic;
+}
+.core-target-concept {
+  color: var(--t2);
+}
 .sel-pin-toggle input {
   width: 13px;
   height: 13px;

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Path as PathParam, Request
+from pydantic import BaseModel
 
 from .. import _examples as ex
 from .. import errors
@@ -142,6 +143,81 @@ def _load_annotations(path: Path) -> list[AnnotationOut]:
             out.append(ann)
     out.sort(key=lambda a: a.offset)
     return out
+
+
+class BySenseLocation(BaseModel):
+    text_id: str
+    seq: int
+    marker_id: str | None
+    offset: int | None
+    bucket: str | None
+    length: int | None
+    id: str | None
+    orth: str | None
+    pron: str | None
+    note: str | None
+
+
+class BySenseResponse(BaseModel):
+    sense_uuid: str
+    total: int
+    locations: list[BySenseLocation]
+
+
+def _ann_root_locations(state: AppState, sense_uuid: str) -> list[BySenseLocation]:
+    root = state.annotations_root
+    if root is None or not root.is_dir():
+        return []
+    out: list[BySenseLocation] = []
+    for jsonl_path in sorted(root.glob("*/*.ann.jsonl")):
+        text_id = jsonl_path.parent.name
+        stem = jsonl_path.name.removesuffix(".ann.jsonl")
+        try:
+            seq = int(stem.rsplit("_", 1)[-1])
+        except ValueError:
+            continue
+        for raw in read_raw_records(jsonl_path):
+            payload = raw.get("payload") or {}
+            if not isinstance(payload, dict):
+                continue
+            sense = payload.get("sense")
+            if not isinstance(sense, dict) or sense.get("id") != sense_uuid:
+                continue
+            anchor = raw.get("anchor") if isinstance(raw.get("anchor"), dict) else {}
+            form = payload.get("form") if isinstance(payload.get("form"), dict) else {}
+            metadata = (
+                payload.get("metadata")
+                if isinstance(payload.get("metadata"), dict)
+                else {}
+            )
+            out.append(BySenseLocation(
+                text_id=text_id,
+                seq=seq,
+                marker_id=anchor.get("marker_id") if isinstance(anchor.get("marker_id"), str) else None,
+                offset=raw.get("bucket_offset") if isinstance(raw.get("bucket_offset"), int) else None,
+                bucket=raw.get("bucket") if isinstance(raw.get("bucket"), str) else None,
+                length=anchor.get("length") if isinstance(anchor.get("length"), int) else None,
+                id=raw.get("id") if isinstance(raw.get("id"), str) else None,
+                orth=form.get("orth") if isinstance(form.get("orth"), str) else None,
+                pron=form.get("pron") if isinstance(form.get("pron"), str) else None,
+                note=metadata.get("note") if isinstance(metadata.get("note"), str) else payload.get("note") if isinstance(payload.get("note"), str) else None,
+            ))
+    return out
+
+
+@router.get(
+    "/annotations/by-sense/{sense_uuid}",
+    response_model=BySenseResponse,
+    response_model_exclude_none=True,
+    summary="List annotation locations whose payload.sense.id matches this sense",
+)
+def annotations_by_sense(
+    request: Request,
+    sense_uuid: str = PathParam(...),
+) -> BySenseResponse:
+    state = request.app.state.bkk
+    locs = _ann_root_locations(state, sense_uuid)
+    return BySenseResponse(sense_uuid=sense_uuid, total=len(locs), locations=locs)
 
 
 @router.get(

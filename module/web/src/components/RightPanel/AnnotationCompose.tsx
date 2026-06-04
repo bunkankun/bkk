@@ -14,6 +14,7 @@ interface Props {
 
 export function AnnotationCompose({ selection, edition }: Props) {
   const status = useWorkspace((s) => s.blueskyStatus);
+  const coreTarget = useWorkspace((s) => s.coreTarget);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +31,13 @@ export function AnnotationCompose({ selection, edition }: Props) {
     setBusy(true);
     setError(null);
     try {
+      const payload: Record<string, unknown> = { note: trimmed };
+      if (coreTarget) {
+        payload.concept = coreTarget.concept;
+        payload.concept_id = coreTarget.concept_id;
+        payload.form = coreTarget.form;
+        payload.sense = coreTarget.sense;
+      }
       const result = await postAnnotation({
         text_id: selection.textid,
         edition,
@@ -38,7 +46,7 @@ export function AnnotationCompose({ selection, edition }: Props) {
           offset: selection.anchorOffset,
           length,
         },
-        payload: { note: trimmed },
+        payload,
       });
       const local: Annotation = {
         id: result.cid,
@@ -50,6 +58,7 @@ export function AnnotationCompose({ selection, edition }: Props) {
       };
       workspace.prependLocalAnnotation(selection.textid, selection.seq, local);
       setNote("");
+      workspace.setCoreTarget(null);
     } catch (e) {
       setError(String(e));
     } finally {

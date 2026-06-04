@@ -101,6 +101,33 @@ class SuperEntryByOrth(BaseModel):
     orth: str
 
 
+class FullSense(BaseModel):
+    uuid: str
+    body_number: int | None
+    pos: str | None
+    syn_func: str | None
+    sem_feat: str | None
+    def_: str | None = Field(default=None, alias="def")
+
+    model_config = {"populate_by_name": True}
+
+
+class FullWord(BaseModel):
+    uuid: str
+    display_label: str | None
+    concept: str | None
+    concept_uuid: str | None
+    pinyin: str | None
+    n: str | None
+    senses: list[FullSense]
+
+
+class SuperEntryFull(BaseModel):
+    uuid: str
+    orth: str
+    words: list[FullWord]
+
+
 class ConceptWord(BaseModel):
     uuid: str
     display_label: str | None
@@ -435,6 +462,65 @@ def super_entry_by_orth(request: Request, orth: str) -> SuperEntryByOrth:
     if row is None:
         raise HTTPException(status_code=404, detail=f"no super-entry with orth {orth!r}")
     return SuperEntryByOrth(uuid=row[0], orth=row[1])
+
+
+# ---------- /super-entries/by-orth/{orth}/full ------------------------------
+
+
+@router.get(
+    "/super-entries/by-orth/{orth}/full",
+    response_model=SuperEntryFull,
+    response_model_by_alias=True,
+    summary="Look up a super-entry by orth and return its words + senses in one shot",
+)
+def super_entry_by_orth_full(request: Request, orth: str) -> SuperEntryFull:
+    state: AppState = request.app.state.bkk
+    conn = _open(state)
+    try:
+        se = conn.execute(
+            "SELECT uuid, orth FROM super_entries WHERE orth = ? LIMIT 1",
+            (orth,),
+        ).fetchone()
+        if se is None:
+            raise HTTPException(
+                status_code=404, detail=f"no super-entry with orth {orth!r}",
+            )
+        se_uuid, se_orth = se[0], se[1]
+        word_rows = conn.execute(
+            "SELECT sew.word_uuid, n.display_label, sew.concept, "
+            "       sew.concept_uuid, sew.pinyin, sew.n "
+            "FROM super_entry_words sew "
+            "LEFT JOIN notes n ON n.uuid = sew.word_uuid "
+            "WHERE sew.super_entry_uuid = ? "
+            "ORDER BY COALESCE(sew.concept, '')",
+            (se_uuid,),
+        ).fetchall()
+        word_uuids = [r[0] for r in word_rows]
+        senses_by_word: dict[str, list[FullSense]] = {u: [] for u in word_uuids}
+        if word_uuids:
+            placeholders = ",".join("?" * len(word_uuids))
+            sense_rows = conn.execute(
+                f"SELECT uuid, word_uuid, body_number, pos, syn_func, sem_feat, def "
+                f"FROM senses WHERE word_uuid IN ({placeholders}) "
+                f"ORDER BY word_uuid, COALESCE(body_number, 0)",
+                word_uuids,
+            ).fetchall()
+            for (s_uuid, w_uuid, bn, pos, sf, sfeat, dfn) in sense_rows:
+                senses_by_word.setdefault(w_uuid, []).append(FullSense(
+                    uuid=s_uuid, body_number=bn, pos=pos,
+                    syn_func=sf, sem_feat=sfeat, **{"def": dfn},
+                ))
+    finally:
+        conn.close()
+    words = [
+        FullWord(
+            uuid=u, display_label=label, concept=concept,
+            concept_uuid=concept_uuid, pinyin=pinyin, n=n,
+            senses=senses_by_word.get(u, []),
+        )
+        for (u, label, concept, concept_uuid, pinyin, n) in word_rows
+    ]
+    return SuperEntryFull(uuid=se_uuid, orth=se_orth, words=words)
 
 
 # ---------- /concepts/{uuid}/words ------------------------------------------

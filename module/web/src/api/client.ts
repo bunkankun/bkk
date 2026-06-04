@@ -23,6 +23,8 @@ import type {
   CoreRecordResponse,
   CoreSuperEntryByOrth,
   CoreSuperEntryExpansion,
+  CoreSuperEntryFull,
+  AnnotationsBySenseResponse,
   Juan,
   Manifest,
   ManifestPart,
@@ -423,6 +425,22 @@ export async function getCoreSuperEntryByOrth(
 ): Promise<CoreSuperEntryByOrth> {
   return fetchJson<CoreSuperEntryByOrth>(
     `${apiBase}/core/super-entries/by-orth/${encodeURIComponent(orth)}`,
+  );
+}
+
+export async function getCoreSuperEntryByOrthFull(
+  orth: string,
+): Promise<CoreSuperEntryFull> {
+  return fetchJson<CoreSuperEntryFull>(
+    `${apiBase}/core/super-entries/by-orth/${encodeURIComponent(orth)}/full`,
+  );
+}
+
+export async function getAnnotationsBySense(
+  senseUuid: string,
+): Promise<AnnotationsBySenseResponse> {
+  return fetchJson<AnnotationsBySenseResponse>(
+    `${apiBase}/annotations/by-sense/${encodeURIComponent(senseUuid)}`,
   );
 }
 

@@ -3,6 +3,7 @@ import { getAnnotations, getManifest, getSegmentTranslations } from "../../api/c
 import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { AnnotationCompose } from "./AnnotationCompose";
+import { CoreTargetPicker } from "./CoreTargetPicker";
 
 function AnnCard({ a }: { a: Annotation }) {
   return (
@@ -219,6 +220,7 @@ export function AnnotationsTab() {
               Search this
             </button>
           </div>
+          <CoreTargetPicker selection={sel} />
           {edition && <AnnotationCompose selection={sel} edition={edition} />}
           <label className="sel-pin-toggle">
             <input
