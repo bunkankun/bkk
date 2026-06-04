@@ -16,6 +16,7 @@ class ServeConfig:
     core_root: Path | None = None
     core_index_path: Path | None = None
     annotations_root: Path | None = None
+    annotations_index_path: Path | None = None
     host: str = "127.0.0.1"
     port: int = 8000
     admin_token: str | None = None
@@ -37,6 +38,10 @@ class ServeConfig:
         if self.translation_search_path is None:
             object.__setattr__(
                 self, "translation_search_path", self.corpus_root / "_translations.bkkt"
+            )
+        if self.annotations_index_path is None and self.annotations_root is not None:
+            object.__setattr__(
+                self, "annotations_index_path", self.annotations_root / "_annotations.bkka"
             )
 
     @classmethod
@@ -109,6 +114,17 @@ class ServeConfig:
             annotations_root = Path(rc_annotations_root).resolve()
         else:
             annotations_root = None
+
+        env_annotations_index = os.environ.get("BKK_ANNOTATIONS_INDEX_PATH")
+        rc_annotations_index = rc.get("annotations_index")
+        if env_annotations_index:
+            annotations_index: Path | None = Path(env_annotations_index).resolve()
+        elif rc_annotations_index:
+            annotations_index = Path(rc_annotations_index).resolve()
+        elif annotations_root is not None:
+            annotations_index = annotations_root / "_annotations.bkka"
+        else:
+            annotations_index = None
 
         env_translation_search = os.environ.get("BKK_TRANSLATION_SEARCH_PATH")
         rc_translation_search = rc.get("translation_search")
@@ -193,6 +209,7 @@ class ServeConfig:
             core_root=core_root,
             core_index_path=core_index,
             annotations_root=annotations_root,
+            annotations_index_path=annotations_index,
             host=host,
             port=port,
             admin_token=admin_token,
@@ -216,6 +233,8 @@ class ServeConfig:
         translation_search_path: Path | str | None = None,
         core_root: Path | str | None = None,
         core_index_path: Path | str | None = None,
+        annotations_root: Path | str | None = None,
+        annotations_index_path: Path | str | None = None,
         host: str | None = None,
         port: int | None = None,
         admin_token: str | None = None,
@@ -242,6 +261,10 @@ class ServeConfig:
             updates["core_root"] = Path(core_root).resolve()
         if core_index_path is not None:
             updates["core_index_path"] = Path(core_index_path).resolve()
+        if annotations_root is not None:
+            updates["annotations_root"] = Path(annotations_root).resolve()
+        if annotations_index_path is not None:
+            updates["annotations_index_path"] = Path(annotations_index_path).resolve()
         if host is not None:
             updates["host"] = host
         if port is not None:

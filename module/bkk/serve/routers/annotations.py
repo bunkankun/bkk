@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sqlite3
 from typing import Any
 
 from fastapi import APIRouter, Path as PathParam, Request
@@ -28,6 +29,7 @@ from ..schemas import (
     AnnotationTranslation,
     MultipleChoicesResponse,
 )
+from .. import selection
 from . import bundles as bundles_router
 from . import texts as texts_router
 
@@ -148,14 +150,25 @@ def _load_annotations(path: Path) -> list[AnnotationOut]:
 class BySenseLocation(BaseModel):
     text_id: str
     seq: int
+    text_title: str | None = None
     marker_id: str | None
     offset: int | None
     bucket: str | None
     length: int | None
     id: str | None
+    concept: str | None = None
+    concept_id: str | None = None
     orth: str | None
     pron: str | None
+    sense_def: str | None = None
     note: str | None
+    translation_title: str | None = None
+    translation_text: str | None = None
+    resp: str | None = None
+    curation_state: str | None = None
+    context_left: str | None = None
+    context_match: str | None = None
+    context_right: str | None = None
 
 
 class BySenseResponse(BaseModel):
@@ -164,10 +177,30 @@ class BySenseResponse(BaseModel):
     locations: list[BySenseLocation]
 
 
+class BySenseCountsRequest(BaseModel):
+    sense_uuids: list[str]
+
+
+class BySenseCountsResponse(BaseModel):
+    counts: dict[str, int]
+
+
+def _sense_uuid_variants(sense_uuid: str) -> tuple[str, ...]:
+    if sense_uuid.startswith("uuid-"):
+        bare = sense_uuid[5:]
+        return (sense_uuid, bare)
+    return (sense_uuid, f"uuid-{sense_uuid}")
+
+
+def _canonical_sense_uuid(sense_uuid: str) -> str:
+    return sense_uuid[5:] if sense_uuid.startswith("uuid-") else sense_uuid
+
+
 def _ann_root_locations(state: AppState, sense_uuid: str) -> list[BySenseLocation]:
     root = state.annotations_root
     if root is None or not root.is_dir():
         return []
+    variants = set(_sense_uuid_variants(sense_uuid))
     out: list[BySenseLocation] = []
     for jsonl_path in sorted(root.glob("*/*.ann.jsonl")):
         text_id = jsonl_path.parent.name
@@ -181,13 +214,22 @@ def _ann_root_locations(state: AppState, sense_uuid: str) -> list[BySenseLocatio
             if not isinstance(payload, dict):
                 continue
             sense = payload.get("sense")
-            if not isinstance(sense, dict) or sense.get("id") != sense_uuid:
+            if (
+                not isinstance(sense, dict)
+                or not isinstance(sense.get("id"), str)
+                or sense.get("id") not in variants
+            ):
                 continue
             anchor = raw.get("anchor") if isinstance(raw.get("anchor"), dict) else {}
             form = payload.get("form") if isinstance(payload.get("form"), dict) else {}
             metadata = (
                 payload.get("metadata")
                 if isinstance(payload.get("metadata"), dict)
+                else {}
+            )
+            translation = (
+                payload.get("translation")
+                if isinstance(payload.get("translation"), dict)
                 else {}
             )
             out.append(BySenseLocation(
@@ -198,11 +240,189 @@ def _ann_root_locations(state: AppState, sense_uuid: str) -> list[BySenseLocatio
                 bucket=raw.get("bucket") if isinstance(raw.get("bucket"), str) else None,
                 length=anchor.get("length") if isinstance(anchor.get("length"), int) else None,
                 id=raw.get("id") if isinstance(raw.get("id"), str) else None,
+                concept=payload.get("concept") if isinstance(payload.get("concept"), str) else None,
+                concept_id=payload.get("concept_id") if isinstance(payload.get("concept_id"), str) else None,
                 orth=form.get("orth") if isinstance(form.get("orth"), str) else None,
                 pron=form.get("pron") if isinstance(form.get("pron"), str) else None,
+                sense_def=sense.get("def") if isinstance(sense.get("def"), str) else None,
                 note=metadata.get("note") if isinstance(metadata.get("note"), str) else payload.get("note") if isinstance(payload.get("note"), str) else None,
+                translation_title=translation.get("title") if isinstance(translation.get("title"), str) else None,
+                translation_text=translation.get("text") if isinstance(translation.get("text"), str) else None,
+                resp=metadata.get("resp") if isinstance(metadata.get("resp"), str) else None,
+                curation_state=raw.get("curation_state") if isinstance(raw.get("curation_state"), str) else None,
             ))
+    out.sort(key=lambda loc: (loc.text_id, loc.seq, loc.offset if loc.offset is not None else -1, loc.id or ""))
     return out
+
+
+def _ann_root_counts(state: AppState, sense_uuids: list[str]) -> dict[str, int]:
+    root = state.annotations_root
+    requested = {_canonical_sense_uuid(s) for s in sense_uuids}
+    counts = {s: 0 for s in requested}
+    if not requested or root is None or not root.is_dir():
+        return counts
+    for jsonl_path in sorted(root.glob("*/*.ann.jsonl")):
+        for raw in read_raw_records(jsonl_path):
+            if raw.get("curation_state") in {"rejected", "superseded"}:
+                continue
+            payload = raw.get("payload") or {}
+            if not isinstance(payload, dict):
+                continue
+            sense = payload.get("sense")
+            if not isinstance(sense, dict) or not isinstance(sense.get("id"), str):
+                continue
+            key = _canonical_sense_uuid(sense["id"])
+            if key in counts:
+                counts[key] += 1
+    return counts
+
+
+def _ann_index_locations(state: AppState, sense_uuid: str) -> list[BySenseLocation] | None:
+    conn = state.open_annotations_index()
+    if conn is None:
+        return None
+    variants = _sense_uuid_variants(sense_uuid)
+    placeholders = ",".join("?" * len(variants))
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT text_id, juan_seq, marker_id, bucket_offset, bucket, length,
+                   annotation_id, concept, concept_id, orth, pron, sense_def, note,
+                   translation_title, translation_text, resp, curation_state
+            FROM annotation_location
+            WHERE sense_uuid IN ({placeholders})
+            ORDER BY text_id, juan_seq, bucket_offset, annotation_id
+            """,
+            variants,
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return None
+    finally:
+        conn.close()
+    return [
+        BySenseLocation(
+            text_id=str(row[0]),
+            seq=int(row[1]),
+            marker_id=row[2],
+            offset=int(row[3]) if row[3] is not None else None,
+            bucket=row[4],
+            length=int(row[5]) if row[5] is not None else None,
+            id=row[6],
+            concept=row[7],
+            concept_id=row[8],
+            orth=row[9],
+            pron=row[10],
+            sense_def=row[11],
+            note=row[12],
+            translation_title=row[13],
+            translation_text=row[14],
+            resp=row[15],
+            curation_state=row[16],
+        )
+        for row in rows
+    ]
+
+
+def _ann_index_counts(state: AppState, sense_uuids: list[str]) -> dict[str, int] | None:
+    requested = sorted({_canonical_sense_uuid(s) for s in sense_uuids})
+    counts = {s: 0 for s in requested}
+    if not requested:
+        return counts
+    conn = state.open_annotations_index()
+    if conn is None:
+        return None
+    variants: list[str] = []
+    variant_to_key: dict[str, str] = {}
+    for key in requested:
+        for variant in _sense_uuid_variants(key):
+            variants.append(variant)
+            variant_to_key[variant] = key
+    placeholders = ",".join("?" * len(variants))
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT sense_uuid, COUNT(*)
+            FROM annotation_location
+            WHERE sense_uuid IN ({placeholders})
+            GROUP BY sense_uuid
+            """,
+            variants,
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return None
+    finally:
+        conn.close()
+    for sense_uuid, count in rows:
+        key = variant_to_key.get(str(sense_uuid))
+        if key is not None:
+            counts[key] += int(count)
+    return counts
+
+
+def _enrich_text_context(state: AppState, locs: list[BySenseLocation]) -> list[BySenseLocation]:
+    juan_cache: dict[tuple[str, int], tuple[str | None, dict[str, Any] | None]] = {}
+    out: list[BySenseLocation] = []
+    for loc in locs:
+        title: str | None = None
+        juan: dict[str, Any] | None = None
+        key = (loc.text_id, loc.seq)
+        if key in juan_cache:
+            title, juan = juan_cache[key]
+        else:
+            try:
+                rec = state.lookup_bundle(loc.text_id)
+                if rec is not None:
+                    metadata = rec.manifest.get("metadata") or {}
+                    title = metadata.get("title") if isinstance(metadata.get("title"), str) else None
+                    juan = selection.load_juan_file(
+                        rec.bundle_dir, rec.manifest, rec.textid, loc.seq,
+                    )
+            except Exception:
+                juan = None
+            juan_cache[key] = (title, juan)
+
+        left: str | None = None
+        match: str | None = None
+        right: str | None = None
+        if (
+            juan is not None
+            and loc.bucket is not None
+            and loc.offset is not None
+        ):
+            bucket = juan.get(loc.bucket)
+            text = bucket.get("text") if isinstance(bucket, dict) else None
+            if isinstance(text, str) and 0 <= loc.offset < len(text):
+                start = loc.offset
+                end = min(len(text), start + max(1, loc.length or 1))
+                left = text[max(0, start - 7):start]
+                match = text[start:end]
+                right = text[end:min(len(text), end + 7)]
+
+        out.append(
+            loc.model_copy(update={
+                "text_title": title,
+                "context_left": left,
+                "context_match": match,
+                "context_right": right,
+            })
+        )
+    return out
+
+
+@router.post(
+    "/annotations/by-senses/counts",
+    response_model=BySenseCountsResponse,
+    summary="Count annotation locations for multiple sense UUIDs",
+)
+def annotations_by_senses_counts(
+    request: Request,
+    body: BySenseCountsRequest,
+) -> BySenseCountsResponse:
+    state = request.app.state.bkk
+    counts = _ann_index_counts(state, body.sense_uuids)
+    if counts is None:
+        counts = _ann_root_counts(state, body.sense_uuids)
+    return BySenseCountsResponse(counts=counts)
 
 
 @router.get(
@@ -216,7 +436,10 @@ def annotations_by_sense(
     sense_uuid: str = PathParam(...),
 ) -> BySenseResponse:
     state = request.app.state.bkk
-    locs = _ann_root_locations(state, sense_uuid)
+    locs = _ann_index_locations(state, sense_uuid)
+    if locs is None:
+        locs = _ann_root_locations(state, sense_uuid)
+    locs = _enrich_text_context(state, locs)
     return BySenseResponse(sense_uuid=sense_uuid, total=len(locs), locations=locs)
 
 

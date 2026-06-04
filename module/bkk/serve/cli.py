@@ -40,6 +40,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--core-index", type=Path, default=None, dest="core_index_path",
                    help="core .bkki index path "
                         "(default: core.index from .bkkrc, else <core-root>/_core.bkki)")
+    p.add_argument("--annotations-root", type=Path, default=None,
+                   help="bkk-annotations archive root "
+                        "(default: annotations.annotations_root / serve.annotations_root from .bkkrc)")
+    p.add_argument("--annotations-index", type=Path, default=None, dest="annotations_index_path",
+                   help="annotation .bkka index path "
+                        "(default: <annotations-root>/_annotations.bkka)")
     p.add_argument("--host", default=None, help="bind address (default: 127.0.0.1)")
     p.add_argument("--port", type=int, default=None, help="port (default: 8000)")
     p.add_argument("--admin-token", default=None,
@@ -74,7 +80,7 @@ def run(argv: list[str] | None = None) -> int:
 
     from bkk.config import load_rc
     rc = load_rc()
-    rc_serve = {**rc.get("global", {}), **rc.get("serve", {})}
+    rc_serve = {**rc.get("global", {}), **rc.get("serve", {}), **rc.get("annotations", {})}
     rc_core = rc.get("core", {})
 
     base = ServeConfig.from_env(
@@ -86,6 +92,8 @@ def run(argv: list[str] | None = None) -> int:
         catalog_path=args.catalog_path,
         core_root=args.core_root,
         core_index_path=args.core_index_path,
+        annotations_root=args.annotations_root,
+        annotations_index_path=args.annotations_index_path,
         host=args.host,
         port=args.port,
         admin_token=args.admin_token,
@@ -113,6 +121,10 @@ def run(argv: list[str] | None = None) -> int:
             os.environ["BKK_CORE_ROOT"] = str(config.core_root)
         if config.core_index_path is not None:
             os.environ["BKK_CORE_INDEX_PATH"] = str(config.core_index_path)
+        if config.annotations_root is not None:
+            os.environ["BKK_ANNOTATIONS_ROOT"] = str(config.annotations_root)
+        if config.annotations_index_path is not None:
+            os.environ["BKK_ANNOTATIONS_INDEX_PATH"] = str(config.annotations_index_path)
         os.environ["BKK_HOST"] = config.host
         os.environ["BKK_PORT"] = str(config.port)
         if config.admin_token is not None:

@@ -579,20 +579,35 @@ export interface CoreSuperEntryFull {
 export interface AnnotationBySenseLocation {
   text_id: string;
   seq: number;
+  text_title: string | null;
   marker_id: string | null;
   offset: number | null;
   bucket: string | null;
   length: number | null;
   id: string | null;
+  concept: string | null;
+  concept_id: string | null;
   orth: string | null;
   pron: string | null;
+  sense_def: string | null;
   note: string | null;
+  translation_title: string | null;
+  translation_text: string | null;
+  resp: string | null;
+  curation_state: string | null;
+  context_left: string | null;
+  context_match: string | null;
+  context_right: string | null;
 }
 
 export interface AnnotationsBySenseResponse {
   sense_uuid: string;
   total: number;
   locations: AnnotationBySenseLocation[];
+}
+
+export interface AnnotationsBySenseCountsResponse {
+  counts: Record<string, number>;
 }
 
 export interface CoreConceptWord {

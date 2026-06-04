@@ -25,6 +25,7 @@ import type {
   CoreSuperEntryExpansion,
   CoreSuperEntryFull,
   AnnotationsBySenseResponse,
+  AnnotationsBySenseCountsResponse,
   Juan,
   Manifest,
   ManifestPart,
@@ -441,6 +442,19 @@ export async function getAnnotationsBySense(
 ): Promise<AnnotationsBySenseResponse> {
   return fetchJson<AnnotationsBySenseResponse>(
     `${apiBase}/annotations/by-sense/${encodeURIComponent(senseUuid)}`,
+  );
+}
+
+export async function getAnnotationSenseCounts(
+  senseUuids: string[],
+): Promise<AnnotationsBySenseCountsResponse> {
+  return fetchJson<AnnotationsBySenseCountsResponse>(
+    `${apiBase}/annotations/by-senses/counts`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sense_uuids: senseUuids }),
+    },
   );
 }
 

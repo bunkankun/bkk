@@ -18,7 +18,13 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Path as PathParam, Request
 from fastapi.responses import JSONResponse
 
-from bkk.index import build_catalog_index, build_index, merge_bundles, merge_translations
+from bkk.index import (
+    build_annotation_index,
+    build_catalog_index,
+    build_index,
+    merge_bundles,
+    merge_translations,
+)
 from bkk.index.catalog import default_catalog_csv
 from bkk.validator import validate_bundle
 
@@ -90,6 +96,15 @@ def _run_translation_index(jobs: JobRegistry, job_id: str, corpus_root, out_path
     try:
         out = merge_translations(corpus_root, out_path)
         jobs.mark_done(job_id, {"translation_search_path": str(out)})
+    except Exception as exc:
+        jobs.mark_error(job_id, exc)
+
+
+def _run_annotation_index(jobs: JobRegistry, job_id: str, annotations_root, out_path):
+    jobs.mark_running(job_id)
+    try:
+        out = build_annotation_index(annotations_root, out_path)
+        jobs.mark_done(job_id, {"annotations_index_path": str(out)})
     except Exception as exc:
         jobs.mark_error(job_id, exc)
 
@@ -179,6 +194,31 @@ def post_translation_search_index(
         job.id,
         state.corpus_root,
         state.translation_search_path,
+    )
+    return _accepted(job)
+
+
+@router.post(
+    "/annotations",
+    summary="Rebuild the annotation location index",
+)
+def post_annotation_index(
+    request: Request,
+    background: BackgroundTasks,
+    state: AppState = Depends(_require_admin),
+) -> JSONResponse:
+    if state.annotations_root is None:
+        raise errors.bad_request(
+            "annotations_root_missing",
+            reason="set serve.annotations_root / annotations.annotations_root or BKK_ANNOTATIONS_ROOT",
+        )
+    job = state.jobs.create(kind="annotation_index", target=None)
+    background.add_task(
+        _run_annotation_index,
+        state.jobs,
+        job.id,
+        state.annotations_root,
+        state.annotations_index_path,
     )
     return _accepted(job)
 

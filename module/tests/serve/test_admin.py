@@ -24,11 +24,17 @@ def admin_corpus(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _client(corpus: Path, *, admin_token: str | None = None) -> TestClient:
+def _client(
+    corpus: Path,
+    *,
+    admin_token: str | None = None,
+    annotations_root: Path | None = None,
+) -> TestClient:
     config = ServeConfig(
         corpus_root=corpus,
         index_path=corpus / "_corpus.bkkx",
         admin_token=admin_token,
+        annotations_root=annotations_root,
     )
     return TestClient(create_app(config))
 
@@ -109,6 +115,31 @@ def test_merge_corpus_produces_artifact(admin_corpus):
     assert body["status"] == "success"
     assert body["kind"] == "merge"
     assert Path(body["result"]["index_path"]).exists()
+
+
+def test_annotation_index_produces_artifact(admin_corpus, tmp_path: Path):
+    archive = tmp_path / "bkk-annotations"
+    text_dir = archive / "ADM0001"
+    text_dir.mkdir(parents=True)
+    (text_dir / "ADM0001_001.ann.jsonl").write_text(
+        '{"payload":{"sense":{"id":"sense-1"}},"bucket":"body","bucket_offset":1}\n',
+        encoding="utf-8",
+    )
+    client = _client(admin_corpus, annotations_root=archive)
+    r = client.post("/admin/annotations")
+    assert r.status_code == 202
+    job_id = r.json()["id"]
+    body = client.get(f"/admin/jobs/{job_id}").json()
+    assert body["status"] == "success"
+    assert body["kind"] == "annotation_index"
+    assert Path(body["result"]["annotations_index_path"]).exists()
+
+
+def test_annotation_index_requires_root(admin_corpus):
+    client = _client(admin_corpus)
+    r = client.post("/admin/annotations")
+    assert r.status_code == 400
+    assert r.json()["error"] == "annotations_root_missing"
 
 
 def test_admin_index_unknown_textid(admin_corpus):

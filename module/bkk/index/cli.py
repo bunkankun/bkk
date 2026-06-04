@@ -6,6 +6,7 @@ Subcommands::
     python -m bkk.index catalog <corpus> [--csv PATH] [--out PATH]
                                          [--prefix KR3a]
     python -m bkk.index translations <corpus> [--out PATH]
+    python -m bkk.index annotations [annotations_root] [--out PATH]
     python -m bkk.index merge <corpus> [--out PATH] [--prefix KR3a]
                                        [--rebuild | --no-build]
     python -m bkk.index core <core_root> [--out PATH]
@@ -20,6 +21,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .annotations import build_annotation_index
 from .build import build_index
 from .catalog import build_catalog_index, default_catalog_csv
 from .core import build_core_index
@@ -81,6 +83,14 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--no-build", action="store_true",
                      help="error if any per-bundle .bkkt is missing or stale")
 
+    pa = sub.add_parser("annotations", help="build a .bkka index over a bkk-annotations archive")
+    pa.add_argument("annotations_root", type=Path, nargs="?", default=None,
+                    help="annotations archive root "
+                         "(or set annotations.annotations_root / serve.annotations_root in .bkkrc)")
+    pa.add_argument("--out", type=Path, default=None,
+                    help="annotation .bkka output path "
+                         "(default: <annotations_root>/_annotations.bkka)")
+
     pco = sub.add_parser("core", help="build a .bkki index over the bkk-core knowledge layer")
     pco.add_argument("core_root", type=Path, nargs="?", default=None,
                      help="core root directory (or set core.root in .bkkrc)")
@@ -112,6 +122,8 @@ def run(argv: list[str] | None = None) -> int:
     g = rc.get("global", {})
     idx = rc.get("index", {})
     core_rc = rc.get("core", {})
+    ann_rc = rc.get("annotations", {})
+    serve_rc = rc.get("serve", {})
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -144,6 +156,17 @@ def run(argv: list[str] | None = None) -> int:
             parser.error("core_root is required (or set core.root in .bkkrc)")
         if args.out is None:
             args.out = Path(core_rc.get("index") or args.core_root / "_core.bkki")
+    if args.cmd == "annotations":
+        if args.annotations_root is None:
+            args.annotations_root = ann_rc.get("annotations_root") or serve_rc.get("annotations_root")
+        if args.annotations_root is None:
+            parser.error(
+                "annotations_root is required "
+                "(or set annotations.annotations_root / serve.annotations_root in .bkkrc)"
+            )
+        args.annotations_root = Path(args.annotations_root)
+        if args.out is None:
+            args.out = args.annotations_root / "_annotations.bkka"
 
     if args.cmd == "build":
         path = build_index(args.bundle_dir, args.out)
@@ -163,6 +186,10 @@ def run(argv: list[str] | None = None) -> int:
             rebuild=args.rebuild, no_build=args.no_build,
             progress=True,
         )
+        print(f"wrote {path}")
+        return 0
+    if args.cmd == "annotations":
+        path = build_annotation_index(args.annotations_root, args.out)
         print(f"wrote {path}")
         return 0
     if args.cmd == "catalog":

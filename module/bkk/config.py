@@ -22,7 +22,7 @@ _PATH_KEYS = frozenset(
      "cache_dir", "tls_source", "web_dist", "index", "catalog",
      "cbeta_root",
      "root", "mapping",
-     "annotations_out", "annotations_root"}
+     "annotations_out", "annotations_root", "annotations_index"}
 )
 
 
@@ -80,6 +80,8 @@ def load_rc() -> dict:
 
         rc_dir = rc_path.parent
         for section, values in data.items():
+            if values is None:
+                values = {}
             if not isinstance(values, dict):
                 sys.exit(
                     f"error: {rc_path}: section [{section}] must be a mapping"

@@ -233,6 +233,10 @@ class AppState:
         return self.config.annotations_root
 
     @property
+    def annotations_index_path(self) -> Path | None:
+        return self.config.annotations_index_path
+
+    @property
     def core_root(self) -> Path | None:
         return self.config.core_root
 
@@ -309,6 +313,17 @@ class AppState:
             return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         except sqlite3.DatabaseError as exc:
             log.warning("translation search index unavailable at %s: %s", path, exc)
+            return None
+
+    def open_annotations_index(self) -> sqlite3.Connection | None:
+        """Open a read-only handle on the annotation location index."""
+        path = self.annotations_index_path
+        if path is None or not path.exists():
+            return None
+        try:
+            return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        except sqlite3.DatabaseError as exc:
+            log.warning("annotation index unavailable at %s: %s", path, exc)
             return None
 
     def lookup_bundle(self, textid: str) -> BundleRecord | None:

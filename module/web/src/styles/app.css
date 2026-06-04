@@ -2105,10 +2105,19 @@ button {
   gap: 4px;
 }
 .core-target-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 10px;
   color: var(--t3);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+.core-target-total-tally {
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
 }
 .core-target-group {
   display: flex;
@@ -2147,6 +2156,13 @@ button {
 }
 .core-target-label {
   font-family: var(--fc);
+  flex: 1;
+  min-width: 0;
+}
+.core-target-word-tally {
+  color: var(--t3);
+  font-size: 10px;
+  white-space: nowrap;
 }
 .core-target-senses {
   display: flex;
@@ -2221,15 +2237,115 @@ button {
 .core-target-where-used li {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
 }
-.core-target-where-loc {
+.core-target-where-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.core-target-where-title-button {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--t2);
+  font: inherit;
+  font-family: var(--fm);
+  text-align: left;
+  cursor: pointer;
+}
+.core-target-where-title-button:hover {
+  color: var(--t1);
+}
+.core-target-where-title-button:disabled {
+  color: var(--t3);
+  cursor: default;
+}
+.core-target-where-jump {
   font-family: var(--fm);
   color: var(--t2);
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
-.core-target-where-note {
+.core-target-where-jump:hover {
+  color: var(--t1);
+}
+.core-target-where-jump:disabled {
+  color: var(--t3);
+  cursor: default;
+}
+.core-target-where-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px;
+}
+.core-target-where-title {
+  color: var(--t1);
+  font-weight: 600;
+}
+.core-target-where-seq,
+.core-target-where-resp {
+  color: var(--t3);
+  white-space: nowrap;
+}
+.core-target-where-context {
+  color: var(--t2);
+  font-size: 11px;
+}
+.core-target-where-context strong {
+  color: var(--t1);
+  font-weight: 700;
+}
+.core-target-where-translation {
   color: var(--t3);
   font-style: italic;
+}
+.core-target-where-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.core-target-where-action {
+  padding: 1px 5px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--t3);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.core-target-where-action:hover {
+  color: var(--t1);
+  border-color: var(--amb);
+  background: var(--hov);
+}
+.core-target-where-action.use {
+  background: var(--t2);
+  border-color: var(--t2);
+  color: var(--bg);
+  font-weight: 600;
+}
+.core-target-where-action.use:hover {
+  background: var(--t1);
+  border-color: var(--t1);
+  color: var(--bg);
+}
+.core-target-where-action:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 .core-target-orth {
   font-weight: 600;

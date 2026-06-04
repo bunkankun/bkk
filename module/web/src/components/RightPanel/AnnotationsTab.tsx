@@ -220,7 +220,7 @@ export function AnnotationsTab() {
               Search this
             </button>
           </div>
-          <CoreTargetPicker selection={sel} />
+          <CoreTargetPicker selection={sel} edition={edition} />
           {edition && <AnnotationCompose selection={sel} edition={edition} />}
           <label className="sel-pin-toggle">
             <input

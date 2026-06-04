@@ -10,6 +10,7 @@ readings that intersect it.
 """
 
 from .build import build_index
+from .annotations import build_annotation_index
 from .catalog import build_catalog_index
 from .ir import Hit, VariantOverlay
 from .merge import merge_bundles
@@ -18,6 +19,6 @@ from .translation import build_translation_index, merge_translations
 
 __all__ = [
     "Index", "Hit", "VariantOverlay",
-    "build_index", "build_catalog_index", "build_translation_index",
+    "build_index", "build_annotation_index", "build_catalog_index", "build_translation_index",
     "merge_bundles", "merge_translations",
 ]

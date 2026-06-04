@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from bkk.index.annotations import build_annotation_index
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
 
@@ -129,6 +130,19 @@ def annotated_client(annotated_corpus: tuple[Path, Path]) -> TestClient:
     return TestClient(create_app(config))
 
 
+@pytest.fixture
+def indexed_annotated_client(annotated_corpus: tuple[Path, Path]) -> TestClient:
+    corpus_root, archive_root = annotated_corpus
+    index_path = build_annotation_index(archive_root)
+    config = ServeConfig(
+        corpus_root=corpus_root,
+        index_path=corpus_root / "_corpus.bkkx",
+        annotations_root=archive_root,
+        annotations_index_path=index_path,
+    )
+    return TestClient(create_app(config))
+
+
 def test_annotations_list_returned_sorted_by_offset(annotated_client: TestClient):
     r = annotated_client.get("/bundles/ANN0001/juan/1/annotations")
     assert r.status_code == 200
@@ -179,3 +193,102 @@ def test_annotations_via_texts_alias_unknown_identifier(annotated_client: TestCl
     r = annotated_client.get("/texts/no_such_id/juan/1/annotations")
     assert r.status_code == 400
     assert r.json()["error"] == "identifier_not_found"
+
+
+def test_annotation_index_builds_locations_and_skips_bad_records(annotated_corpus: tuple[Path, Path]):
+    _corpus_root, archive_root = annotated_corpus
+    path = _write_ann_jsonl(
+        archive_root,
+        "ANN0001",
+        2,
+        [
+            {
+                "id": "bad-rejected",
+                "payload": {"sense": {"id": "uuid-s1"}},
+                "curation_state": "rejected",
+                "bucket": "body",
+                "bucket_offset": 1,
+            },
+            {
+                "id": "bad-no-sense",
+                "payload": {"sense": {"def": "missing id"}},
+                "curation_state": "accepted",
+                "bucket": "body",
+                "bucket_offset": 2,
+            },
+            {
+                "id": "good-2",
+                "payload": {
+                    "concept": "ASCEND",
+                    "form": {"orth": "乙"},
+                    "sense": {"id": "uuid-s1", "def": "second use"},
+                },
+                "anchor": {"marker_id": "m2", "length": 1},
+                "curation_state": "proposed",
+                "bucket": "body",
+                "bucket_offset": 3,
+            },
+        ],
+    )
+    with path.open("a", encoding="utf-8") as f:
+        f.write("{not json}\n")
+
+    index_path = build_annotation_index(archive_root)
+    import sqlite3
+    conn = sqlite3.connect(index_path)
+    try:
+        rows = conn.execute(
+            "SELECT text_id, juan_seq, annotation_id, orth, sense_def "
+            "FROM annotation_location WHERE sense_uuid = ? "
+            "ORDER BY text_id, juan_seq, bucket_offset, annotation_id",
+            ("s1",),
+        ).fetchall()
+    finally:
+        conn.close()
+    assert rows == [
+        ("ANN0001", 1, "uuid-1", "己", "self; oneself"),
+        ("ANN0001", 2, "good-2", "乙", "second use"),
+    ]
+
+
+def test_annotations_by_sense_falls_back_to_jsonl_scan(annotated_client: TestClient):
+    r = annotated_client.get("/annotations/by-sense/uuid-s1")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    loc = body["locations"][0]
+    assert loc["text_id"] == "ANN0001"
+    assert loc["seq"] == 1
+    assert loc["bucket"] == "body"
+    assert loc["offset"] == 5
+    assert loc["length"] == 1
+    assert loc["orth"] == "己"
+    assert loc["sense_def"] == "self; oneself"
+    assert loc["translation_title"] == "Test (en)"
+    assert loc["translation_text"] == "self"
+    assert loc["resp"] == "T"
+    assert loc["curation_state"] == "accepted"
+    assert loc["text_title"] == "Annotated"
+    assert loc["context_left"] == "甲乙丙丁戊"
+    assert loc["context_match"] == "己"
+    assert loc["context_right"] == "庚辛壬癸"
+
+
+def test_annotations_by_sense_reads_index(indexed_annotated_client: TestClient):
+    r = indexed_annotated_client.get("/annotations/by-sense/uuid-s1")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    loc = body["locations"][0]
+    assert loc["id"] == "uuid-1"
+    assert loc["concept"] == "ASCEND"
+    assert loc["concept_id"] == "uuid-c1"
+    assert loc["marker_id"] == "ANN0001_T_001-001a.1"
+
+
+def test_annotations_by_sense_empty_without_root(corpus: Path):
+    config = ServeConfig(corpus_root=corpus, index_path=corpus / "_corpus.bkkx")
+    client = TestClient(create_app(config))
+    r = client.get("/annotations/by-sense/uuid-s1")
+    assert r.status_code == 200
+    assert r.json() == {"sense_uuid": "uuid-s1", "total": 0, "locations": []}

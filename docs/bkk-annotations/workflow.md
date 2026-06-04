@@ -113,6 +113,14 @@ incidentally.
 The harvest is idempotent: a second run on the same set of PDS records
 produces a byte-identical output file.
 
+## Sense UUID compatibility
+
+TLS-seed annotation records may carry `payload.sense.id` as `uuid-<uuid>`,
+while the bkk-core index and frontend picker use the bare UUID form. Any
+read path that joins annotations to bkk-core senses must normalize or query
+both forms; otherwise existing annotation locations show up in the juan view
+but the sense-level "where used" lookup reports zero uses.
+
 ## Configuring DIDs in `.bkkrc`
 
 ```yaml
