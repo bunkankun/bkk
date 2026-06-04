@@ -1,5 +1,6 @@
 import { startGithubLogin } from "../../api/client";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
+import { BlueskyLogin } from "./BlueskyLogin";
 import { SearchBar } from "./SearchBar";
 
 function SidebarToggles() {
@@ -74,6 +75,7 @@ export function Menubar() {
           {persistence.status === "error" ? "Sync error" : "Syncing"}
         </span>
       ) : null}
+      <BlueskyLogin />
       {user ? (
         <div className="mb-user" title={`${user.workspace.repo} (${user.workspace.branch})`}>
           {user.avatar_url ? (

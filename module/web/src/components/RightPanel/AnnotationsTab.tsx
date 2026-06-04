@@ -3,7 +3,6 @@ import { getAnnotations, getManifest, getSegmentTranslations } from "../../api/c
 import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { AnnotationCompose } from "./AnnotationCompose";
-import { BlueskyPanel } from "./BlueskyPanel";
 
 function AnnCard({ a }: { a: Annotation }) {
   return (
@@ -191,7 +190,6 @@ export function AnnotationsTab() {
 
   return (
     <div className="rc">
-      <BlueskyPanel />
       {sel && sel.textid === textid && sel.seq === seq && (
         <>
           <div className="sel-summary">{sel.chars.join("")}</div>

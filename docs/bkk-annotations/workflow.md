@@ -40,8 +40,8 @@ a DNS-verifiable namespace later is mechanical.
 ## Posting from the SPA
 
 1. The user authenticates against Bluesky with handle + app password via the
-   panel in the Annotations tab
-   ([`BlueskyPanel.tsx`](../../module/web/src/components/RightPanel/BlueskyPanel.tsx)).
+   menubar dialog
+   ([`BlueskyLogin.tsx`](../../module/web/src/components/Menubar/BlueskyLogin.tsx)).
    `POST /api/annotations/bluesky/session` exchanges the password for an
    atproto session via `com.atproto.server.createSession`. The JWT pair and
    the user's DID are attached to the in-memory `UserSession.bluesky` slot
@@ -126,6 +126,27 @@ annotations:
 A scalar `dids:` value is rejected with a clear error; without the list
 markers, YAML would parse the whole thing as a string and the harvester would
 iterate it character by character.
+
+## Bluesky session is scoped to the GitHub session
+
+The Bluesky login endpoint calls `_require_user` before accepting an app
+password, and the resulting `BlueskySession` is attached to the GitHub-issued
+`UserSession` keyed by the `SESSION_COOKIE`. The annotation post handler then
+calls both `_require_user` and `_require_bluesky`.
+
+This coupling is intentional under the current model:
+
+- Annotations are mirrored into the user's GitHub-hosted `bkk-annotations`
+  archive, so a post that bypasses GitHub auth would have nowhere to land.
+- Scoping the in-memory atproto tokens to the GitHub session avoids inventing
+  a second cookie / session store just for Bluesky.
+
+**Worth reconsidering** if a standalone Bluesky use case appears — e.g.
+browsing other users' Bluesky-hosted annotations without a personal archive,
+or letting a reader connect their Bluesky identity for read-only social
+features. At that point the Bluesky session would need its own cookie and
+the post handler's `_require_user` dependency would need to move to a
+GitHub-only path.
 
 ## Out of scope (deferred)
 
