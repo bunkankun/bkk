@@ -3,6 +3,7 @@ import { getManifest } from "../../api/client";
 import { krClass } from "../../lib/krClass";
 import { setResizing, useWorkspace, workspace, type PaneLeaf } from "../../state/useWorkspace";
 import { CharInfoBar } from "../CharInfoBar";
+import { Welcome } from "../Welcome";
 import { CoreRecord } from "./CoreRecord";
 import { ImagePanel } from "./ImagePanel";
 import { TextViewer } from "./TextViewer";
@@ -272,7 +273,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
           />
         )
       ) : (
-        <div className="empty-pane">Select a text from the catalog or TOC.</div>
+        <Welcome empty="Select a text from the catalog or TOC." />
       )}
       {!activeCoreTab && (
         <CharInfoBar

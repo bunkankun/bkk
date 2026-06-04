@@ -430,6 +430,10 @@ export interface ServerInfo {
   openapi?: string;
 }
 
+export interface ServerWelcome {
+  markdown: string;
+}
+
 export interface WorkspaceInfo {
   repo: string;
   html_url: string;

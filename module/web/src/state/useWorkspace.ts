@@ -1862,6 +1862,21 @@ export const workspace = {
     notify();
     scheduleSessionSave();
   },
+  resetPanes() {
+    state = {
+      ...state,
+      pane: { kind: "leaf", id: "root", tabs: [], activeTabId: null },
+      focusedPaneId: "root",
+      activeTextid: null,
+      activeSeq: null,
+      selection: null,
+      currentPage: null,
+      selectedTranslation: null,
+      selectedSegment: null,
+    };
+    notify();
+    scheduleSessionSave();
+  },
   openHistoryText(textid: string) {
     const entry = state.textHistory.find((item) => item.textid === textid);
     if (!entry) return;

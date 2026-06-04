@@ -23,6 +23,7 @@ class ServeConfig:
     reload: bool = False
     upstream_repo: str | None = None
     web_dist: Path | None = None
+    welcome_path: Path | None = None
     image_base_urls: dict[str, str] = field(default_factory=dict)
     github_client_id: str | None = None
     github_client_secret: str | None = None
@@ -144,6 +145,15 @@ class ServeConfig:
         else:
             web_dist = None
 
+        env_welcome = os.environ.get("BKK_WELCOME_PATH")
+        rc_welcome = rc.get("welcome")
+        if env_welcome:
+            welcome_path: Path | None = Path(env_welcome).resolve()
+        elif rc_welcome:
+            welcome_path = Path(rc_welcome).resolve()
+        else:
+            welcome_path = None
+
         env_host = os.environ.get("BKK_HOST")
         host = env_host if env_host is not None else rc.get("host", "127.0.0.1")
 
@@ -216,6 +226,7 @@ class ServeConfig:
             reload=False,
             upstream_repo=upstream_repo,
             web_dist=web_dist,
+            welcome_path=welcome_path,
             image_base_urls=dict(rc_image_base_urls),
             github_client_id=github_client_id,
             github_client_secret=github_client_secret,
@@ -241,6 +252,7 @@ class ServeConfig:
         reload: bool | None = None,
         upstream_repo: str | None = None,
         web_dist: Path | str | None = None,
+        welcome_path: Path | str | None = None,
         github_client_id: str | None = None,
         github_client_secret: str | None = None,
         github_callback_url: str | None = None,
@@ -277,6 +289,8 @@ class ServeConfig:
             updates["upstream_repo"] = upstream_repo
         if web_dist is not None:
             updates["web_dist"] = Path(web_dist).resolve()
+        if welcome_path is not None:
+            updates["welcome_path"] = Path(welcome_path).resolve()
         if github_client_id is not None:
             updates["github_client_id"] = github_client_id
         if github_client_secret is not None:

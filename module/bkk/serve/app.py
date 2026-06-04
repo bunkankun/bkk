@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import errors
@@ -116,6 +116,23 @@ def create_app(config: ServeConfig) -> FastAPI:
     @app.get("/healthz", tags=["meta"], summary="Liveness probe")
     def healthz() -> dict:
         return {"status": "ok"}
+
+    @app.get("/server-welcome", tags=["meta"], summary="Welcome markdown (if configured)")
+    def server_welcome() -> dict:
+        path = config.welcome_path
+        if path is None:
+            raise HTTPException(status_code=404, detail="no welcome message configured")
+        try:
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404, detail=f"welcome file not found: {path}"
+            )
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500, detail=f"cannot read welcome file: {exc}"
+            )
+        return {"markdown": text}
 
     @app.get("/server-info", tags=["meta"], summary="Server identity + corpus pointer (always JSON)")
     def server_info() -> dict:

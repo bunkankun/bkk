@@ -130,6 +130,12 @@ serve:
 #   admin_token: changeme         # bearer token for /admin/* endpoints
 #   upstream_repo: org/repo       # GitHub ORG/REPO surfaced to the SPA on GET /
 #   web_dist: /path/to/dist      # directory containing the built SPA
+#   welcome: /var/lib/bkk/welcome.md
+#                                # markdown file shown in the empty workspace
+#                                # and when the user clicks the logo in the
+#                                # menubar. Read on each request, so editing
+#                                # the file takes effect immediately — no
+#                                # restart or rebuild required.
 #   corpus: /data/bkk/corpus     # override global.corpus for serve only
 #   index: /data/bkk/_corpus.bkkx
 #   image_base_urls:             # per-edition image URL prefix, applied at the

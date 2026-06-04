@@ -34,6 +34,7 @@ import type {
   SearchSort,
   SearchTextidsResponse,
   ServerInfo,
+  ServerWelcome,
   TimelineResponse,
   TranslationAlignmentResponse,
   TranslationListResponse,
@@ -85,6 +86,15 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export async function getServerInfo(): Promise<ServerInfo> {
   return fetchJson<ServerInfo>(`${apiBase}/server-info`);
+}
+
+export async function getServerWelcome(): Promise<ServerWelcome | null> {
+  try {
+    return await fetchJson<ServerWelcome>(`${apiBase}/server-welcome`);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
 }
 
 export async function getAuthSession(): Promise<AuthSession> {

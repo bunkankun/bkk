@@ -59,6 +59,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--web-dist", type=Path, default=None,
                    help="directory containing the built SPA to mount at / "
                         "(default: $BKK_WEB_DIST)")
+    p.add_argument("--welcome", type=Path, default=None, dest="welcome_path",
+                   help="markdown file shown in the empty workspace and when "
+                        "the user clicks the logo "
+                        "(default: serve.welcome from .bkkrc, else $BKK_WELCOME_PATH)")
     p.add_argument("--github-client-id", default=None,
                    help="GitHub OAuth app client id (default: $BKK_GITHUB_CLIENT_ID)")
     p.add_argument("--github-client-secret", default=None,
@@ -100,6 +104,7 @@ def run(argv: list[str] | None = None) -> int:
         reload=args.reload or None,
         upstream_repo=args.upstream_repo,
         web_dist=args.web_dist,
+        welcome_path=args.welcome_path,
         github_client_id=args.github_client_id,
         github_client_secret=args.github_client_secret,
         github_callback_url=args.github_callback_url,
@@ -133,6 +138,8 @@ def run(argv: list[str] | None = None) -> int:
             os.environ["BKK_UPSTREAM_REPO"] = config.upstream_repo
         if config.web_dist is not None:
             os.environ["BKK_WEB_DIST"] = str(config.web_dist)
+        if config.welcome_path is not None:
+            os.environ["BKK_WELCOME_PATH"] = str(config.welcome_path)
         if config.github_client_id is not None:
             os.environ["BKK_GITHUB_CLIENT_ID"] = config.github_client_id
         if config.github_client_secret is not None:

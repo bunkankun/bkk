@@ -1195,6 +1195,57 @@ button {
   font-style: italic;
 }
 
+.welcome-pane {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+.welcome-body {
+  max-width: 720px;
+  width: 100%;
+  color: var(--t1);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.welcome-body h1,
+.welcome-body h2,
+.welcome-body h3 {
+  color: var(--t1);
+  margin-top: 1.2em;
+}
+.welcome-body h1:first-child,
+.welcome-body h2:first-child {
+  margin-top: 0;
+}
+.welcome-body a {
+  color: var(--link);
+}
+.welcome-body code {
+  background: var(--bg-act);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.welcome-body pre {
+  background: var(--bg-act);
+  padding: 8px 10px;
+  border-radius: 4px;
+  overflow: auto;
+}
+
+.mb-logo-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.mb-logo-btn:hover .mb-logo-txt {
+  text-decoration: underline;
+}
+
 /* inspect mode: side-by-side TextViewer + ImagePanel inside one workspace pane */
 .ws-split {
   flex: 1;

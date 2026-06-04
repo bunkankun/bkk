@@ -42,18 +42,24 @@ export function Menubar() {
   const auth = useWorkspace((s) => s.auth);
   const persistence = useWorkspace((s) => s.persistence);
   const user = auth.session?.user ?? null;
-  const tooltip =
+  const baseTooltip =
     upstream != null
       ? `Bunkankun${version ? ` v${version}` : ""} — powered by ${upstream}`
       : `Bunkankun${version ? ` v${version}` : ""}`;
+  const tooltip = `${baseTooltip} — click to return to the start screen`;
   return (
     <div className="mb">
-      <div className="mb-logo" title={tooltip}>
+      <button
+        type="button"
+        className="mb-logo mb-logo-btn"
+        title={tooltip}
+        onClick={() => workspace.resetPanes()}
+      >
         <span className="mb-logo-cjk mb-logo-cjk-full">文看訓</span>
         <span className="mb-logo-cjk mb-logo-cjk-compact">文訓</span>
         <span className="mb-logo-cjk mb-logo-cjk-min">訓</span>
         <span className="mb-logo-txt">Bunkankun</span>
-      </div>
+      </button>
       <div className="mb-sep" />
       <button className="mb-btn" disabled title="v2">
         Browse
