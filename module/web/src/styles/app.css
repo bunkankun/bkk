@@ -2313,12 +2313,15 @@ button {
   font-style: italic;
 }
 .core-target-where-actions {
+  --location-action-size: 20px;
   display: flex;
   flex-wrap: nowrap;
   gap: 4px;
 }
 .core-target-where-action {
-  padding: 1px 5px;
+  min-width: var(--location-action-size);
+  height: var(--location-action-size);
+  padding: 0 6px;
   border: 1px solid var(--bdr);
   border-radius: 4px;
   background: var(--bg);
@@ -2326,6 +2329,20 @@ button {
   font: inherit;
   font-size: 10px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.core-target-where-action.icon {
+  width: var(--location-action-size);
+  padding: 0;
+}
+.core-target-action-icon {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+  display: block;
 }
 .core-target-where-action:hover {
   color: var(--t1);

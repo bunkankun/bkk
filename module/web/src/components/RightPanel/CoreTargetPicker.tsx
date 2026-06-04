@@ -31,6 +31,31 @@ function stopLocationAction(ev: MouseEvent<HTMLButtonElement>) {
   ev.stopPropagation();
 }
 
+function ThumbIcon() {
+  return (
+    <svg className="core-target-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 10v10H4V10h3Z" />
+      <path d="M9 20h7.4c1 0 1.8-.7 2-1.6l1.3-6c.3-1.2-.7-2.4-2-2.4H14l.7-3.4c.2-.9-.3-1.8-1.2-2.2L13 4.2 9 9v11Z" />
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg className="core-target-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m12 3 2.7 5.6 6.2.9-4.5 4.3 1.1 6.2-5.5-2.9L6.5 20l1.1-6.2-4.5-4.3 6.2-.9L12 3Z" />
+    </svg>
+  );
+}
+
+function CommentIcon() {
+  return (
+    <svg className="core-target-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 5h14v10H9l-4 4V5Z" />
+    </svg>
+  );
+}
+
 function senseSummary(sense: CoreFullSense): string {
   const bits: string[] = [];
   if (sense.pos) bits.push(sense.pos);
@@ -204,27 +229,30 @@ function WhereUsedPanel({
             <div className="core-target-where-actions">
               <button
                 type="button"
-                className="core-target-where-action"
+                className="core-target-where-action icon"
                 onClick={stopLocationAction}
                 title="Change curation state"
+                aria-label="Change curation state"
               >
-                {loc.curation_state ?? "state"}
+                <ThumbIcon />
               </button>
               <button
                 type="button"
-                className="core-target-where-action"
+                className="core-target-where-action icon"
                 onClick={stopLocationAction}
                 title="Star this location"
+                aria-label="Star this location"
               >
-                Star
+                <StarIcon />
               </button>
               <button
                 type="button"
-                className="core-target-where-action"
+                className="core-target-where-action icon"
                 onClick={stopLocationAction}
                 title="Comment on this location"
+                aria-label="Comment on this location"
               >
-                Comment
+                <CommentIcon />
               </button>
               {blueskyStatus != null && (
                 <button
