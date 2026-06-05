@@ -2421,6 +2421,13 @@ button {
 .sense-uses-panel {
   font-weight: normal;
 }
+/* The global `* { padding: 0 }` reset removes the marker gutter that browsers
+   normally apply to lists, so multi-digit ordered list numbers get clipped on
+   the left. Restore enough padding for two-digit markers. */
+.core-record-body ol,
+.core-record-body ul {
+  padding-left: 2em;
+}
 .core-target-orth {
   font-weight: 600;
 }
