@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -16,6 +16,7 @@ import type {
   CoreRecordResponse,
 } from "../../api/types";
 import { findTab, useWorkspace, workspace } from "../../state/useWorkspace";
+import { SenseUsesPanel } from "../SenseUses";
 
 const LOCKED_FRONTMATTER_KEYS = new Set(["uuid", "type"]);
 
@@ -57,6 +58,29 @@ const SAME_COLLECTION_RE = new RegExp(
 );
 
 const WIKILINK_SCHEME = "bkk-wikilink:";
+
+// `[N Attributions](#<sense-uuid>)` links in word entries — toggle a uses panel
+// inline rather than navigating away.
+const SENSE_HASH_RE = new RegExp(String.raw`^#(${UUID_RE})$`);
+
+function SenseLink({ uuid, children }: { uuid: string; children: ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      <a
+        href={`#${uuid}`}
+        onClick={(e) => {
+          e.preventDefault();
+          setExpanded((v) => !v);
+        }}
+        style={{ color: "var(--link)" }}
+      >
+        {children}
+      </a>
+      {expanded && <SenseUsesPanel senseUuid={uuid} />}
+    </>
+  );
+}
 
 function parseCoreHref(
   href: string,
@@ -702,6 +726,10 @@ export function CoreRecord({
           urlTransform={passthroughUrlTransform}
           components={{
             a: ({ href, children, ...rest }) => {
+              const senseHash = href ? SENSE_HASH_RE.exec(href) : null;
+              if (senseHash) {
+                return <SenseLink uuid={senseHash[1]}>{children}</SenseLink>;
+              }
               const isWikilink = href?.startsWith(WIKILINK_SCHEME);
               const parsed =
                 !isWikilink && href ? parseCoreHref(href, record.collection) : null;

@@ -2415,6 +2415,12 @@ button {
   opacity: 0.55;
   cursor: default;
 }
+/* When rendered inside word-entry markdown the panel sits inside a `<strong>`
+   wrapping the attributions link — reset the inherited bold so the list reads
+   like the right-panel "Uses" rendering. */
+.sense-uses-panel {
+  font-weight: normal;
+}
 .core-target-orth {
   font-weight: 600;
 }
