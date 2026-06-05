@@ -59,6 +59,27 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def collect_info_report(
+    *,
+    corpus: Path,
+    index_path: Path,
+    catalog_path: Path,
+    rc: dict | None = None,
+    want_bundles: bool = False,
+    prefix: str | None = None,
+) -> dict:
+    """Build the info report dict. Shared by the CLI and the ``/admin/info`` endpoint."""
+    report = {
+        "corpus": _collect_corpus(corpus, prefix=None),
+        "index": _collect_index(index_path, corpus),
+        "catalog": _collect_catalog(catalog_path),
+        "config": _collect_config(rc) if rc is not None else {"files": [], "sections": {}},
+    }
+    if want_bundles or prefix is not None:
+        report["bundles"] = _collect_bundles(corpus, index_path, prefix=prefix)
+    return report
+
+
 def run(argv: list[str] | None = None) -> int:
     rc = load_rc()
     g = rc.get("global", {})
@@ -92,24 +113,14 @@ def run(argv: list[str] | None = None) -> int:
         )
 
     want_bundles = args.bundles or args.prefix is not None
-
-    corpus_data = _collect_corpus(corpus, prefix=None)
-    index_data = _collect_index(index_path, corpus)
-    catalog_data = _collect_catalog(catalog_path)
-    config_data = _collect_config(rc)
-    bundles_data = (
-        _collect_bundles(corpus, index_path, prefix=args.prefix)
-        if want_bundles else None
+    report = collect_info_report(
+        corpus=corpus,
+        index_path=index_path,
+        catalog_path=catalog_path,
+        rc=rc,
+        want_bundles=want_bundles,
+        prefix=args.prefix,
     )
-
-    report = {
-        "corpus": corpus_data,
-        "index": index_data,
-        "catalog": catalog_data,
-        "config": config_data,
-    }
-    if bundles_data is not None:
-        report["bundles"] = bundles_data
 
     if args.json_out:
         print(json.dumps(report, indent=2, default=str))

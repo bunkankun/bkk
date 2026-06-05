@@ -1,4 +1,4 @@
-"""Endpoints under /admin: bearer-token auth + background jobs."""
+"""Endpoints under /admin: session + GitHub-team gating + background jobs."""
 
 from __future__ import annotations
 
@@ -24,53 +24,67 @@ def admin_corpus(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _workspace(login: str = "alice") -> dict:
+    return {
+        "repo": f"{login}/BKK-Workspace",
+        "html_url": f"https://github.com/{login}/BKK-Workspace",
+        "branch": login,
+        "private": True,
+    }
+
+
 def _client(
     corpus: Path,
     *,
-    admin_token: str | None = None,
+    is_admin: bool = True,
+    login_as: str | None = "alice",
     annotations_root: Path | None = None,
+    core_root: Path | None = None,
+    core_index_path: Path | None = None,
 ) -> TestClient:
     config = ServeConfig(
         corpus_root=corpus,
         index_path=corpus / "_corpus.bkkx",
-        admin_token=admin_token,
         annotations_root=annotations_root,
+        core_root=core_root,
+        core_index_path=core_index_path,
     )
-    return TestClient(create_app(config))
+    client = TestClient(create_app(config))
+    if login_as is not None:
+        state = client.app.state.bkk
+        session = state.sessions.create(
+            login=login_as,
+            name=login_as.capitalize(),
+            avatar_url=None,
+            html_url=f"https://github.com/{login_as}",
+            access_token="test-token",
+            workspace=_workspace(login_as),
+            is_admin=is_admin,
+        )
+        client.cookies.set("bkk_session", session.id)
+    return client
 
 
 # ---------- auth ----------
 
 
-def test_admin_open_when_no_token(admin_corpus):
+def test_admin_requires_session(admin_corpus):
+    client = _client(admin_corpus, login_as=None)
+    r = client.post("/admin/validate/ADM0001")
+    assert r.status_code == 401
+    assert r.json()["detail"] == "Login required"
+
+
+def test_admin_forbids_non_admin_session(admin_corpus):
+    client = _client(admin_corpus, is_admin=False)
+    r = client.post("/admin/validate/ADM0001")
+    assert r.status_code == 403
+    assert r.json()["detail"] == "Admin team membership required"
+
+
+def test_admin_allows_admin_session(admin_corpus):
     client = _client(admin_corpus)
     r = client.post("/admin/validate/ADM0001")
-    assert r.status_code == 202
-
-
-def test_admin_unauthorized_without_header(admin_corpus):
-    client = _client(admin_corpus, admin_token="secret")
-    r = client.post("/admin/validate/ADM0001")
-    assert r.status_code == 401
-    assert r.json()["error"] == "admin_unauthorized"
-    assert r.headers.get("www-authenticate") == "Bearer"
-
-
-def test_admin_unauthorized_wrong_token(admin_corpus):
-    client = _client(admin_corpus, admin_token="secret")
-    r = client.post(
-        "/admin/validate/ADM0001",
-        headers={"Authorization": "Bearer nope"},
-    )
-    assert r.status_code == 401
-
-
-def test_admin_authorized_with_correct_token(admin_corpus):
-    client = _client(admin_corpus, admin_token="secret")
-    r = client.post(
-        "/admin/validate/ADM0001",
-        headers={"Authorization": "Bearer secret"},
-    )
     assert r.status_code == 202
 
 
@@ -91,7 +105,6 @@ def test_validate_produces_success_job(admin_corpus):
     assert body["target"] == "ADM0001"
     assert body["started_at"] is not None
     assert body["finished_at"] is not None
-    # Validator emits a JSON report; render_json was loaded back to a dict.
     assert isinstance(body["result"], dict)
 
 
@@ -173,13 +186,11 @@ def test_core_sync_runs_git_and_rebuilds_index(admin_corpus, tmp_path: Path, mon
         encoding="utf-8",
     )
 
-    config = ServeConfig(
-        corpus_root=admin_corpus,
-        index_path=admin_corpus / "_corpus.bkkx",
+    client = _client(
+        admin_corpus,
         core_root=core_root,
         core_index_path=core_root / "_core.bkki",
     )
-    client = TestClient(create_app(config))
 
     runs: list[list[str]] = []
 
@@ -206,7 +217,6 @@ def test_core_sync_runs_git_and_rebuilds_index(admin_corpus, tmp_path: Path, mon
     assert body["kind"] == "core_sync"
     assert body["result"]["pulled_sha"] == "deadbeef"
     assert Path(body["result"]["core_index_path"]).exists()
-    # fetch, merge, rev-parse — three subprocess calls
     assert [r[3] for r in runs] == ["fetch", "merge", "rev-parse"]
 
 
@@ -216,13 +226,11 @@ def test_core_sync_reports_non_ff_merge_failure(admin_corpus, tmp_path: Path, mo
     core_root = tmp_path / "bkk-core"
     core_root.mkdir()
 
-    config = ServeConfig(
-        corpus_root=admin_corpus,
-        index_path=admin_corpus / "_corpus.bkkx",
+    client = _client(
+        admin_corpus,
         core_root=core_root,
         core_index_path=core_root / "_core.bkki",
     )
-    client = TestClient(create_app(config))
 
     class FakeCompleted:
         def __init__(self, args, returncode=0, stdout="", stderr=""):
@@ -252,7 +260,31 @@ def test_jobs_unknown_id(admin_corpus):
     assert r.json()["error"] == "job_not_found"
 
 
-def test_jobs_endpoint_also_auth_protected(admin_corpus):
-    client = _client(admin_corpus, admin_token="secret")
+def test_jobs_endpoint_requires_session(admin_corpus):
+    client = _client(admin_corpus, login_as=None)
     r = client.get("/admin/jobs/anything")
     assert r.status_code == 401
+
+
+# ---------- /admin/info ----------
+
+
+def test_admin_info_returns_health_snapshot(admin_corpus):
+    client = _client(admin_corpus)
+    r = client.get("/admin/info")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["server_version"] == "0.1.0"
+    assert body["corpus"]["bundle_count"] == 1
+    assert body["corpus"]["exists"] is True
+    assert "index" in body
+    assert "catalog" in body
+    assert "config" in body
+
+
+def test_admin_info_requires_admin(admin_corpus):
+    anon = _client(admin_corpus, login_as=None)
+    assert anon.get("/admin/info").status_code == 401
+
+    non_admin = _client(admin_corpus, is_admin=False)
+    assert non_admin.get("/admin/info").status_code == 403

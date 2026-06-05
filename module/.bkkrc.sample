@@ -122,12 +122,23 @@ voice:
 
 # ── Serve defaults ─────────────────────────────────────────────────────────
 # Serve also reads BKK_* environment variables; env vars beat the rc file.
-# CLI flags beat env vars.  admin_token is best kept in ~/.bkkrc (not in a
-# project-local file that might be committed to version control).
+# CLI flags beat env vars.
 serve:
 #   host: 127.0.0.1
 #   port: 8000
-#   admin_token: changeme         # bearer token for /admin/* endpoints
+#   admin_team: bunkankun/bkk-admin
+#                                 # GitHub team (ORG/SLUG) whose members may
+#                                 # access /admin/* endpoints and the admin UI.
+#                                 # Membership is checked once at OAuth callback
+#                                 # and cached on the session.
+#   source_root: /opt/bkk         # git checkout the server runs from. Used by
+#                                 # POST /admin/update (git pull --ff-only,
+#                                 # pip install -e <source_root>/module) and by
+#                                 # POST /admin/restart (SIGTERM, systemd
+#                                 # respawns). Auto-detected from the package
+#                                 # path for editable installs; set explicitly
+#                                 # in production.
+#   source_branch: master         # branch fetched by /admin/update.
 #   upstream_repo: org/repo       # GitHub ORG/REPO surfaced to the SPA on GET /
 #   web_dist: /path/to/dist      # directory containing the built SPA
 #   welcome: /var/lib/bkk/welcome.md

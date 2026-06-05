@@ -45,6 +45,7 @@ export type Activity =
   | "lists"
   | "history"
   | "core"
+  | "admin"
   | "settings";
 export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
@@ -1919,8 +1920,12 @@ export const workspace = {
     notify();
     try {
       const session = await getAuthSession();
+      const isAdmin = session.user?.is_admin ?? false;
+      const activity =
+        state.activity === "admin" && !isAdmin ? "texts" : state.activity;
       state = {
         ...state,
+        activity,
         auth: {
           status: session.authenticated ? "authenticated" : "anonymous",
           error: null,

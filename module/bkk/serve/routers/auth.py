@@ -270,6 +270,29 @@ def _workspace_for_user(state: AppState, token: str, login: str) -> dict[str, An
     }
 
 
+def _is_team_member(token: str, team_path: str, login: str) -> bool:
+    """Return True iff ``login`` is an active member of ``team_path`` (``org/slug``).
+
+    Treats 403/404 as "not a member" (covers both genuine non-membership and the
+    case where the OAuth token lacks ``read:org`` scope or the team is hidden).
+    Re-raises other GitHub errors.
+    """
+    org, _, slug = team_path.partition("/")
+    if not org or not slug:
+        return False
+    try:
+        body = _github_json(
+            "GET",
+            f"/orgs/{org}/teams/{slug}/memberships/{login}",
+            token,
+        )
+    except HTTPException as exc:
+        if _github_status(exc) in (403, 404):
+            return False
+        raise
+    return bool(body) and body.get("state") == "active"
+
+
 def _session_from_request(request: Request) -> UserSession | None:
     return _state(request).sessions.get(request.cookies.get(SESSION_COOKIE))
 
@@ -292,7 +315,7 @@ def github_start(request: Request) -> RedirectResponse:
         {
             "client_id": client_id,
             "redirect_uri": _callback_url(request),
-            "scope": "repo read:user",
+            "scope": "repo read:user read:org",
             "state": oauth_state,
         }
     )
@@ -348,6 +371,7 @@ def github_callback(request: Request, code: str, state: str) -> RedirectResponse
         raise HTTPException(status_code=502, detail="GitHub user payload has no login")
 
     workspace = _workspace_for_user(app_state, access_token, login)
+    is_admin = _is_team_member(access_token, app_state.config.admin_team, login)
     user_session = app_state.sessions.create(
         login=login,
         name=user.get("name") if isinstance(user.get("name"), str) else None,
@@ -359,6 +383,7 @@ def github_callback(request: Request, code: str, state: str) -> RedirectResponse
         html_url=user.get("html_url") if isinstance(user.get("html_url"), str) else None,
         access_token=access_token,
         workspace=workspace,
+        is_admin=is_admin,
     )
 
     response = RedirectResponse("/", status_code=302)

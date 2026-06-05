@@ -46,7 +46,70 @@ def test_auth_session_returns_public_user(client):
     assert body["authenticated"] is True
     assert body["user"]["login"] == "alice"
     assert body["user"]["workspace"]["branch"] == "alice"
+    assert body["user"]["is_admin"] is False
     assert "access_token" not in body["user"]
+
+
+# ---------- _is_team_member ----------
+
+
+def test_is_team_member_active(monkeypatch):
+    calls = []
+
+    def fake_github_json(method, path, token, **kwargs):
+        calls.append((method, path))
+        return {"state": "active", "role": "member"}
+
+    monkeypatch.setattr(auth, "_github_json", fake_github_json)
+    assert auth._is_team_member("tok", "bunkankun/bkk-admin", "alice") is True
+    assert calls == [("GET", "/orgs/bunkankun/teams/bkk-admin/memberships/alice")]
+
+
+def test_is_team_member_pending_is_not_active(monkeypatch):
+    monkeypatch.setattr(
+        auth, "_github_json",
+        lambda method, path, token, **kwargs: {"state": "pending"},
+    )
+    assert auth._is_team_member("tok", "bunkankun/bkk-admin", "alice") is False
+
+
+def test_is_team_member_404_returns_false(monkeypatch):
+    def fake_github_json(method, path, token, **kwargs):
+        raise HTTPException(
+            status_code=502,
+            detail={"github_status": 404, "body": {"message": "Not Found"}},
+        )
+
+    monkeypatch.setattr(auth, "_github_json", fake_github_json)
+    assert auth._is_team_member("tok", "bunkankun/bkk-admin", "alice") is False
+
+
+def test_is_team_member_403_returns_false(monkeypatch):
+    """Missing read:org scope returns 403 from GitHub; we treat as non-member."""
+    def fake_github_json(method, path, token, **kwargs):
+        raise HTTPException(
+            status_code=502,
+            detail={"github_status": 403, "body": {"message": "Forbidden"}},
+        )
+
+    monkeypatch.setattr(auth, "_github_json", fake_github_json)
+    assert auth._is_team_member("tok", "bunkankun/bkk-admin", "alice") is False
+
+
+def test_is_team_member_other_error_raises(monkeypatch):
+    def fake_github_json(method, path, token, **kwargs):
+        raise HTTPException(
+            status_code=502,
+            detail={"github_status": 500, "body": {"message": "boom"}},
+        )
+
+    monkeypatch.setattr(auth, "_github_json", fake_github_json)
+    try:
+        auth._is_team_member("tok", "bunkankun/bkk-admin", "alice")
+    except HTTPException as exc:
+        assert exc.status_code == 502
+    else:
+        raise AssertionError("expected non-403/404 GitHub error to propagate")
 
 
 def test_logout_drops_session_cookie(client):

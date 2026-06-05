@@ -172,6 +172,27 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
     ),
   },
   {
+    id: "admin",
+    label: "Admin",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+        <path
+          d="M8 1.8 2.8 4v4c0 3.2 2.2 5.4 5.2 6.3 3-.9 5.2-3.1 5.2-6.3V4L8 1.8Z"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+        />
+        <path
+          d="m5.7 8 1.7 1.7L10.5 6.5"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "settings",
     label: "Settings",
     icon: (
@@ -190,9 +211,11 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
 
 export function ActivityBar() {
   const activity = useWorkspace((s) => s.activity);
+  const isAdmin = useWorkspace((s) => s.auth.session?.user?.is_admin ?? false);
+  const items = ITEMS.filter((it) => it.id !== "admin" || isAdmin);
   return (
     <div className="act">
-      {ITEMS.map((it) => (
+      {items.map((it) => (
         <button
           key={it.id}
           className={`act-btn${activity === it.id ? " on" : ""}`}

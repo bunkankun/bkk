@@ -3,7 +3,7 @@
 Usage::
 
     bkk-serve --corpus <dir> [--index PATH] [--catalog PATH] [--host H] [--port N]
-              [--admin-token TOKEN] [--reload]
+              [--admin-team ORG/SLUG] [--reload]
               [--upstream-repo ORG/REPO] [--web-dist PATH]
 """
 
@@ -56,9 +56,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "(default: <annotations-root>/_annotations.bkka)")
     p.add_argument("--host", default=None, help="bind address (default: 127.0.0.1)")
     p.add_argument("--port", type=int, default=None, help="port (default: 8000)")
-    p.add_argument("--admin-token", default=None,
-                   help="bearer token required for /admin/* "
-                        "(default: $BKK_ADMIN_TOKEN; if unset, admin is open)")
+    p.add_argument("--admin-team", default=None, dest="admin_team",
+                   help="GitHub team (ORG/SLUG) whose members may access /admin/* "
+                        "(default: $BKK_ADMIN_TEAM, else bunkankun/bkk-admin)")
     p.add_argument("--reload", action="store_true",
                    help="auto-reload on code changes (development only)")
     p.add_argument("--upstream-repo", default=None,
@@ -110,7 +110,7 @@ def run(argv: list[str] | None = None) -> int:
         annotations_index_path=args.annotations_index_path,
         host=args.host,
         port=args.port,
-        admin_token=args.admin_token,
+        admin_team=args.admin_team,
         reload=args.reload or None,
         upstream_repo=args.upstream_repo,
         web_dist=args.web_dist,
@@ -145,8 +145,7 @@ def run(argv: list[str] | None = None) -> int:
             os.environ["BKK_ANNOTATIONS_INDEX_PATH"] = str(config.annotations_index_path)
         os.environ["BKK_HOST"] = config.host
         os.environ["BKK_PORT"] = str(config.port)
-        if config.admin_token is not None:
-            os.environ["BKK_ADMIN_TOKEN"] = config.admin_token
+        os.environ["BKK_ADMIN_TEAM"] = config.admin_team
         if config.upstream_repo is not None:
             os.environ["BKK_UPSTREAM_REPO"] = config.upstream_repo
         if config.web_dist is not None:

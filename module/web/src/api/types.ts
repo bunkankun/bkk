@@ -478,7 +478,81 @@ export interface AuthUser {
   avatar_url?: string | null;
   html_url?: string | null;
   workspace: WorkspaceInfo;
+  is_admin: boolean;
   bluesky?: { handle: string; did: string } | null;
+}
+
+export interface AdminJob {
+  id: string;
+  kind: string;
+  target?: string | null;
+  status: "pending" | "running" | "success" | "error";
+  started_at: number | null;
+  finished_at: number | null;
+  result: unknown;
+  error: string | null;
+}
+
+export interface AdminInfoIndex {
+  path: string;
+  built: boolean;
+  size_bytes?: number;
+  schema_version?: number;
+  schema_current?: number;
+  schema_ok?: boolean;
+  counts?: Record<string, number | null>;
+  voices?: string[];
+  per_bundle_indices_checked?: number;
+  per_bundle_indices_stale?: number;
+  error?: string;
+}
+
+export interface AdminInfoCatalog {
+  path: string;
+  built: boolean;
+  size_bytes?: number;
+  schema_version?: number;
+  schema_current?: number;
+  schema_ok?: boolean;
+  counts?: Record<string, number | null>;
+  date_min?: number;
+  date_max?: number;
+  source_csv?: string;
+  error?: string;
+}
+
+export interface AdminInfoCorpus {
+  path: string;
+  exists: boolean;
+  bundle_count: number;
+  by_section: Record<string, number>;
+}
+
+export interface AdminInfoExtras {
+  path: string;
+  built: boolean;
+}
+
+export interface AdminInfoSource {
+  path: string;
+  branch: string;
+  is_git: boolean;
+}
+
+export interface AdminInfoConfig {
+  files: string[];
+  sections: Record<string, Record<string, string>>;
+}
+
+export interface AdminInfoResponse {
+  server_version: string;
+  corpus: AdminInfoCorpus;
+  index: AdminInfoIndex;
+  catalog: AdminInfoCatalog;
+  core: AdminInfoExtras | null;
+  source: AdminInfoSource | null;
+  annotations: AdminInfoExtras | null;
+  config: AdminInfoConfig;
 }
 
 export interface AuthSession {

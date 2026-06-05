@@ -19,8 +19,8 @@ taking precedence:
 ~/work/project/.bkkrc  ← highest priority  (project-specific overrides)
 ```
 
-This lets you keep `serve.admin_token` in `~/.bkkrc` and override only
-`serve.host` in a project-local file without repeating the token.
+This lets you keep `serve.admin_team` in `~/.bkkrc` and override only
+`serve.host` in a project-local file without repeating it.
 
 ### Precedence
 
@@ -42,7 +42,7 @@ import:
   cache_dir: ~/.cache/bkk/krp
 
 serve:
-  admin_token: changeme      # keep this in ~/.bkkrc, not in a project file
+  admin_team: bunkankun/bkk-admin  # GitHub team for /admin/* access
   port: 9000
 ```
 

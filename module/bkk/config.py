@@ -22,7 +22,8 @@ _PATH_KEYS = frozenset(
      "cache_dir", "tls_source", "web_dist", "index", "catalog",
      "cbeta_root",
      "root", "mapping",
-     "annotations_out", "annotations_root", "annotations_index"}
+     "annotations_out", "annotations_root", "annotations_index",
+     "source_root"}
 )
 
 

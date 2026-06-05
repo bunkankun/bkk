@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -25,8 +23,6 @@ from .routers import translations as translations_router
 from .routers import workspace as workspace_router
 from .state import AppState
 from .static import mount_spa
-
-log = logging.getLogger("bkk.serve")
 
 
 def create_app(config: ServeConfig) -> FastAPI:
@@ -148,12 +144,6 @@ def create_app(config: ServeConfig) -> FastAPI:
             "docs": "/docs",
             "openapi": "/openapi.json",
         }
-
-    if config.admin_token is None:
-        log.warning(
-            "/admin/* endpoints are unauthenticated; "
-            "set BKK_ADMIN_TOKEN to require a bearer token"
-        )
 
     if config.web_dist is not None:
         mount_spa(app, config.web_dist)

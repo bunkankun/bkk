@@ -21,7 +21,7 @@ class ServeConfig:
     annotations_index_path: Path | None = None
     host: str = "127.0.0.1"
     port: int = 8000
-    admin_token: str | None = None
+    admin_team: str = "bunkankun/bkk-admin"
     reload: bool = False
     upstream_repo: str | None = None
     web_dist: Path | None = None
@@ -32,6 +32,8 @@ class ServeConfig:
     github_callback_url: str | None = None
     workspace_template_repo: str = "bunkankun/BKK-Workspace"
     workspace_repo_name: str = "BKK-Workspace"
+    source_root: Path | None = None
+    source_branch: str = "master"
 
     def __post_init__(self) -> None:
         if self.catalog_path is None:
@@ -176,8 +178,12 @@ class ServeConfig:
         env_port = os.environ.get("BKK_PORT")
         port = int(env_port) if env_port is not None else int(rc.get("port", 8000))
 
-        env_token = os.environ.get("BKK_ADMIN_TOKEN")
-        admin_token = env_token if env_token is not None else rc.get("admin_token")
+        env_admin_team = os.environ.get("BKK_ADMIN_TEAM")
+        admin_team = (
+            env_admin_team
+            if env_admin_team is not None
+            else rc.get("admin_team", "bunkankun/bkk-admin")
+        )
 
         env_repo = os.environ.get("BKK_UPSTREAM_REPO")
         upstream_repo = env_repo if env_repo is not None else rc.get("upstream_repo")
@@ -210,6 +216,28 @@ class ServeConfig:
             else rc.get("workspace_template_repo", "bunkankun/BKK-Workspace")
         )
 
+        env_source_root = os.environ.get("BKK_SOURCE_ROOT")
+        rc_source_root = rc.get("source_root")
+        if env_source_root:
+            source_root: Path | None = Path(env_source_root).resolve()
+        elif rc_source_root:
+            source_root = Path(rc_source_root).resolve()
+        else:
+            # Auto-detect: <bkk-package>/__init__.py → parents[2] is repo root.
+            try:
+                import bkk as _bkk_pkg
+                candidate = Path(_bkk_pkg.__file__).resolve().parents[2]
+                source_root = candidate if (candidate / ".git").exists() else None
+            except Exception:
+                source_root = None
+
+        env_source_branch = os.environ.get("BKK_SOURCE_BRANCH")
+        source_branch = (
+            env_source_branch
+            if env_source_branch is not None
+            else rc.get("source_branch", "master")
+        )
+
         env_workspace_repo_name = os.environ.get("BKK_WORKSPACE_REPO_NAME")
         workspace_repo_name = (
             env_workspace_repo_name
@@ -240,7 +268,7 @@ class ServeConfig:
             annotations_index_path=annotations_index,
             host=host,
             port=port,
-            admin_token=admin_token,
+            admin_team=admin_team,
             reload=False,
             upstream_repo=upstream_repo,
             web_dist=web_dist,
@@ -251,6 +279,8 @@ class ServeConfig:
             github_callback_url=github_callback_url,
             workspace_template_repo=workspace_template_repo,
             workspace_repo_name=workspace_repo_name,
+            source_root=source_root,
+            source_branch=source_branch,
         )
 
     def merge_cli(
@@ -268,7 +298,7 @@ class ServeConfig:
         annotations_index_path: Path | str | None = None,
         host: str | None = None,
         port: int | None = None,
-        admin_token: str | None = None,
+        admin_team: str | None = None,
         reload: bool | None = None,
         upstream_repo: str | None = None,
         web_dist: Path | str | None = None,
@@ -278,6 +308,8 @@ class ServeConfig:
         github_callback_url: str | None = None,
         workspace_template_repo: str | None = None,
         workspace_repo_name: str | None = None,
+        source_root: Path | str | None = None,
+        source_branch: str | None = None,
     ) -> "ServeConfig":
         """Return a copy with any non-``None`` argument overriding the field."""
         updates: dict = {}
@@ -305,8 +337,8 @@ class ServeConfig:
             updates["host"] = host
         if port is not None:
             updates["port"] = port
-        if admin_token is not None:
-            updates["admin_token"] = admin_token
+        if admin_team is not None:
+            updates["admin_team"] = admin_team
         if reload is not None:
             updates["reload"] = reload
         if upstream_repo is not None:
@@ -325,4 +357,8 @@ class ServeConfig:
             updates["workspace_template_repo"] = workspace_template_repo
         if workspace_repo_name is not None:
             updates["workspace_repo_name"] = workspace_repo_name
+        if source_root is not None:
+            updates["source_root"] = Path(source_root).resolve()
+        if source_branch is not None:
+            updates["source_branch"] = source_branch
         return replace(self, **updates)

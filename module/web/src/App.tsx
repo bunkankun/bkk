@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { getServerInfo } from "./api/client";
 import { ActivityBar } from "./components/ActivityBar";
+import { Admin } from "./components/LeftPanel/Admin";
 import { Catalog } from "./components/LeftPanel/Catalog";
 import { Core } from "./components/LeftPanel/Core";
 import { History } from "./components/LeftPanel/History";
@@ -68,6 +69,8 @@ function LeftPanel() {
       ? "History"
     : activity === "settings"
       ? "Settings"
+    : activity === "admin"
+      ? "Admin"
     : activity === "core"
       ? "CORE"
     : activity === "catalog"
@@ -89,6 +92,8 @@ function LeftPanel() {
           <History />
         ) : activity === "settings" ? (
           <Settings />
+        ) : activity === "admin" ? (
+          <Admin />
         ) : activity === "core" ? (
           <Core />
         ) : activity === "catalog" ? (

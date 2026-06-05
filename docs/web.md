@@ -46,7 +46,9 @@ Open <http://127.0.0.1:8000>. FastAPI serves the built SPA at `/` and the API at
 | `--index PATH`            | `BKK_INDEX_PATH`      | merged `.bkkx`; default `<corpus>/_corpus.bkkx` |
 | `--catalog PATH`          | `BKK_CATALOG_PATH`    | catalog `.bkkc`; default `<corpus>/_catalog.bkkc` |
 | `--host` / `--port`       | `BKK_HOST` / `BKK_PORT` | default `127.0.0.1:8000` |
-| `--admin-token TOKEN`     | `BKK_ADMIN_TOKEN`     | bearer required for `/admin/*`; if unset, admin is open |
+| `--admin-team ORG/SLUG`   | `BKK_ADMIN_TEAM`      | GitHub team for `/admin/*` access (default `bunkankun/bkk-admin`); members get the Admin activity in the SPA |
+| —                         | `BKK_SOURCE_ROOT`     | git checkout used by `POST /admin/update` and `POST /admin/restart`; auto-detected for editable installs |
+| —                         | `BKK_SOURCE_BRANCH`   | branch fetched by `/admin/update` (default `master`) |
 | `--reload`                | —                     | dev only; enables auto-reload + CORS for `:5173` |
 | `--upstream-repo ORG/REPO`| `BKK_UPSTREAM_REPO`   | echoed at `GET /server-info`; the SPA reads it once on startup |
 | `--web-dist PATH`         | `BKK_WEB_DIST`        | directory containing the built SPA; mounted at `/` |
@@ -90,6 +92,21 @@ all: search only KR2, KR3
 - The left activity bar has separate Catalog and Timeline entries; Timeline browses calendar-century buckets
 
 What does NOT work yet (deferred to later slices): in-browser text editing/PRs, translation mode, AI/Dharma panels, the cross-text annotation dictionary, pane splits.
+
+## Admin activity
+
+The shield icon in the Activity Bar is visible only to GitHub users who are active members of the team named in `BKK_ADMIN_TEAM` (default `bunkankun/bkk-admin`). Membership is checked once at OAuth callback and cached on the session for 30 days; revoking team membership only takes effect after the session expires or the user logs out. Non-members never see the icon, and `/admin/*` returns 403 if they probe by URL.
+
+The panel has two tabs:
+
+- **Dashboard** — read-only health snapshot from `GET /admin/info`: server version, corpus path + bundle count by section, index/catalog schema version and counts, core/annotations index status, and the configured `source_root` + branch. Stale per-bundle indices show as an amber banner at the top.
+- **Operations** — long-running maintenance jobs. Each button POSTs to its endpoint, polls `GET /admin/jobs/{id}` every 1.5s, and shows the status badge (`running`/`success`/`error`).
+  - *Corpus indexes*: rebuild merged corpus index, catalog index, translation search, annotation location index
+  - *Per-bundle*: reindex / validate a single bundle by textid
+  - *bkk-core*: fast-forward the local clone and rebuild its index
+  - *Server*: `Update (git pull + pip install)` runs `git fetch && git merge --ff-only origin/<source_branch>` in `source_root`, then `pip install -e <source_root>/module`; captures pip stdout/stderr into the job result. `Restart server` sends SIGTERM to the process — only useful under a supervisor (systemd) that respawns it. The UI then polls `/server-info` and shows `online` once the server is reachable again.
+
+Update and Restart are intentionally separate clicks so you can read the update job's pip output before bouncing the process. There is no automatic rollback — if the new code crashes on boot, systemd will keep restarting it and shell access is required to `git reset`.
 
 ## Search
 

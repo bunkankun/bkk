@@ -117,6 +117,7 @@ class UserSession:
     html_url: str | None
     access_token: str
     workspace: dict[str, Any]
+    is_admin: bool = False
     bluesky: BlueskySession | None = None
     created_at: float = field(default_factory=time.time)
 
@@ -127,6 +128,7 @@ class UserSession:
             "avatar_url": self.avatar_url,
             "html_url": self.html_url,
             "workspace": self.workspace,
+            "is_admin": self.is_admin,
             "bluesky": (
                 {"did": self.bluesky.did, "handle": self.bluesky.handle}
                 if self.bluesky is not None
@@ -151,6 +153,7 @@ class SessionRegistry:
         html_url: str | None,
         access_token: str,
         workspace: dict[str, Any],
+        is_admin: bool = False,
     ) -> UserSession:
         session = UserSession(
             id=uuid.uuid4().hex,
@@ -160,6 +163,7 @@ class SessionRegistry:
             html_url=html_url,
             access_token=access_token,
             workspace=workspace,
+            is_admin=is_admin,
         )
         with self._lock:
             self._sessions[session.id] = session
@@ -243,6 +247,14 @@ class AppState:
     @property
     def core_index_path(self) -> Path | None:
         return self.config.core_index_path
+
+    @property
+    def source_root(self) -> Path | None:
+        return self.config.source_root
+
+    @property
+    def source_branch(self) -> str:
+        return self.config.source_branch
 
     @property
     def cache(self) -> CorpusCache:

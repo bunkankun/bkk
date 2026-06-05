@@ -54,16 +54,23 @@ Type=simple
 User=bkk
 Group=bkk
 WorkingDirectory=/var/lib/bkk
-Environment=BKK_ADMIN_TOKEN=replace-with-a-long-random-string
-# Optional, if you use the GitHub OAuth flow:
-# Environment=BKK_GITHUB_CLIENT_ID=...
-# Environment=BKK_GITHUB_CLIENT_SECRET=...
-# Environment=BKK_GITHUB_CALLBACK_URL=https://bkk.example.org/auth/github/callback
+# Required for /admin/* and the admin web UI:
+Environment=BKK_GITHUB_CLIENT_ID=...
+Environment=BKK_GITHUB_CLIENT_SECRET=...
+Environment=BKK_GITHUB_CALLBACK_URL=https://bkk.example.org/auth/github/callback
+# Override the default admin team (bunkankun/bkk-admin) if needed:
+# Environment=BKK_ADMIN_TEAM=your-org/your-team
+# Required for the in-UI "Update" + "Restart server" buttons:
+Environment=BKK_SOURCE_ROOT=/path/to/bkk
+# Environment=BKK_SOURCE_BRANCH=master
 ExecStart=/var/lib/bkk/venv/bin/bkk-serve \
     --host 127.0.0.1 --port 8000 \
     --web-dist /var/lib/bkk/web-dist
-Restart=on-failure
+Restart=always
 RestartSec=3
+# Restart=always (not on-failure) so the in-UI "Restart server" button
+# respawns the process on its clean SIGTERM exit. Use `systemctl stop bkk`
+# to take the service offline without it bouncing back.
 # Hardening
 NoNewPrivileges=true
 PrivateTmp=true
@@ -149,8 +156,19 @@ curl -sS https://bkk.example.org/healthz      # through Apache
   SPA mount keeps Apache config trivial and avoids drift when routers are
   added. If you later want Apache to serve static assets for speed, add a
   `<Location /assets/>` block with `ProxyPass !` + `DocumentRoot`/`Alias`.
-- **Admin token**: set `BKK_ADMIN_TOKEN` in the unit (as shown) — without it
-  `/admin/*` is open.
+- **Admin access**: `/admin/*` and the admin UI require GitHub OAuth login plus
+  active membership of the team in `BKK_ADMIN_TEAM` (default
+  `bunkankun/bkk-admin`). The OAuth app must request the `read:org` scope.
+  Membership is checked at login and cached for the session lifetime
+  (30 days); removing a user from the team only takes effect once their
+  session expires or they log out.
+- **In-UI update/restart**: the admin panel exposes `Update (git pull + pip
+  install)` and `Restart server` buttons (see `docs/web.md`). For these to
+  work, set `BKK_SOURCE_ROOT` (or `serve.source_root` in `.bkkrc`) to the git
+  checkout that the bkk venv was editable-installed from. The service user
+  needs write access to that path. Restart sends SIGTERM and relies on
+  systemd's `Restart=on-failure` to respawn — make sure that line is in the
+  unit, or restart will simply stop the server.
 - **OAuth callback**: if you use GitHub login, the callback URL must match
   what's registered with the GitHub app *and* what Apache exposes
   (`https://bkk.example.org/auth/github/callback`).
@@ -160,7 +178,23 @@ curl -sS https://bkk.example.org/healthz      # through Apache
 
 ## 7. Updating
 
-### Python server
+### Python server — from the admin UI
+
+Once `BKK_SOURCE_ROOT` is set and the service user owns the checkout, an admin
+team member can update without SSH:
+
+1. Open the Admin activity → Operations tab → Server group.
+2. Click *Update (git pull + pip install)* and wait for the `success` badge.
+   The job runs `git fetch && git merge --ff-only origin/<branch>` followed by
+   `pip install -e <source_root>/module`; pip stdout/stderr is captured.
+3. Click *Restart server*. The UI sends SIGTERM, polls `/server-info`, and
+   shows `online` once systemd has respawned the process.
+
+This is intentionally a two-click workflow: read the update job's output
+before bouncing. There is no rollback button — if the new build crashes on
+boot, systemd will loop and shell access is required to `git reset`.
+
+### Python server — from the shell
 
 ```bash
 # 1. Pull latest code (as your normal user, wherever the repo lives)

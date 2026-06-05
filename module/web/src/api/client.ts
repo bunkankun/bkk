@@ -8,6 +8,8 @@
 // (not `GET /`) because in prod the backend serves the SPA index at `/`.
 
 import type {
+  AdminInfoResponse,
+  AdminJob,
   Annotation,
   AnnotationPostRequest,
   AnnotationPostResponse,
@@ -111,6 +113,58 @@ export function startGithubLogin(): void {
 
 export async function logout(): Promise<void> {
   await fetchJson<{ ok: boolean }>(`${apiBase}/auth/logout`, { method: "POST" });
+}
+
+// ---------- admin ----------
+
+export async function getAdminInfo(): Promise<AdminInfoResponse> {
+  return fetchJson<AdminInfoResponse>(`${apiBase}/admin/info`);
+}
+
+export async function getAdminJob(id: string): Promise<AdminJob> {
+  return fetchJson<AdminJob>(`${apiBase}/admin/jobs/${encodeURIComponent(id)}`);
+}
+
+export async function postAdminIndex(): Promise<AdminJob> {
+  return fetchJson<AdminJob>(`${apiBase}/admin/index`, { method: "POST" });
+}
+
+export async function postAdminIndexOne(textid: string): Promise<AdminJob> {
+  return fetchJson<AdminJob>(
+    `${apiBase}/admin/index/${encodeURIComponent(textid)}`,
+    { method: "POST" },
+  );
+}
+
+export async function postAdminCatalog(): Promise<AdminJob> {
+  return fetchJson<AdminJob>(`${apiBase}/admin/catalog`, { method: "POST" });
+}
+
+export async function postAdminTranslations(): Promise<AdminJob> {
+  return fetchJson<AdminJob>(`${apiBase}/admin/translations`, { method: "POST" });
+}
+
+export async function postAdminAnnotations(): Promise<AdminJob> {
+  return fetchJson<AdminJob>(`${apiBase}/admin/annotations`, { method: "POST" });
+}
+
+export async function postAdminValidate(textid: string): Promise<AdminJob> {
+  return fetchJson<AdminJob>(
+    `${apiBase}/admin/validate/${encodeURIComponent(textid)}`,
+    { method: "POST" },
+  );
+}
+
+export async function postAdminCoreSync(): Promise<AdminJob> {
+  return fetchJson<AdminJob>(`${apiBase}/admin/core/sync`, { method: "POST" });
+}
+
+export async function postAdminUpdate(): Promise<AdminJob> {
+  return fetchJson<AdminJob>(`${apiBase}/admin/update`, { method: "POST" });
+}
+
+export async function postAdminRestart(): Promise<{ status: string }> {
+  return fetchJson<{ status: string }>(`${apiBase}/admin/restart`, { method: "POST" });
 }
 
 function workspacePath(path: string): string {
