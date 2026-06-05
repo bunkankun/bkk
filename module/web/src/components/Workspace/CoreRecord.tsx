@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  ApiError,
   getCoreBacklinks,
   getCoreConceptWords,
   getCoreRecord,
   getCoreSuperEntryByOrth,
+  openCoreRecordPr,
+  patchCoreRecord,
 } from "../../api/client";
 import type {
   CoreBacklinksResponse,
@@ -13,6 +16,19 @@ import type {
   CoreRecordResponse,
 } from "../../api/types";
 import { findTab, useWorkspace, workspace } from "../../state/useWorkspace";
+
+const LOCKED_FRONTMATTER_KEYS = new Set(["uuid", "type"]);
+
+interface EditDraft {
+  branch: string;
+  parent_sha: string;
+  commit_sha: string;
+  fork_repo: string;
+  compare_url: string;
+  pr_url: string | null;
+  frontmatter: Record<string, unknown>;
+  body_markdown: string;
+}
 
 const KNOWN_COLLECTIONS = new Set([
   "concepts",
@@ -111,6 +127,15 @@ export function CoreRecord({
   const [showFrontmatter, setShowFrontmatter] = useState(false);
   const [conceptWords, setConceptWords] = useState<CoreConceptWord[] | null>(null);
   const [backlinks, setBacklinks] = useState<CoreBacklinksResponse | null>(null);
+  const [draft, setDraft] = useState<EditDraft | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editFm, setEditFm] = useState<Array<[string, string]>>([]);
+  const [editBody, setEditBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editConflict, setEditConflict] = useState(false);
+  const [openingPr, setOpeningPr] = useState(false);
+  const authStatus = useWorkspace((s) => s.auth.status);
   const historyLen = useWorkspace((s) => {
     const tab = findTab(s.pane, paneId, tabId);
     return tab?.type === "core-record" ? tab.history?.length ?? 0 : 0;
@@ -119,6 +144,10 @@ export function CoreRecord({
   useEffect(() => {
     let cancelled = false;
     setState({ status: "loading" });
+    setDraft(null);
+    setEditing(false);
+    setEditError(null);
+    setEditConflict(false);
     getCoreRecord(collection, uuid)
       .then((record) => {
         if (!cancelled) setState({ status: "ok", record });
@@ -170,19 +199,27 @@ export function CoreRecord({
     };
   }, [collection, uuid]);
 
+  const displayFrontmatter = useMemo(() => {
+    if (draft) return draft.frontmatter;
+    return state.status === "ok" ? state.record.frontmatter : {};
+  }, [state, draft]);
+
+  const displayBody = useMemo(() => {
+    if (draft) return draft.body_markdown;
+    return state.status === "ok" ? state.record.body_markdown : "";
+  }, [state, draft]);
+
   const frontmatterText = useMemo(() => {
-    if (state.status !== "ok") return "";
     try {
-      return JSON.stringify(state.record.frontmatter, null, 2);
+      return JSON.stringify(displayFrontmatter, null, 2);
     } catch {
       return "";
     }
-  }, [state]);
+  }, [displayFrontmatter]);
 
   const processedBody = useMemo(() => {
-    if (state.status !== "ok") return "";
-    return preprocessWikilinks(state.record.body_markdown);
-  }, [state]);
+    return preprocessWikilinks(displayBody);
+  }, [displayBody]);
 
   if (state.status === "loading") {
     return <div className="empty-pane">Loading core record…</div>;
@@ -195,6 +232,114 @@ export function CoreRecord({
 
   const replaceWithCore = (nextCollection: string, nextUuid: string) => {
     workspace.replaceCoreRecord(paneId, tabId, nextCollection, nextUuid);
+  };
+
+  const startEdit = () => {
+    const fm = displayFrontmatter;
+    const entries: Array<[string, string]> = [];
+    for (const [k, v] of Object.entries(fm)) {
+      if (LOCKED_FRONTMATTER_KEYS.has(k)) continue;
+      let s: string;
+      if (typeof v === "string") s = v;
+      else if (v == null) s = "";
+      else s = JSON.stringify(v);
+      entries.push([k, s]);
+    }
+    setEditFm(entries);
+    setEditBody(displayBody);
+    setEditError(null);
+    setEditConflict(false);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditError(null);
+  };
+
+  const saveEdit = async () => {
+    if (state.status !== "ok") return;
+    const fm: Record<string, unknown> = {};
+    // Preserve locked fields from the original record so the PATCH includes
+    // every existing key.
+    for (const k of ["uuid", "type"]) {
+      const v = (displayFrontmatter as Record<string, unknown>)[k];
+      if (v !== undefined) fm[k] = v;
+    }
+    for (const [k, raw] of editFm) {
+      const original = (displayFrontmatter as Record<string, unknown>)[k];
+      if (typeof original === "string" || original == null) {
+        fm[k] = raw;
+      } else {
+        try {
+          fm[k] = JSON.parse(raw);
+        } catch (e) {
+          setEditError(`field ${k}: invalid JSON (${String(e)})`);
+          return;
+        }
+      }
+    }
+    setSaving(true);
+    setEditError(null);
+    setEditConflict(false);
+    try {
+      const resp = await patchCoreRecord(collection, uuid, {
+        frontmatter: fm,
+        body: editBody,
+        parent_sha: draft?.parent_sha,
+        branch: draft?.branch,
+      });
+      setDraft({
+        branch: resp.branch,
+        parent_sha: resp.parent_sha,
+        commit_sha: resp.commit_sha,
+        fork_repo: resp.fork_repo,
+        compare_url: resp.compare_url,
+        pr_url: resp.pr_url,
+        frontmatter: resp.frontmatter,
+        body_markdown: resp.body_markdown,
+      });
+      setEditing(false);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setEditConflict(true);
+        setEditError(
+          "This record changed upstream since you started editing. Discard your draft and reload to start over.",
+        );
+      } else {
+        setEditError(String(e));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const discardDraft = () => {
+    setDraft(null);
+    setEditing(false);
+    setEditError(null);
+    setEditConflict(false);
+    // re-fetch upstream
+    setState({ status: "loading" });
+    getCoreRecord(collection, uuid)
+      .then((record) => setState({ status: "ok", record }))
+      .catch((e) => setState({ status: "error", error: String(e) }));
+  };
+
+  const openPr = async () => {
+    if (!draft) return;
+    setOpeningPr(true);
+    setEditError(null);
+    try {
+      const resp = await openCoreRecordPr(collection, uuid, {
+        branch: draft.branch,
+      });
+      setDraft({ ...draft, pr_url: resp.pr_url });
+    } catch (e) {
+      setEditError(String(e));
+    } finally {
+      setOpeningPr(false);
+    }
   };
 
   const resolveWikilink = (orth: string) => {
@@ -262,10 +407,103 @@ export function CoreRecord({
         <h2 style={{ fontSize: 16, margin: 0, color: "var(--t1)" }}>
           {record.display_label}
         </h2>
+        {authStatus === "authenticated" && !editing && (
+          <button
+            type="button"
+            onClick={startEdit}
+            title="Edit this record on your GitHub fork"
+            style={{
+              fontSize: 11,
+              padding: "2px 8px",
+              background: "var(--bg-1)",
+              color: "var(--t1)",
+              border: "1px solid var(--bd)",
+              borderRadius: 3,
+              cursor: "pointer",
+              marginLeft: "auto",
+            }}
+          >
+            Edit
+          </button>
+        )}
       </div>
       <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 12 }}>
         {record.collection} · {record.uuid}
       </div>
+
+      {draft && (
+        <div
+          style={{
+            fontSize: 11,
+            padding: "6px 10px",
+            marginBottom: 12,
+            background: "var(--bg-1)",
+            border: "1px solid var(--bd)",
+            borderRadius: 3,
+            color: "var(--t1)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
+          <span>
+            Viewing your unmerged edit on{" "}
+            <a
+              href={draft.compare_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--link)" }}
+            >
+              {draft.branch}
+            </a>{" "}
+            (commit <code>{draft.commit_sha.slice(0, 7)}</code>).
+          </span>
+          {draft.pr_url ? (
+            <a
+              href={draft.pr_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--link)" }}
+            >
+              View PR ↗
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={openPr}
+              disabled={openingPr}
+              style={{
+                fontSize: 11,
+                padding: "1px 6px",
+                background: "var(--bg-2)",
+                color: "var(--t1)",
+                border: "1px solid var(--bd)",
+                borderRadius: 3,
+                cursor: openingPr ? "default" : "pointer",
+              }}
+            >
+              {openingPr ? "Opening…" : "Open PR"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={discardDraft}
+            title="Discard local draft and reload upstream"
+            style={{
+              fontSize: 11,
+              padding: "1px 6px",
+              background: "var(--bg-2)",
+              color: "var(--t1)",
+              border: "1px solid var(--bd)",
+              borderRadius: 3,
+              cursor: "pointer",
+            }}
+          >
+            Reset to upstream
+          </button>
+        </div>
+      )}
 
       <details
         open={showFrontmatter}
@@ -329,6 +567,134 @@ export function CoreRecord({
         record.collection !== "words" && (
           <BacklinksSection backlinks={backlinks} onOpen={replaceWithCore} />
         )}
+
+      {editing && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveEdit();
+          }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            marginBottom: 16,
+            padding: 10,
+            border: "1px solid var(--bd)",
+            borderRadius: 3,
+            background: "var(--bg-1)",
+          }}
+        >
+          <div style={{ fontSize: 11, color: "var(--t2)" }}>Frontmatter</div>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 8px" }}>
+            {["uuid", "type"].map((k) => {
+              const v = (displayFrontmatter as Record<string, unknown>)[k];
+              if (v === undefined) return null;
+              return (
+                <div key={k} style={{ display: "contents" }}>
+                  <label style={{ fontSize: 11, color: "var(--t3)" }}>{k}</label>
+                  <code style={{ fontSize: 11, color: "var(--t3)" }}>{String(v)}</code>
+                </div>
+              );
+            })}
+            {editFm.map(([k, v], idx) => (
+              <div key={k} style={{ display: "contents" }}>
+                <label style={{ fontSize: 11, color: "var(--t2)" }} htmlFor={`fm-${k}`}>
+                  {k}
+                </label>
+                <input
+                  id={`fm-${k}`}
+                  type="text"
+                  value={v}
+                  onChange={(e) => {
+                    const next = editFm.slice();
+                    next[idx] = [k, e.target.value];
+                    setEditFm(next);
+                  }}
+                  style={{
+                    fontSize: 12,
+                    padding: "2px 6px",
+                    background: "var(--bg-0)",
+                    color: "var(--t1)",
+                    border: "1px solid var(--bd)",
+                    borderRadius: 3,
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--t2)" }}>Body</div>
+          <textarea
+            value={editBody}
+            onChange={(e) => setEditBody(e.target.value)}
+            rows={20}
+            style={{
+              fontFamily: "monospace",
+              fontSize: 12,
+              padding: 6,
+              background: "var(--bg-0)",
+              color: "var(--t1)",
+              border: "1px solid var(--bd)",
+              borderRadius: 3,
+              resize: "vertical",
+            }}
+          />
+          {editError && (
+            <div style={{ fontSize: 11, color: "var(--t1)", background: "var(--err)", padding: "4px 8px", borderRadius: 3 }}>
+              {editError}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            {editConflict && (
+              <button
+                type="button"
+                onClick={discardDraft}
+                style={{
+                  fontSize: 11,
+                  padding: "3px 10px",
+                  background: "var(--bg-2)",
+                  color: "var(--t1)",
+                  border: "1px solid var(--bd)",
+                  borderRadius: 3,
+                  cursor: "pointer",
+                }}
+              >
+                Reload from upstream
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={cancelEdit}
+              style={{
+                fontSize: 11,
+                padding: "3px 10px",
+                background: "var(--bg-2)",
+                color: "var(--t1)",
+                border: "1px solid var(--bd)",
+                borderRadius: 3,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              style={{
+                fontSize: 11,
+                padding: "3px 10px",
+                background: "var(--bg-2)",
+                color: "var(--t1)",
+                border: "1px solid var(--bd)",
+                borderRadius: 3,
+                cursor: saving ? "default" : "pointer",
+              }}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="core-record-body" style={{ fontSize: 13, lineHeight: 1.55 }}>
         <ReactMarkdown

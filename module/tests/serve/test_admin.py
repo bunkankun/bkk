@@ -156,6 +156,95 @@ def test_admin_validate_unknown_textid(admin_corpus):
     assert r.json()["error"] == "bundle_not_found"
 
 
+def test_core_sync_requires_core_root(admin_corpus):
+    client = _client(admin_corpus)
+    r = client.post("/admin/core/sync")
+    assert r.status_code == 400
+    assert r.json()["error"] == "core_root_missing"
+
+
+def test_core_sync_runs_git_and_rebuilds_index(admin_corpus, tmp_path: Path, monkeypatch):
+    import subprocess
+
+    core_root = tmp_path / "bkk-core"
+    (core_root / "concepts" / "0").mkdir(parents=True)
+    (core_root / "concepts" / "0" / "abc.md").write_text(
+        "---\nuuid: 00000000-0000-0000-0000-00000000abcd\ntype: concept\nconcept: X\n---\nbody\n",
+        encoding="utf-8",
+    )
+
+    config = ServeConfig(
+        corpus_root=admin_corpus,
+        index_path=admin_corpus / "_corpus.bkkx",
+        core_root=core_root,
+        core_index_path=core_root / "_core.bkki",
+    )
+    client = TestClient(create_app(config))
+
+    runs: list[list[str]] = []
+
+    class FakeCompleted:
+        def __init__(self, args, returncode=0, stdout="", stderr=""):
+            self.args = args
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_run(args, **kwargs):
+        runs.append(args)
+        if args[3] == "rev-parse":
+            return FakeCompleted(args, stdout="deadbeef\n")
+        return FakeCompleted(args)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    r = client.post("/admin/core/sync")
+    assert r.status_code == 202
+    job_id = r.json()["id"]
+    body = client.get(f"/admin/jobs/{job_id}").json()
+    assert body["status"] == "success", body
+    assert body["kind"] == "core_sync"
+    assert body["result"]["pulled_sha"] == "deadbeef"
+    assert Path(body["result"]["core_index_path"]).exists()
+    # fetch, merge, rev-parse — three subprocess calls
+    assert [r[3] for r in runs] == ["fetch", "merge", "rev-parse"]
+
+
+def test_core_sync_reports_non_ff_merge_failure(admin_corpus, tmp_path: Path, monkeypatch):
+    import subprocess
+
+    core_root = tmp_path / "bkk-core"
+    core_root.mkdir()
+
+    config = ServeConfig(
+        corpus_root=admin_corpus,
+        index_path=admin_corpus / "_corpus.bkkx",
+        core_root=core_root,
+        core_index_path=core_root / "_core.bkki",
+    )
+    client = TestClient(create_app(config))
+
+    class FakeCompleted:
+        def __init__(self, args, returncode=0, stdout="", stderr=""):
+            self.args = args
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_run(args, **kwargs):
+        if args[3] == "merge":
+            return FakeCompleted(args, returncode=1, stderr="not fast-forward")
+        return FakeCompleted(args)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    r = client.post("/admin/core/sync")
+    job_id = r.json()["id"]
+    body = client.get(f"/admin/jobs/{job_id}").json()
+    assert body["status"] == "error"
+    assert "not fast-forward" in body["error"]
+
+
 def test_jobs_unknown_id(admin_corpus):
     client = _client(admin_corpus)
     r = client.get("/admin/jobs/no-such-job")

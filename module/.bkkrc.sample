@@ -8,8 +8,8 @@
 # Precedence (lowest → highest): .bkkrc < env vars < CLI flags
 #
 # Supported sections: global, import, cbeta, export, index, validate, serve,
-# repair, voice, recipe, info. Unknown section names cause bkk to exit
-# with an error.
+# repair, voice, recipe, info, annotations, core. Unknown section names
+# cause bkk to exit with an error.
 #
 # Path values are resolved relative to the file that defines them.
 # ~ is expanded.  Relative paths without ~ are made absolute from the
@@ -167,3 +167,21 @@ annotations:
 #                                # for the `bkk annotations` and `bkk index
 #                                # annotations` subcommands only (e.g. harvest into
 #                                # a staging dir before promoting it).
+
+# ── Core knowledge layer ───────────────────────────────────────────────────
+# Wires the bkk-core checkout into both the serve-time browser at /core/*
+# and the inline editor (PATCH /core/{collection}/{uuid}). When
+# upstream_repo is set, logged-in users can edit a record from the SPA:
+# the change lands as a commit on their GitHub fork, on a per-edit
+# branch, with an opt-in "Open PR" against upstream.
+core:
+#   root: /data/bkk-core           # local clone of bunkankun/bkk-core
+#                                  # → enables /core/* read endpoints
+#                                  # → target of `bkk core sync`
+#   index: /data/bkk-core/_core.bkki
+#                                  # override default (<root>/_core.bkki)
+#   upstream_repo: bunkankun/bkk-core
+#                                  # ORG/REPO to fork from and open PRs against;
+#                                  # without it the PATCH endpoint returns 503
+#   pr_base: master                # upstream branch that edit PRs target
+#                                  # (also the branch `bkk core sync` ff-merges)

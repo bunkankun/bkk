@@ -555,6 +555,37 @@ export interface CoreSuperEntryByOrth {
   orth: string;
 }
 
+export interface CoreEditRequest {
+  frontmatter: Record<string, unknown>;
+  body: string;
+  parent_sha?: string;
+  branch?: string;
+  message?: string;
+}
+
+export interface CoreEditResponse {
+  branch: string;
+  commit_sha: string;
+  parent_sha: string;
+  fork_repo: string;
+  compare_url: string;
+  pr_url: string | null;
+  frontmatter: Record<string, unknown>;
+  body_markdown: string;
+}
+
+export interface CoreOpenPrRequest {
+  branch: string;
+  title?: string;
+  body?: string;
+}
+
+export interface CoreOpenPrResponse {
+  pr_url: string;
+  pr_number: number;
+  already_existed: boolean;
+}
+
 export interface CoreFullSense {
   uuid: string;
   body_number: number | null;

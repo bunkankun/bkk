@@ -12,6 +12,7 @@ Routes ``bkk <subcommand> ...`` to the matching sub-package CLI:
     bkk recipe   ...   -> bkk.recipe.cli:run
     bkk info     ...   -> bkk.info.cli:run
     bkk annotations ... -> bkk.annotations.cli:run
+    bkk core     ...   -> bkk.core_cli.cli:run
 
 The dispatcher parses only the first positional (the subcommand name); every
 remaining argument is forwarded verbatim to the sub-CLI so each one keeps its
@@ -80,6 +81,11 @@ def _load_annotations() -> SubCommand:
     return run
 
 
+def _load_core() -> SubCommand:
+    from bkk.core_cli.cli import run
+    return run
+
+
 SUBCOMMANDS: dict[str, tuple[Callable[[], SubCommand], str]] = {
     "import":   (_load_importer,  "import an external source (TLS, KRP) into a BKK bundle"),
     "export":   (_load_exporter,  "export bundles via a recipe to TEI/etc."),
@@ -91,6 +97,7 @@ SUBCOMMANDS: dict[str, tuple[Callable[[], SubCommand], str]] = {
     "recipe":   (_load_recipe,    "render recipe templates"),
     "info":     (_load_info,      "show corpus, index, and config summary"),
     "annotations": (_load_annotations, "harvest Bluesky annotation records into the archive"),
+    "core":     (_load_core,      "maintain the bkk-core knowledge layer (sync, …)"),
 }
 
 # Aliases so familiar verbs work too.

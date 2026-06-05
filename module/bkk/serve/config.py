@@ -15,6 +15,8 @@ class ServeConfig:
     translation_search_path: Path | None = None
     core_root: Path | None = None
     core_index_path: Path | None = None
+    core_upstream_repo: str | None = None
+    core_pr_base: str = "master"
     annotations_root: Path | None = None
     annotations_index_path: Path | None = None
     host: str = "127.0.0.1"
@@ -106,6 +108,20 @@ class ServeConfig:
             core_index = core_root / "_core.bkki"
         else:
             core_index = None
+
+        env_core_upstream = os.environ.get("BKK_CORE_UPSTREAM_REPO")
+        core_upstream_repo = (
+            env_core_upstream
+            if env_core_upstream is not None
+            else core_rc.get("upstream_repo")
+        )
+
+        env_core_pr_base = os.environ.get("BKK_CORE_PR_BASE")
+        core_pr_base = (
+            env_core_pr_base
+            if env_core_pr_base is not None
+            else core_rc.get("pr_base", "master")
+        )
 
         env_annotations_root = os.environ.get("BKK_ANNOTATIONS_ROOT")
         rc_annotations_root = rc.get("annotations_root")
@@ -218,6 +234,8 @@ class ServeConfig:
             translation_search_path=translation_search,
             core_root=core_root,
             core_index_path=core_index,
+            core_upstream_repo=core_upstream_repo,
+            core_pr_base=core_pr_base,
             annotations_root=annotations_root,
             annotations_index_path=annotations_index,
             host=host,
@@ -244,6 +262,8 @@ class ServeConfig:
         translation_search_path: Path | str | None = None,
         core_root: Path | str | None = None,
         core_index_path: Path | str | None = None,
+        core_upstream_repo: str | None = None,
+        core_pr_base: str | None = None,
         annotations_root: Path | str | None = None,
         annotations_index_path: Path | str | None = None,
         host: str | None = None,
@@ -273,6 +293,10 @@ class ServeConfig:
             updates["core_root"] = Path(core_root).resolve()
         if core_index_path is not None:
             updates["core_index_path"] = Path(core_index_path).resolve()
+        if core_upstream_repo is not None:
+            updates["core_upstream_repo"] = core_upstream_repo
+        if core_pr_base is not None:
+            updates["core_pr_base"] = core_pr_base
         if annotations_root is not None:
             updates["annotations_root"] = Path(annotations_root).resolve()
         if annotations_index_path is not None:

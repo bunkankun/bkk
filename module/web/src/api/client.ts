@@ -19,7 +19,11 @@ import type {
   CoreBacklinksResponse,
   CoreCollectionsResponse,
   CoreConceptWordsResponse,
+  CoreEditRequest,
+  CoreEditResponse,
   CoreListResponse,
+  CoreOpenPrRequest,
+  CoreOpenPrResponse,
   CoreRecordResponse,
   CoreSuperEntryByOrth,
   CoreSuperEntryExpansion,
@@ -428,6 +432,36 @@ export async function getCoreRecord(
 ): Promise<CoreRecordResponse> {
   return fetchJson<CoreRecordResponse>(
     `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}`,
+  );
+}
+
+export async function patchCoreRecord(
+  collection: string,
+  uuid: string,
+  body: CoreEditRequest,
+): Promise<CoreEditResponse> {
+  return fetchJson<CoreEditResponse>(
+    `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export async function openCoreRecordPr(
+  collection: string,
+  uuid: string,
+  body: CoreOpenPrRequest,
+): Promise<CoreOpenPrResponse> {
+  return fetchJson<CoreOpenPrResponse>(
+    `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}/pr`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
   );
 }
 

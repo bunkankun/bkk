@@ -7,16 +7,15 @@ fetch a single record's detail (frontmatter + raw body markdown).
 
 from __future__ import annotations
 
-import re
 import sqlite3
 from pathlib import Path
 from typing import Any
 
-import yaml
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from bkk.index.catalog import normalize_search_text
+from bkk.serialize.frontmatter import parse_frontmatter
 from bkk.serve.state import AppState
 
 router = APIRouter(prefix="/core", tags=["core"])
@@ -47,9 +46,6 @@ BROWSE_COLLECTIONS: tuple[str, ...] = (
     "concepts", "words", "syntactic-functions",
     "semantic-features", "graphs", "bibliography",
 )
-
-_FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?(.*)\Z", re.S)
-
 
 class CollectionInfo(BaseModel):
     id: str
@@ -206,14 +202,7 @@ def _require_collection(collection: str) -> str:
 
 
 def _split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
-    match = _FRONTMATTER_RE.match(text)
-    if not match:
-        return {}, text
-    try:
-        fm = yaml.safe_load(match.group(1)) or {}
-    except yaml.YAMLError:
-        return {}, match.group(2)
-    return (fm if isinstance(fm, dict) else {}), match.group(2)
+    return parse_frontmatter(text)
 
 
 def _collection_of_type(type_name: str) -> str | None:

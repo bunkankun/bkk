@@ -26,6 +26,7 @@ from bkk.index import (
     merge_translations,
 )
 from bkk.index.catalog import default_catalog_csv
+from bkk.index.core import build_core_index
 from bkk.validator import validate_bundle
 
 from fastapi import HTTPException
@@ -105,6 +106,40 @@ def _run_annotation_index(jobs: JobRegistry, job_id: str, annotations_root, out_
     try:
         out = build_annotation_index(annotations_root, out_path)
         jobs.mark_done(job_id, {"annotations_index_path": str(out)})
+    except Exception as exc:
+        jobs.mark_error(job_id, exc)
+
+
+def _run_core_sync(jobs: JobRegistry, job_id: str, core_root, core_index_path, pr_base):
+    jobs.mark_running(job_id)
+    try:
+        import subprocess
+
+        fetch = subprocess.run(
+            ["git", "-C", str(core_root), "fetch", "origin", pr_base],
+            capture_output=True, text=True,
+        )
+        if fetch.returncode != 0:
+            raise RuntimeError(f"git fetch failed: {fetch.stderr.strip()}")
+        merge = subprocess.run(
+            ["git", "-C", str(core_root), "merge", "--ff-only", f"origin/{pr_base}"],
+            capture_output=True, text=True,
+        )
+        if merge.returncode != 0:
+            raise RuntimeError(
+                f"git merge --ff-only origin/{pr_base} failed: "
+                f"{merge.stderr.strip() or merge.stdout.strip()}"
+            )
+        head = subprocess.run(
+            ["git", "-C", str(core_root), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        )
+        pulled_sha = head.stdout.strip()
+        out = build_core_index(core_root, core_index_path)
+        jobs.mark_done(job_id, {
+            "pulled_sha": pulled_sha,
+            "core_index_path": str(out),
+        })
     except Exception as exc:
         jobs.mark_error(job_id, exc)
 
@@ -219,6 +254,32 @@ def post_annotation_index(
         job.id,
         state.annotations_root,
         state.annotations_index_path,
+    )
+    return _accepted(job)
+
+
+@router.post(
+    "/core/sync",
+    summary="Fast-forward the local bkk-core clone from upstream and rebuild its index",
+)
+def post_core_sync(
+    request: Request,
+    background: BackgroundTasks,
+    state: AppState = Depends(_require_admin),
+) -> JSONResponse:
+    if state.core_root is None or state.core_index_path is None:
+        raise errors.bad_request(
+            "core_root_missing",
+            reason="set core.root in .bkkrc or BKK_CORE_ROOT to enable /core/* and admin sync",
+        )
+    job = state.jobs.create(kind="core_sync", target=None)
+    background.add_task(
+        _run_core_sync,
+        state.jobs,
+        job.id,
+        state.core_root,
+        state.core_index_path,
+        state.config.core_pr_base,
     )
     return _accepted(job)
 

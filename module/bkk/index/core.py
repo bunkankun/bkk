@@ -20,7 +20,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
-import yaml
+from bkk.serialize.frontmatter import parse_frontmatter
 
 from .catalog import normalize_search_text
 
@@ -109,7 +109,6 @@ CREATE INDEX idx_super_entry_words_word ON super_entry_words(word_uuid);
 CREATE INDEX idx_senses_word ON senses(word_uuid);
 """
 
-_FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?(.*)\Z", re.S)
 
 # Markdown link in a record body. Captures (display, href). The href is
 # inspected with _BODY_LINK_TARGET_RE to find a core-record reference.
@@ -330,13 +329,7 @@ def _read_frontmatter(path: Path) -> dict[str, Any]:
 
 
 def _read_record(path: Path) -> tuple[dict[str, Any], str]:
-    raw = path.read_text(encoding="utf-8")
-    match = _FRONTMATTER_RE.match(raw)
-    if not match:
-        return {}, raw
-    data = yaml.safe_load(match.group(1)) or {}
-    fm = data if isinstance(data, dict) else {}
-    return fm, match.group(2)
+    return parse_frontmatter(path.read_text(encoding="utf-8"))
 
 
 def _word_pinyin(fm: dict) -> str | None:

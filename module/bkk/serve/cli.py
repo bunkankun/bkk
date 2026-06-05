@@ -40,6 +40,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--core-index", type=Path, default=None, dest="core_index_path",
                    help="core .bkki index path "
                         "(default: core.index from .bkkrc, else <core-root>/_core.bkki)")
+    p.add_argument("--core-upstream-repo", default=None, dest="core_upstream_repo",
+                   help="GitHub upstream bkk-core repo as ORG/REPO; required "
+                        "to enable inline editing of core records "
+                        "(default: core.upstream_repo from .bkkrc, "
+                        "else $BKK_CORE_UPSTREAM_REPO)")
+    p.add_argument("--core-pr-base", default=None, dest="core_pr_base",
+                   help="base branch on the upstream bkk-core repo that "
+                        "edit PRs target (default: master)")
     p.add_argument("--annotations-root", type=Path, default=None,
                    help="bkk-annotations archive root "
                         "(default: annotations.annotations_root / serve.annotations_root from .bkkrc)")
@@ -96,6 +104,8 @@ def run(argv: list[str] | None = None) -> int:
         catalog_path=args.catalog_path,
         core_root=args.core_root,
         core_index_path=args.core_index_path,
+        core_upstream_repo=args.core_upstream_repo,
+        core_pr_base=args.core_pr_base,
         annotations_root=args.annotations_root,
         annotations_index_path=args.annotations_index_path,
         host=args.host,
@@ -126,6 +136,9 @@ def run(argv: list[str] | None = None) -> int:
             os.environ["BKK_CORE_ROOT"] = str(config.core_root)
         if config.core_index_path is not None:
             os.environ["BKK_CORE_INDEX_PATH"] = str(config.core_index_path)
+        if config.core_upstream_repo is not None:
+            os.environ["BKK_CORE_UPSTREAM_REPO"] = config.core_upstream_repo
+        os.environ["BKK_CORE_PR_BASE"] = config.core_pr_base
         if config.annotations_root is not None:
             os.environ["BKK_ANNOTATIONS_ROOT"] = str(config.annotations_root)
         if config.annotations_index_path is not None:

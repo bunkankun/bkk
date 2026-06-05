@@ -16,6 +16,7 @@ from .routers import auth as auth_router
 from .routers import bundles as bundles_router
 from .routers import catalog as catalog_router
 from .routers import core as core_router
+from .routers import core_edit as core_edit_router
 from .routers import recipes as recipes_router
 from .routers import redirects as redirects_router
 from .routers import search as search_router
@@ -86,6 +87,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(texts_router.router)
     app.include_router(catalog_router.router)
     app.include_router(core_router.router)
+    app.include_router(core_edit_router.router)
     app.include_router(search_router.router)
     app.include_router(recipes_router.router)
     app.include_router(auth_router.router)
