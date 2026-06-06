@@ -14,11 +14,17 @@ from .annotations import build_annotation_index
 from .catalog import build_catalog_index
 from .ir import Hit, VariantOverlay
 from .merge import merge_bundles
+from .parallel import (
+    ParallelCluster,
+    ParallelLocation,
+    discover_parallel_passages,
+    write_parallel_report,
+)
 from .query import Index
 from .translation import build_translation_index, merge_translations
 
 __all__ = [
-    "Index", "Hit", "VariantOverlay",
+    "Index", "Hit", "VariantOverlay", "ParallelCluster", "ParallelLocation",
     "build_index", "build_annotation_index", "build_catalog_index", "build_translation_index",
-    "merge_bundles", "merge_translations",
+    "merge_bundles", "merge_translations", "discover_parallel_passages", "write_parallel_report",
 ]

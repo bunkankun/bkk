@@ -10,6 +10,8 @@ Subcommands::
     python -m bkk.index merge <corpus> [--out PATH] [--prefix KR3a]
                                        [--rebuild | --no-build]
     python -m bkk.index core <core_root> [--out PATH]
+    python -m bkk.index parallel <bkkx_path> <seed> [--out PATH]
+                                                [--format jsonl|tsv]
     python -m bkk.index search <bkkx_path> <query> [--context N]
                                                    [--witness LABEL]...
                                                    [--textid ID]
@@ -27,6 +29,7 @@ from .catalog import build_catalog_index, default_catalog_csv
 from .core import build_core_index
 from .ir import Hit
 from .merge import merge_bundles
+from .parallel import discover_parallel_passages, write_parallel_report
 from .query import Index
 from .translation import build_translation_index, merge_translations
 
@@ -98,6 +101,31 @@ def build_parser() -> argparse.ArgumentParser:
                      help="core .bkki output path "
                           "(default: core.index from .bkkrc, "
                           "else <core_root>/_core.bkki)")
+
+    pp = sub.add_parser("parallel", help="discover exact repeated passages in a .bkkx index")
+    pp.add_argument("index_path", type=Path)
+    pp.add_argument("seed", nargs="?", default=None,
+                    help="1-3 character seed term to extend around")
+    pp.add_argument("--out", type=Path, default=None,
+                    help="output path (default: stdout)")
+    pp.add_argument("--bucket", choices=["front", "body", "back", "all"],
+                    default="body",
+                    help="bucket kind to scan (default: body)")
+    pp.add_argument("--min-length", type=int, default=12,
+                    help="minimum repeated passage length in characters (default: 12)")
+    pp.add_argument("--min-occurrences", type=int, default=2,
+                    help="minimum locations per cluster (default: 2)")
+    pp.add_argument("--max-postings", type=int, default=500,
+                    help="maximum seed postings, or gram postings under --full-scan "
+                         "(default: 500)")
+    pp.add_argument("--format", choices=["jsonl", "tsv"], default="jsonl",
+                    help="report format (default: jsonl)")
+    pp.add_argument("--context", type=int, default=20,
+                    help="snippet context around each occurrence (default: 20)")
+    pp.add_argument("--include-contained", action="store_true",
+                    help="include clusters wholly contained in longer clusters")
+    pp.add_argument("--full-scan", action="store_true",
+                    help="scan all trigram anchors; expensive and intended only for small indices")
 
     ps = sub.add_parser("search", help="run a KWIC query against a .bkkx index")
     ps.add_argument("index_path", type=Path)
@@ -204,6 +232,31 @@ def run(argv: list[str] | None = None) -> int:
     if args.cmd == "core":
         path = build_core_index(args.core_root, args.out)
         print(f"wrote {path}")
+        return 0
+    if args.cmd == "parallel":
+        if args.seed is None and not args.full_scan:
+            parser.error(
+                "parallel now requires a 1-3 character seed term "
+                "(or pass --full-scan for small indices)"
+            )
+        if args.seed is not None and args.full_scan:
+            parser.error("parallel accepts either a seed term or --full-scan, not both")
+        clusters = discover_parallel_passages(
+            args.index_path,
+            seed=args.seed,
+            bucket=args.bucket,
+            min_length=args.min_length,
+            min_occurrences=args.min_occurrences,
+            max_postings=args.max_postings,
+            include_contained=args.include_contained,
+            context=args.context,
+        )
+        if args.out is None:
+            import sys
+            write_parallel_report(clusters, sys.stdout, format=args.format)
+        else:
+            write_parallel_report(clusters, args.out, format=args.format)
+            print(f"wrote {args.out}")
         return 0
     if args.cmd == "search":
         with Index(args.index_path) as ix:
