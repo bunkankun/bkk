@@ -180,6 +180,36 @@ function Dashboard() {
             badge={info.core.built ? "ok" : "missing"}
             ok={info.core.built}
           />
+          {info.core.root && <Row k="root" v={info.core.root} mono />}
+          <Row
+            k="editing"
+            v={info.core.editing_enabled ? "enabled" : "disabled"}
+            badge={info.core.editing_enabled ? "ok" : "off"}
+            ok={info.core.editing_enabled}
+          />
+          <Row
+            k="upstream"
+            v={info.core.upstream_repo ?? "(not set)"}
+            mono={!!info.core.upstream_repo}
+          />
+          <Row k="pr_base" v={info.core.pr_base ?? "(default)"} />
+          {!info.core.editing_enabled && (
+            <div
+              style={{
+                marginTop: 4,
+                padding: "4px 6px",
+                fontSize: 11,
+                color: "var(--amb)",
+                background: "var(--amb-d)",
+                border: "1px solid var(--amb-b)",
+                borderRadius: 2,
+              }}
+            >
+              Inline editing returns 503 until <code>core.upstream_repo</code> is
+              set in <code>.bkkrc</code> (or <code>BKK_CORE_UPSTREAM_REPO</code>)
+              as <code>owner/repo</code> and the server is restarted.
+            </div>
+          )}
         </Section>
       )}
 
@@ -207,6 +237,23 @@ function Dashboard() {
           />
         </Section>
       )}
+
+      <Section label="Config">
+        {info.config.files.length === 0 ? (
+          <Row k=".bkkrc" v="(none found)" ok={false} badge="missing" />
+        ) : (
+          info.config.files.map((f, i) => (
+            <Row
+              key={f}
+              k={i === 0 ? ".bkkrc" : ""}
+              v={f}
+              mono
+              badge={i === info.config.files.length - 1 ? "highest" : undefined}
+              ok={i === info.config.files.length - 1}
+            />
+          ))
+        )}
+      </Section>
 
       <div style={{ marginTop: 10 }}>
         <button

@@ -2,11 +2,12 @@
 
 Two endpoints, both gated by a logged-in GitHub session:
 
-* ``PATCH /core/{collection}/{uuid}`` — write proposed frontmatter / body
-  changes to a feature branch on the user's fork of the upstream bkk-core
-  repo. Idempotent across saves: the client passes back the ``branch``
-  and ``parent_sha`` the previous response returned, so successive saves
-  stack as commits on the same branch.
+* ``PATCH /core/{collection}/{uuid}`` — write the proposed YAML record
+  (and any ``extra_files`` — e.g. a new sense file when adding a sense to
+  a word) to a feature branch on the user's fork of the upstream
+  bkk-core repo. Idempotent across saves: the client passes back the
+  ``branch`` and ``parent_sha`` the previous response returned, so
+  successive saves stack as commits on the same branch.
 
 * ``POST  /core/{collection}/{uuid}/pr`` — opt-in opening of a pull
   request from that branch against ``upstream:<core.pr_base>``.
@@ -29,7 +30,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from bkk.serialize.frontmatter import parse_frontmatter, serialize_frontmatter
+from bkk.serialize.yaml_io import dumps_record, loads_record
 
 from ..state import AppState, UserSession
 from .auth import (
@@ -43,22 +44,35 @@ from .core import COLLECTION_TYPES, _open, _require_collection
 
 router = APIRouter(prefix="/core", tags=["core"])
 
-# Frontmatter keys that callers are never allowed to change. uuid + type
+# Record keys that callers are never allowed to change. ``uuid`` + ``type``
 # pin the file to its index row; renaming either breaks every reverse
-# lookup. Editor UIs should render them read-only.
-LOCKED_FRONTMATTER_KEYS = frozenset({"uuid", "type"})
+# lookup.
+LOCKED_RECORD_KEYS = frozenset({"uuid", "type"})
 
 # Max attempts when polling for fork creation. Fork is async on GitHub's
 # side; a freshly-forked repo can 404 for a few seconds.
 FORK_READY_ATTEMPTS = 12
 
 
+class ExtraFile(BaseModel):
+    path: str
+    data: dict[str, Any] | None = None
+    parent_sha: str | None = None
+
+
 class EditRequest(BaseModel):
-    frontmatter: dict[str, Any] = Field(default_factory=dict)
-    body: str = ""
+    data: dict[str, Any] = Field(default_factory=dict)
     parent_sha: str | None = None
     branch: str | None = None
     message: str | None = None
+    extra_files: list[ExtraFile] = Field(default_factory=list)
+
+
+class ExtraFileResult(BaseModel):
+    path: str
+    commit_sha: str
+    parent_sha: str | None
+    deleted: bool
 
 
 class EditResponse(BaseModel):
@@ -68,8 +82,8 @@ class EditResponse(BaseModel):
     fork_repo: str
     compare_url: str
     pr_url: str | None
-    frontmatter: dict[str, Any]
-    body_markdown: str
+    data: dict[str, Any]
+    extras: list[ExtraFileResult] = Field(default_factory=list)
 
 
 class OpenPrRequest(BaseModel):
@@ -132,28 +146,92 @@ def _content_path(path: str) -> str:
     return quote(path, safe="/")
 
 
-def _ensure_fork(token: str, login: str, upstream: str) -> str:
+def _is_fork_of(repo: dict[str, Any], upstream: str) -> bool:
+    """True if ``repo`` is a GitHub fork whose parent is ``upstream``."""
+    if not repo.get("fork"):
+        return False
+    parent = repo.get("parent")
+    if not isinstance(parent, dict):
+        return False
+    return parent.get("full_name") == upstream
+
+
+def _fork_branch_ready(
+    token: str, fork: str, branch: str,
+) -> bool:
+    """True once ``branch`` is queryable on the fork.
+
+    A freshly-created fork takes a few seconds before its refs and contents
+    are queryable, even after the repo metadata endpoint starts returning
+    200. Polling the branch ref is a stronger readiness signal than polling
+    the repo itself.
+    """
+    fork_owner, fork_repo = fork.split("/", 1)
+    try:
+        _github_json(
+            "GET",
+            f"/repos/{fork_owner}/{fork_repo}/git/ref/heads/{branch}",
+            token,
+        )
+        return True
+    except HTTPException as exc:
+        status = _github_status(exc)
+        if status in (404, 409):
+            return False
+        raise
+
+
+def _ensure_fork(token: str, login: str, upstream: str, base_branch: str) -> str:
     """Return ``"<login>/<repo>"`` for the user's fork of ``upstream``.
 
-    Creates the fork on demand and waits briefly for GitHub to make it
-    queryable. Idempotent — a no-op if the fork already exists.
+    Creates the fork on demand and waits for it to become writable.
+    Idempotent — a no-op if the fork already exists and its ``base_branch``
+    is queryable. If a same-named repo exists under ``<login>`` that is
+    *not* a fork of ``upstream``, raises 409 so the user can rename or
+    delete it rather than silently writing to the wrong repo.
     """
     upstream_owner, upstream_name = upstream.split("/", 1)
     fork_full = f"{login}/{upstream_name}"
+
     existing = _repo_exists(token, login, upstream_name)
     if existing is not None:
-        return fork_full
-    _github_json("POST", f"/repos/{upstream}/forks", token, json={})
+        if not _is_fork_of(existing, upstream):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{fork_full} exists but is not a fork of {upstream}. "
+                    "Rename or delete that repository on GitHub, then retry."
+                ),
+            )
+        if _fork_branch_ready(token, fork_full, base_branch):
+            return fork_full
+        # Fork exists but base branch isn't queryable yet (rare; e.g. the
+        # user just forked from another tool and refs are still replicating).
+        # Fall through to the polling loop below.
+    else:
+        _github_json("POST", f"/repos/{upstream}/forks", token, json={})
+
     for _ in range(FORK_READY_ATTEMPTS):
         time.sleep(1)
         repo = _repo_exists(token, login, upstream_name)
-        if repo is not None:
+        if repo is None:
+            continue
+        if not _is_fork_of(repo, upstream):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{fork_full} appeared but is not a fork of {upstream}; "
+                    "refusing to write to it."
+                ),
+            )
+        if _fork_branch_ready(token, fork_full, base_branch):
             return fork_full
     raise HTTPException(
         status_code=504,
         detail=(
-            f"Fork of {upstream} was requested but did not appear under "
-            f"{fork_full} in time. Try the request again in a few seconds."
+            f"Fork {fork_full} of {upstream} did not become writable in time "
+            f"(base branch {base_branch!r} still not queryable). "
+            "Try the save again in a few seconds."
         ),
     )
 
@@ -230,38 +308,140 @@ def _decode_file(payload: dict[str, Any]) -> str:
         ) from exc
 
 
-def _validate_frontmatter(
-    proposed: dict[str, Any], original: dict[str, Any]
+def _validate_record(
+    proposed: dict[str, Any], original: dict[str, Any], type_name: str | None
 ) -> dict[str, Any]:
-    """Reject changes to locked keys and additions of new keys.
+    """Reject changes to locked keys (``uuid``, ``type``).
 
-    Returns the merged frontmatter to write (preserves the original
-    key order: every key from ``original`` in its existing order, with
-    values replaced by ``proposed`` where present).
+    Returns the proposed record as-is (key order preserved by the caller's
+    payload). The Pydantic schema for each type is the per-collection
+    contract; this validator only enforces identity invariants that are
+    universal across all collections.
     """
-    proposed_keys = set(proposed.keys())
-    original_keys = set(original.keys())
-
-    new_keys = proposed_keys - original_keys
-    if new_keys:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "frontmatter edit may not introduce new keys "
-                f"(got: {sorted(new_keys)})"
-            ),
-        )
-    for key in LOCKED_FRONTMATTER_KEYS:
+    for key in LOCKED_RECORD_KEYS:
         if key in proposed and proposed[key] != original.get(key):
             raise HTTPException(
                 status_code=400,
-                detail=f"frontmatter key {key!r} is read-only",
+                detail=f"record key {key!r} is read-only",
             )
+        if key not in proposed and key in original:
+            # Auto-fill from original — UI may strip these for display.
+            proposed = {**proposed, key: original[key]}
+    if type_name and proposed.get("type") not in (None, type_name):
+        raise HTTPException(
+            status_code=400,
+            detail=f"record type must be {type_name!r}",
+        )
+    return proposed
 
-    merged: dict[str, Any] = {}
-    for key, value in original.items():
-        merged[key] = proposed[key] if key in proposed else value
-    return merged
+
+def _validate_extra_path(path: str) -> None:
+    """Extra file paths must live under a known collection directory.
+
+    Layout is ``<collection>/<hex>/<uuid>.yml`` — same shape as importer
+    output. Reject ``..``, leading ``/``, or any unknown top-level dir.
+    """
+    parts = path.split("/")
+    if len(parts) != 3 or any(p in ("", ".", "..") for p in parts):
+        raise HTTPException(
+            status_code=400,
+            detail=f"extra_files path {path!r} must be '<collection>/<hex>/<uuid>.yml'",
+        )
+    collection, hex_dir, fname = parts
+    if collection not in COLLECTION_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"extra_files path {path!r}: unknown collection {collection!r}",
+        )
+    if len(hex_dir) != 1 or hex_dir not in "0123456789abcdef":
+        raise HTTPException(
+            status_code=400,
+            detail=f"extra_files path {path!r}: shard segment must be a single hex char",
+        )
+    if not fname.endswith(".yml"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"extra_files path {path!r}: filename must end with .yml",
+        )
+
+
+def _put_file(
+    *,
+    token: str,
+    fork: str,
+    rel_path: str,
+    branch: str,
+    text: str,
+    message: str,
+    parent_sha: str | None,
+) -> tuple[str, str]:
+    """PUT one file, returning ``(blob_sha, commit_sha)``."""
+    body: dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(text.encode("utf-8")).decode("ascii"),
+        "branch": branch,
+    }
+    if parent_sha is not None:
+        body["sha"] = parent_sha
+    try:
+        result = _github_json(
+            "PUT",
+            f"/repos/{fork}/contents/{_content_path(rel_path)}",
+            token,
+            json=body,
+        )
+    except HTTPException as exc:
+        if _github_status(exc) in (409, 422):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"core file {rel_path} changed on the fork branch since "
+                    "you last loaded it; reload and re-apply your edits"
+                ),
+            ) from exc
+        raise
+
+    content_result = result.get("content") if isinstance(result, dict) else None
+    new_sha = content_result.get("sha") if isinstance(content_result, dict) else None
+    commit_obj = result.get("commit") if isinstance(result, dict) else None
+    commit_sha = commit_obj.get("sha") if isinstance(commit_obj, dict) else None
+    if not isinstance(new_sha, str) or not isinstance(commit_sha, str):
+        raise HTTPException(status_code=502, detail="GitHub PUT returned unexpected payload")
+    return new_sha, commit_sha
+
+
+def _delete_file(
+    *,
+    token: str,
+    fork: str,
+    rel_path: str,
+    branch: str,
+    message: str,
+    parent_sha: str,
+) -> str:
+    """DELETE one file, returning the resulting commit sha."""
+    try:
+        result = _github_json(
+            "DELETE",
+            f"/repos/{fork}/contents/{_content_path(rel_path)}",
+            token,
+            json={"message": message, "branch": branch, "sha": parent_sha},
+        )
+    except HTTPException as exc:
+        if _github_status(exc) in (409, 422):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"core file {rel_path} changed on the fork branch since "
+                    "you last loaded it; reload and re-apply your edits"
+                ),
+            ) from exc
+        raise
+    commit_obj = result.get("commit") if isinstance(result, dict) else None
+    commit_sha = commit_obj.get("sha") if isinstance(commit_obj, dict) else None
+    if not isinstance(commit_sha, str):
+        raise HTTPException(status_code=502, detail="GitHub DELETE returned unexpected payload")
+    return commit_sha
 
 
 def _default_branch_name(collection: str, uuid: str) -> str:
@@ -322,22 +502,25 @@ async def edit_record(
             ),
         )
     base_text = _decode_file(base_payload)
-    base_fm, _base_body = parse_frontmatter(base_text)
-    if base_fm.get("uuid") not in (None, uuid):
+    base_record = loads_record(base_text)
+    if base_record.get("uuid") not in (None, uuid):
         raise HTTPException(
             status_code=500,
-            detail=f"upstream {rel_path} frontmatter uuid does not match index",
+            detail=f"upstream {rel_path} record uuid does not match index",
         )
-    if type_name and base_fm.get("type") not in (None, type_name):
+    if type_name and base_record.get("type") not in (None, type_name):
         raise HTTPException(
             status_code=500,
-            detail=f"upstream {rel_path} frontmatter type does not match index",
+            detail=f"upstream {rel_path} record type does not match index",
         )
 
-    merged_fm = _validate_frontmatter(req.frontmatter, base_fm)
-    new_text = serialize_frontmatter(merged_fm, req.body)
+    merged = _validate_record(req.data, base_record, type_name)
+    new_text = dumps_record(merged)
 
-    fork = _ensure_fork(token, user_session.login, upstream)
+    for extra in req.extra_files:
+        _validate_extra_path(extra.path)
+
+    fork = _ensure_fork(token, user_session.login, upstream, upstream_branch)
     fork_owner = user_session.login
 
     branch = req.branch or _default_branch_name(collection, uuid)
@@ -366,37 +549,50 @@ async def edit_record(
             )
 
     commit_message = req.message or f"Edit {collection}/{display_label or uuid}"
-    try:
-        put_result = _github_json(
-            "PUT",
-            f"/repos/{fork}/contents/{_content_path(rel_path)}",
-            token,
-            json={
-                "message": commit_message,
-                "content": base64.b64encode(new_text.encode("utf-8")).decode("ascii"),
-                "branch": branch,
-                "sha": parent_sha,
-            },
-        )
-    except HTTPException as exc:
-        if _github_status(exc) in (409, 422):
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "core record changed on the fork branch since you last "
-                    "loaded it; reload and re-apply your edits"
-                ),
-            ) from exc
-        raise
-
-    content_result = put_result.get("content") if isinstance(put_result, dict) else None
-    new_sha = (
-        content_result.get("sha") if isinstance(content_result, dict) else None
+    new_sha, commit_sha = _put_file(
+        token=token, fork=fork, rel_path=rel_path, branch=branch,
+        text=new_text, message=commit_message, parent_sha=parent_sha,
     )
-    commit_obj = put_result.get("commit") if isinstance(put_result, dict) else None
-    commit_sha = commit_obj.get("sha") if isinstance(commit_obj, dict) else None
-    if not isinstance(new_sha, str) or not isinstance(commit_sha, str):
-        raise HTTPException(status_code=502, detail="GitHub PUT returned unexpected payload")
+
+    extras_out: list[ExtraFileResult] = []
+    for extra in req.extra_files:
+        extra_collection = extra.path.split("/", 1)[0]
+        extra_type = COLLECTION_TYPES[extra_collection]
+        extra_message = f"{commit_message} ({extra.path})"
+        if extra.data is None:
+            if extra.parent_sha is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"extra_files delete of {extra.path} requires parent_sha",
+                )
+            extra_commit = _delete_file(
+                token=token, fork=fork, rel_path=extra.path, branch=branch,
+                message=extra_message, parent_sha=extra.parent_sha,
+            )
+            extras_out.append(ExtraFileResult(
+                path=extra.path, commit_sha=extra_commit,
+                parent_sha=None, deleted=True,
+            ))
+            continue
+
+        proposed_type = extra.data.get("type")
+        if proposed_type not in (None, extra_type):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"extra_files {extra.path}: type {proposed_type!r} does not "
+                    f"match collection {extra_collection!r} (expected {extra_type!r})"
+                ),
+            )
+        extra_text = dumps_record(extra.data)
+        extra_blob, extra_commit = _put_file(
+            token=token, fork=fork, rel_path=extra.path, branch=branch,
+            text=extra_text, message=extra_message, parent_sha=extra.parent_sha,
+        )
+        extras_out.append(ExtraFileResult(
+            path=extra.path, commit_sha=extra_commit,
+            parent_sha=extra_blob, deleted=False,
+        ))
 
     existing_pr = _find_existing_pr(token, upstream, fork_owner, branch)
     pr_url = (
@@ -415,15 +611,16 @@ async def edit_record(
         # Same-owner forks can't be linked via the OWNER:BRANCH syntax.
         compare_url = f"https://github.com/{upstream}/compare/{upstream_branch}...{branch}"
 
+    last_commit = extras_out[-1].commit_sha if extras_out else commit_sha
     return EditResponse(
         branch=branch,
-        commit_sha=commit_sha,
+        commit_sha=last_commit,
         parent_sha=new_sha,
         fork_repo=fork,
         compare_url=compare_url,
         pr_url=pr_url,
-        frontmatter=merged_fm,
-        body_markdown=req.body,
+        data=merged,
+        extras=extras_out,
     )
 
 

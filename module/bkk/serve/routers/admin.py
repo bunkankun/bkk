@@ -429,11 +429,25 @@ def get_admin_info(
         rc=load_rc(),
     )
     report["server_version"] = "0.1.0"
-    report["core"] = (
-        {"path": str(state.core_index_path), "built": state.core_index_path.exists()}
-        if state.core_index_path is not None
-        else None
-    )
+    core_upstream = state.config.core_upstream_repo
+    core_editing_enabled = bool(core_upstream and "/" in core_upstream)
+    if (
+        state.core_index_path is not None
+        or state.core_root is not None
+        or core_upstream
+    ):
+        report["core"] = {
+            "path": str(state.core_index_path) if state.core_index_path else "",
+            "built": bool(
+                state.core_index_path and state.core_index_path.exists()
+            ),
+            "root": str(state.core_root) if state.core_root else None,
+            "upstream_repo": core_upstream,
+            "pr_base": state.config.core_pr_base,
+            "editing_enabled": core_editing_enabled,
+        }
+    else:
+        report["core"] = None
     report["source"] = (
         {
             "path": str(state.source_root),

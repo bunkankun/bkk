@@ -14,7 +14,9 @@ function AnnCard({ a }: { a: Annotation }) {
         <span className="ann-offset">@{a.offset}</span>
       </div>
       {a.concept && <div className="ann-concept">{a.concept}</div>}
-      {a.sense?.def && <div className="ann-def">{a.sense.def}</div>}
+      {(a.sense?.def_text ?? a.sense?.def) && (
+        <div className="ann-def">{a.sense?.def_text ?? a.sense?.def}</div>
+      )}
       {a.translation?.text && (
         <div className="ann-tr">
           "{a.translation.text}"

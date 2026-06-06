@@ -26,7 +26,8 @@ export function annTooltip(a: Annotation): string {
   const bits: string[] = [];
   if (a.form?.orth) bits.push(a.form.orth);
   if (a.form?.pron) bits.push(`(${a.form.pron})`);
-  if (a.sense?.def) bits.push(a.sense.def);
+  const def = a.sense?.def_text ?? a.sense?.def;
+  if (def) bits.push(def);
   if (bits.length === 0 && a.concept) bits.push(a.concept);
   return bits.join(" ");
 }

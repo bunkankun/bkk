@@ -31,14 +31,12 @@ interface Props {
 type Status = "idle" | "loading" | "ok" | "no-match" | "error";
 type SenseCounts = Record<string, number>;
 
-function senseSummary(sense: CoreFullSense): string {
+function senseSummary(sense: CoreFullSense, ordIndex: number): string {
   const bits: string[] = [];
+  const senseLabel = sense.sense_ord != null ? sense.sense_ord + 1 : ordIndex + 1;
+  bits.push(`sense ${senseLabel}`);
   if (sense.pos) bits.push(sense.pos);
-  if (sense.syn_func) bits.push(sense.syn_func);
-  if (sense.sem_feat) bits.push(sense.sem_feat);
-  if (bits.length === 0 && sense.body_number != null) {
-    bits.push(`sense ${sense.body_number}`);
-  }
+  if (sense.n) bits.push(`${sense.n} att.`);
   return bits.join(" · ");
 }
 
@@ -119,7 +117,7 @@ function WhereUsedPanel({
           sense: {
             id: sense.uuid,
             pos: sense.pos,
-            syn_func: sense.syn_func,
+            def_text: sense.def_text,
           },
           used_from: loc.id ?? null,
         },
@@ -136,7 +134,7 @@ function WhereUsedPanel({
         sense: {
           id: sense.uuid,
           pos: sense.pos ?? undefined,
-          syn_func: sense.syn_func ?? undefined,
+          def_text: sense.def_text ?? undefined,
         },
         metadata: { did: result.did, posted: "just now", used_from: loc.id ?? null },
       };
@@ -188,6 +186,7 @@ function WhereUsedPanel({
 function SenseRow({
   word,
   sense,
+  ordIndex,
   superEntryUuid,
   superEntryOrth,
   useCount,
@@ -196,6 +195,7 @@ function SenseRow({
 }: {
   word: CoreFullWord;
   sense: CoreFullSense;
+  ordIndex: number;
   superEntryUuid: string;
   superEntryOrth: string;
   useCount: number | null;
@@ -221,12 +221,12 @@ function SenseRow({
       sense: {
         id: sense.uuid,
         pos: sense.pos,
-        syn_func: sense.syn_func,
+        def_text: sense.def_text,
       },
     });
   };
 
-  const summary = senseSummary(sense);
+  const summary = senseSummary(sense, ordIndex);
 
   return (
     <div className="core-target-sense-block">
@@ -237,8 +237,8 @@ function SenseRow({
           onClick={onPick}
         >
           {summary && <span className="core-target-sense-summary">{summary}</span>}
-          {sense.def && <span className="core-target-sense-def">{sense.def}</span>}
-          {!summary && !sense.def && (
+          {sense.def_text && <span className="core-target-sense-def">{sense.def_text}</span>}
+          {!summary && !sense.def_text && (
             <span className="core-target-sense-summary">{sense.uuid.slice(0, 8)}</span>
           )}
         </button>
@@ -322,11 +322,12 @@ function WordRow({
           {word.senses.length === 0 && (
             <div className="empty">This word has no senses.</div>
           )}
-          {word.senses.map((s) => (
+          {word.senses.map((s, i) => (
             <SenseRow
               key={s.uuid}
               word={word}
               sense={s}
+              ordIndex={i}
               superEntryUuid={superEntryUuid}
               superEntryOrth={superEntryOrth}
               useCount={counts == null ? null : counts[s.uuid] ?? 0}

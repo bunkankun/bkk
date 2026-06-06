@@ -13,6 +13,7 @@ from ..ir import (
     ConceptRelation,
     ConceptSection,
 )
+from ._provenance import lift_source
 
 
 TEI_NS = "http://www.tei-c.org/ns/1.0"
@@ -69,6 +70,7 @@ def read_concept(xml_path: Path) -> ConceptBundle:
     relations = _parse_relations(root)
     bibliography = _parse_bibliography(root)
     words = _paragraphs_in_first_div(root, "words")
+    source = _source(root)
 
     return ConceptBundle(
         uuid=uuid,
@@ -80,7 +82,16 @@ def read_concept(xml_path: Path) -> ConceptBundle:
         relations=relations,
         bibliography=bibliography,
         words=words,
+        source=source,
     )
+
+
+def _source(root) -> dict:
+    """Lift resp/date from the root <div>, the <head>, the definition <div>, and its first <p>."""
+    head = root.find(_q("head"))
+    def_div = root.find(f"{_q('div')}[@type='definition']")
+    first_p = def_div.find(f".//{_q('p')}") if def_div is not None else None
+    return lift_source(root, head, def_div, first_p)
 
 
 def _text_content(el) -> str:

@@ -161,10 +161,12 @@ export interface AnnotationForm {
 export interface AnnotationSense {
   id?: string;
   pos?: string;
+  def_text?: string;
+  usage?: Record<string, unknown>;
+  // Legacy fields preserved for annotations created before the bkk-core overhaul.
   syn_func?: string;
   sem_feat?: string;
   def?: string;
-  usage?: Record<string, unknown>;
 }
 
 export interface AnnotationTranslation {
@@ -533,6 +535,15 @@ export interface AdminInfoExtras {
   built: boolean;
 }
 
+export interface AdminInfoCore {
+  path: string;
+  built: boolean;
+  root: string | null;
+  upstream_repo: string | null;
+  pr_base: string | null;
+  editing_enabled: boolean;
+}
+
 export interface AdminInfoSource {
   path: string;
   branch: string;
@@ -549,7 +560,7 @@ export interface AdminInfoResponse {
   corpus: AdminInfoCorpus;
   index: AdminInfoIndex;
   catalog: AdminInfoCatalog;
-  core: AdminInfoExtras | null;
+  core: AdminInfoCore | null;
   source: AdminInfoSource | null;
   annotations: AdminInfoExtras | null;
   config: AdminInfoConfig;
@@ -619,8 +630,7 @@ export interface CoreRecordResponse {
   collection: string;
   display_label: string;
   path: string;
-  frontmatter: Record<string, unknown>;
-  body_markdown: string;
+  data: Record<string, unknown>;
   links: CoreRecordLink[];
 }
 
@@ -629,12 +639,25 @@ export interface CoreSuperEntryByOrth {
   orth: string;
 }
 
+export interface CoreEditExtraFile {
+  path: string;
+  data: Record<string, unknown> | null;
+  parent_sha?: string;
+}
+
 export interface CoreEditRequest {
-  frontmatter: Record<string, unknown>;
-  body: string;
+  data: Record<string, unknown>;
   parent_sha?: string;
   branch?: string;
   message?: string;
+  extra_files?: CoreEditExtraFile[];
+}
+
+export interface CoreEditExtraFileResult {
+  path: string;
+  commit_sha: string;
+  parent_sha: string | null;
+  deleted: boolean;
 }
 
 export interface CoreEditResponse {
@@ -644,8 +667,8 @@ export interface CoreEditResponse {
   fork_repo: string;
   compare_url: string;
   pr_url: string | null;
-  frontmatter: Record<string, unknown>;
-  body_markdown: string;
+  data: Record<string, unknown>;
+  extras: CoreEditExtraFileResult[];
 }
 
 export interface CoreOpenPrRequest {
@@ -662,11 +685,10 @@ export interface CoreOpenPrResponse {
 
 export interface CoreFullSense {
   uuid: string;
-  body_number: number | null;
+  sense_ord: number | null;
+  n: string | null;
   pos: string | null;
-  syn_func: string | null;
-  sem_feat: string | null;
-  def: string | null;
+  def_text: string | null;
 }
 
 export interface CoreFullWord {

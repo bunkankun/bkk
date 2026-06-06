@@ -185,7 +185,7 @@ export interface CoreTarget {
   sense: {
     id: string;
     pos: string | null;
-    syn_func: string | null;
+    def_text: string | null;
   };
 }
 

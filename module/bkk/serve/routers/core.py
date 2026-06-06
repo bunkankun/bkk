@@ -2,20 +2,19 @@
 
 Drives the CORE activity in the web frontend: list collections, search a
 collection by label, expand a super-entry into its constituent words, and
-fetch a single record's detail (frontmatter + raw body markdown).
+fetch a single typed YAML record.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from bkk.index.catalog import normalize_search_text
-from bkk.serialize.frontmatter import parse_frontmatter
+from bkk.serialize.yaml_io import load_record
 from bkk.serve.state import AppState
 
 router = APIRouter(prefix="/core", tags=["core"])
@@ -28,6 +27,7 @@ COLLECTION_TYPES: dict[str, str] = {
     "semantic-features": "semantic-feature",
     "bibliography": "bibliography",
     "words": "word",
+    "senses": "sense",
     "super-entries": "super-entry",
 }
 
@@ -99,13 +99,10 @@ class SuperEntryByOrth(BaseModel):
 
 class FullSense(BaseModel):
     uuid: str
-    body_number: int | None
+    sense_ord: int | None
+    n: str | None
     pos: str | None
-    syn_func: str | None
-    sem_feat: str | None
-    def_: str | None = Field(default=None, alias="def")
-
-    model_config = {"populate_by_name": True}
+    def_text: str | None
 
 
 class FullWord(BaseModel):
@@ -172,8 +169,7 @@ class CoreRecordResponse(BaseModel):
     collection: str
     display_label: str
     path: str
-    frontmatter: dict[str, Any]
-    body_markdown: str
+    data: dict[str, Any]
     links: list[CoreRecordLink] = Field(default_factory=list)
 
 
@@ -199,10 +195,6 @@ def _require_collection(collection: str) -> str:
                    f"valid: {sorted(COLLECTION_TYPES)}",
         )
     return COLLECTION_TYPES[collection]
-
-
-def _split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
-    return parse_frontmatter(text)
 
 
 def _collection_of_type(type_name: str) -> str | None:
@@ -489,15 +481,14 @@ def super_entry_by_orth_full(request: Request, orth: str) -> SuperEntryFull:
         if word_uuids:
             placeholders = ",".join("?" * len(word_uuids))
             sense_rows = conn.execute(
-                f"SELECT uuid, word_uuid, body_number, pos, syn_func, sem_feat, def "
+                f"SELECT uuid, word_uuid, sense_ord, n, pos, def_text "
                 f"FROM senses WHERE word_uuid IN ({placeholders}) "
-                f"ORDER BY word_uuid, COALESCE(body_number, 0)",
+                f"ORDER BY word_uuid, COALESCE(sense_ord, 0)",
                 word_uuids,
             ).fetchall()
-            for (s_uuid, w_uuid, bn, pos, sf, sfeat, dfn) in sense_rows:
+            for (s_uuid, w_uuid, ord_, n_, pos, dfn) in sense_rows:
                 senses_by_word.setdefault(w_uuid, []).append(FullSense(
-                    uuid=s_uuid, body_number=bn, pos=pos,
-                    syn_func=sf, sem_feat=sfeat, **{"def": dfn},
+                    uuid=s_uuid, sense_ord=ord_, n=n_, pos=pos, def_text=dfn,
                 ))
     finally:
         conn.close()
@@ -650,15 +641,14 @@ def get_record(request: Request, collection: str, uuid: str) -> CoreRecordRespon
 
     if state.core_root is None:
         raise HTTPException(status_code=503, detail="core_root not configured")
-    md_path = state.core_root / row[3]
+    yml_path = state.core_root / row[3]
     try:
-        raw = md_path.read_text(encoding="utf-8")
+        data = load_record(yml_path)
     except FileNotFoundError:
         raise HTTPException(
             status_code=410,
             detail=f"index references missing file {row[3]!r}; rerun `bkk index core`",
         )
-    fm, body = _split_frontmatter(raw)
 
     if type_name != row[1]:
         # index/collection mismatch — bail loudly instead of silently lying.
@@ -684,7 +674,6 @@ def get_record(request: Request, collection: str, uuid: str) -> CoreRecordRespon
         collection=row[2],
         display_label=row[4],
         path=row[3],
-        frontmatter=fm,
-        body_markdown=body,
+        data=data,
         links=links,
     )

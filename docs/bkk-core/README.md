@@ -1,22 +1,20 @@
 # BKK Core Knowledge Notes
 
-This document describes the Markdown/YAML data format currently produced by
-the core importers. It is intended as a contract for frontend rendering,
-navigation, and index construction.
+This document describes the pure-YAML data format produced by the core
+importers. It is the contract for frontend rendering, navigation, editing,
+and index construction.
 
-The core knowledge layer is a set of local Markdown notes with YAML
-frontmatter. Every note is addressable by a prefixless UUID, stored in a
-collection directory, and sharded by the first hexadecimal character of the
-UUID.
+The core knowledge layer is a set of structured YAML records. Every record
+is addressable by a prefixless UUID, stored in a collection directory, and
+sharded by the first hexadecimal character of the UUID. There is no
+Markdown body; prose lives in named string fields inside the record.
 
-## Common Model
+## Common model
 
-### Output Root
+### Output root
 
-The importer `--out` argument points at the core root. Importers create their
-own collection directories under that root.
-
-Example:
+The importer `--out` argument points at the core root. Importers create
+their own collection directories under that root.
 
 ```text
 core/
@@ -24,80 +22,105 @@ core/
   concepts/
   graphs/
   semantic-features/
+  senses/
   super-entries/
   syntactic-functions/
   words/
 ```
 
+### File shape
+
+All records use:
+
+```text
+<collection>/<first-hex>/<uuid>.yml
+```
+
+Each file is a single YAML document. There is **no `---` fence** and no
+Markdown body — the file is pure YAML from the first line.
+
+Examples:
+
+```text
+concepts/3/3eb2c600-e234-4c6b-bb79-40e8eff9ee14.yml
+bibliography/6/60d39cc0-d76b-4275-8490-886ace4204be.yml
+words/d/d57eebf9-7218-46d5-95bc-4ac4591b81ed.yml
+senses/4/45ddee60-d2a7-4973-9289-b93f0f921ac4.yml
+```
+
 ### UUIDs
 
-Source XML often uses IDs such as `uuid-3eb2...`. Core Markdown removes the
-leading `uuid-` everywhere:
-
-- filenames
-- frontmatter `uuid` fields
-- link paths
-- relation metadata
-
-Example:
-
-```yaml
-uuid: 3eb2c600-e234-4c6b-bb79-40e8eff9ee14
-```
-
-### Sharding
-
-All first-class notes use:
-
-```text
-<collection>/<first-hex>/<uuid>.md
-```
-
-Examples:
-
-```text
-concepts/3/3eb2c600-e234-4c6b-bb79-40e8eff9ee14.md
-bibliography/6/60d39cc0-d76b-4275-8490-886ace4204be.md
-words/d/d57eebf9-7218-46d5-95bc-4ac4591b81ed.md
-```
-
-### Links
-
-UUID references are rendered as standard relative Markdown filesystem links.
-This keeps notes locally editable and navigable without requiring a resolver.
-
-The frontend/index should still treat UUID frontmatter as the canonical
-identity. Paths are the current storage policy, not the only possible identity
-mechanism.
-
-Examples:
-
-```markdown
-[DELIGHT](../../concepts/1/1c7bf322-c905-41e0-9145-7d4b01da86a1.md)
-[FOGUANG](../../bibliography/2/2389c812-8053-4187-8f7a-19f6e856050f.md)
-[nab.t](../../syntactic-functions/d/d128d787-1ecb-4c4f-8e89-5dd3edea91d1.md)
-```
-
-### Common Frontmatter Fields
-
-Every note has:
+Source XML often uses IDs such as `uuid-3eb2…`. Core records drop the
+leading `uuid-` everywhere — filenames, the `uuid` field, every relation
+list. Each record carries:
 
 ```yaml
 uuid: <prefixless uuid>
 type: <record type>
 ```
 
-Current `type` values:
+`type` values:
 
 - `bibliography`
 - `concept`
 - `graph`
 - `semantic-feature`
+- `sense`
 - `super-entry`
 - `syntactic-function`
 - `word`
 
-Most importers also include `source`, usually with a source filename:
+### Relations
+
+Relations are **bare UUID strings** (or lists of bare UUIDs). Display
+labels are never denormalized into a record — the indexer resolves them
+at query time via JOIN against the target record's primary label.
+
+```yaml
+antonyms:
+- deb3cd81-03bc-4c7c-9125-a2a8837202c9
+hyponyms:
+- 4ba683a6-974f-4812-a94a-6b5ae8818e19
+- 11c629f4-b7c5-4617-a97d-a2d76292def6
+```
+
+Structured cross-collection refs (typically bibliography) carry a typed
+key plus scope/note metadata:
+
+```yaml
+bibliography:
+- bibliography_uuid: 60d39cc0-d76b-4275-8490-886ace4204be
+  scope: '1008'
+  scope_unit: page
+- bibliography_uuid: ab831347-9626-498d-aa1e-eb43eae72d05
+  notes:
+  - CAN
+  - posse refers to an ability as a consequence of power…
+```
+
+### Prose fields
+
+Prose lives in named string fields. Two prose conventions:
+
+- `[[X]]` — wikilink to a CJK super-entry by orthograph. Resolved by the
+  indexer against the super-entry orth map.
+- bare Markdown links — anything the author wants outside the structured
+  relation lists.
+
+There are no `{{REF:…}}` macros. Prose fields are freeform Markdown.
+
+Prose-bearing fields by record type:
+
+- `concept.definition`, `concept.criteria[].text`
+- `syntactic-function.description`, `syntactic-function.notes`
+- `semantic-feature.description`, `semantic-feature.notes`
+- `word.definition`
+- `sense.definition`
+
+### Source provenance
+
+Most importers include a `source` block recording the originating XML
+file:
 
 ```yaml
 source:
@@ -108,362 +131,180 @@ source:
 
 ### Concepts
 
-Path:
-
-```text
-concepts/<hex>/<uuid>.md
-```
-
-Type:
-
-```yaml
-type: concept
-```
-
-Concept notes represent TLS concept records.
-
-Frontmatter shape:
+Path: `concepts/<hex>/<uuid>.yml` · Type: `concept`
 
 ```yaml
 uuid: 3eb2c600-e234-4c6b-bb79-40e8eff9ee14
 type: concept
 concept: ABLE
-labels:
+alt_labels:
 - CAPABLE OF
+- COMPETENT TO
 zh: 能夠
 och: 能
+definition: HAVE FEATURES one NEEDS in SELF:oneself FOR ACHIEVING something.
+criteria:
+- type: old-chinese-criteria
+  text: |
+    1. The commonest word is néng [[能]] "have an inherent capacity for…"
+    2. Kě yǐ [[可以]] "be in an objective position to…"
+- type: modern-chinese-criteria
+  text: |
+    能夠
+    能
+    會
+antonyms:
+- deb3cd81-03bc-4c7c-9125-a2a8837202c9
+hypernyms:
+- fb02970d-7e8c-43ca-b0fd-fddc6055d130
+hyponyms: []
+see_also:
+- 297bd4cc-f53e-42a5-b51f-5150aa0f4795
+bibliography:
+- bibliography_uuid: 60d39cc0-d76b-4275-8490-886ace4204be
+  scope: '9.95'
+  scope_unit: page
+source:
+  source_file: concepts.xml
 ```
-
-Body shape:
-
-```markdown
-# Concept: ABLE
-# Definition
-...
-# Criteria and general notes
-## Old Chinese Criteria
-...
-# Ontology
-## Antonym
-- [UNABLE](../d/deb3cd81-03bc-4c7c-9125-a2a8837202c9.md)
-# Bibliography
-- [BUCK 1988](../../bibliography/6/60d39cc0-d76b-4275-8490-886ace4204be.md)
-**A Dictionary ...** page 1008
-# Words
-```
-
-Important behavior:
-
-- Ontology links target `concepts`.
-- Bibliography links target `bibliography`.
-- Old Chinese criteria may contain name wikilinks for unmarked Chinese terms,
-  for example `néng [[能]]`.
-- `# Words` is always present, even when empty.
 
 Index hints:
 
-- Use `concept` as the primary display label.
-- `labels`, `zh`, and `och` are alternate labels/search fields.
-- Body sections should be indexed as text, but relation targets are most
-  reliable in rendered Markdown links and structured importer data is not yet
-  duplicated into concept YAML.
+- `concept` is the primary display label.
+- `alt_labels`, `zh`, `och` are alternate labels / search fields.
+- `criteria[].text` may contain `[[X]]` wikilinks to super-entries.
 
 ### Bibliography
 
-Path:
-
-```text
-bibliography/<hex>/<uuid>.md
-```
-
-Type:
+Path: `bibliography/<hex>/<uuid>.yml` · Type: `bibliography`
 
 ```yaml
+uuid: 0009ccda-306e-47bb-97e2-7da0c80b3302
 type: bibliography
-```
-
-Bibliography notes represent MODS records.
-
-Frontmatter shape:
-
-```yaml
-uuid: 60d39cc0-d76b-4275-8490-886ace4204be
-type: bibliography
-citation_label: BUCK 1988
-ref_usage: '1008'
+citation_label: LU FENGPENG 1997
+ref_usage: '0'
 resource_type: text
 genres:
-- value: book
+- value: article
   authority: marcgt
 titles:
-- title: A Dictionary of Selected Synonyms...
-  lang: eng
+- title: 段玉裁的轉注論及其運用
+  script: Hant
+- title: Duan Yucai de zhuan zhu lun ji qi lian yong
+  type: translated
   script: Latn
 contributors:
-- given: Carl Darling
-  family: BUCK
-  roles:
-  - author
-origin:
-  place: Chicago
-  publisher: The University of Chicago Press
-  date_issued: '1988'
-notes:
-- type: general
-  text: Indispensable standard handbook.
+- type: personal
+  roles: [author]
+  given: Fengpeng
+  family: Lu
+  script: Latn
+  names:
+  - {script: Latn, given: Fengpeng, family: Lu, transliteration: chinese/ala-lc}
+  - {script: Hant, given: 鳳鵬, family: 盧}
 source:
   format: MODS
   version: '3.6'
 ```
 
-Chinese and transliterated names are preserved as variants:
-
-```yaml
-contributors:
-- given: Fengpeng
-  family: Lu
-  script: Latn
-  names:
-  - script: Latn
-    transliteration: chinese/ala-lc
-    given: Fengpeng
-    family: Lu
-  - script: Hant
-    given: 鳳鵬
-    family: 盧
-```
-
-Body shape:
-
-```markdown
-# BUCK 1988
-
-## Title
-**A Dictionary ...**
-
-## Contributors
-- Carl Darling BUCK, author
-
-## Publication
-Chicago: The University of Chicago Press, 1988.
-
-## Notes
-Indispensable standard handbook.
-```
-
 Index hints:
 
 - `citation_label` is the primary short display label.
-- Index all title variants and contributor name variants.
-- For Chinese contributors, index both romanized and character forms.
+- Index all title and contributor name variants; both romanized and CJK
+  forms for Chinese contributors.
 
 ### Graphs
 
-Path:
-
-```text
-graphs/<hex>/<uuid>.md
-```
-
-Type:
-
-```yaml
-type: graph
-```
-
-Graph notes represent Chinese graph records.
-
-Frontmatter shape:
+Path: `graphs/<hex>/<uuid>.yml` · Type: `graph`
 
 ```yaml
 uuid: f35bd989-7850-4240-9751-87ca014d77b1
 type: graph
 graphs:
   attested: 閑
-  unemended:
-  emended:
-  standardised:
+  unemended: null
+  emended: null
+  standardised: null
 gloss: 闌也防也禦也大也法也習也睱也戸間切九
-xiaoyun:
-  headword: 閑
-  graph_count: 9
+xiaoyun: {headword: 閑, graph_count: 9}
 fanqie:
-  shangzi:
-    attested: 戶
-    standard:
-  xiazi:
-    attested: 閒
-    standard:
-ids:
-  guangyun_jiaoshi_id: '4981'
-  pan_wuyun_id: '5025'
-locations:
-  guangyun_location: '129.15'
+  shangzi: {attested: 戶, standard: null}
+  xiazi:  {attested: 閒, standard: null}
+ids:       {guangyun_jiaoshi_id: '4981', pan_wuyun_id: '5025'}
+locations: {guangyun_location: '129.15'}
 pronunciation:
-  mandarin:
-    jin: xián
+  mandarin: {jin: xián}
   middle_chinese:
-    categories:
-      聲: 匣
+    categories: {聲: 匣, 等: 二, 呼: 開, 韻部: 山, 調: 平, 攝: 山}
   old_chinese:
-    pan_wuyun:
-      oc: ɢreen
-```
-
-Body shape:
-
-```markdown
-# 閑
-
-## Fanqie
-戶閒
-
-## Mandarin
-xián
-```
-
-If no attested graph exists, the standardized form becomes the display graph:
-
-```markdown
-# 舔 (standardized)
+    pan_wuyun: {oc: ɢreen, yunbu: 元2, phonetic: 閑}
 ```
 
 Index hints:
 
-- Most graph data is in frontmatter.
-- Body intentionally exposes only display graph, fanqie, and Mandarin/Jin.
-- Index `graphs.attested`, `graphs.standardised`, fanqie components,
-  external IDs, locations, and pronunciation fields.
+- Display label: `graphs.attested`, falling back to `graphs.standardised`.
+- Index `graphs.*`, fanqie components, external IDs, locations, and
+  every pronunciation field.
 
-### Syntactic Functions
+### Syntactic functions
 
-Path:
+Path: `syntactic-functions/<hex>/<uuid>.yml` · Type: `syntactic-function`
 
-```text
-syntactic-functions/<hex>/<uuid>.md
-```
-
-Type:
+Parsed from `<div type="syn-func">` records in
+`core/syntactic-functions.xml`.
 
 ```yaml
+uuid: d128d787-1ecb-4c4f-8e89-5dd3edea91d1
 type: syntactic-function
-```
-
-Syntactic functions are parsed from `<div type="syn-func">` records in a
-single TEI source file.
-
-Frontmatter shape:
-
-```yaml
-uuid: e81e5db1-7207-4450-a18d-27a597c5fd67
-type: syntactic-function
-code: npro.adNab
-relations:
-- type: taxonymy
-  refs:
-  - uuid: 8694d163-4347-4386-b028-e99017c8995b
-    label: npro.adNPab{S}
+code: nab.t
+description: transitive abstract noun, i.e. an abstract, typically deverbal noun…
+notes: |
+  Action nouns are often semantically as transitive as the verbs they derive from…
+taxonomy_parents:
+- 0b9195a6-7aa5-4f97-b489-54e635423cdd
+- d76e92fd-a62d-4b70-82ca-dabb844acc6c
 source:
   source_file: syntactic-functions.xml
 ```
 
-Descriptions and notes are body-only:
-
-```markdown
-# npro.adNab
-
-## Description
-pronoun preceding and modifying an abstract nominal
-
-## Notes
-Most abstract nominals ...
-
-## Links
-### Taxonomy
-- [npro.adNPab{S}](../8/8694d163-4347-4386-b028-e99017c8995b.md)
-```
-
 Index hints:
 
 - `code` is the primary display and lookup field.
-- `relations` are structured enough for graph navigation.
-- Do not expect descriptions/notes in YAML.
+- `taxonomy_parents` is a bare-UUID list of same-collection links.
 
-### Semantic Features
+### Semantic features
 
-Path:
+Path: `semantic-features/<hex>/<uuid>.yml` · Type: `semantic-feature`
 
-```text
-semantic-features/<hex>/<uuid>.md
-```
-
-Type:
+Parsed from `<div type="sem-feat">` records in
+`core/semantic-features.xml`.
 
 ```yaml
+uuid: 98e7674b-b362-466f-9568-d0c14470282a
 type: semantic-feature
-```
-
-Semantic features are parsed from `<div type="sem-feat">` records in a single
-TEI source file.
-
-Frontmatter shape:
-
-```yaml
-uuid: 667a2e02-a4e1-4484-ae80-1382510681be
-type: semantic-feature
-code: imp
-relations:
-- type: source-references
-  target_type: bibliography
-  refs:
-  - uuid: 574fc47b-68e2-4f99-a5c9-692ef8338357
-    label: BROWN 2005
-    title: Encyclopedia of Language and Linguistics. Second Edition
-    scope: '565'
-    scope_unit: page
+code: psych
+description: mental/psychological
+notes: ''
+source_references:
+- bibliography_uuid: 574fc47b-68e2-4f99-a5c9-692ef8338357
+  scope: '565'
+  scope_unit: page
 source:
   source_file: semantic-features.xml
 ```
 
-Descriptions and notes are body-only:
-
-```markdown
-# imp
-
-## Description
-Imperative use of a verb...
-
-## Links
-### Source References
-- [BROWN 2005](../../bibliography/5/574fc47b-68e2-4f99-a5c9-692ef8338357.md) - Encyclopedia ...; page 565
-```
-
 Index hints:
 
 - `code` is the primary display and lookup field.
-- `relations[].target_type` distinguishes same-type semantic-feature links
-  from bibliography links.
-- Do not expect descriptions/notes in YAML.
+- `source_references` is the bibliography pointer list (parallel to
+  `concept.bibliography`).
 
-### Super-Entries
+### Super-entries
 
-Path:
+Path: `super-entries/<hex>/<uuid>.yml` · Type: `super-entry`
 
-```text
-super-entries/<hex>/<uuid>.md
-```
-
-Type:
-
-```yaml
-type: super-entry
-```
-
-Super-entry notes are top-level word-family/index records parsed from TEI
-`superEntry`. They are not the editable word records. Actual concept-scoped
-word records live in `words/`.
-
-Frontmatter shape:
+Top-level word-family / index records parsed from TEI `superEntry`.
+Their child word-entries are split out into the `words/` collection.
 
 ```yaml
 uuid: 703886f9-eb81-4985-b886-f9eb81598567
@@ -473,259 +314,235 @@ n: '4'
 forms:
 - orth: 喜
 - orth: 喜
-  graph_uuid: c4711853-e554-4934-bdf2-97e5b33fbc53
+  graph_uuids: [c4711853-e554-4934-bdf2-97e5b33fbc53]
   pronunciations:
-  - lang: zh-Latn-x-pinyin
-    value: xǐ
-  - lang: zh-x-oc
-    value: qhɯʔ
-  - lang: zh-x-mc
-    value: hɨ
-entries:
-- uuid: d57eebf9-7218-46d5-95bc-4ac4591b81ed
-  sense_count: 16
-  concept: DELIGHT
-  concept_uuid: 1c7bf322-c905-41e0-9145-7d4b01da86a1
-  n: '74'
+  - {lang: zh-Latn-x-pinyin, value: xǐ}
+  - {lang: zh-x-oc,          value: qhɯʔ}
+  - {lang: zh-x-mc,          value: hɨ}
+word_uuids:
+- 044ecd60-1d2f-40b2-a902-3c1384f4b2ca
+- d57eebf9-7218-46d5-95bc-4ac4591b81ed
+- 57102a8f-2ac7-483e-b9a2-d966689bbf86
+- 338ddf66-a845-41e8-9101-64aa32a68ea3
 source:
   source_file: uuid-703886f9-eb81-4985-b886-f9eb81598567.xml
 ```
 
-Body shape:
+Notes:
 
-```markdown
-# Super-entry: 喜
-
-## Forms
-- Orth: 喜
-- Orth: [喜](../../graphs/c/c4711853-e554-4934-bdf2-97e5b33fbc53.md)
-  - Pinyin: xǐ
-  - Old Chinese: qhɯʔ
-  - Middle Chinese: hɨ
-
-## Words
-- [CUSTOM](../../words/0/044ecd60-1d2f-40b2-a902-3c1384f4b2ca.md) (1 sense, n=3)
-- [DELIGHT](../../words/d/d57eebf9-7218-46d5-95bc-4ac4591b81ed.md) (16 senses, n=74)
-```
-
-Important behavior:
-
-- Word links are sorted alphabetically by concept label.
-- `entries` frontmatter is an index only. Full word details are in the
-  linked `words/` notes.
+- `word_uuids` is the bare-UUID list of child word records. The
+  denormalized `entries[]` cache used by the old format is gone — the
+  indexer derives concept/sense-count summaries via JOIN against the
+  word records.
 - The same graph may appear in multiple form variants.
 
 Index hints:
 
-- Use `orth` as the display label.
-- Index `forms[].graph_uuid` and pronunciation variants.
-- Use `entries[]` to build a word-family to word-record relation.
+- Display label: `orth`.
+- Index `forms[].graph_uuids` and every pronunciation variant.
 
 ### Words
 
-Path:
+Path: `words/<hex>/<uuid>.yml` · Type: `word`
 
-```text
-words/<hex>/<uuid>.md
-```
-
-Type:
-
-```yaml
-type: word
-```
-
-Word notes are concept-scoped lexical entries parsed from child `<entry>`
-elements inside a TEI `superEntry`.
-
-Frontmatter shape:
+Concept-scoped lexical entries parsed from child `<entry>` elements
+inside a TEI `superEntry`.
 
 ```yaml
 uuid: d57eebf9-7218-46d5-95bc-4ac4591b81ed
 type: word
 super_entry_uuid: 703886f9-eb81-4985-b886-f9eb81598567
-super_entry_orth: 喜
-concept: DELIGHT
 concept_uuid: 1c7bf322-c905-41e0-9145-7d4b01da86a1
 n: '74'
 form:
   orth: 喜
-  graph_uuid: c4711853-e554-4934-bdf2-97e5b33fbc53
+  graph_uuids: [c4711853-e554-4934-bdf2-97e5b33fbc53]
   pronunciations:
-  - lang: zh-Latn-x-pinyin
-    value: xǐ
-  - lang: zh-x-oc
-    value: qhɯʔ
-  - lang: zh-x-mc
-    value: hɨ
+  - {lang: zh-Latn-x-pinyin, value: xǐ}
+  - {lang: zh-x-oc,          value: qhɯʔ}
+  - {lang: zh-x-mc,          value: hɨ}
+definition: |
+  Xǐ 喜 (ant. yōu 憂 "worry") is openly manifested delight…
 bibliography:
-- uuid: 2389c812-8053-4187-8f7a-19f6e856050f
-  label: FOGUANG
-  title: 佛光大辭典 Fóguāng dàcídiǎn The Foguang Dictionary of Buddhism
+- bibliography_uuid: 2389c812-8053-4187-8f7a-19f6e856050f
   scope: 4899b
   scope_unit: page
-senses:
-- uuid: 45ddee60-d2a7-4973-9289-b93f0f921ac4
-  body_number: 1
-  n: '2'
-  pos: N
-  syntactic_functions:
-  - label: nab.t
-    uuid: d128d787-1ecb-4c4f-8e89-5dd3edea91d1
-  semantic_features:
-  - label: psych
-    uuid: 98e7674b-b362-466f-9568-d0c14470282a
-  usages:
-  - value: '3'
-    type: warring-states-currency
+sense_uuids:
+- 45ddee60-d2a7-4973-9289-b93f0f921ac4
+- 7e95214c-9f48-4227-b809-0432fa83a101
+- 58b4a3ba-a1b5-4b50-9a36-81d2fb17577f
 source:
   source_file: uuid-703886f9-eb81-4985-b886-f9eb81598567.xml
 ```
 
-Body shape:
+Notes:
 
-```markdown
-# 喜: DELIGHT
-
-- Super-entry: [喜](../../super-entries/7/703886f9-eb81-4985-b886-f9eb81598567.md)
-- Concept: [DELIGHT](../../concepts/1/1c7bf322-c905-41e0-9145-7d4b01da86a1.md)
-
-## Form
-- Orth: [喜](../../graphs/c/c4711853-e554-4934-bdf2-97e5b33fbc53.md)
-  - Pinyin: xǐ
-  - Old Chinese: qhɯʔ
-  - Middle Chinese: hɨ
-
-## Definition
-Xǐ 喜 ... is openly manifested delight...
-
-## Bibliography
-- [FOGUANG](../../bibliography/2/2389c812-8053-4187-8f7a-19f6e856050f.md) - 佛光大辭典 ...; page 4899b
-
-## Senses
-1. **[nab.t](../../syntactic-functions/d/d128d787-1ecb-4c4f-8e89-5dd3edea91d1.md)** *[psych](../../semantic-features/9/98e7674b-b362-466f-9568-d0c14470282a.md)* delight (in someone N), joy about (something N) **[2 Attributions](#45ddee60-d2a7-4973-9289-b93f0f921ac4)**
-   - Usage: warring-states-currency: 3
-```
-
-Important behavior:
-
-- Entry-level and sense definitions are body-only.
-- Sense UUIDs are not exposed in body text.
-- `senses[].body_number` maps a frontmatter sense UUID to the numbered body
-  item.
-- POS is frontmatter-only and is not repeated in the body.
-- Sense syntax is rendered inline in bold before the definition.
-- Sense semantic features are rendered inline in italics after syntax.
-- If the sense has an `n` value, the body line ends with
-  `**[<n> Attributions](#<sense-uuid>)**`. The fragment target is the
-  prefixless sense UUID and is intended for frontend attribution lookup.
+- `super_entry_orth` and `concept` label denormalizations are gone — use
+  `super_entry_uuid` / `concept_uuid` and JOIN.
+- `sense_uuids` is the **ordered** list. The frontend numbers displayed
+  senses from list index. There is no `body_number` field.
+- `definition` may contain `[[X]]` wikilinks to super-entries.
 
 Index hints:
 
-- Use `form.orth` plus `concept` as the primary display pair.
-- Use `super_entry_uuid` to group words by top-level graph/word family.
-- Use `concept_uuid` to connect words to concepts.
-- Use `senses[].body_number` for frontend deep navigation to a numbered sense.
-- Index `senses[].syntactic_functions[]` and `senses[].semantic_features[]`
-  as typed outgoing links.
-- Index body definitions as searchable lexical text.
+- Use `form.orth` plus the JOIN-resolved concept label as the display
+  pair.
+- Group by `super_entry_uuid` (word family) and `concept_uuid`.
+- Index `definition` as searchable lexical text.
 
-## Import Commands
+### Senses
 
-All core importers use `--in` for the source XML directory and `--out` for the
-core output root.
+Path: `senses/<hex>/<uuid>.yml` · Type: `sense`
 
-```bash
-bkk import concepts --in module/input/core/concepts --out module/output/core --yes
-bkk import bibliography --in module/input/core/bibliography --out module/output/core --yes
-bkk import graphs --in module/input/core/graphs --out module/output/core --yes
-bkk import syntactic-functions --in module/input/core/syntactic-functions --out module/output/core --yes
-bkk import semantic-features --in module/input/core/semantic-features --out module/output/core --yes
-bkk import words --in module/input/core/words --out module/output/core --yes
+Each sense of a word is its own top-level record. Senses back-reference
+their parent word; word records list their senses in order via
+`sense_uuids`.
+
+```yaml
+uuid: 45ddee60-d2a7-4973-9289-b93f0f921ac4
+type: sense
+word_uuid: d57eebf9-7218-46d5-95bc-4ac4591b81ed
+n: '2'
+pos: N
+syntactic_function_uuids:
+- d128d787-1ecb-4c4f-8e89-5dd3edea91d1
+semantic_feature_uuids:
+- 98e7674b-b362-466f-9568-d0c14470282a
+definition: delight (in someone N), joy about (something N)
+usages:
+- {value: '3', type: warring-states-currency}
+source:
+  source_file: uuid-703886f9-eb81-4985-b886-f9eb81598567.xml
 ```
 
-The explicit form also works:
+Notes:
+
+- `n` is the attestation count. The frontend uses `n` + the sense `uuid`
+  directly to render the attribution toggle; there is no body anchor.
+- `pos` lives on the sense, not the word.
+- Sense order is given by the parent word's `sense_uuids` list. The
+  index materializes this as a `sense_ord` column so queries can return
+  senses in declaration order without re-reading the word file.
+
+Index hints:
+
+- Display number = position in parent word's `sense_uuids` + 1.
+- Index `definition` as searchable lexical text.
+- Treat `syntactic_function_uuids` and `semantic_feature_uuids` as typed
+  outgoing links.
+
+## Import commands
+
+All bkk-core data ships in one TLS repository tree (`tls-data/`) under
+conventional subdirs and files. The consolidated `core` format imports
+every collection in a single invocation:
 
 ```bash
-bkk import --format words --in module/input/core/words --out module/output/core --yes
+bkk import --format core --in <tls-data-root> --out module/output/core --yes
 ```
 
-Current `--text-id` filtering:
+It dispatches to each sub-importer with the conventional source path:
 
-- concepts: source filename stem, UUID, or concept name where supported by the
-  reader/importer path
-- bibliography and graphs: source filename stem or UUID
-- syntactic-functions: UUID or code
-- semantic-features: UUID or code
-- words: super-entry UUID, source filename stem, orthograph, word-entry UUID,
-  or concept name
+| Format | Source under `--in` |
+| --- | --- |
+| `concepts`            | `concepts/`                       |
+| `bibliography`        | `bibliography/`                   |
+| `graphs`              | `guangyun/`                       |
+| `words`               | `words/`                          |
+| `syntactic-functions` | `core/syntactic-functions.xml`    |
+| `semantic-features`   | `core/semantic-features.xml`      |
 
-`--on-exists skip` leaves existing Markdown files unchanged.
+Individual sub-formats still work for incremental re-imports:
 
-## Index Construction Guidance
+```bash
+bkk import concepts            --in <tls-data>/concepts                     --out module/output/core --yes
+bkk import bibliography        --in <tls-data>/bibliography                 --out module/output/core --yes
+bkk import graphs              --in <tls-data>/guangyun                     --out module/output/core --yes
+bkk import syntactic-functions --in <tls-data>/core/syntactic-functions.xml --out module/output/core --yes
+bkk import semantic-features   --in <tls-data>/core/semantic-features.xml   --out module/output/core --yes
+bkk import words               --in <tls-data>/words                        --out module/output/core --yes
+```
 
-### Primary Keys
+`--text-id` filtering by sub-format:
 
-Use `(type, uuid)` as the logical primary key. Paths are useful storage
-addresses, but UUIDs should drive identity.
+- concepts, bibliography, graphs: source filename stem or UUID.
+- syntactic-functions, semantic-features: UUID or code.
+- words: super-entry UUID, source filename stem, orthograph, word-entry
+  UUID, or concept name.
 
-For `type: word`, the UUID is the word-entry UUID, not the super-entry UUID.
+`--on-exists skip` leaves existing `.yml` files unchanged.
 
-### Suggested Tables or Index Buckets
+## Editing model
 
-- `notes`: uuid, type, path, title/display label, source file.
+Records are edited as whole-file YAML through the
+`PATCH /core/<collection>/<uuid>` endpoint, which writes via the
+GitHub fork-and-PR flow.
+
+Request shape:
+
+```json
+{
+  "data": { /* full typed record */ },
+  "parent_sha": "…",
+  "branch": "edit/…",
+  "message": "…",
+  "extra_files": [
+    { "path": "senses/4/45ddee60-….yml", "data": { /* new/changed record */ }, "parent_sha": null }
+  ]
+}
+```
+
+- `data` is the proposed full record. The backend locks `uuid` and `type`
+  to the on-disk record (auto-filling them if omitted) but otherwise
+  accepts any keys the per-type schema validates.
+- `extra_files` carries multi-file edits on the same branch. Set
+  `data: null` to delete a file. Typical use: adding a sense (modified
+  word file in `data`, new sense file in `extra_files`).
+- The response returns the new `commit_sha` plus per-file `extras` with
+  updated parent SHAs so the client can stack subsequent commits on the
+  same branch.
+
+## Index construction guidance
+
+### Primary keys
+
+Use `(type, uuid)` as the logical primary key. The index file lives at
+`<out>/_core.bkki` (SQLite).
+
+### Suggested tables
+
+- `notes`: uuid, type, path, display label, source file.
 - `labels`: uuid, type, label, label_type.
-- `links`: source_uuid, source_type, target_uuid, target_type, label, path.
-- `frontmatter`: raw parsed YAML or typed per-collection projections.
-- `body_text`: note UUID, section heading, text, offset/line metadata if useful.
-- `word_senses`: word_entry_uuid, sense_uuid, body_number, pos, source n, usage.
+- `links`: source_uuid, source_type, target_uuid, target_type, relation.
+- `senses`: uuid, word_uuid, sense_ord, n, pos, def_text.
+- `frontmatter`: typed per-collection projections of record fields.
 
-### Link Extraction
+The index is a **faithful projection** of the YAML records — there is
+no regex reconstruction of prose, because all structured data is already
+typed in the records. Prose fields are indexed as text only.
 
-Extract links from both places:
+### Link extraction
 
-- YAML frontmatter relation fields where present.
-- Markdown body links for local navigation and links not duplicated in YAML.
+Walk the bare-UUID relation lists per record type:
 
-The frontend should resolve links by path for local navigation, but the index
-should normalize them back to target UUID and type where possible.
+- `concept`: `antonyms`, `hypernyms`, `hyponyms`, `see_also`,
+  `bibliography[].bibliography_uuid`.
+- `syntactic-function`: `taxonomy_parents`.
+- `semantic-feature`: `source_references[].bibliography_uuid`.
+- `super-entry`: `word_uuids`, `forms[].graph_uuids`.
+- `word`: `super_entry_uuid`, `concept_uuid`, `form.graph_uuids`,
+  `bibliography[].bibliography_uuid`, `sense_uuids`.
+- `sense`: `word_uuid`, `syntactic_function_uuids`,
+  `semantic_feature_uuids`.
 
-### Collection and Type Caveats
+Wikilinks (`[[X]]`) in prose fields are resolved against the super-entry
+orth map at index time.
 
-- Collection names are plural path names: `concepts`, `graphs`,
-  `syntactic-functions`, `semantic-features`, `super-entries`, `words`.
-- Type names are singular logical names, except `super-entry`:
-  `concept`, `graph`, `syntactic-function`, `semantic-feature`, `word`.
+### Collection / type naming
+
+- Collection names are the plural directory names: `concepts`,
+  `graphs`, `syntactic-functions`, `semantic-features`, `senses`,
+  `super-entries`, `words`.
+- `type` values are singular except `super-entry`: `concept`, `graph`,
+  `syntactic-function`, `semantic-feature`, `sense`, `word`.
 - `bibliography` is both the collection and type name.
-
-### Body Versus Frontmatter
-
-Several note types intentionally keep prose out of YAML to avoid sync drift:
-
-- syntactic-function descriptions and notes
-- semantic-feature descriptions and notes
-- word entry definitions
-- word sense definitions
-
-The frontend should render from the body for editorial text, and the index
-should index body text as searchable prose.
-
-## Current Scope
-
-The current core format covers:
-
-- concepts
-- bibliography records
-- graphs
-- syntactic functions
-- semantic features
-- super-entries
-- words
-
-Future core record types should follow the same pattern:
-
-```text
-<collection>/<hex>/<uuid>.md
-```
-
-with prefixless UUIDs, `type` in frontmatter, and local relative Markdown links.

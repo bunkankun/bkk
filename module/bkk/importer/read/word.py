@@ -16,6 +16,7 @@ from ..ir import (
     WordSense,
     WordUsage,
 )
+from ._provenance import lift_source
 from .concept import normalize_uuid
 
 
@@ -72,6 +73,7 @@ def _parse_entry(entry) -> WordEntry:
 
     form_el = entry.find(_q("form"))
     form = _parse_form(form_el) if form_el is not None else None
+    def_el = entry.find(_q("def"))
     return WordEntry(
         uuid=uuid,
         concept=_attr(entry, f"{{{TLS_NS}}}concept"),
@@ -84,7 +86,7 @@ def _parse_entry(entry) -> WordEntry:
             _parse_sense(sense)
             for sense in entry.findall(_q("sense"))
         ],
-        provenance=_provenance(entry),
+        source=lift_source(entry, def_el),
     )
 
 
@@ -135,9 +137,6 @@ def _parse_sense(sense) -> WordSense:
 
     gram = sense.find(_q("gramGrp"))
     definition = sense.find(_q("def"))
-    provenance = _provenance(sense)
-    if definition is not None:
-        provenance.update(_provenance(definition))
 
     return WordSense(
         uuid=uuid,
@@ -154,7 +153,7 @@ def _parse_sense(sense) -> WordSense:
             for usg in gram.findall(_q("usg")) if _text(usg)
         ] if gram is not None else [],
         definition=_text(definition),
-        provenance=provenance,
+        source=lift_source(sense, definition),
     )
 
 
@@ -188,20 +187,6 @@ def _dedupe_forms(forms: list[WordForm]) -> list[WordForm]:
         seen.add(key)
         deduped.append(form)
     return deduped
-
-
-def _provenance(el) -> dict:
-    data: dict = {}
-    for attr_name, key in [
-        ("resp", "resp"),
-        ("updated", "updated"),
-        (f"{{{TLS_NS}}}created", "created"),
-        ("created", "created"),
-    ]:
-        value = _attr(el, attr_name)
-        if value:
-            data[key] = value
-    return data
 
 
 def _direct_child_text(parent, local: str) -> str | None:

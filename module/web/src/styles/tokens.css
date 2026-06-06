@@ -11,6 +11,14 @@
   --bdr: #252338;
   --bdr-l: #1e1c30;
 
+  /* Aliases for ad-hoc names used by inline styles in components. */
+  --bg-0: var(--bg-pan);
+  --bg-1: var(--bg-act);
+  --bd: var(--bdr);
+  --link: var(--blu);
+  --accent: var(--grn);
+  --err: var(--kr2);
+
   --t1: #dcd8f0;
   --t2: #7a778f;
   --t3: #4a4762;

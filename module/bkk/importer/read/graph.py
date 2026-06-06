@@ -7,10 +7,12 @@ from pathlib import Path
 from lxml import etree
 
 from ..ir import GraphBundle
+from ._provenance import lift_source
 from .concept import normalize_uuid
 
 
 TLS_NS = "http://exist-db.org/tls"
+HXWD_NS = "http://hxwd.org/ns/1.0"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 
 
@@ -42,6 +44,7 @@ def read_graph(xml_path: Path) -> GraphBundle:
         locations=_parse_simple_children(root.find(_q("locations"))),
         notes=_parse_notes(root),
         pronunciation=_parse_pronunciation(root),
+        source=lift_source(root.find(f"{{{HXWD_NS}}}metadata")),
     )
 
 

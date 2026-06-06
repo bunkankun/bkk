@@ -1,15 +1,15 @@
 """Build a SQLite index (``.bkki``) over the bkk-core knowledge layer.
 
-The core knowledge layer lives outside the text bundles. It is a tree of
-Markdown notes with YAML frontmatter, organized as
-``<collection>/<hex>/<uuid>.md``. See ``docs/bkk-core/README.md`` for the
+The core layer is a tree of pure YAML records organized as
+``<collection>/<hex>/<uuid>.yml``. See ``docs/bkk-core/README.md`` for the
 on-disk contract.
 
 The index powers the web frontend's CORE browse activity: a list of records
 per collection, label-substring search, and a detail-view lookup by uuid.
 For the Words collection the list is two-level — super-entries first, then
 their constituent word records — so super-entries are indexed even though
-they are not browseable as a collection of their own.
+they are not browseable as a collection of their own. Senses are indexed as
+their own collection but addressed through their parent word.
 """
 
 from __future__ import annotations
@@ -20,22 +20,24 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
-from bkk.serialize.frontmatter import parse_frontmatter
+from bkk.serialize.yaml_io import load_record
 
 from .catalog import normalize_search_text
 
 log = logging.getLogger("bkk.index.core")
 
-CORE_SCHEMA_VERSION = 2
+CORE_SCHEMA_VERSION = 3
 
 COLLECTIONS: tuple[tuple[str, str], ...] = (
-    # (collection dir name, type)
+    # (collection dir name, type) — ordered so derived JOINs are populated
+    # left-to-right (concepts before words; words before senses & super-entries).
     ("concepts", "concept"),
     ("graphs", "graph"),
     ("syntactic-functions", "syntactic-function"),
     ("semantic-features", "semantic-feature"),
     ("bibliography", "bibliography"),
     ("words", "word"),
+    ("senses", "sense"),
     ("super-entries", "super-entry"),
 )
 
@@ -91,11 +93,10 @@ CREATE TABLE super_entry_words (
 CREATE TABLE senses (
   uuid TEXT PRIMARY KEY,
   word_uuid TEXT NOT NULL,
-  body_number INTEGER,
+  sense_ord INTEGER,
+  n TEXT,
   pos TEXT,
-  syn_func TEXT,
-  sem_feat TEXT,
-  def TEXT
+  def_text TEXT
 );
 
 CREATE INDEX idx_notes_collection ON notes(collection);
@@ -107,62 +108,27 @@ CREATE INDEX idx_links_target ON links(target_uuid);
 CREATE INDEX idx_super_entries_orth_search ON super_entries(orth_search);
 CREATE INDEX idx_super_entry_words_word ON super_entry_words(word_uuid);
 CREATE INDEX idx_senses_word ON senses(word_uuid);
+CREATE INDEX idx_senses_ord ON senses(word_uuid, sense_ord);
 """
 
 
-# Markdown link in a record body. Captures (display, href). The href is
-# inspected with _BODY_LINK_TARGET_RE to find a core-record reference.
-_BODY_MD_LINK_RE = re.compile(r"\[([^\]\n]+)\]\(([^)\n]+)\)")
+# `[[X]]` wikilink in prose fields — resolved against the super-entry orth map.
+_WIKILINK_RE = re.compile(r"\[\[([^\]\n|]+)\]\]")
 
-# Canonical UUID shape (8-4-4-4-12 hex). The `.md` suffix is optional because
-# a few source records have a stray space in the href (markdown parsers
-# truncate at the space, and we want to follow those links anyway).
-_UUID_PATTERN = (
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-)
-
-# `<collection>/<hex>/[uuid-]<uuid>[.md]` — used for cross-collection refs.
-_BODY_CROSS_RE = re.compile(
-    r"(?:^|/)(concepts|graphs|syntactic-functions|semantic-features|bibliography|words|super-entries)/"
-    r"[0-9a-f]+/(?:uuid-)?(" + _UUID_PATTERN + r")(?:\.md)?"
-)
-
-# `../<hex>/[uuid-]<uuid>[.md]` — same-collection sibling.
-_BODY_SAME_RE = re.compile(
-    r"(?:^|/)[0-9a-f]+/(?:uuid-)?(" + _UUID_PATTERN + r")(?:\.md)?"
-)
-
-# CJK-flavoured wikilink such as `[[修]]`. We only resolve those that map to
-# a known super-entry by orth (looked up after the first pass).
-_BODY_WIKILINK_RE = re.compile(r"\[\[([^\]\n|]+)\]\]")
-
-# Strip fenced code blocks before mining links so we don't index sample paths
-# pasted into a record.
-_FENCE_RE = re.compile(r"^\s*```", re.M)
-
-# `## Senses` heading and the next `## ` heading bound the senses section.
-_SENSES_HEADING_RE = re.compile(r"^##\s+Senses\s*$", re.M)
-_NEXT_H2_RE = re.compile(r"^##\s+", re.M)
-
-# Numbered list item: `1. <rest of line>` (rest may contain inline markdown).
-_NUMBERED_ITEM_RE = re.compile(r"^(\d+)\.\s+(.*)$")
-
-# Leading `**[label](href)**` (syntactic function) — optionally followed by
-# `*[label](href)*` (semantic feature).
-_LEADING_BOLD_LINK_RE = re.compile(r"^\*\*\[[^\]\n]+\]\([^)\n]+\)\*\*\s*")
-_LEADING_ITALIC_LINK_RE = re.compile(r"^\*\[[^\]\n]+\]\([^)\n]+\)\*\s*")
-
-# Trailing `**[N Attributions](#<sense-uuid>)**` — when present, also yields
-# the sense uuid for matching to a frontmatter sense.
-_TRAILING_ATTRIBUTIONS_RE = re.compile(
-    r"\s*\*\*\[\d+\s+Attributions?\]\(#(" + _UUID_PATTERN + r")\)\*\*\s*$"
-)
+# Prose fields scanned for wikilinks, per record type.
+_PROSE_FIELDS: dict[str, tuple[str, ...]] = {
+    "concept": ("definition", "words_text"),
+    "word": ("definition",),
+    "sense": ("definition",),
+    "syntactic-function": ("description", "notes"),
+    "semantic-feature": ("description", "notes"),
+}
 
 COLLECTION_TO_TYPE: dict[str, str] = {coll: t for coll, t in COLLECTIONS}
 
 
 def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
-    """Walk ``core_root``, parse frontmatter, write the SQLite index."""
+    """Walk ``core_root``, load each YAML record, write the SQLite index."""
     core_root = Path(core_root)
     out_path = Path(out_path)
 
@@ -172,77 +138,112 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
     notes: list[tuple] = []
     labels: list[tuple] = []
     links: list[tuple] = []
-    super_entries: list[tuple] = []
-    super_entry_word_rows: list[tuple[str, str, str | None, str | None, str | None]] = []
-    senses_rows: list[tuple] = []
-    # word_uuid → pinyin string, populated during the word pass and joined
-    # into super_entry_words at write time.
-    word_pinyin: dict[str, str] = {}
-    # (source_uuid, source_type, source_collection, orth) — resolved after the
-    # super-entry orth → uuid map is complete.
-    pending_wikilinks: list[tuple[str, str, str, str]] = []
+    super_entry_rows: list[tuple] = []
+    super_entry_word_rows: list[tuple] = []
+    sense_rows: list[tuple] = []
     counts: dict[str, int] = {}
+
+    # Caches populated as we walk and consulted by later records:
+    #   word_info[word_uuid] = (concept_uuid, n, pinyin)
+    #   word_display[word_uuid] = "orth: CONCEPT"
+    #   sense_position[sense_uuid] = (word_uuid, ord_index)
+    word_info: dict[str, tuple[str | None, str | None, str | None]] = {}
+    word_display: dict[str, str] = {}
+    sense_position: dict[str, tuple[str, int]] = {}
+    concept_display: dict[str, str] = {}
+
+    # (src_uuid, src_type, orth) — resolved after the super-entry pass.
+    pending_wikilinks: list[tuple[str, str, str]] = []
 
     for coll_dir, type_name in COLLECTIONS:
         coll_root = core_root / coll_dir
         if not coll_root.is_dir():
             log.warning("collection %s not found under %s", coll_dir, core_root)
             continue
-        for md_path in _iter_collection(coll_root):
+        for yml_path in _iter_collection(coll_root):
             try:
-                fm, body = _read_record(md_path)
+                data = load_record(yml_path)
             except Exception as exc:
-                log.warning("%s: frontmatter parse failed: %s", md_path, exc)
+                log.warning("%s: yaml parse failed: %s", yml_path, exc)
                 continue
-            if not fm:
+            if not isinstance(data, dict):
                 continue
-            uuid = _uuid(fm, md_path)
+            uuid = _uuid(data, yml_path)
             if uuid is None:
-                log.warning("%s: missing uuid", md_path)
+                log.warning("%s: missing uuid", yml_path)
                 continue
-            display = _display_label(type_name, fm) or uuid
-            rel_path = md_path.relative_to(core_root).as_posix()
-            source_file = _source_file(fm)
+
+            display = _display_label(
+                type_name, data,
+                concept_display=concept_display,
+                word_display=word_display,
+                sense_position=sense_position,
+            ) or uuid
+            rel_path = yml_path.relative_to(core_root).as_posix()
+            source_file = _source_file(data)
             notes.append((uuid, type_name, coll_dir, rel_path, display, source_file))
-            labels.extend(_label_rows(uuid, type_name, fm, display))
-            links.extend(_link_rows(uuid, type_name, fm))
-            body_text = _strip_code_fences(body) if body else ""
-            if body_text:
-                links.extend(_body_link_rows(uuid, type_name, coll_dir, body_text))
-                for orth in _body_wikilink_orths(body_text):
-                    pending_wikilinks.append((uuid, type_name, coll_dir, orth))
+            labels.extend(_label_rows(uuid, type_name, data, display))
+            links.extend(_link_rows(uuid, type_name, data))
             counts[type_name] = counts.get(type_name, 0) + 1
-            if type_name == "word":
-                pinyin = _word_pinyin(fm)
-                if pinyin:
-                    word_pinyin[uuid] = pinyin
-                senses_rows.extend(_sense_rows(uuid, fm, body_text))
-            if type_name == "super-entry":
-                orth = str(fm.get("orth") or display)
-                entries = [e for e in fm.get("entries") or [] if isinstance(e, dict)]
-                super_entries.append((
-                    uuid, orth, normalize_search_text(orth) or "", len(entries),
+
+            # Wikilink discovery against prose fields only.
+            for orth in _wikilink_orths(type_name, data):
+                pending_wikilinks.append((uuid, type_name, orth))
+
+            if type_name == "concept":
+                concept_display[uuid] = display
+            elif type_name == "word":
+                concept_uuid = _strip_uuid_prefix(data.get("concept_uuid"))
+                n = _str_or_none(data.get("n"))
+                pinyin = _word_pinyin(data)
+                word_info[uuid] = (concept_uuid, n, pinyin)
+                word_display[uuid] = display
+                for ord_index, sense_uuid_raw in enumerate(data.get("sense_uuids") or []):
+                    sense_uuid = _strip_uuid_prefix(sense_uuid_raw)
+                    if sense_uuid:
+                        sense_position[sense_uuid] = (uuid, ord_index)
+            elif type_name == "sense":
+                word_uuid = _strip_uuid_prefix(data.get("word_uuid"))
+                pos_value, ord_index = sense_position.get(uuid, (word_uuid, None))
+                sense_rows.append((
+                    uuid,
+                    word_uuid or pos_value or "",
+                    ord_index,
+                    _str_or_none(data.get("n")),
+                    _str_or_none(data.get("pos")),
+                    _str_or_none(data.get("definition")),
                 ))
-                for entry in entries:
-                    word_uuid = _strip_uuid_prefix(entry.get("uuid"))
-                    if not word_uuid:
-                        continue
+            elif type_name == "super-entry":
+                orth = _str_or_none(data.get("orth")) or display
+                word_uuid_list = [
+                    _strip_uuid_prefix(u)
+                    for u in (data.get("word_uuids") or [])
+                ]
+                word_uuid_list = [u for u in word_uuid_list if u]
+                super_entry_rows.append((
+                    uuid, orth, normalize_search_text(orth) or "",
+                    len(word_uuid_list),
+                ))
+                for word_uuid in word_uuid_list:
+                    concept_uuid, n, pinyin = word_info.get(
+                        word_uuid, (None, None, None),
+                    )
+                    concept_label = (
+                        concept_display.get(concept_uuid)
+                        if concept_uuid else None
+                    )
                     super_entry_word_rows.append((
-                        uuid, word_uuid,
-                        entry.get("concept"),
-                        _strip_uuid_prefix(entry.get("concept_uuid")),
-                        _str_or_none(entry.get("n")),
+                        uuid, word_uuid, concept_label, concept_uuid, n, pinyin,
                     ))
 
-    # Resolve wikilinks against the super-entry orth → uuid map. A wikilink
-    # to an orth with no super-entry is silently dropped.
+    # Resolve wikilinks against the super-entry orth → uuid map.
     orth_to_super: dict[str, str] = {}
-    for se_uuid, orth, _orth_search, _count in super_entries:
+    for se_uuid, orth, _orth_search, _count in super_entry_rows:
         orth_to_super.setdefault(orth, se_uuid)
-    for src_uuid, src_type, _src_coll, orth in pending_wikilinks:
+    for src_uuid, src_type, orth in pending_wikilinks:
         target = orth_to_super.get(orth)
         if target and target != src_uuid:
-            links.append((src_uuid, src_type, target, "super-entry", "body-wikilink"))
+            links.append((src_uuid, src_type, target, "super-entry", "wikilink"))
 
     # Final dedupe of links (same source/target/type/relation).
     seen_links: set[tuple] = set()
@@ -285,24 +286,19 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
         conn.executemany(
             "INSERT INTO super_entries(uuid, orth, orth_search, word_count)"
             " VALUES (?,?,?,?)",
-            super_entries,
+            super_entry_rows,
         )
         conn.executemany(
             "INSERT INTO super_entry_words"
             "(super_entry_uuid, word_uuid, concept, concept_uuid, n, pinyin)"
             " VALUES (?,?,?,?,?,?)",
-            [
-                (se_uuid, word_uuid, concept, concept_uuid, n,
-                 word_pinyin.get(word_uuid))
-                for (se_uuid, word_uuid, concept, concept_uuid, n)
-                in super_entry_word_rows
-            ],
+            super_entry_word_rows,
         )
         conn.executemany(
             "INSERT INTO senses"
-            "(uuid, word_uuid, body_number, pos, syn_func, sem_feat, def)"
-            " VALUES (?,?,?,?,?,?,?)",
-            senses_rows,
+            "(uuid, word_uuid, sense_ord, n, pos, def_text)"
+            " VALUES (?,?,?,?,?,?)",
+            sense_rows,
         )
         conn.commit()
     finally:
@@ -319,22 +315,13 @@ def _iter_collection(coll_root: Path) -> Iterable[Path]:
     for shard in sorted(coll_root.iterdir()):
         if not shard.is_dir() or len(shard.name) != 1:
             continue
-        for md_path in sorted(shard.glob("*.md")):
-            yield md_path
+        for yml_path in sorted(shard.glob("*.yml")):
+            yield yml_path
 
 
-def _read_frontmatter(path: Path) -> dict[str, Any]:
-    fm, _ = _read_record(path)
-    return fm
-
-
-def _read_record(path: Path) -> tuple[dict[str, Any], str]:
-    return parse_frontmatter(path.read_text(encoding="utf-8"))
-
-
-def _word_pinyin(fm: dict) -> str | None:
-    """Pull the pinyin pronunciation out of a word's frontmatter."""
-    form = fm.get("form") if isinstance(fm.get("form"), dict) else {}
+def _word_pinyin(data: dict) -> str | None:
+    """Pull the pinyin pronunciation out of a word's form."""
+    form = data.get("form") if isinstance(data.get("form"), dict) else {}
     prons = form.get("pronunciations") if isinstance(form, dict) else None
     if not isinstance(prons, list):
         return None
@@ -348,118 +335,18 @@ def _word_pinyin(fm: dict) -> str | None:
     return None
 
 
-def _parse_body_senses(body: str) -> dict[str, str]:
-    """Return `{sense_uuid: def_text}` parsed from a word body's Senses section.
-
-    The body shape (see ``docs/bkk-core/README.md``) is a numbered list under
-    ``## Senses``. Each item begins with optional inline markup:
-
-        1. **[syn-func](...)** *[sem-feat](...)* def text **[2 Attributions](#uuid)**
-
-    Only items whose trailing attributions link a sense uuid are usable —
-    those without a sense uuid mapping are silently dropped (the def can be
-    re-derived later if a body-number fallback is added).
-    """
-    if not body:
-        return {}
-    heading = _SENSES_HEADING_RE.search(body)
-    if heading is None:
-        return {}
-    section = body[heading.end():]
-    next_h = _NEXT_H2_RE.search(section)
-    if next_h is not None:
-        section = section[:next_h.start()]
-    out: dict[str, str] = {}
-    for line in section.splitlines():
-        m = _NUMBERED_ITEM_RE.match(line)
-        if not m:
-            continue
-        rest = m.group(2)
-        tail = _TRAILING_ATTRIBUTIONS_RE.search(rest)
-        if tail is None:
-            continue
-        sense_uuid = tail.group(1)
-        rest = rest[: tail.start()]
-        rest = _LEADING_BOLD_LINK_RE.sub("", rest, count=1)
-        rest = _LEADING_ITALIC_LINK_RE.sub("", rest, count=1)
-        def_text = rest.strip()
-        if def_text:
-            out[sense_uuid] = def_text
-    return out
-
-
-def _sense_rows(
-    word_uuid: str, fm: dict, body: str,
-) -> list[tuple[str, str, int | None, str | None, str | None, str | None, str | None]]:
-    """Return one row per sense in a word's frontmatter, def from body."""
-    raw = fm.get("senses")
-    if not isinstance(raw, list):
-        return []
-    defs_by_uuid = _parse_body_senses(body)
-    rows = []
-    for sense in raw:
-        if not isinstance(sense, dict):
-            continue
-        sense_uuid = _strip_uuid_prefix(sense.get("uuid"))
-        if not sense_uuid:
-            continue
-        body_number_raw = sense.get("body_number")
-        try:
-            body_number: int | None = (
-                int(body_number_raw) if body_number_raw is not None else None
-            )
-        except (TypeError, ValueError):
-            body_number = None
-        pos = _str_or_none(sense.get("pos"))
-        syn_func = None
-        syn_funcs = sense.get("syntactic_functions")
-        if isinstance(syn_funcs, list):
-            for sf in syn_funcs:
-                if isinstance(sf, dict):
-                    syn_func = _str_or_none(sf.get("label"))
-                    if syn_func:
-                        break
-        sem_feat = None
-        sem_feats = sense.get("semantic_features")
-        if isinstance(sem_feats, list):
-            for sf in sem_feats:
-                if isinstance(sf, dict):
-                    sem_feat = _str_or_none(sf.get("label"))
-                    if sem_feat:
-                        break
-        def_text = defs_by_uuid.get(sense_uuid)
-        rows.append(
-            (sense_uuid, word_uuid, body_number, pos, syn_func, sem_feat, def_text)
-        )
-    return rows
-
-
-def _strip_code_fences(body: str) -> str:
-    """Remove fenced code blocks before mining links."""
-    parts: list[str] = []
-    in_fence = False
-    for line in body.splitlines():
-        if _FENCE_RE.match(line):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        parts.append(line)
-    return "\n".join(parts)
-
-
 # ---------- field extraction ------------------------------------------------
 
 
-def _uuid(fm: dict, md_path: Path) -> str | None:
-    raw = fm.get("uuid")
+def _uuid(data: dict, yml_path: Path) -> str | None:
+    raw = data.get("uuid")
     if isinstance(raw, str) and raw.strip():
         return _strip_uuid_prefix(raw.strip())
-    return md_path.stem or None
+    return yml_path.stem or None
 
 
-def _source_file(fm: dict) -> str | None:
-    source = fm.get("source")
+def _source_file(data: dict) -> str | None:
+    source = data.get("source")
     if isinstance(source, dict):
         sf = source.get("source_file")
         if isinstance(sf, str):
@@ -467,13 +354,20 @@ def _source_file(fm: dict) -> str | None:
     return None
 
 
-def _display_label(type_name: str, fm: dict) -> str | None:
+def _display_label(
+    type_name: str,
+    data: dict,
+    *,
+    concept_display: dict[str, str],
+    word_display: dict[str, str],
+    sense_position: dict[str, tuple[str, int]],
+) -> str | None:
     if type_name == "concept":
-        return _str_or_none(fm.get("concept"))
+        return _str_or_none(data.get("concept"))
     if type_name == "bibliography":
-        return _str_or_none(fm.get("citation_label"))
+        return _str_or_none(data.get("citation_label"))
     if type_name == "graph":
-        graphs = fm.get("graphs") if isinstance(fm.get("graphs"), dict) else {}
+        graphs = data.get("graphs") if isinstance(data.get("graphs"), dict) else {}
         attested = _str_or_none(graphs.get("attested"))
         if attested:
             return attested
@@ -482,21 +376,33 @@ def _display_label(type_name: str, fm: dict) -> str | None:
             return f"{standardised} (standardised)"
         return None
     if type_name in ("syntactic-function", "semantic-feature"):
-        return _str_or_none(fm.get("code"))
+        return _str_or_none(data.get("code"))
     if type_name == "word":
-        form = fm.get("form") if isinstance(fm.get("form"), dict) else {}
-        orth = _str_or_none(form.get("orth")) or _str_or_none(fm.get("super_entry_orth"))
-        concept = _str_or_none(fm.get("concept"))
+        form = data.get("form") if isinstance(data.get("form"), dict) else {}
+        orth = _str_or_none(form.get("orth"))
+        concept_uuid = _strip_uuid_prefix(data.get("concept_uuid"))
+        concept = concept_display.get(concept_uuid) if concept_uuid else None
         if orth and concept:
             return f"{orth}: {concept}"
         return orth or concept
     if type_name == "super-entry":
-        return _str_or_none(fm.get("orth"))
+        return _str_or_none(data.get("orth"))
+    if type_name == "sense":
+        uuid = _strip_uuid_prefix(data.get("uuid")) or ""
+        word_uuid_field = _strip_uuid_prefix(data.get("word_uuid"))
+        pos_word, ord_index = sense_position.get(uuid, (word_uuid_field, None))
+        parent_label = word_display.get(pos_word or "") if pos_word else None
+        ord_text = str(ord_index + 1) if ord_index is not None else None
+        if parent_label and ord_text:
+            return f"{parent_label} (sense {ord_text})"
+        if parent_label:
+            return parent_label
+        return _str_or_none(data.get("definition"))
     return None
 
 
 def _label_rows(
-    uuid: str, type_name: str, fm: dict, display: str,
+    uuid: str, type_name: str, data: dict, display: str,
 ) -> list[tuple[str, str, str, str]]:
     rows: list[tuple[str, str, str, str]] = []
 
@@ -512,36 +418,36 @@ def _label_rows(
     add(display, "display")
 
     if type_name == "concept":
-        add(fm.get("concept"), "concept")
-        for alt in fm.get("labels") or []:
+        add(data.get("concept"), "concept")
+        for alt in data.get("alt_labels") or []:
             add(alt, "alt")
-        add(fm.get("zh"), "zh")
-        add(fm.get("och"), "och")
+        add(data.get("zh"), "zh")
+        add(data.get("och"), "och")
     elif type_name == "bibliography":
-        add(fm.get("citation_label"), "citation_label")
-        for title in fm.get("titles") or []:
+        add(data.get("citation_label"), "citation_label")
+        for title in data.get("titles") or []:
             if isinstance(title, dict):
                 add(title.get("title"), "title")
-        for c in fm.get("contributors") or []:
+        for c in data.get("contributors") or []:
             if not isinstance(c, dict):
                 continue
             _add_contributor_labels(c, add)
     elif type_name == "graph":
-        graphs = fm.get("graphs") if isinstance(fm.get("graphs"), dict) else {}
+        graphs = data.get("graphs") if isinstance(data.get("graphs"), dict) else {}
         for k in ("attested", "unemended", "emended", "standardised"):
             add(graphs.get(k), k)
     elif type_name in ("syntactic-function", "semantic-feature"):
-        add(fm.get("code"), "code")
+        add(data.get("code"), "code")
     elif type_name == "word":
-        form = fm.get("form") if isinstance(fm.get("form"), dict) else {}
+        form = data.get("form") if isinstance(data.get("form"), dict) else {}
         add(form.get("orth"), "orth")
-        add(fm.get("concept"), "concept")
-        add(fm.get("super_entry_orth"), "super_entry_orth")
     elif type_name == "super-entry":
-        add(fm.get("orth"), "orth")
-        for f in fm.get("forms") or []:
+        add(data.get("orth"), "orth")
+        for f in data.get("forms") or []:
             if isinstance(f, dict):
                 add(f.get("orth"), "form_orth")
+    elif type_name == "sense":
+        add(data.get("definition"), "definition")
 
     # Dedupe (uuid, label, label_type) — preserve order of first occurrence.
     seen: set[tuple[str, str, str]] = set()
@@ -573,9 +479,9 @@ def _add_contributor_labels(contributor: dict, add) -> None:
 
 
 def _link_rows(
-    uuid: str, type_name: str, fm: dict,
+    uuid: str, type_name: str, data: dict,
 ) -> list[tuple[str, str, str, str | None, str | None]]:
-    """Extract structured links from frontmatter only (not body)."""
+    """Extract structured links from a record's typed relation fields."""
     rows: list[tuple[str, str, str, str | None, str | None]] = []
 
     def add(target: Any, target_type: str | None, relation: str | None) -> None:
@@ -584,43 +490,60 @@ def _link_rows(
             return
         rows.append((uuid, type_name, target_uuid, target_type, relation))
 
-    if type_name == "word":
-        add(fm.get("super_entry_uuid"), "super-entry", "super_entry")
-        add(fm.get("concept_uuid"), "concept", "concept")
-        form = fm.get("form") if isinstance(fm.get("form"), dict) else {}
-        add(form.get("graph_uuid"), "graph", "graph")
-        for bib in fm.get("bibliography") or []:
+    def add_each(values: Any, target_type: str | None, relation: str | None) -> None:
+        if not isinstance(values, list):
+            return
+        for v in values:
+            add(v, target_type, relation)
+
+    if type_name == "concept":
+        add_each(data.get("antonyms"), "concept", "antonym")
+        add_each(data.get("hypernyms"), "concept", "hypernym")
+        add_each(data.get("hyponyms"), "concept", "hyponym")
+        add_each(data.get("see_also"), "concept", "see")
+        for other in data.get("other_relations") or []:
+            if isinstance(other, dict):
+                add_each(other.get("uuids"), "concept", other.get("type"))
+        for bib in data.get("bibliography") or []:
             if isinstance(bib, dict):
-                add(bib.get("uuid"), "bibliography", "bibliography")
-        for sense in fm.get("senses") or []:
-            if not isinstance(sense, dict):
-                continue
-            for sf in sense.get("syntactic_functions") or []:
-                if isinstance(sf, dict):
-                    add(sf.get("uuid"), "syntactic-function", "syntactic_function")
-            for sf in sense.get("semantic_features") or []:
-                if isinstance(sf, dict):
-                    add(sf.get("uuid"), "semantic-feature", "semantic_feature")
+                add(bib.get("bibliography_uuid"), "bibliography", "bibliography")
+    elif type_name == "word":
+        add(data.get("super_entry_uuid"), "super-entry", "super_entry")
+        add(data.get("concept_uuid"), "concept", "concept")
+        form = data.get("form") if isinstance(data.get("form"), dict) else {}
+        add_each(form.get("graph_uuids"), "graph", "graph")
+        for bib in data.get("bibliography") or []:
+            if isinstance(bib, dict):
+                add(bib.get("bibliography_uuid"), "bibliography", "bibliography")
+        add_each(data.get("sense_uuids"), "sense", "sense")
+    elif type_name == "sense":
+        add(data.get("word_uuid"), "word", "word")
+        add_each(
+            data.get("syntactic_function_uuids"),
+            "syntactic-function", "syntactic_function",
+        )
+        add_each(
+            data.get("semantic_feature_uuids"),
+            "semantic-feature", "semantic_feature",
+        )
     elif type_name == "super-entry":
-        for f in fm.get("forms") or []:
+        add_each(data.get("word_uuids"), "word", "word")
+        for f in data.get("forms") or []:
             if isinstance(f, dict):
-                add(f.get("graph_uuid"), "graph", "graph")
-        for entry in fm.get("entries") or []:
-            if isinstance(entry, dict):
-                add(entry.get("uuid"), "word", "word")
-                add(entry.get("concept_uuid"), "concept", "concept")
-    elif type_name in ("syntactic-function", "semantic-feature"):
-        for rel in fm.get("relations") or []:
-            if not isinstance(rel, dict):
-                continue
-            rel_label = rel.get("type")
-            target_type = rel.get("target_type") or type_name
-            for ref in rel.get("refs") or []:
-                if isinstance(ref, dict):
-                    add(ref.get("uuid"), target_type, rel_label)
+                add_each(f.get("graph_uuids"), "graph", "graph")
+    elif type_name == "syntactic-function":
+        add_each(data.get("taxonomy_parents"), "syntactic-function", "taxonomy")
+    elif type_name == "semantic-feature":
+        add_each(data.get("taxonomy_parents"), "semantic-feature", "taxonomy")
+        for ref in data.get("source_references") or []:
+            if isinstance(ref, dict):
+                add(
+                    ref.get("bibliography_uuid"),
+                    "bibliography", "source_reference",
+                )
 
     # Dedupe.
-    seen: set[tuple[str, str, str | None, str | None]] = set()
+    seen: set[tuple] = set()
     out: list[tuple[str, str, str, str | None, str | None]] = []
     for row in rows:
         key = (row[2], row[3], row[4], row[1])
@@ -631,53 +554,39 @@ def _link_rows(
     return out
 
 
-def _body_link_rows(
-    source_uuid: str,
-    source_type: str,
-    source_collection: str,
-    body: str,
-) -> list[tuple[str, str, str, str | None, str | None]]:
-    """Extract explicit markdown links from the body to other core records.
-
-    Cross-collection links carry the collection name in their path (e.g.
-    ``../../bibliography/a/<uuid>.md``); same-collection sibling links omit
-    it (``../9/<uuid>.md``) and default to ``source_collection``.
-    """
-    rows: list[tuple[str, str, str, str | None, str | None]] = []
-    for _label, href in _BODY_MD_LINK_RE.findall(body):
-        href = href.strip()
-        if not href:
-            continue
-        # Strip leading scheme-less anchors and split off any title.
-        href = href.split(" ", 1)[0]
-        m_cross = _BODY_CROSS_RE.search(href)
-        if m_cross:
-            target_coll = m_cross.group(1)
-            target_uuid = _strip_uuid_prefix(m_cross.group(2))
-        else:
-            m_same = _BODY_SAME_RE.search(href)
-            if not m_same:
-                continue
-            target_coll = source_collection
-            target_uuid = _strip_uuid_prefix(m_same.group(1))
-        if not target_uuid or target_uuid == source_uuid:
-            continue
-        target_type = COLLECTION_TO_TYPE.get(target_coll)
-        rows.append((source_uuid, source_type, target_uuid, target_type, "body"))
-    return rows
+# ---------- wikilink discovery ----------------------------------------------
 
 
-def _body_wikilink_orths(body: str) -> list[str]:
-    """Return distinct orth strings referenced via ``[[X]]`` wikilinks."""
+def _wikilink_orths(type_name: str, data: dict) -> Iterable[str]:
+    """Yield distinct orth strings referenced via ``[[X]]`` in prose fields."""
+    fields = _PROSE_FIELDS.get(type_name)
+    if not fields:
+        return ()
     seen: set[str] = set()
     out: list[str] = []
-    for inner in _BODY_WIKILINK_RE.findall(body):
-        orth = inner.strip()
-        if not orth or orth in seen:
+    for source in _prose_sources(type_name, data, fields):
+        if not isinstance(source, str):
             continue
-        seen.add(orth)
-        out.append(orth)
+        for inner in _WIKILINK_RE.findall(source):
+            orth = inner.strip()
+            if not orth or orth in seen:
+                continue
+            seen.add(orth)
+            out.append(orth)
     return out
+
+
+def _prose_sources(type_name: str, data: dict, fields: tuple[str, ...]) -> Iterable[str]:
+    for field in fields:
+        value = data.get(field)
+        if isinstance(value, str):
+            yield value
+    if type_name == "concept":
+        for section in data.get("criteria") or []:
+            if isinstance(section, dict):
+                text = section.get("text")
+                if isinstance(text, str):
+                    yield text
 
 
 # ---------- small helpers ---------------------------------------------------
@@ -691,7 +600,6 @@ def _strip_uuid_prefix(value: Any) -> str | None:
         return None
     if text.startswith("uuid-"):
         text = text[len("uuid-"):]
-    # Super-entry graph_uuid sometimes embeds a "#uuid-..." trailing comment.
     text = text.split()[0].split("#", 1)[0]
     return text or None
 

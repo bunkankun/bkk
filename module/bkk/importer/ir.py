@@ -151,6 +151,7 @@ class ConceptBundle:
     relations: list[ConceptRelation] = field(default_factory=list)
     bibliography: list[ConceptBibliographyEntry] = field(default_factory=list)
     words: list[str] = field(default_factory=list)
+    source: dict = field(default_factory=dict)
 
 
 # ---------- Bibliography ---------------------------------------------------
@@ -217,6 +218,7 @@ class GraphBundle:
     locations: dict = field(default_factory=dict)
     notes: dict = field(default_factory=dict)
     pronunciation: dict = field(default_factory=dict)
+    source: dict = field(default_factory=dict)
 
 
 # ---------- Syntactic functions -------------------------------------------
@@ -307,7 +309,7 @@ class WordSense:
     semantic_features: list[WordGrammarLink] = field(default_factory=list)
     usages: list[WordUsage] = field(default_factory=list)
     definition: str | None = None
-    provenance: dict = field(default_factory=dict)
+    source: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -320,7 +322,7 @@ class WordEntry:
     definition: str | None = None
     bibliography: list[WordBibliographyRef] = field(default_factory=list)
     senses: list[WordSense] = field(default_factory=list)
-    provenance: dict = field(default_factory=dict)
+    source: dict = field(default_factory=dict)
 
 
 @dataclass

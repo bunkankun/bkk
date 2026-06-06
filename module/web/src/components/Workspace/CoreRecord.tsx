@@ -2,68 +2,39 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  ApiError,
+  getAnnotationSenseCounts,
   getCoreBacklinks,
   getCoreConceptWords,
   getCoreRecord,
   getCoreSuperEntryByOrth,
-  openCoreRecordPr,
-  patchCoreRecord,
 } from "../../api/client";
 import type {
   CoreBacklinksResponse,
   CoreConceptWord,
+  CoreRecordLink,
   CoreRecordResponse,
 } from "../../api/types";
 import { findTab, useWorkspace, workspace } from "../../state/useWorkspace";
 import { SenseUsesPanel } from "../SenseUses";
-
-const LOCKED_FRONTMATTER_KEYS = new Set(["uuid", "type"]);
-
-interface EditDraft {
-  branch: string;
-  parent_sha: string;
-  commit_sha: string;
-  fork_repo: string;
-  compare_url: string;
-  pr_url: string | null;
-  frontmatter: Record<string, unknown>;
-  body_markdown: string;
-}
-
-const KNOWN_COLLECTIONS = new Set([
-  "concepts",
-  "graphs",
-  "syntactic-functions",
-  "semantic-features",
-  "bibliography",
-  "words",
-  "super-entries",
-]);
-
-// Canonical UUID shape (8-4-4-4-12 hex). The `.md` suffix is optional because
-// some source records have a stray space in the href, which markdown parsers
-// truncate at — we still want to follow those links.
-const UUID_RE = String.raw`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`;
-
-// Cross-collection link: `.../<collection>/<hex>/[uuid-]<uuid>[.md]`
-const CROSS_COLLECTION_RE = new RegExp(
-  String.raw`(?:^|/)(concepts|graphs|syntactic-functions|semantic-features|bibliography|words|super-entries)/` +
-    String.raw`[0-9a-f]+/(?:uuid-)?(${UUID_RE})(?:\.md)?`,
-);
-
-// Same-collection sibling link: `../<hex>/[uuid-]<uuid>[.md]` (no collection name in path).
-const SAME_COLLECTION_RE = new RegExp(
-  String.raw`(?:^|/)[0-9a-f]+/(?:uuid-)?(${UUID_RE})(?:\.md)?(?:[#?].*)?$`,
-);
+import { CoreRecordEditor } from "./CoreRecordEditor";
 
 const WIKILINK_SCHEME = "bkk-wikilink:";
 
-// `[N Attributions](#<sense-uuid>)` links in word entries — toggle a uses panel
-// inline rather than navigating away.
-const SENSE_HASH_RE = new RegExp(String.raw`^#(${UUID_RE})$`);
+function passthroughUrlTransform(href: string): string {
+  return href;
+}
 
-function SenseLink({ uuid, children }: { uuid: string; children: ReactNode }) {
+// Convert `[[X]]` (CJK) wikilinks to markdown links with a sentinel scheme so
+// ReactMarkdown's link handler can intercept and dispatch them.
+function preprocessWikilinks(text: string): string {
+  return text.replace(/\[\[([^\]\n|]+)\]\]/g, (_, inner: string) => {
+    const orth = inner.trim();
+    if (!orth) return _;
+    return `[${orth}](${WIKILINK_SCHEME}${encodeURIComponent(orth)})`;
+  });
+}
+
+function SenseLink({ uuid, label }: { uuid: string; label: string }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <>
@@ -75,66 +46,1019 @@ function SenseLink({ uuid, children }: { uuid: string; children: ReactNode }) {
         }}
         style={{ color: "var(--link)" }}
       >
-        {children}
+        {label}
       </a>
       {expanded && <SenseUsesPanel senseUuid={uuid} />}
     </>
   );
 }
 
-function parseCoreHref(
-  href: string,
-  currentCollection: string,
-): { collection: string; uuid: string } | null {
-  if (!href) return null;
-  const cross = CROSS_COLLECTION_RE.exec(href);
-  if (cross && KNOWN_COLLECTIONS.has(cross[1])) {
-    return { collection: cross[1], uuid: cross[2] };
-  }
-  const same = SAME_COLLECTION_RE.exec(href);
-  if (same) {
-    return { collection: currentCollection, uuid: same[1] };
-  }
-  return null;
-}
-
-// react-markdown's default urlTransform rejects unknown schemes (so our
-// `bkk-wikilink:` href is silently stripped) and percent-encodes the path,
-// which can confuse our relative-link regex. Let everything through — we
-// handle dispatch ourselves in the `a` component.
-function passthroughUrlTransform(href: string): string {
-  return href;
-}
-
-// Convert `[[X]]` (CJK) wikilinks into markdown anchors with a sentinel scheme
-// so ReactMarkdown's link handler can intercept them. Skip occurrences inside
-// fenced code blocks.
-function preprocessWikilinks(body: string): string {
-  const lines = body.split("\n");
-  let inFence = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^\s*```/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-    lines[i] = line.replace(
-      /\[\[([^\]\n|]+)\]\]/g,
-      (_, inner: string) => {
-        const orth = inner.trim();
-        if (!orth) return _;
-        return `[${orth}](${WIKILINK_SCHEME}${encodeURIComponent(orth)})`;
-      },
-    );
-  }
-  return lines.join("\n");
-}
-
 type State =
   | { status: "loading" }
   | { status: "ok"; record: CoreRecordResponse }
   | { status: "error"; error: string; status_code?: number };
+
+type Lookup = (uuid: string) => CoreRecordLink | undefined;
+type Navigate = (collection: string, uuid: string) => void;
+
+function recordLink(
+  uuid: string,
+  lookup: Lookup,
+  navigate: Navigate,
+  fallbackCollection?: string,
+): ReactNode {
+  const link = lookup(uuid);
+  const label = link?.target_label ?? uuid;
+  const collection = link?.target_collection ?? fallbackCollection ?? null;
+  if (!collection) {
+    return <span>{label}</span>;
+  }
+  return (
+    <a
+      href="#"
+      onClick={(e) => {
+        e.preventDefault();
+        navigate(collection, uuid);
+      }}
+      style={{ color: "var(--link)" }}
+    >
+      {label}
+    </a>
+  );
+}
+
+function ProseMarkdown({
+  text,
+  onWikilink,
+  onCoreNav,
+}: {
+  text: string;
+  onWikilink: (orth: string) => void;
+  onCoreNav: Navigate;
+}) {
+  const processed = useMemo(() => preprocessWikilinks(text || ""), [text]);
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      urlTransform={passthroughUrlTransform}
+      components={{
+        a: ({ href, children, ...rest }) => {
+          if (href?.startsWith(WIKILINK_SCHEME)) {
+            const orth = decodeURIComponent(href.slice(WIKILINK_SCHEME.length));
+            return (
+              <a
+                href={href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onWikilink(orth);
+                }}
+                style={{ color: "var(--link)" }}
+                {...rest}
+              >
+                {children}
+              </a>
+            );
+          }
+          // Bare-UUID markdown link, written by the importer for `{{BKKREF:…}}`.
+          // We don't know the collection so we let the backend's link table
+          // resolve it lazily; for now navigate to whichever collection the
+          // referenced uuid lives in by hitting `/core/<any>/<uuid>` would 404
+          // for the wrong collection. Surface as a plain visible label.
+          if (href && /^[0-9a-fA-F-]{36}$/.test(href)) {
+            const uuid = href;
+            return (
+              <a
+                href={`#${uuid}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  // Best-effort: jump into concepts first; user can navigate
+                  // from there. Phase 5 will switch this to the typed link.
+                  onCoreNav("concepts", uuid);
+                }}
+                style={{ color: "var(--link)" }}
+              >
+                {children}
+              </a>
+            );
+          }
+          return (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--link)" }}
+              {...rest}
+            >
+              {children}
+            </a>
+          );
+        },
+      }}
+    >
+      {processed}
+    </ReactMarkdown>
+  );
+}
+
+function FieldRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 12, marginBottom: 6 }}>
+      <div style={{ fontSize: 11, color: "var(--t3)", textTransform: "uppercase", letterSpacing: 0.4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13, color: "var(--t1)" }}>{children}</div>
+    </div>
+  );
+}
+
+function UuidList({
+  uuids,
+  lookup,
+  navigate,
+  fallbackCollection,
+}: {
+  uuids: string[];
+  lookup: Lookup;
+  navigate: Navigate;
+  fallbackCollection?: string;
+}) {
+  if (!uuids?.length) return null;
+  return (
+    <ul style={{ margin: 0, paddingLeft: 18 }}>
+      {uuids.map((u) => (
+        <li key={u}>{recordLink(u, lookup, navigate, fallbackCollection)}</li>
+      ))}
+    </ul>
+  );
+}
+
+function asString(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === "string") return v;
+  return String(v);
+}
+
+function asStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x): x is string => typeof x === "string" && x.length > 0);
+}
+
+function asRecordArray(v: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x): x is Record<string, unknown> => typeof x === "object" && x != null);
+}
+
+// ---------- per-type renderers ---------------------------------------------
+
+function ConceptView({
+  data,
+  lookup,
+  navigate,
+  onWikilink,
+}: {
+  data: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  const concept = asString(data.concept);
+  const altLabels = asStringArray(data.alt_labels);
+  const zh = asString(data.zh);
+  const och = asString(data.och);
+  const definition = asString(data.definition);
+  const criteria = asRecordArray(data.criteria);
+  const antonyms = asStringArray(data.antonyms);
+  const hypernyms = asStringArray(data.hypernyms);
+  const hyponyms = asStringArray(data.hyponyms);
+  const seeAlso = asStringArray(data.see_also);
+  const otherRelations = asRecordArray(data.other_relations);
+  const bibliography = asRecordArray(data.bibliography);
+  const wordsText = asString(data.words_text);
+  return (
+    <>
+      {concept && <FieldRow label="Concept">{concept}</FieldRow>}
+      {altLabels.length > 0 && (
+        <FieldRow label="Also">{altLabels.join(", ")}</FieldRow>
+      )}
+      {zh && <FieldRow label="zh">{zh}</FieldRow>}
+      {och && <FieldRow label="och">{och}</FieldRow>}
+      {definition && (
+        <FieldRow label="Definition">
+          <ProseMarkdown text={definition} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {criteria.map((section, i) => {
+        const type = asString(section.type) ?? "criteria";
+        const text = asString(section.text) ?? "";
+        return (
+          <FieldRow key={`${type}-${i}`} label={type}>
+            <ProseMarkdown text={text} onWikilink={onWikilink} onCoreNav={navigate} />
+          </FieldRow>
+        );
+      })}
+      {antonyms.length > 0 && (
+        <FieldRow label="Antonyms">
+          <UuidList uuids={antonyms} lookup={lookup} navigate={navigate} fallbackCollection="concepts" />
+        </FieldRow>
+      )}
+      {hypernyms.length > 0 && (
+        <FieldRow label="Hypernyms">
+          <UuidList uuids={hypernyms} lookup={lookup} navigate={navigate} fallbackCollection="concepts" />
+        </FieldRow>
+      )}
+      {hyponyms.length > 0 && (
+        <FieldRow label="Hyponyms">
+          <UuidList uuids={hyponyms} lookup={lookup} navigate={navigate} fallbackCollection="concepts" />
+        </FieldRow>
+      )}
+      {seeAlso.length > 0 && (
+        <FieldRow label="See also">
+          <UuidList uuids={seeAlso} lookup={lookup} navigate={navigate} fallbackCollection="concepts" />
+        </FieldRow>
+      )}
+      {otherRelations.map((rel, i) => {
+        const type = asString(rel.type) ?? `relation-${i}`;
+        const uuids = asStringArray(rel.uuids);
+        if (uuids.length === 0) return null;
+        return (
+          <FieldRow key={`${type}-${i}`} label={type}>
+            <UuidList uuids={uuids} lookup={lookup} navigate={navigate} fallbackCollection="concepts" />
+          </FieldRow>
+        );
+      })}
+      {bibliography.length > 0 && (
+        <FieldRow label="Bibliography">
+          <BibliographyRefList refs={bibliography} lookup={lookup} navigate={navigate} />
+        </FieldRow>
+      )}
+      {wordsText && (
+        <FieldRow label="Words">
+          <ProseMarkdown text={wordsText} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
+function BibliographyRefList({
+  refs,
+  lookup,
+  navigate,
+}: {
+  refs: Record<string, unknown>[];
+  lookup: Lookup;
+  navigate: Navigate;
+}) {
+  return (
+    <ul style={{ margin: 0, paddingLeft: 18 }}>
+      {refs.map((ref, i) => {
+        const uuid = asString(ref.bibliography_uuid);
+        const scope = asString(ref.scope);
+        const scopeUnit = asString(ref.scope_unit);
+        const notes = asStringArray(ref.notes);
+        return (
+          <li key={`${uuid ?? "ref"}-${i}`}>
+            {uuid ? recordLink(uuid, lookup, navigate, "bibliography") : <em>(missing ref)</em>}
+            {scope && (
+              <span style={{ color: "var(--t3)" }}>
+                {" "}— {scope}
+                {scopeUnit && ` (${scopeUnit})`}
+              </span>
+            )}
+            {notes.length > 0 && (
+              <ul style={{ margin: "2px 0 0", paddingLeft: 18 }}>
+                {notes.map((n, j) => (
+                  <li key={j} style={{ color: "var(--t2)" }}>{n}</li>
+                ))}
+              </ul>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function pronLabel(lang: string): { label: string | null; italic: boolean } {
+  if (lang === "zh-Latn-x-pinyin") return { label: null, italic: true };
+  if (lang === "zh-x-oc") return { label: "OC", italic: false };
+  if (lang === "zh-x-mc") return { label: "MC", italic: false };
+  return { label: lang, italic: false };
+}
+
+function FormInline({
+  form,
+  superEntryUuid,
+  lookup,
+  navigate,
+}: {
+  form: Record<string, unknown>;
+  superEntryUuid: string | null;
+  lookup: Lookup;
+  navigate: Navigate;
+}) {
+  const orth = asString(form.orth);
+  const graphUuids = asStringArray(form.graph_uuids);
+  const prons = asRecordArray(form.pronunciations);
+  const parts: ReactNode[] = [];
+  if (orth) {
+    parts.push(
+      superEntryUuid ? (
+        <a
+          key="orth"
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate("super-entries", superEntryUuid);
+          }}
+          style={{ color: "var(--link)" }}
+        >
+          {orth}
+        </a>
+      ) : (
+        <span key="orth">{orth}</span>
+      ),
+    );
+  }
+  prons.forEach((p, i) => {
+    const lang = asString(p.lang);
+    const value = asString(p.value);
+    if (!value) return;
+    const { label, italic } = pronLabel(lang ?? "");
+    parts.push(
+      <span key={`pron-${i}`}>
+        {label && <span style={{ color: "var(--t3)" }}>{label}: </span>}
+        {italic ? <em>{value}</em> : value}
+      </span>,
+    );
+  });
+  if (graphUuids.length > 0) {
+    parts.push(
+      <span key="graphs" style={{ color: "var(--t3)" }}>
+        graphs:{" "}
+        {graphUuids.map((u, i) => (
+          <span key={u}>
+            {i > 0 && ", "}
+            {recordLink(u, lookup, navigate, "graphs")}
+          </span>
+        ))}
+      </span>,
+    );
+  }
+  return (
+    <span>
+      {parts.map((p, i) => (
+        <span key={i}>
+          {i > 0 && <span style={{ color: "var(--t3)" }}> · </span>}
+          {p}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+interface SenseCountsState {
+  status: "loading" | "ok" | "na";
+  counts: Record<string, number>;
+  total: number;
+}
+
+function useSenseCounts(senseUuids: string[]): SenseCountsState {
+  const [state, setState] = useState<SenseCountsState>({
+    status: "loading", counts: {}, total: 0,
+  });
+  const key = senseUuids.join(",");
+  useEffect(() => {
+    if (senseUuids.length === 0) {
+      setState({ status: "ok", counts: {}, total: 0 });
+      return;
+    }
+    let cancelled = false;
+    setState({ status: "loading", counts: {}, total: 0 });
+    getAnnotationSenseCounts(senseUuids)
+      .then((r) => {
+        if (cancelled) return;
+        const total = senseUuids.reduce((n, u) => n + (r.counts[u] ?? 0), 0);
+        setState({ status: "ok", counts: r.counts, total });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: "na", counts: {}, total: 0 });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return state;
+}
+
+function AttributionsBadge({
+  senseUuid,
+  count,
+  status,
+}: {
+  senseUuid: string;
+  count: number;
+  status: SenseCountsState["status"];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const label =
+    status === "loading"
+      ? "… Attributions"
+      : status === "na"
+        ? "Attributions n/a"
+        : `${count} Attributions`;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          display: "inline-block",
+          fontSize: 11,
+          padding: "0 6px",
+          marginLeft: 6,
+          background: "var(--bg-act)",
+          color: count > 0 ? "var(--t1)" : "var(--t3)",
+          border: "1px solid var(--bdr)",
+          borderRadius: 8,
+          cursor: "pointer",
+          lineHeight: "16px",
+        }}
+        title="Toggle prior uses of this sense"
+      >
+        {label}
+      </button>
+      {expanded && <SenseUsesPanel senseUuid={senseUuid} />}
+    </>
+  );
+}
+
+function useSenseRecords(senseUuids: string[]) {
+  const [records, setRecords] = useState<Map<string, CoreRecordResponse>>(new Map());
+  const key = senseUuids.join(",");
+  useEffect(() => {
+    if (senseUuids.length === 0) {
+      setRecords(new Map());
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      senseUuids.map((u) =>
+        getCoreRecord("senses", u).catch(() => null),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      const next = new Map<string, CoreRecordResponse>();
+      results.forEach((r, i) => {
+        if (r) next.set(senseUuids[i], r);
+      });
+      setRecords(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return records;
+}
+
+function WordSensesList({
+  senseUuids,
+  counts,
+  countsStatus,
+  navigate,
+  onWikilink,
+}: {
+  senseUuids: string[];
+  counts: Record<string, number>;
+  countsStatus: SenseCountsState["status"];
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  const records = useSenseRecords(senseUuids);
+  return (
+    <ol style={{ margin: 0, paddingLeft: 18 }}>
+      {senseUuids.map((u, i) => {
+        const rec = records.get(u);
+        if (!rec) {
+          return (
+            <li key={u} style={{ color: "var(--t3)" }}>
+              <SenseLink uuid={u} label={`sense ${i + 1}`} />
+            </li>
+          );
+        }
+        const senseLinks = new Map<string, CoreRecordLink>(
+          rec.links.map((l) => [l.target_uuid, l]),
+        );
+        const synUuids = asStringArray(rec.data.syntactic_function_uuids);
+        const semUuids = asStringArray(rec.data.semantic_feature_uuids);
+        const definition = asString(rec.data.definition);
+        const source = (rec.data.source && typeof rec.data.source === "object")
+          ? rec.data.source as Record<string, unknown>
+          : null;
+        const creator = source ? asString(source.resp) : null;
+        const label = (uuid: string, fallbackCollection: string) =>
+          recordLink(uuid, (v) => senseLinks.get(v), navigate, fallbackCollection);
+        return (
+          <li key={u} style={{ marginBottom: 4 }}>
+            {synUuids.length > 0 && (
+              <strong>
+                {synUuids.map((s, j) => (
+                  <span key={s}>
+                    {j > 0 && ", "}
+                    {label(s, "syntactic-functions")}
+                  </span>
+                ))}
+              </strong>
+            )}
+            {semUuids.length > 0 && (
+              <>
+                {synUuids.length > 0 && " "}
+                <em>
+                  {semUuids.map((s, j) => (
+                    <span key={s}>
+                      {j > 0 && ", "}
+                      {label(s, "semantic-features")}
+                    </span>
+                  ))}
+                </em>
+              </>
+            )}
+            {definition && (
+              <>
+                {(synUuids.length > 0 || semUuids.length > 0) && " "}
+                <ProseMarkdownInline
+                  text={definition}
+                  onWikilink={onWikilink}
+                  onCoreNav={navigate}
+                />
+              </>
+            )}
+            {creator && (
+              <span style={{ color: "var(--t3)" }}> — {creator}</span>
+            )}
+            <AttributionsBadge
+              senseUuid={u}
+              count={counts[u] ?? 0}
+              status={countsStatus}
+            />
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function ProseMarkdownInline({
+  text,
+  onWikilink,
+  onCoreNav,
+}: {
+  text: string;
+  onWikilink: (orth: string) => void;
+  onCoreNav: Navigate;
+}) {
+  const processed = useMemo(() => preprocessWikilinks(text || ""), [text]);
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      urlTransform={passthroughUrlTransform}
+      components={{
+        p: ({ children }) => <span>{children}</span>,
+        a: ({ href, children, ...rest }) => {
+          if (href?.startsWith(WIKILINK_SCHEME)) {
+            const orth = decodeURIComponent(href.slice(WIKILINK_SCHEME.length));
+            return (
+              <a
+                href={href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onWikilink(orth);
+                }}
+                style={{ color: "var(--link)" }}
+                {...rest}
+              >
+                {children}
+              </a>
+            );
+          }
+          if (href && /^[0-9a-fA-F-]{36}$/.test(href)) {
+            const uuid = href;
+            return (
+              <a
+                href={`#${uuid}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onCoreNav("concepts", uuid);
+                }}
+                style={{ color: "var(--link)" }}
+              >
+                {children}
+              </a>
+            );
+          }
+          return (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--link)" }}
+              {...rest}
+            >
+              {children}
+            </a>
+          );
+        },
+      }}
+    >
+      {processed}
+    </ReactMarkdown>
+  );
+}
+
+function WordView({
+  data,
+  lookup,
+  navigate,
+  onWikilink,
+}: {
+  data: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  const superEntryUuid = asString(data.super_entry_uuid);
+  const conceptUuid = asString(data.concept_uuid);
+  const form = (data.form && typeof data.form === "object") ? data.form as Record<string, unknown> : null;
+  const definition = asString(data.definition);
+  const bibliography = asRecordArray(data.bibliography);
+  const senseUuids = asStringArray(data.sense_uuids);
+  const attestations = useSenseCounts(senseUuids);
+  return (
+    <>
+      {form && (
+        <FieldRow label="Form">
+          <FormInline
+            form={form}
+            superEntryUuid={superEntryUuid}
+            lookup={lookup}
+            navigate={navigate}
+          />
+        </FieldRow>
+      )}
+      {conceptUuid && (
+        <FieldRow label="Concept">
+          {recordLink(conceptUuid, lookup, navigate, "concepts")}
+        </FieldRow>
+      )}
+      <FieldRow label="Attestations">
+        {attestations.status === "loading"
+          ? "…"
+          : attestations.status === "na"
+            ? <span style={{ color: "var(--t3)" }}>n/a</span>
+            : String(attestations.total)}
+      </FieldRow>
+      {definition && (
+        <FieldRow label="Definition">
+          <ProseMarkdown text={definition} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {bibliography.length > 0 && (
+        <FieldRow label="Bibliography">
+          <BibliographyRefList refs={bibliography} lookup={lookup} navigate={navigate} />
+        </FieldRow>
+      )}
+      {senseUuids.length > 0 && (
+        <FieldRow label="Senses">
+          <WordSensesList
+            senseUuids={senseUuids}
+            counts={attestations.counts}
+            countsStatus={attestations.status}
+            navigate={navigate}
+            onWikilink={onWikilink}
+          />
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
+function FormView({
+  form,
+  lookup,
+  navigate,
+}: {
+  form: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+}) {
+  const orth = asString(form.orth);
+  const graphUuids = asStringArray(form.graph_uuids);
+  const prons = asRecordArray(form.pronunciations);
+  return (
+    <div>
+      {orth && <div style={{ fontSize: 16 }}>{orth}</div>}
+      {graphUuids.length > 0 && (
+        <div style={{ fontSize: 11, color: "var(--t3)" }}>
+          graphs:{" "}
+          {graphUuids.map((u, i) => (
+            <span key={u}>
+              {i > 0 && ", "}
+              {recordLink(u, lookup, navigate, "graphs")}
+            </span>
+          ))}
+        </div>
+      )}
+      {prons.length > 0 && (
+        <ul style={{ margin: "2px 0 0", paddingLeft: 18 }}>
+          {prons.map((p, i) => (
+            <li key={i} style={{ fontSize: 12 }}>
+              <code style={{ color: "var(--t3)" }}>{asString(p.lang)}</code>{" "}
+              {asString(p.value)}
+              {asString(p.resp) && (
+                <span style={{ color: "var(--t3)" }}> ({asString(p.resp)})</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SenseView({
+  data,
+  lookup,
+  navigate,
+  onWikilink,
+}: {
+  data: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  const wordUuid = asString(data.word_uuid);
+  const n = asString(data.n);
+  const pos = asString(data.pos);
+  const syn = asStringArray(data.syntactic_function_uuids);
+  const sem = asStringArray(data.semantic_feature_uuids);
+  const definition = asString(data.definition);
+  const usages = asRecordArray(data.usages);
+  return (
+    <>
+      {wordUuid && (
+        <FieldRow label="Word">
+          {recordLink(wordUuid, lookup, navigate, "words")}
+        </FieldRow>
+      )}
+      {pos && <FieldRow label="POS">{pos}</FieldRow>}
+      {n && <FieldRow label="Attestations">{n}</FieldRow>}
+      {syn.length > 0 && (
+        <FieldRow label="Syntactic function">
+          <UuidList uuids={syn} lookup={lookup} navigate={navigate} fallbackCollection="syntactic-functions" />
+        </FieldRow>
+      )}
+      {sem.length > 0 && (
+        <FieldRow label="Semantic feature">
+          <UuidList uuids={sem} lookup={lookup} navigate={navigate} fallbackCollection="semantic-features" />
+        </FieldRow>
+      )}
+      {definition && (
+        <FieldRow label="Definition">
+          <ProseMarkdown text={definition} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {usages.length > 0 && (
+        <FieldRow label="Usages">
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {usages.map((u, i) => (
+              <li key={i}>
+                {asString(u.type) && (
+                  <span style={{ color: "var(--t3)" }}>{asString(u.type)}: </span>
+                )}
+                {asString(u.value)}
+              </li>
+            ))}
+          </ul>
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
+function SuperEntryView({
+  data,
+  lookup,
+  navigate,
+}: {
+  data: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+}) {
+  const orth = asString(data.orth);
+  const n = asString(data.n);
+  const forms = asRecordArray(data.forms);
+  const wordUuids = asStringArray(data.word_uuids);
+  return (
+    <>
+      {orth && <FieldRow label="Orth">{orth}</FieldRow>}
+      {n && <FieldRow label="n">{n}</FieldRow>}
+      {forms.length > 0 && (
+        <FieldRow label="Forms">
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {forms.map((f, i) => (
+              <li key={i} style={{ marginBottom: 4 }}>
+                <FormView form={f} lookup={lookup} navigate={navigate} />
+              </li>
+            ))}
+          </ul>
+        </FieldRow>
+      )}
+      {wordUuids.length > 0 && (
+        <FieldRow label="Words">
+          <UuidList uuids={wordUuids} lookup={lookup} navigate={navigate} fallbackCollection="words" />
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
+function SyntacticFunctionView({
+  data,
+  lookup,
+  navigate,
+  onWikilink,
+}: {
+  data: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  const code = asString(data.code);
+  const description = asString(data.description);
+  const notes = asString(data.notes);
+  const parents = asStringArray(data.taxonomy_parents);
+  return (
+    <>
+      {code && <FieldRow label="Code"><code>{code}</code></FieldRow>}
+      {description && (
+        <FieldRow label="Description">
+          <ProseMarkdown text={description} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {notes && (
+        <FieldRow label="Notes">
+          <ProseMarkdown text={notes} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {parents.length > 0 && (
+        <FieldRow label="Taxonomy parents">
+          <UuidList uuids={parents} lookup={lookup} navigate={navigate} fallbackCollection="syntactic-functions" />
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
+function SemanticFeatureView({
+  data,
+  lookup,
+  navigate,
+  onWikilink,
+}: {
+  data: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  const code = asString(data.code);
+  const description = asString(data.description);
+  const notes = asString(data.notes);
+  const parents = asStringArray(data.taxonomy_parents);
+  const sources = asRecordArray(data.source_references);
+  return (
+    <>
+      {code && <FieldRow label="Code"><code>{code}</code></FieldRow>}
+      {description && (
+        <FieldRow label="Description">
+          <ProseMarkdown text={description} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {notes && (
+        <FieldRow label="Notes">
+          <ProseMarkdown text={notes} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {parents.length > 0 && (
+        <FieldRow label="Taxonomy parents">
+          <UuidList uuids={parents} lookup={lookup} navigate={navigate} fallbackCollection="semantic-features" />
+        </FieldRow>
+      )}
+      {sources.length > 0 && (
+        <FieldRow label="Source references">
+          <BibliographyRefList refs={sources} lookup={lookup} navigate={navigate} />
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
+function BibliographyView({ data }: { data: Record<string, unknown> }) {
+  const label = asString(data.citation_label);
+  const resourceType = asString(data.resource_type);
+  const titles = asRecordArray(data.titles);
+  const contributors = asRecordArray(data.contributors);
+  const origin = (data.origin && typeof data.origin === "object") ? data.origin as Record<string, unknown> : null;
+  const notes = asRecordArray(data.notes);
+  return (
+    <>
+      {label && <FieldRow label="Citation label">{label}</FieldRow>}
+      {resourceType && <FieldRow label="Type">{resourceType}</FieldRow>}
+      {titles.length > 0 && (
+        <FieldRow label="Title">
+          {titles.map((t, i) => (
+            <div key={i}>{asString(t.title)}</div>
+          ))}
+        </FieldRow>
+      )}
+      {contributors.length > 0 && (
+        <FieldRow label="Contributors">
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {contributors.map((c, i) => {
+              const family = asString(c.family);
+              const given = asString(c.given);
+              const roles = asStringArray(c.roles);
+              return (
+                <li key={i}>
+                  {family} {given}
+                  {roles.length > 0 && (
+                    <span style={{ color: "var(--t3)" }}> — {roles.join(", ")}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </FieldRow>
+      )}
+      {origin && (
+        <FieldRow label="Origin">
+          {asString(origin.publisher)}
+          {asString(origin.place) && `, ${asString(origin.place)}`}
+          {asString(origin.date_issued) && ` (${asString(origin.date_issued)})`}
+        </FieldRow>
+      )}
+      {notes.length > 0 && (
+        <FieldRow label="Notes">
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {notes.map((n, i) => (
+              <li key={i}>{asString(n.text)}</li>
+            ))}
+          </ul>
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
+function GraphView({ data }: { data: Record<string, unknown> }) {
+  return (
+    <pre
+      style={{
+        fontSize: 11,
+        background: "var(--bg-1)",
+        padding: 8,
+        border: "1px solid var(--bd)",
+        borderRadius: 3,
+        overflow: "auto",
+        color: "var(--t1)",
+        maxHeight: 480,
+      }}
+    >
+      {JSON.stringify(data, null, 2)}
+    </pre>
+  );
+}
+
+function FallbackView({ data }: { data: Record<string, unknown> }) {
+  return (
+    <pre
+      style={{
+        fontSize: 11,
+        background: "var(--bg-1)",
+        padding: 8,
+        border: "1px solid var(--bd)",
+        borderRadius: 3,
+        overflow: "auto",
+        color: "var(--t1)",
+      }}
+    >
+      {JSON.stringify(data, null, 2)}
+    </pre>
+  );
+}
+
+// ---------- main component --------------------------------------------------
 
 export function CoreRecord({
   paneId,
@@ -148,30 +1072,19 @@ export function CoreRecord({
   uuid: string;
 }) {
   const [state, setState] = useState<State>({ status: "loading" });
-  const [showFrontmatter, setShowFrontmatter] = useState(false);
+  const [showRaw, setShowRaw] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [conceptWords, setConceptWords] = useState<CoreConceptWord[] | null>(null);
   const [backlinks, setBacklinks] = useState<CoreBacklinksResponse | null>(null);
-  const [draft, setDraft] = useState<EditDraft | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [editFm, setEditFm] = useState<Array<[string, string]>>([]);
-  const [editBody, setEditBody] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [editConflict, setEditConflict] = useState(false);
-  const [openingPr, setOpeningPr] = useState(false);
-  const authStatus = useWorkspace((s) => s.auth.status);
   const historyLen = useWorkspace((s) => {
     const tab = findTab(s.pane, paneId, tabId);
     return tab?.type === "core-record" ? tab.history?.length ?? 0 : 0;
   });
+  const authenticated = useWorkspace((s) => s.auth.status === "authenticated");
 
   useEffect(() => {
     let cancelled = false;
     setState({ status: "loading" });
-    setDraft(null);
-    setEditing(false);
-    setEditError(null);
-    setEditConflict(false);
     getCoreRecord(collection, uuid)
       .then((record) => {
         if (!cancelled) setState({ status: "ok", record });
@@ -187,8 +1100,6 @@ export function CoreRecord({
   useEffect(() => {
     setBacklinks(null);
     if (collection === "concepts" || collection === "words") {
-      // "Referenced by" is noisy for these collections (every word references
-      // its concept, every concept references the same canonical refs).
       return;
     }
     let cancelled = false;
@@ -223,28 +1134,6 @@ export function CoreRecord({
     };
   }, [collection, uuid]);
 
-  const displayFrontmatter = useMemo(() => {
-    if (draft) return draft.frontmatter;
-    return state.status === "ok" ? state.record.frontmatter : {};
-  }, [state, draft]);
-
-  const displayBody = useMemo(() => {
-    if (draft) return draft.body_markdown;
-    return state.status === "ok" ? state.record.body_markdown : "";
-  }, [state, draft]);
-
-  const frontmatterText = useMemo(() => {
-    try {
-      return JSON.stringify(displayFrontmatter, null, 2);
-    } catch {
-      return "";
-    }
-  }, [displayFrontmatter]);
-
-  const processedBody = useMemo(() => {
-    return preprocessWikilinks(displayBody);
-  }, [displayBody]);
-
   if (state.status === "loading") {
     return <div className="empty-pane">Loading core record…</div>;
   }
@@ -253,145 +1142,24 @@ export function CoreRecord({
   }
 
   const record = state.record;
+  const linksByUuid = new Map<string, CoreRecordLink>(
+    record.links.map((l) => [l.target_uuid, l]),
+  );
+  const lookup: Lookup = (u) => linksByUuid.get(u);
 
-  const replaceWithCore = (nextCollection: string, nextUuid: string) => {
+  const navigate: Navigate = (nextCollection, nextUuid) => {
     workspace.replaceCoreRecord(paneId, tabId, nextCollection, nextUuid);
   };
 
-  const startEdit = () => {
-    const fm = displayFrontmatter;
-    const entries: Array<[string, string]> = [];
-    for (const [k, v] of Object.entries(fm)) {
-      if (LOCKED_FRONTMATTER_KEYS.has(k)) continue;
-      let s: string;
-      if (typeof v === "string") s = v;
-      else if (v == null) s = "";
-      else s = JSON.stringify(v);
-      entries.push([k, s]);
-    }
-    setEditFm(entries);
-    setEditBody(displayBody);
-    setEditError(null);
-    setEditConflict(false);
-    setEditing(true);
-  };
-
-  const cancelEdit = () => {
-    setEditing(false);
-    setEditError(null);
-  };
-
-  const saveEdit = async () => {
-    if (state.status !== "ok") return;
-    const fm: Record<string, unknown> = {};
-    // Preserve locked fields from the original record so the PATCH includes
-    // every existing key.
-    for (const k of ["uuid", "type"]) {
-      const v = (displayFrontmatter as Record<string, unknown>)[k];
-      if (v !== undefined) fm[k] = v;
-    }
-    for (const [k, raw] of editFm) {
-      const original = (displayFrontmatter as Record<string, unknown>)[k];
-      if (typeof original === "string" || original == null) {
-        fm[k] = raw;
-      } else {
-        try {
-          fm[k] = JSON.parse(raw);
-        } catch (e) {
-          setEditError(`field ${k}: invalid JSON (${String(e)})`);
-          return;
-        }
-      }
-    }
-    setSaving(true);
-    setEditError(null);
-    setEditConflict(false);
-    try {
-      const resp = await patchCoreRecord(collection, uuid, {
-        frontmatter: fm,
-        body: editBody,
-        parent_sha: draft?.parent_sha,
-        branch: draft?.branch,
-      });
-      setDraft({
-        branch: resp.branch,
-        parent_sha: resp.parent_sha,
-        commit_sha: resp.commit_sha,
-        fork_repo: resp.fork_repo,
-        compare_url: resp.compare_url,
-        pr_url: resp.pr_url,
-        frontmatter: resp.frontmatter,
-        body_markdown: resp.body_markdown,
-      });
-      setEditing(false);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setEditConflict(true);
-        setEditError(
-          "This record changed upstream since you started editing. Discard your draft and reload to start over.",
-        );
-      } else {
-        setEditError(String(e));
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const discardDraft = () => {
-    setDraft(null);
-    setEditing(false);
-    setEditError(null);
-    setEditConflict(false);
-    // re-fetch upstream
-    setState({ status: "loading" });
-    getCoreRecord(collection, uuid)
-      .then((record) => setState({ status: "ok", record }))
-      .catch((e) => setState({ status: "error", error: String(e) }));
-  };
-
-  const openPr = async () => {
-    if (!draft) return;
-    setOpeningPr(true);
-    setEditError(null);
-    try {
-      const resp = await openCoreRecordPr(collection, uuid, {
-        branch: draft.branch,
-      });
-      setDraft({ ...draft, pr_url: resp.pr_url });
-    } catch (e) {
-      setEditError(String(e));
-    } finally {
-      setOpeningPr(false);
-    }
-  };
-
-  const resolveWikilink = (orth: string) => {
+  const handleWikilink = (orth: string) => {
     getCoreSuperEntryByOrth(orth)
-      .then((r) => replaceWithCore("super-entries", r.uuid))
+      .then((r) => navigate("super-entries", r.uuid))
       .catch(() => {
-        // No super-entry exists for this orth; do nothing for now.
+        // No super-entry exists for this orth; silently ignore.
       });
   };
 
-  const handleLinkClick = (href: string | undefined, e: React.MouseEvent) => {
-    if (!href) return;
-    if (href.startsWith(WIKILINK_SCHEME)) {
-      e.preventDefault();
-      const orth = decodeURIComponent(href.slice(WIKILINK_SCHEME.length));
-      resolveWikilink(orth);
-      return;
-    }
-    const parsed = parseCoreHref(href, record.collection);
-    if (!parsed) return;
-    e.preventDefault();
-    replaceWithCore(parsed.collection, parsed.uuid);
-  };
-
-  const showRelated =
-    record.collection !== "words" &&
-    record.collection !== "concepts" &&
-    record.links.length > 0;
+  const body = renderTypedView(record, lookup, navigate, handleWikilink);
 
   return (
     <div
@@ -431,23 +1199,23 @@ export function CoreRecord({
         <h2 style={{ fontSize: 16, margin: 0, color: "var(--t1)" }}>
           {record.display_label}
         </h2>
-        {authStatus === "authenticated" && !editing && (
+        {authenticated && (
           <button
             type="button"
-            onClick={startEdit}
-            title="Edit this record on your GitHub fork"
+            onClick={() => setEditing((v) => !v)}
             style={{
+              marginLeft: "auto",
               fontSize: 11,
               padding: "2px 8px",
-              background: "var(--bg-1)",
-              color: "var(--t1)",
+              background: editing ? "var(--accent, #2a5)" : "var(--bg-1)",
+              color: editing ? "white" : "var(--t1)",
               border: "1px solid var(--bd)",
               borderRadius: 3,
               cursor: "pointer",
-              marginLeft: "auto",
             }}
+            title={editing ? "Hide editor" : "Edit on your fork"}
           >
-            Edit
+            {editing ? "Editing" : "Edit"}
           </button>
         )}
       </div>
@@ -455,87 +1223,13 @@ export function CoreRecord({
         {record.collection} · {record.uuid}
       </div>
 
-      {draft && (
-        <div
-          style={{
-            fontSize: 11,
-            padding: "6px 10px",
-            marginBottom: 12,
-            background: "var(--bg-1)",
-            border: "1px solid var(--bd)",
-            borderRadius: 3,
-            color: "var(--t1)",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <span>
-            Viewing your unmerged edit on{" "}
-            <a
-              href={draft.compare_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "var(--link)" }}
-            >
-              {draft.branch}
-            </a>{" "}
-            (commit <code>{draft.commit_sha.slice(0, 7)}</code>).
-          </span>
-          {draft.pr_url ? (
-            <a
-              href={draft.pr_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "var(--link)" }}
-            >
-              View PR ↗
-            </a>
-          ) : (
-            <button
-              type="button"
-              onClick={openPr}
-              disabled={openingPr}
-              style={{
-                fontSize: 11,
-                padding: "1px 6px",
-                background: "var(--bg-2)",
-                color: "var(--t1)",
-                border: "1px solid var(--bd)",
-                borderRadius: 3,
-                cursor: openingPr ? "default" : "pointer",
-              }}
-            >
-              {openingPr ? "Opening…" : "Open PR"}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={discardDraft}
-            title="Discard local draft and reload upstream"
-            style={{
-              fontSize: 11,
-              padding: "1px 6px",
-              background: "var(--bg-2)",
-              color: "var(--t1)",
-              border: "1px solid var(--bd)",
-              borderRadius: 3,
-              cursor: "pointer",
-            }}
-          >
-            Reset to upstream
-          </button>
-        </div>
-      )}
-
       <details
-        open={showFrontmatter}
-        onToggle={(e) => setShowFrontmatter((e.target as HTMLDetailsElement).open)}
+        open={showRaw}
+        onToggle={(e) => setShowRaw((e.target as HTMLDetailsElement).open)}
         style={{ marginBottom: 12 }}
       >
         <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--t2)" }}>
-          Frontmatter
+          Raw YAML data
         </summary>
         <pre
           style={{
@@ -549,243 +1243,84 @@ export function CoreRecord({
             maxHeight: 320,
           }}
         >
-          {frontmatterText}
+          {JSON.stringify(record.data, null, 2)}
         </pre>
       </details>
 
-      {showRelated && (
-        <div style={{ marginBottom: 12, fontSize: 12 }}>
-          <div style={{ color: "var(--t2)", marginBottom: 4 }}>Related</div>
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {record.links.map((l, i) => (
-              <li key={`${l.target_uuid}-${i}`}>
-                {l.target_collection ? (
+      <div className="core-record-body" style={{ fontSize: 13, lineHeight: 1.55 }}>
+        {body}
+
+        {collection === "concepts" && conceptWords != null && conceptWords.length > 0 && (
+          <FieldRow label="Words">
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {conceptWords.map((w) => (
+                <li key={w.uuid}>
                   <a
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
-                      replaceWithCore(l.target_collection!, l.target_uuid);
+                      navigate("words", w.uuid);
                     }}
                     style={{ color: "var(--link)" }}
                   >
-                    {l.target_label ?? l.target_uuid}
+                    {w.super_entry_orth ?? w.display_label ?? w.uuid}
                   </a>
-                ) : (
-                  <span>{l.target_label ?? l.target_uuid}</span>
-                )}
-                {l.relation && (
-                  <span style={{ color: "var(--t3)" }}> — {l.relation}</span>
-                )}
-                {l.target_type && (
-                  <span style={{ color: "var(--t3)" }}> ({l.target_type})</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
+                  {w.n != null && (
+                    <span style={{ color: "var(--t3)" }}> · n={w.n}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </FieldRow>
+        )}
+      </div>
+
+      {editing && (
+        <CoreRecordEditor
+          record={record}
+          onClose={() => setEditing(false)}
+          onSaved={(nextData) => {
+            setState({ status: "ok", record: { ...record, data: nextData } });
+          }}
+        />
       )}
 
       {backlinks &&
         backlinks.total > 0 &&
         record.collection !== "concepts" &&
         record.collection !== "words" && (
-          <BacklinksSection backlinks={backlinks} onOpen={replaceWithCore} />
+          <BacklinksSection backlinks={backlinks} onOpen={navigate} />
         )}
-
-      {editing && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            saveEdit();
-          }}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            marginBottom: 16,
-            padding: 10,
-            border: "1px solid var(--bd)",
-            borderRadius: 3,
-            background: "var(--bg-1)",
-          }}
-        >
-          <div style={{ fontSize: 11, color: "var(--t2)" }}>Frontmatter</div>
-          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 8px" }}>
-            {["uuid", "type"].map((k) => {
-              const v = (displayFrontmatter as Record<string, unknown>)[k];
-              if (v === undefined) return null;
-              return (
-                <div key={k} style={{ display: "contents" }}>
-                  <label style={{ fontSize: 11, color: "var(--t3)" }}>{k}</label>
-                  <code style={{ fontSize: 11, color: "var(--t3)" }}>{String(v)}</code>
-                </div>
-              );
-            })}
-            {editFm.map(([k, v], idx) => (
-              <div key={k} style={{ display: "contents" }}>
-                <label style={{ fontSize: 11, color: "var(--t2)" }} htmlFor={`fm-${k}`}>
-                  {k}
-                </label>
-                <input
-                  id={`fm-${k}`}
-                  type="text"
-                  value={v}
-                  onChange={(e) => {
-                    const next = editFm.slice();
-                    next[idx] = [k, e.target.value];
-                    setEditFm(next);
-                  }}
-                  style={{
-                    fontSize: 12,
-                    padding: "2px 6px",
-                    background: "var(--bg-0)",
-                    color: "var(--t1)",
-                    border: "1px solid var(--bd)",
-                    borderRadius: 3,
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--t2)" }}>Body</div>
-          <textarea
-            value={editBody}
-            onChange={(e) => setEditBody(e.target.value)}
-            rows={20}
-            style={{
-              fontFamily: "monospace",
-              fontSize: 12,
-              padding: 6,
-              background: "var(--bg-0)",
-              color: "var(--t1)",
-              border: "1px solid var(--bd)",
-              borderRadius: 3,
-              resize: "vertical",
-            }}
-          />
-          {editError && (
-            <div style={{ fontSize: 11, color: "var(--t1)", background: "var(--err)", padding: "4px 8px", borderRadius: 3 }}>
-              {editError}
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            {editConflict && (
-              <button
-                type="button"
-                onClick={discardDraft}
-                style={{
-                  fontSize: 11,
-                  padding: "3px 10px",
-                  background: "var(--bg-2)",
-                  color: "var(--t1)",
-                  border: "1px solid var(--bd)",
-                  borderRadius: 3,
-                  cursor: "pointer",
-                }}
-              >
-                Reload from upstream
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={cancelEdit}
-              style={{
-                fontSize: 11,
-                padding: "3px 10px",
-                background: "var(--bg-2)",
-                color: "var(--t1)",
-                border: "1px solid var(--bd)",
-                borderRadius: 3,
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                fontSize: 11,
-                padding: "3px 10px",
-                background: "var(--bg-2)",
-                color: "var(--t1)",
-                border: "1px solid var(--bd)",
-                borderRadius: 3,
-                cursor: saving ? "default" : "pointer",
-              }}
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </form>
-      )}
-
-      <div className="core-record-body" style={{ fontSize: 13, lineHeight: 1.55 }}>
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          urlTransform={passthroughUrlTransform}
-          components={{
-            a: ({ href, children, ...rest }) => {
-              const senseHash = href ? SENSE_HASH_RE.exec(href) : null;
-              if (senseHash) {
-                return <SenseLink uuid={senseHash[1]}>{children}</SenseLink>;
-              }
-              const isWikilink = href?.startsWith(WIKILINK_SCHEME);
-              const parsed =
-                !isWikilink && href ? parseCoreHref(href, record.collection) : null;
-              if (isWikilink || parsed) {
-                return (
-                  <a
-                    href={href}
-                    onClick={(e) => handleLinkClick(href, e)}
-                    style={{ color: "var(--link)" }}
-                    {...rest}
-                  >
-                    {children}
-                  </a>
-                );
-              }
-              return (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: "var(--link)" }}
-                  {...rest}
-                >
-                  {children}
-                </a>
-              );
-            },
-          }}
-        >
-          {processedBody}
-        </ReactMarkdown>
-
-        {collection === "concepts" && conceptWords != null && conceptWords.length > 0 && (
-          <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
-            {conceptWords.map((w) => (
-              <li key={w.uuid}>
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    replaceWithCore("words", w.uuid);
-                  }}
-                  style={{ color: "var(--link)" }}
-                >
-                  {w.super_entry_orth ?? w.display_label ?? w.uuid}
-                </a>
-                {w.n != null && (
-                  <span style={{ color: "var(--t3)" }}> · n={w.n}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   );
+}
+
+function renderTypedView(
+  record: CoreRecordResponse,
+  lookup: Lookup,
+  navigate: Navigate,
+  onWikilink: (orth: string) => void,
+): ReactNode {
+  switch (record.type) {
+    case "concept":
+      return <ConceptView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
+    case "word":
+      return <WordView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
+    case "sense":
+      return <SenseView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
+    case "super-entry":
+      return <SuperEntryView data={record.data} lookup={lookup} navigate={navigate} />;
+    case "syntactic-function":
+      return <SyntacticFunctionView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
+    case "semantic-feature":
+      return <SemanticFeatureView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
+    case "bibliography":
+      return <BibliographyView data={record.data} />;
+    case "graph":
+      return <GraphView data={record.data} />;
+    default:
+      return <FallbackView data={record.data} />;
+  }
 }
 
 const COLLECTION_TITLES: Record<string, string> = {
@@ -795,6 +1330,7 @@ const COLLECTION_TITLES: Record<string, string> = {
   "semantic-features": "Semantic features",
   bibliography: "Bibliography",
   words: "Words",
+  senses: "Senses",
   "super-entries": "Super-entries",
 };
 

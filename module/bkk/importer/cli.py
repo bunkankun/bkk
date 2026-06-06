@@ -60,6 +60,14 @@ Concept invocation::
     # equivalent explicit form
     python -m bkk.importer --format concepts --in <concept-xml-dir> --out <concepts-dir>
 
+Consolidated bkk-core invocation::
+
+    # run all six bkk-core sub-importers from one tls-data root.
+    # Resolves <root>/concepts/, <root>/bibliography/, <root>/guangyun/,
+    # <root>/words/, <root>/core/syntactic-functions.xml,
+    # <root>/core/semantic-features.xml automatically.
+    python -m bkk.importer --format core --in <tls-data-root> --out <out> --yes
+
 Each input XML file becomes one bundle at
 ``<out>/translations/<file-stem>/``; the stem (e.g.
 ``KR1h0004-en-588d9aad``) preserves snapshot suffixes so revisions are
@@ -87,6 +95,7 @@ Cross-source co-existence (see ``docs/cross-source-merge.md``):
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import re
 import sys
@@ -239,9 +248,11 @@ def _find_tls_texts(in_root: Path, text_id: str) -> list[Path]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk.importer")
-    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation", "concepts", "bibliography", "graphs", "syntactic-functions", "semantic-features", "words"], default=None,
-                   help="source format: tls, krp, cbeta, translation, concepts, bibliography, graphs, syntactic-functions, semantic-features, or words "
-                        "(required; or set import.format in .bkkrc)")
+    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation", "core", "concepts", "bibliography", "graphs", "syntactic-functions", "semantic-features", "words"], default=None,
+                   help="source format: tls, krp, cbeta, translation, core, concepts, bibliography, graphs, syntactic-functions, semantic-features, or words "
+                        "(required; or set import.format in .bkkrc). "
+                        "'core' runs all six bkk-core sub-importers against a single tls-data root, "
+                        "resolving the conventional subdir for each.")
     p.add_argument("--recipe", type=Path, default=None,
                    help="recipe YAML pinning per-text knobs (krp); when given, "
                         "supplies --in/--out/--text-id defaults and overrides "
@@ -358,6 +369,7 @@ def run(argv: list[str] | None = None) -> int:
 
     arg_list = list(sys.argv[1:] if argv is None else argv)
     if arg_list and arg_list[0] in (
+        "core",
         "concepts", "bibliography", "graphs",
         "syntactic-functions", "semantic-features", "words",
     ):
@@ -391,6 +403,8 @@ def run(argv: list[str] | None = None) -> int:
         return _run_cbeta(args)
     if args.format == "translation":
         return _run_translation(args)
+    if args.format == "core":
+        return _run_core(args)
     if args.format == "concepts":
         return _run_concepts(args)
     if args.format == "bibliography":
@@ -1680,6 +1694,71 @@ def _import_one_translation(args, xml_path: Path) -> None:
     )
 
 
+_CORE_SUBPATHS: list[tuple[str, str]] = [
+    ("concepts", "concepts"),
+    ("bibliography", "bibliography"),
+    ("graphs", "guangyun"),
+    ("syntactic-functions", "core/syntactic-functions.xml"),
+    ("semantic-features", "core/semantic-features.xml"),
+    ("words", "words"),
+]
+
+
+def _run_core(args) -> int:
+    """Run all six bkk-core sub-importers against a single tls-data root.
+
+    Each sub-format's source is resolved by appending its conventional
+    subdir (or specific XML file) to ``args.in_root``. A single ``--out``
+    receives every collection. ``--text-id`` and ``--on-exists`` propagate
+    to every sub-runner.
+    """
+    if args.in_root is None or args.out_root is None:
+        print(
+            "error: --in (tls-data root) and --out are required for "
+            "--format core",
+            file=sys.stderr,
+        )
+        return 2
+    core_root = args.in_root
+    if not core_root.exists() or not core_root.is_dir():
+        print(
+            f"error: {core_root} is not a directory (expected a tls-data root)",
+            file=sys.stderr,
+        )
+        return 2
+
+    runners = {
+        "concepts": _run_concepts,
+        "bibliography": _run_bibliography,
+        "graphs": _run_graphs,
+        "syntactic-functions": _run_syntactic_functions,
+        "semantic-features": _run_semantic_features,
+        "words": _run_words,
+    }
+
+    rc = 0
+    for fmt, sub in _CORE_SUBPATHS:
+        sub_in = core_root / sub
+        if not sub_in.exists():
+            print(
+                f"warning: {fmt}: {sub_in} does not exist; skipping",
+                file=sys.stderr,
+            )
+            continue
+        sub_args = copy.copy(args)
+        sub_args.in_root = sub_in
+        sub_args.format = fmt
+        print(f"\n=== --format {fmt} --in {sub_in} ===", file=sys.stderr)
+        try:
+            result = runners[fmt](sub_args)
+        except Exception as exc:  # noqa: BLE001
+            print(f"error in {fmt}: {exc}", file=sys.stderr)
+            result = 1
+        if result:
+            rc = result
+    return rc
+
+
 def _run_concepts(args) -> int:
     """Dispatch the concept-note import path."""
     if args.in_root is None or args.out_root is None:
@@ -1715,24 +1794,37 @@ def _run_concepts(args) -> int:
     return rc
 
 
-def _resolve_core_note_targets(args, *, label: str) -> list[Path]:
-    """Map core-note CLI flags to XML files.
+def _collect_xml_paths(base: Path) -> list[Path]:
+    """Return the XML files under ``base``.
 
-    ``--in`` is the source XML directory itself. XML files are discovered
-    recursively so sharded layouts like ``bibliography/6/uuid-....xml`` work.
-    ``--text-id`` is accepted as a practical single-file filter by source stem
-    or by the prefixless UUID stem.
+    Accepts either a directory (recursive ``*.xml`` glob, for sharded layouts
+    like ``bibliography/6/uuid-....xml``) or a single ``.xml`` file (used by
+    the consolidated ``--format core`` mode to point at e.g.
+    ``<root>/core/syntactic-functions.xml``).
     """
-    base = args.in_root
     if not base.exists():
         print(f"error: {base} does not exist", file=sys.stderr)
         return []
+    if base.is_file():
+        if base.suffix.lower() != ".xml":
+            print(f"error: {base} is not an XML file", file=sys.stderr)
+            return []
+        return [base]
     if not base.is_dir():
-        print(f"error: {base} is not a directory", file=sys.stderr)
+        print(f"error: {base} is not a directory or file", file=sys.stderr)
         return []
+    return sorted(base.rglob("*.xml"))
 
+
+def _resolve_core_note_targets(args, *, label: str) -> list[Path]:
+    """Map core-note CLI flags to XML files.
+
+    ``--in`` is the source XML directory (or a single XML file). ``--text-id``
+    is accepted as a practical single-file filter by source stem or by the
+    prefixless UUID stem.
+    """
+    paths = _collect_xml_paths(args.in_root)
     text_filter = (args.text_id or "").strip() or None
-    paths = sorted(base.rglob("*.xml"))
     if text_filter is None:
         return paths
     return [
@@ -1934,14 +2026,7 @@ def _resolve_syntactic_function_sources(args) -> list[Path]:
     Unlike the one-record-per-file core importers, ``--text-id`` is applied
     after parsing because one source XML file contains many records.
     """
-    base = args.in_root
-    if not base.exists():
-        print(f"error: {base} does not exist", file=sys.stderr)
-        return []
-    if not base.is_dir():
-        print(f"error: {base} is not a directory", file=sys.stderr)
-        return []
-    return sorted(base.rglob("*.xml"))
+    return _collect_xml_paths(args.in_root)
 
 
 def _import_one_syntactic_functions_file(args, xml_path: Path) -> int:
@@ -2022,14 +2107,7 @@ def _resolve_semantic_feature_sources(args) -> list[Path]:
     Like syntactic functions, semantic features are currently stored as many
     records in a single XML file, so ``--text-id`` is applied after parsing.
     """
-    base = args.in_root
-    if not base.exists():
-        print(f"error: {base} does not exist", file=sys.stderr)
-        return []
-    if not base.is_dir():
-        print(f"error: {base} is not a directory", file=sys.stderr)
-        return []
-    return sorted(base.rglob("*.xml"))
+    return _collect_xml_paths(args.in_root)
 
 
 def _import_one_semantic_features_file(args, xml_path: Path) -> int:
@@ -2108,14 +2186,7 @@ def _resolve_word_targets(args) -> list[Path]:
     Filename/UUID filters can be applied before parse; orthograph filters are
     applied in ``_import_one_word`` because they require reading the XML.
     """
-    base = args.in_root
-    if not base.exists():
-        print(f"error: {base} does not exist", file=sys.stderr)
-        return []
-    if not base.is_dir():
-        print(f"error: {base} is not a directory", file=sys.stderr)
-        return []
-    return sorted(base.rglob("*.xml"))
+    return _collect_xml_paths(args.in_root)
 
 
 def _import_one_word(args, xml_path: Path) -> bool:

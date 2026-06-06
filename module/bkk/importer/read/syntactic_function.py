@@ -7,11 +7,11 @@ from pathlib import Path
 from lxml import etree
 
 from ..ir import SyntacticFunctionBundle, SyntacticFunctionRelation
+from ._provenance import lift_source
 from .concept import normalize_uuid
 
 
 TEI_NS = "http://www.tei-c.org/ns/1.0"
-TLS_NS = "http://hxwd.org/ns/1.0"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 
 
@@ -63,15 +63,9 @@ def _parse_syn_func(div, xml_path: Path) -> SyntacticFunctionBundle:
 
 
 def _metadata(div, xml_path: Path) -> dict:
+    first_p = div.find(_q("p"))
     data: dict = {"source_file": xml_path.name}
-    for attr_name, key in [
-        ("resp", "resp"),
-        (f"{{{TLS_NS}}}created", "created"),
-        ("created", "created"),
-    ]:
-        value = div.get(attr_name)
-        if value:
-            data[key] = value
+    data.update(lift_source(div, first_p))
     return data
 
 
