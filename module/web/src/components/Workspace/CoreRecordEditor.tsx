@@ -167,12 +167,12 @@ function StringListInput({
 type LabelFor = (uuid: string) => string | null;
 type Resolved = (uuid: string, label: string) => void;
 
-interface LabelStore {
+export interface LabelStore {
   labelFor: LabelFor;
   resolved: Resolved;
 }
 
-function useLabelStore(initial: Map<string, string>): LabelStore {
+export function useLabelStore(initial: Map<string, string>): LabelStore {
   const [labels, setLabels] = useState<Record<string, string>>(() =>
     Object.fromEntries(initial),
   );
@@ -931,7 +931,7 @@ function ConceptForm({
   );
 }
 
-function SenseRowLabel({ uuid, store }: { uuid: string; store: LabelStore }) {
+export function SenseRowLabel({ uuid, store }: { uuid: string; store: LabelStore }) {
   const [rec, setRec] = useState<CoreRecordResponse | null>(null);
   useEffect(() => {
     let cancelled = false;

@@ -4,8 +4,33 @@ import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { AnnotationCompose } from "./AnnotationCompose";
 import { CoreTargetPicker } from "./CoreTargetPicker";
+import {
+  SenseRowLabel,
+  useLabelStore,
+  type LabelStore,
+} from "../Workspace/CoreRecordEditor";
 
-function AnnCard({ a }: { a: Annotation }) {
+function SenseTriple({ a, store }: { a: Annotation; store: LabelStore }) {
+  if (a.sense?.id) {
+    return <SenseRowLabel uuid={a.sense.id} store={store} />;
+  }
+  const syn = a.sense?.syn_func;
+  const sem = a.sense?.sem_feat;
+  const def = a.sense?.def_text ?? a.sense?.def;
+  if (!syn && !sem && !def) return null;
+  return (
+    <span>
+      {syn && <strong>{syn}</strong>}
+      {sem && <>{syn && " "}<em>{sem}</em></>}
+      {def && <>{(syn || sem) && " "}{def}</>}
+    </span>
+  );
+}
+
+function AnnCard({ a, store }: { a: Annotation; store: LabelStore }) {
+  const hasSense =
+    a.sense?.id || a.sense?.syn_func || a.sense?.sem_feat ||
+    a.sense?.def_text || a.sense?.def;
   return (
     <div className="ann">
       <div className="ann-head">
@@ -14,8 +39,10 @@ function AnnCard({ a }: { a: Annotation }) {
         <span className="ann-offset">@{a.offset}</span>
       </div>
       {a.concept && <div className="ann-concept">{a.concept}</div>}
-      {(a.sense?.def_text ?? a.sense?.def) && (
-        <div className="ann-def">{a.sense?.def_text ?? a.sense?.def}</div>
+      {hasSense && (
+        <div className="ann-def">
+          <SenseTriple a={a} store={store} />
+        </div>
       )}
       {a.translation?.text && (
         <div className="ann-tr">
@@ -72,6 +99,7 @@ export function AnnotationsTab() {
   const [includePin, setIncludePin] = useState(false);
   const [segTranslations, setSegTranslations] = useState<SegmentTranslationEntry[] | null>(null);
   const [segError, setSegError] = useState<string | null>(null);
+  const labelStore = useLabelStore(new Map());
 
   useEffect(() => {
     if (textid == null || seq == null) {
@@ -267,7 +295,9 @@ export function AnnotationsTab() {
             : "No annotations in selection."}
         </div>
       ) : (
-        visible.map((a, i) => <AnnCard key={a.id ?? `${a.offset}-${i}`} a={a} />)
+        visible.map((a, i) => (
+          <AnnCard key={a.id ?? `${a.offset}-${i}`} a={a} store={labelStore} />
+        ))
       )}
     </div>
   );

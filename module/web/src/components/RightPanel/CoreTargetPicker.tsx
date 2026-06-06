@@ -22,6 +22,11 @@ import {
   useSenseLocations,
   type UsesStatus,
 } from "../SenseUses";
+import {
+  SenseRowLabel,
+  useLabelStore,
+  type LabelStore,
+} from "../Workspace/CoreRecordEditor";
 
 interface Props {
   selection: SelectionRange;
@@ -30,15 +35,6 @@ interface Props {
 
 type Status = "idle" | "loading" | "ok" | "no-match" | "error";
 type SenseCounts = Record<string, number>;
-
-function senseSummary(sense: CoreFullSense, ordIndex: number): string {
-  const bits: string[] = [];
-  const senseLabel = sense.sense_ord != null ? sense.sense_ord + 1 : ordIndex + 1;
-  bits.push(`sense ${senseLabel}`);
-  if (sense.pos) bits.push(sense.pos);
-  if (sense.n) bits.push(`${sense.n} att.`);
-  return bits.join(" · ");
-}
 
 function useSenseCounts(words: CoreFullWord[]): SenseCounts | null {
   const [counts, setCounts] = useState<SenseCounts | null>(null);
@@ -186,21 +182,21 @@ function WhereUsedPanel({
 function SenseRow({
   word,
   sense,
-  ordIndex,
   superEntryUuid,
   superEntryOrth,
   useCount,
   selection,
   edition,
+  store,
 }: {
   word: CoreFullWord;
   sense: CoreFullSense;
-  ordIndex: number;
   superEntryUuid: string;
   superEntryOrth: string;
   useCount: number | null;
   selection: SelectionRange;
   edition: string | null;
+  store: LabelStore;
 }) {
   const coreTarget = useWorkspace((s) => s.coreTarget);
   const [showWhere, setShowWhere] = useState(false);
@@ -226,8 +222,6 @@ function SenseRow({
     });
   };
 
-  const summary = senseSummary(sense, ordIndex);
-
   return (
     <div className="core-target-sense-block">
       <div className={selected ? "core-target-row sense selected" : "core-target-row sense"}>
@@ -236,11 +230,9 @@ function SenseRow({
           className="core-target-sense-pick"
           onClick={onPick}
         >
-          {summary && <span className="core-target-sense-summary">{summary}</span>}
-          {sense.def_text && <span className="core-target-sense-def">{sense.def_text}</span>}
-          {!summary && !sense.def_text && (
-            <span className="core-target-sense-summary">{sense.uuid.slice(0, 8)}</span>
-          )}
+          <span className="core-target-sense-def">
+            <SenseRowLabel uuid={sense.uuid} store={store} />
+          </span>
         </button>
         <button
           type="button"
@@ -274,6 +266,7 @@ function WordRow({
   counts,
   selection,
   edition,
+  store,
 }: {
   word: CoreFullWord;
   superEntryUuid: string;
@@ -281,6 +274,7 @@ function WordRow({
   counts: SenseCounts | null;
   selection: SelectionRange;
   edition: string | null;
+  store: LabelStore;
 }) {
   const coreTarget = useWorkspace((s) => s.coreTarget);
   const [expanded, setExpanded] = useState(false);
@@ -322,17 +316,17 @@ function WordRow({
           {word.senses.length === 0 && (
             <div className="empty">This word has no senses.</div>
           )}
-          {word.senses.map((s, i) => (
+          {word.senses.map((s) => (
             <SenseRow
               key={s.uuid}
               word={word}
               sense={s}
-              ordIndex={i}
               superEntryUuid={superEntryUuid}
               superEntryOrth={superEntryOrth}
               useCount={counts == null ? null : counts[s.uuid] ?? 0}
               selection={selection}
               edition={edition}
+              store={store}
             />
           ))}
         </div>
@@ -348,6 +342,7 @@ export function CoreTargetPicker({ selection, edition }: Props) {
   const [words, setWords] = useState<CoreFullWord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const counts = useSenseCounts(words);
+  const labelStore = useLabelStore(new Map());
 
   const query = selection.chars.join("");
   const totalSenseCount = words.reduce((n, w) => n + w.senses.length, 0);
@@ -423,6 +418,7 @@ export function CoreTargetPicker({ selection, edition }: Props) {
             counts={counts}
             selection={selection}
             edition={edition}
+            store={labelStore}
           />
         ))}
     </div>
