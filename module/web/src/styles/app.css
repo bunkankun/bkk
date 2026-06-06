@@ -2400,16 +2400,25 @@ button {
   border-color: var(--amb);
   background: var(--hov);
 }
-.core-target-where-action.use {
+.core-target-sense-use {
+  align-self: stretch;
+  padding: 4px 10px;
+  border: none;
+  border-left: 1px solid var(--bdr);
   background: var(--t2);
-  border-color: var(--t2);
   color: var(--bg);
+  font: inherit;
+  font-size: 11px;
   font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
-.core-target-where-action.use:hover {
+.core-target-sense-use:hover:not(:disabled) {
   background: var(--t1);
-  border-color: var(--t1);
-  color: var(--bg);
+}
+.core-target-sense-use:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 .core-target-where-action:disabled {
   opacity: 0.55;

@@ -16,12 +16,7 @@ import {
   workspace,
   type SelectionRange,
 } from "../../state/useWorkspace";
-import {
-  LocationRow,
-  stopLocationAction,
-  useSenseLocations,
-  type UsesStatus,
-} from "../SenseUses";
+import { LocationRow, useSenseLocations } from "../SenseUses";
 import {
   SenseRowLabel,
   useLabelStore,
@@ -66,119 +61,6 @@ function useSenseCounts(words: CoreFullWord[]): SenseCounts | null {
   return counts;
 }
 
-function WhereUsedPanel({
-  status,
-  locations,
-  error,
-  selection,
-  edition,
-  word,
-  sense,
-  superEntryOrth,
-}: {
-  status: UsesStatus;
-  locations: AnnotationBySenseLocation[];
-  error: string | null;
-  selection: SelectionRange;
-  edition: string | null;
-  word: CoreFullWord;
-  sense: CoreFullSense;
-  superEntryOrth: string;
-}) {
-  const blueskyStatus = useWorkspace((s) => s.blueskyStatus);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [postError, setPostError] = useState<string | null>(null);
-
-  const canUse = blueskyStatus != null && edition != null && selection.anchorMarkerId != null;
-
-  const onUse = async (loc: AnnotationBySenseLocation) => {
-    if (!canUse || !edition || !selection.anchorMarkerId) return;
-    const localId = loc.id ?? `${loc.text_id}:${loc.seq}:${loc.offset ?? 0}`;
-    setBusyId(localId);
-    setPostError(null);
-    try {
-      const length = Math.max(0, selection.end - selection.start);
-      const result = await postAnnotation({
-        text_id: selection.textid,
-        edition,
-        anchor: {
-          marker_id: selection.anchorMarkerId,
-          offset: selection.anchorOffset,
-          length,
-        },
-        payload: {
-          concept: word.concept ?? null,
-          concept_id: word.concept_uuid ?? null,
-          form: { orth: superEntryOrth, pron: word.pinyin },
-          sense: {
-            id: sense.uuid,
-            pos: sense.pos,
-            def_text: sense.def_text,
-          },
-          used_from: loc.id ?? null,
-        },
-      });
-      const local: Annotation = {
-        id: result.cid,
-        offset: selection.start,
-        bucket: selection.bucket,
-        length,
-        marker_id: selection.anchorMarkerId,
-        concept: word.concept ?? undefined,
-        concept_id: word.concept_uuid ?? undefined,
-        form: { orth: superEntryOrth, pron: word.pinyin ?? undefined },
-        sense: {
-          id: sense.uuid,
-          pos: sense.pos ?? undefined,
-          def_text: sense.def_text ?? undefined,
-        },
-        metadata: { did: result.did, posted: "just now", used_from: loc.id ?? null },
-      };
-      workspace.prependLocalAnnotation(selection.textid, selection.seq, local);
-      workspace.setCoreTarget(null);
-    } catch (e) {
-      setPostError(String(e));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  if (status === "loading") return <div className="empty">Searching…</div>;
-  if (status === "error") return <div className="empty">Failed: {error}</div>;
-  if (locations.length === 0) {
-    return <div className="empty">No prior uses of this sense.</div>;
-  }
-  return (
-    <ul className="core-target-where-used">
-      {locations.map((loc, i) => {
-        const locKey = loc.id ?? `${loc.text_id}:${loc.seq}:${loc.offset ?? 0}`;
-        const useAction = blueskyStatus != null && (
-          <button
-            type="button"
-            className="core-target-where-action use"
-            disabled={!canUse || busyId === locKey}
-            onClick={(ev) => {
-              stopLocationAction(ev);
-              void onUse(loc);
-            }}
-            title="Post this sense for the current selection"
-          >
-            {busyId === locKey ? "Using…" : "Use"}
-          </button>
-        );
-        return (
-          <LocationRow
-            key={loc.id ?? `${loc.text_id}:${loc.seq}:${i}`}
-            loc={loc}
-            extraAction={useAction}
-          />
-        );
-      })}
-      {postError && <li className="empty">Failed to post: {postError}</li>}
-    </ul>
-  );
-}
-
 function SenseRow({
   word,
   sense,
@@ -199,9 +81,15 @@ function SenseRow({
   store: LabelStore;
 }) {
   const coreTarget = useWorkspace((s) => s.coreTarget);
+  const blueskyStatus = useWorkspace((s) => s.blueskyStatus);
   const [showWhere, setShowWhere] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   const uses = useSenseLocations(sense.uuid, showWhere);
   const selected = coreTarget?.sense.id === sense.uuid;
+
+  const canUse =
+    blueskyStatus != null && edition != null && selection.anchorMarkerId != null;
 
   const onPick = () => {
     if (selected) {
@@ -222,6 +110,57 @@ function SenseRow({
     });
   };
 
+  const onUse = async () => {
+    if (!canUse || !edition || !selection.anchorMarkerId) return;
+    setBusy(true);
+    setPostError(null);
+    try {
+      const length = Math.max(0, selection.end - selection.start);
+      const result = await postAnnotation({
+        text_id: selection.textid,
+        edition,
+        anchor: {
+          marker_id: selection.anchorMarkerId,
+          offset: selection.anchorOffset,
+          length,
+        },
+        payload: {
+          concept: word.concept ?? null,
+          concept_id: word.concept_uuid ?? null,
+          form: { orth: superEntryOrth, pron: word.pinyin },
+          sense: {
+            id: sense.uuid,
+            pos: sense.pos,
+            def_text: sense.def_text,
+          },
+          used_from: null,
+        },
+      });
+      const local: Annotation = {
+        id: result.cid,
+        offset: selection.start,
+        bucket: selection.bucket,
+        length,
+        marker_id: selection.anchorMarkerId,
+        concept: word.concept ?? undefined,
+        concept_id: word.concept_uuid ?? undefined,
+        form: { orth: superEntryOrth, pron: word.pinyin ?? undefined },
+        sense: {
+          id: sense.uuid,
+          pos: sense.pos ?? undefined,
+          def_text: sense.def_text ?? undefined,
+        },
+        metadata: { did: result.did, posted: "just now", used_from: null },
+      };
+      workspace.prependLocalAnnotation(selection.textid, selection.seq, local);
+      workspace.setCoreTarget(null);
+    } catch (e) {
+      setPostError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="core-target-sense-block">
       <div className={selected ? "core-target-row sense selected" : "core-target-row sense"}>
@@ -234,6 +173,17 @@ function SenseRow({
             <SenseRowLabel uuid={sense.uuid} store={store} />
           </span>
         </button>
+        {blueskyStatus != null && (
+          <button
+            type="button"
+            className="core-target-sense-use"
+            disabled={!canUse || busy}
+            onClick={onUse}
+            title="Assign this sense to the current selection"
+          >
+            {busy ? "Using…" : "Use"}
+          </button>
+        )}
         <button
           type="button"
           className="core-target-where-toggle"
@@ -244,18 +194,40 @@ function SenseRow({
         </button>
       </div>
       {showWhere && (
-        <WhereUsedPanel
+        <WhereUsedList
           status={uses.status}
           locations={uses.locations}
           error={uses.error}
-          selection={selection}
-          edition={edition}
-          word={word}
-          sense={sense}
-          superEntryOrth={superEntryOrth}
         />
       )}
+      {postError && <div className="empty">Failed to post: {postError}</div>}
     </div>
+  );
+}
+
+function WhereUsedList({
+  status,
+  locations,
+  error,
+}: {
+  status: "loading" | "ok" | "error";
+  locations: AnnotationBySenseLocation[];
+  error: string | null;
+}) {
+  if (status === "loading") return <div className="empty">Searching…</div>;
+  if (status === "error") return <div className="empty">Failed: {error}</div>;
+  if (locations.length === 0) {
+    return <div className="empty">No prior uses of this sense.</div>;
+  }
+  return (
+    <ul className="core-target-where-used">
+      {locations.map((loc, i) => (
+        <LocationRow
+          key={loc.id ?? `${loc.text_id}:${loc.seq}:${i}`}
+          loc={loc}
+        />
+      ))}
+    </ul>
   );
 }
 
