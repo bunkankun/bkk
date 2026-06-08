@@ -1,6 +1,7 @@
 import {
   useWorkspace,
   workspace,
+  type LineBreakDisplay,
   type LineMode,
   type PaneNode,
   type ReadMode,
@@ -18,8 +19,14 @@ const MODES: { id: ReadMode; label: string; enabled: boolean; tip: string }[] = 
 ];
 
 const LINE_MODES: { id: LineMode; label: string; tip: string }[] = [
-  { id: "paragraph", label: "¶", tip: "Paragraph display" },
-  { id: "phrase", label: "↵", tip: "Phrase-per-line display (tls:seg or punctuation)" },
+  { id: "paragraph", label: "P", tip: "Paragraph display" },
+  { id: "phrase", label: "L", tip: "Phrase-per-line display (tls:seg or punctuation)" },
+];
+
+const LB_MODES: { id: LineBreakDisplay; label: string; tip: string }[] = [
+  { id: "off", label: "—", tip: "Hide source line-breaks" },
+  { id: "glyph", label: "·", tip: "Mark source line-breaks with ¶" },
+  { id: "br", label: "↵", tip: "Wrap source line-breaks (real <br>)" },
 ];
 
 function paneLeaves(pane: PaneNode): Extract<PaneNode, { kind: "leaf" }>[] {
@@ -39,6 +46,8 @@ export function StatusBar() {
   const focusedPaneId = useWorkspace((s) => s.focusedPaneId);
   const defaultMode = useWorkspace((s) => s.readMode);
   const defaultLineMode = useWorkspace((s) => s.readPrefs.lineMode);
+  const showPageBreaks = useWorkspace((s) => s.readPrefs.showPageBreaks);
+  const lineBreakDisplay = useWorkspace((s) => s.readPrefs.lineBreakDisplay);
   const tab = focusedTab(pane, focusedPaneId);
   const textTab = tab?.type === "text" ? tab : null;
   const mode = textTab?.readMode ?? defaultMode;
@@ -51,6 +60,23 @@ export function StatusBar() {
       <div className="si">juan {seq ?? "—"}</div>
       <div className="si">{cp != null ? formatCp(cp) : ""}</div>
       <div className="s-sp" />
+      <button
+        className={`sdb${showPageBreaks ? " on" : ""}`}
+        title="Show page-breaks"
+        onClick={() => workspace.setShowPageBreaks(!showPageBreaks)}
+      >
+        ⌐
+      </button>
+      {LB_MODES.map((m) => (
+        <button
+          key={m.id}
+          className={`sdb${lineBreakDisplay === m.id ? " on" : ""}`}
+          title={m.tip}
+          onClick={() => workspace.setLineBreakDisplay(m.id)}
+        >
+          {m.label}
+        </button>
+      ))}
       {LINE_MODES.map((m) => (
         <button
           key={m.id}

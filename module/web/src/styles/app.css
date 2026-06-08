@@ -1275,6 +1275,34 @@ button {
   overflow: hidden;
 }
 
+/* page-break: visible when tv-show-pb is set on the container AND the anchor's
+ * edition matches the one currently shown in the image panel. Only matching
+ * anchors get the single | marker; others stay invisible so the transcription
+ * is not littered with breaks from other witnesses. */
+.tv-show-pb .page-anchor--match {
+  width: auto;
+  height: auto;
+  overflow: visible;
+  vertical-align: baseline;
+}
+.tv-show-pb .page-anchor--match::before {
+  content: "|";
+  color: var(--t3);
+  margin: 0 0.15em;
+  user-select: none;
+  cursor: help;
+}
+
+/* line-break glyph marker: rendered as a span by BlockView when
+ * lineBreakDisplay === "glyph". */
+.lb-mark::before {
+  content: "¶";
+  color: var(--t3);
+  font-size: 0.85em;
+  margin: 0 0.15em;
+  user-select: none;
+}
+
 /* image panel ------------------------------------------------- */
 .image-panel {
   flex: 1;

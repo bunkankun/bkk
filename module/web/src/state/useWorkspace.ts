@@ -53,6 +53,7 @@ export type ReadMode = "read" | "trans" | "inspect";
 export type OpenMode = "read" | "trans" | "sticky";
 export type SearchTarget = "fulltext" | "dictionary" | "translations";
 export type LineMode = "paragraph" | "phrase";
+export type LineBreakDisplay = "off" | "glyph" | "br";
 export type Theme = "current" | "dark" | "light";
 export type ListFilterMode = "off" | "any" | "all";
 export type SearchFacetKind =
@@ -269,7 +270,7 @@ export interface WorkspaceState {
   // and by ImagePanel's prev/next toolbar.
   currentPage: CurrentPage | null;
   // user-tunable read-mode display preferences (persisted in localStorage).
-  readPrefs: { lineMode: LineMode };
+  readPrefs: { lineMode: LineMode; showPageBreaks: boolean; lineBreakDisplay: LineBreakDisplay };
   // broader UI preferences (persisted locally and, when logged in, in the
   // user's GitHub workspace session file).
   uiPrefs: { theme: Theme; leftSidebarVisible: boolean; rightSidebarVisible: boolean };
@@ -306,20 +307,35 @@ const SESSION_PATH = "settings/session.json";
 const MAX_SEARCH_HISTORY = 50;
 const MAX_TEXT_HISTORY = 20;
 
-function loadReadPrefs(): { lineMode: LineMode } {
-  if (typeof window === "undefined") return { lineMode: "paragraph" };
+type ReadPrefs = { lineMode: LineMode; showPageBreaks: boolean; lineBreakDisplay: LineBreakDisplay };
+
+const DEFAULT_READ_PREFS: ReadPrefs = {
+  lineMode: "paragraph",
+  showPageBreaks: false,
+  lineBreakDisplay: "off",
+};
+
+function coerceLineBreakDisplay(value: unknown): LineBreakDisplay {
+  return value === "glyph" || value === "br" ? value : "off";
+}
+
+function loadReadPrefs(): ReadPrefs {
+  if (typeof window === "undefined") return { ...DEFAULT_READ_PREFS };
   try {
     const raw = window.localStorage.getItem(READ_PREFS_KEY);
-    if (!raw) return { lineMode: "paragraph" };
+    if (!raw) return { ...DEFAULT_READ_PREFS };
     const parsed = JSON.parse(raw);
-    const lm = parsed?.lineMode === "phrase" ? "phrase" : "paragraph";
-    return { lineMode: lm };
+    return {
+      lineMode: parsed?.lineMode === "phrase" ? "phrase" : "paragraph",
+      showPageBreaks: parsed?.showPageBreaks === true,
+      lineBreakDisplay: coerceLineBreakDisplay(parsed?.lineBreakDisplay),
+    };
   } catch {
-    return { lineMode: "paragraph" };
+    return { ...DEFAULT_READ_PREFS };
   }
 }
 
-function saveReadPrefs(prefs: { lineMode: LineMode }): void {
+function saveReadPrefs(prefs: ReadPrefs): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(READ_PREFS_KEY, JSON.stringify(prefs));
@@ -1298,13 +1314,25 @@ async function loadWorkspacePersistence(): Promise<void> {
           : state.rightTab;
       const sessionReadPrefs =
         typeof sessionDoc.readPrefs === "object" && sessionDoc.readPrefs != null
-          ? (sessionDoc.readPrefs as { lineMode?: unknown })
+          ? (sessionDoc.readPrefs as {
+              lineMode?: unknown;
+              showPageBreaks?: unknown;
+              lineBreakDisplay?: unknown;
+            })
           : null;
       const readPrefs = sessionReadPrefs
         ? {
             ...state.readPrefs,
             lineMode:
               sessionReadPrefs.lineMode === "phrase" ? "phrase" : state.readPrefs.lineMode,
+            showPageBreaks:
+              typeof sessionReadPrefs.showPageBreaks === "boolean"
+                ? sessionReadPrefs.showPageBreaks
+                : state.readPrefs.showPageBreaks,
+            lineBreakDisplay:
+              sessionReadPrefs.lineBreakDisplay === undefined
+                ? state.readPrefs.lineBreakDisplay
+                : coerceLineBreakDisplay(sessionReadPrefs.lineBreakDisplay),
           }
         : state.readPrefs;
       const sessionUiPrefs =
@@ -2420,6 +2448,22 @@ export const workspace = {
         }),
       };
     }
+    notify();
+    scheduleSessionSave();
+  },
+  setShowPageBreaks(show: boolean) {
+    if (state.readPrefs.showPageBreaks === show) return;
+    const readPrefs = { ...state.readPrefs, showPageBreaks: show };
+    state = { ...state, readPrefs };
+    saveReadPrefs(readPrefs);
+    notify();
+    scheduleSessionSave();
+  },
+  setLineBreakDisplay(mode: LineBreakDisplay) {
+    if (state.readPrefs.lineBreakDisplay === mode) return;
+    const readPrefs = { ...state.readPrefs, lineBreakDisplay: mode };
+    state = { ...state, readPrefs };
+    saveReadPrefs(readPrefs);
     notify();
     scheduleSessionSave();
   },

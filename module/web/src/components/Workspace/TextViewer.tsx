@@ -19,8 +19,10 @@ import {
   isResizing,
   useWorkspace,
   workspace,
+  type LineBreakDisplay,
   type LineMode,
 } from "../../state/useWorkspace";
+import { parseMarkerId } from "../../lib/markers";
 import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
 
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
@@ -364,6 +366,17 @@ interface Props {
 }
 
 export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
+  const showPageBreaks = useWorkspace((s) => s.readPrefs.showPageBreaks);
+  const lineBreakDisplay = useWorkspace((s) => s.readPrefs.lineBreakDisplay);
+  const currentPageMarkerId = useWorkspace((s) =>
+    s.currentPage && s.currentPage.textid === textid && s.currentPage.seq === seq
+      ? s.currentPage.markerId
+      : null,
+  );
+  const activeEdition = useMemo(
+    () => (currentPageMarkerId ? parseMarkerId(currentPageMarkerId)?.edition ?? null : null),
+    [currentPageMarkerId],
+  );
   const [juan, setJuan] = useState<Juan | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [catalogMatch, setCatalogMatch] = useState<CatalogMatch | null>(null);
@@ -764,7 +777,10 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
           {editionShort ? ` · ${editionShort}` : ""} · 卷 {seq}
         </h2>
       </div>
-      <div className={`tv-body tv-body-${lineMode}`} ref={containerRef}>
+      <div
+        className={`tv-body tv-body-${lineMode}${showPageBreaks ? " tv-show-pb" : ""} tv-lb-${lineBreakDisplay}`}
+        ref={containerRef}
+      >
         {blocksByBucket.map((view) => (
           <section className={`tv-bucket tv-bucket-${view.bucket}`} key={view.bucket}>
             {view.bucket !== "body" ? (
@@ -786,6 +802,8 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
                   paneId={paneId}
                   tabId={tabId}
                   resolveAnchor={resolveAnchor}
+                  lineBreakDisplay={lineBreakDisplay}
+                  activeEdition={activeEdition}
                 />
               );
             })}
@@ -811,6 +829,8 @@ interface BlockViewProps {
     bucket: BucketName,
     offset: number,
   ) => { anchorMarkerId: string | null; anchorOffset: number };
+  lineBreakDisplay: LineBreakDisplay;
+  activeEdition: string | null;
 }
 
 function BlockView({
@@ -825,6 +845,8 @@ function BlockView({
   paneId,
   tabId,
   resolveAnchor,
+  lineBreakDisplay,
+  activeEdition,
 }: BlockViewProps) {
   const Tag = block.tagName;
 
@@ -846,18 +868,25 @@ function BlockView({
     >
       {block.chars.map((rc, i) => {
         if (rc.pageAnchor) {
+          const parsed = parseMarkerId(rc.pageAnchor.id);
+          const match = activeEdition != null && parsed?.edition === activeEdition;
           return (
             <span
               key={i}
-              className="page-anchor"
+              className={`page-anchor${match ? " page-anchor--match" : ""}`}
               data-bucket={block.bucket}
               data-page-id={rc.pageAnchor.id}
               data-page-offset={rc.pageAnchor.offset}
-              aria-hidden="true"
+              title={match ? rc.pageAnchor.id : undefined}
             />
           );
         }
-        if (rc.isNewline) return <br key={i} />;
+        if (rc.isNewline) {
+          if (lineBreakDisplay === "br") return <br key={i} />;
+          if (lineBreakDisplay === "glyph")
+            return <span key={i} className="lb-mark" aria-hidden="true" />;
+          return null;
+        }
         if (rc.isPunct) {
           // Injected punctuation has no srcOffset; existing punct still has one
           // but we don't expose it for selection.
