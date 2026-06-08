@@ -162,6 +162,15 @@ serve:
 #                                # [annotations] section below only needs an
 #                                # `annotations_root` line in the rare case
 #                                # where you want a per-tool override.
+#   max_search_hits: 20000        # per-query cap on hits the /search endpoint
+#                                 # will materialise. When a query (e.g. a
+#                                 # common bigram like 謂之) would exceed this,
+#                                 # /search returns an empty hits array plus an
+#                                 # `overview` block (approximate total,
+#                                 # trigram extensions, SQL-aggregated facets)
+#                                 # so the user can narrow without OOM-killing
+#                                 # the server. Default: 20000 (~40 MB worst
+#                                 # case). Env: BKK_MAX_SEARCH_HITS.
 
 # ── Annotations harvester ──────────────────────────────────────────────────
 # `bkk annotations harvest` walks each DID below via

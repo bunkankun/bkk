@@ -3,6 +3,7 @@ import type {
   SearchFacetValue,
   SearchFacets,
   SearchHit,
+  SearchOverview,
   TranslationSearchFacets,
   TranslationSearchResponse,
   TranslationSegmentHit,
@@ -677,6 +678,82 @@ function TranslationResultsView({
   );
 }
 
+function refineQuery(extension: string) {
+  workspace.setSearchQuery(extension);
+  void workspace.runSearch();
+}
+
+function OverviewPanel({
+  query,
+  total,
+  overview,
+  disabled,
+}: {
+  query: string;
+  total: number;
+  overview: SearchOverview;
+  disabled: boolean;
+}) {
+  const totalLabel = overview.approximate ? `~${total}` : `${total}`;
+  const hasLeft = overview.trigram_left.length > 0;
+  const hasRight = overview.trigram_right.length > 0;
+  return (
+    <div className="kwic-overview">
+      <div className="kwic-overview-banner">
+        <strong>{totalLabel}</strong> results for “{query}” — too broad to
+        list. Pick a context extension or facet below to narrow the search.
+      </div>
+      {overview.kwic_filters_ignored ? (
+        <div className="kwic-overview-note">
+          KWIC-based filters (left/right char, bigram, binom) are ignored
+          while the result set exceeds {overview.threshold} — narrow first,
+          then re-apply them.
+        </div>
+      ) : null}
+      {(hasLeft || hasRight) ? (
+        <div className="kwic-overview-extensions">
+          {hasLeft ? (
+            <div className="kwic-overview-col">
+              <div className="kwic-overview-col-title">Left context</div>
+              {overview.trigram_left.map((t) => (
+                <button
+                  key={`l:${t.gram}`}
+                  type="button"
+                  className="kwic-overview-ext"
+                  disabled={disabled}
+                  onClick={() => refineQuery(t.gram)}
+                  title={`Refine to ${t.gram} (${t.count} hits)`}
+                >
+                  <span className="kwic-overview-ext-gram">{t.gram}</span>
+                  <span className="kwic-overview-ext-count">{t.count}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {hasRight ? (
+            <div className="kwic-overview-col">
+              <div className="kwic-overview-col-title">Right context</div>
+              {overview.trigram_right.map((t) => (
+                <button
+                  key={`r:${t.gram}`}
+                  type="button"
+                  className="kwic-overview-ext"
+                  disabled={disabled}
+                  onClick={() => refineQuery(t.gram)}
+                  title={`Refine to ${t.gram} (${t.count} hits)`}
+                >
+                  <span className="kwic-overview-ext-gram">{t.gram}</span>
+                  <span className="kwic-overview-ext-count">{t.count}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function SearchTab() {
   const [expandedFacets, setExpandedFacets] = useState<Set<FacetGroupKey>>(() => new Set());
   const status = useWorkspace((s) => s.search.status);
@@ -763,10 +840,11 @@ export function SearchTab() {
     );
   }
 
+  const isOverview = response.overview != null;
   const start = response.offset + 1;
   const end = Math.min(response.offset + response.limit, response.total);
-  const hasPrev = response.offset > 0;
-  const hasNext = response.offset + response.limit < response.total;
+  const hasPrev = !isOverview && response.offset > 0;
+  const hasNext = !isOverview && response.offset + response.limit < response.total;
   const facets = response.facets ? normalizeFacets(response.facets) : EMPTY_FACETS;
   const disabled = status === "loading";
   const filtered = hasAnyFilter(filters);
@@ -787,7 +865,9 @@ export function SearchTab() {
     <div className="rc kwic-list">
       <div className="kwic-summary">
         <span>
-          {start}–{end} of {response.total} for “{response.query}”
+          {isOverview
+            ? `${response.overview!.approximate ? "~" : ""}${response.total} for “${response.query}” (overview)`
+            : `${start}–${end} of ${response.total} for “${response.query}”`}
         </span>
         <span className="kwic-sort">· {response.sort}</span>
         {listFilterMode !== "off" ? (
@@ -908,9 +988,18 @@ export function SearchTab() {
           onMore={() => expandFacet("aroundBinom")}
         />
       </div>
-      {response.hits.map((h, i) => (
-        <HitRow key={`${h.textid}:${h.juan_seq}:${h.master_offset}:${i}`} hit={h} />
-      ))}
+      {isOverview ? (
+        <OverviewPanel
+          query={response.query}
+          total={response.total}
+          overview={response.overview!}
+          disabled={disabled}
+        />
+      ) : (
+        response.hits.map((h, i) => (
+          <HitRow key={`${h.textid}:${h.juan_seq}:${h.master_offset}:${i}`} hit={h} />
+        ))
+      )}
       {(hasPrev || hasNext) && (
         <div className="kwic-pager">
           <button

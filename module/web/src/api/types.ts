@@ -293,6 +293,19 @@ export interface SearchFacets {
   date: SearchDateFacets;
 }
 
+export interface TrigramExtension {
+  gram: string;
+  count: number;
+}
+
+export interface SearchOverview {
+  approximate: boolean;
+  threshold: number;
+  trigram_left: TrigramExtension[];
+  trigram_right: TrigramExtension[];
+  kwic_filters_ignored: boolean;
+}
+
 export interface SearchResponse {
   query: string;
   total: number;
@@ -301,6 +314,7 @@ export interface SearchResponse {
   sort: SearchSort;
   facets?: SearchFacets;
   hits: SearchHit[];
+  overview?: SearchOverview | null;
 }
 
 export interface SearchTextidsResponse {

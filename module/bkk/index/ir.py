@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -68,3 +68,24 @@ class Hit:
     witness_right: str = ""
     witness_left_variant_offset: int = 0
     witness_right_variant_end: int = 0
+
+
+@dataclass(frozen=True)
+class IndexSummary:
+    """Bird's-eye rollup of a query without materialising any :class:`Hit`.
+
+    Used when a query would yield more matches than the server-side cap;
+    powers the search "overview" UI so the user can narrow without ever
+    paginating through tens of thousands of hits.
+
+    Counts are summed over candidate positions (cheap, derivable from the
+    trigram index plus light SQL joins) and may slightly overcount for
+    queries of length ≥ 3 because trigram candidates aren't string-verified;
+    for 2-char queries they are exact.
+    """
+
+    total: int
+    by_textid: dict[str, int] = field(default_factory=dict)
+    by_witness_label: dict[str, int] = field(default_factory=dict)
+    trigram_left: list[tuple[str, int]] = field(default_factory=list)
+    trigram_right: list[tuple[str, int]] = field(default_factory=list)

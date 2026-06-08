@@ -8,9 +8,14 @@ import unicodedata
 from collections.abc import Iterator
 from pathlib import Path
 
-from .ir import Hit, VariantOverlay
+from collections import Counter
+
+from .ir import Hit, IndexSummary, VariantOverlay
 from .schema import SCHEMA_VERSION
 from .witness import Segment, witness_to_master_span
+
+
+_SQLITE_VAR_LIMIT = 500  # SQLite default ?-binding cap is 999; keep margin.
 
 
 class Index:
@@ -58,6 +63,7 @@ class Index:
         witnesses: set[str] | None = None,
         textid: str | None = None,
         voices: set[str] | None = None,
+        candidates: dict[tuple[str, int], set[int]] | None = None,
     ) -> Iterator[Hit]:
         """Yield :class:`Hit` for every position matching ``query``.
 
@@ -72,16 +78,132 @@ class Index:
         nested inside two ranges (e.g. ``sound-gloss`` inside
         ``commentary``) qualifies for either name. ``None`` means no
         voice filter — all hits are emitted, each tagged with its voice.
+
+        ``candidates`` can be a pre-computed positions dict (as returned
+        by :meth:`candidates_and_total`) to avoid re-running the
+        candidate scan when the caller already paid for it.
         """
         query = unicodedata.normalize("NFC", query)
         if not query:
             return
-        candidates = self._candidate_positions(query)
+        if candidates is None:
+            candidates = self._candidate_positions(query)
         for (kind, src_id), positions in candidates.items():
             yield from self._verify_and_emit(
                 query, kind, src_id, sorted(positions), context,
                 witnesses, textid, voices,
             )
+
+    def candidates_and_total(
+        self, query: str,
+    ) -> tuple[dict[tuple[str, int], set[int]], int]:
+        """Return the raw candidate-positions dict and the summed total.
+
+        ``total`` is exact for queries of length < 3 (positions are
+        string-verified against bucket/witness texts in
+        :meth:`_scan_all_sources`) and an upper bound for longer queries
+        (trigram candidates are only string-verified inside
+        :meth:`_verify_and_emit`). The dict is suitable to pass back into
+        :meth:`search` or :meth:`summarise` to avoid a second scan.
+        """
+        query = unicodedata.normalize("NFC", query)
+        if not query:
+            return {}, 0
+        cand = self._candidate_positions(query)
+        total = sum(len(v) for v in cand.values())
+        return cand, total
+
+    def summarise(
+        self,
+        query: str,
+        *,
+        candidates: dict[tuple[str, int], set[int]] | None = None,
+        textids: set[str] | None = None,
+        witnesses: set[str] | None = None,
+        max_extensions: int = 20,
+    ) -> IndexSummary:
+        """Bird's-eye rollup over candidate positions — no Hits, no KWIC.
+
+        Used by the search endpoint when a query exceeds the configured
+        materialisation cap. Counts roll up via two small SQL joins
+        (one per source kind) plus two trigram-extension aggregates;
+        the heavy work is the single ``_candidate_positions`` call,
+        which can be passed in via ``candidates`` when the caller has
+        already computed it (e.g. through :meth:`candidates_and_total`).
+        """
+        query = unicodedata.normalize("NFC", query)
+        if not query:
+            return IndexSummary(total=0)
+        if candidates is None:
+            candidates = self._candidate_positions(query)
+
+        bucket_counts: dict[int, int] = {}
+        witness_counts: dict[int, int] = {}
+        for (kind, src_id), positions in candidates.items():
+            if kind == "bucket":
+                bucket_counts[src_id] = len(positions)
+            else:
+                witness_counts[src_id] = len(positions)
+
+        by_textid: Counter[str] = Counter()
+        by_witness_label: Counter[str] = Counter()
+
+        for chunk in _chunked(list(bucket_counts), _SQLITE_VAR_LIMIT):
+            placeholders = ",".join("?" * len(chunk))
+            rows = self._conn.execute(
+                f"SELECT b.bucket_id, j.textid "
+                f"FROM bucket b JOIN juan j ON b.juan_id = j.juan_id "
+                f"WHERE b.bucket_id IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for row in rows:
+                tid = row["textid"]
+                if textids is not None and tid not in textids:
+                    continue
+                c = bucket_counts[row["bucket_id"]]
+                by_textid[tid] += c
+                by_witness_label["master"] += c
+
+        for chunk in _chunked(list(witness_counts), _SQLITE_VAR_LIMIT):
+            placeholders = ",".join("?" * len(chunk))
+            rows = self._conn.execute(
+                f"SELECT w.witness_id, w.label, j.textid "
+                f"FROM witness w JOIN bucket b ON w.bucket_id = b.bucket_id "
+                f"JOIN juan j ON b.juan_id = j.juan_id "
+                f"WHERE w.witness_id IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for row in rows:
+                tid = row["textid"]
+                if textids is not None and tid not in textids:
+                    continue
+                label = row["label"]
+                if witnesses is not None and label not in witnesses:
+                    continue
+                c = witness_counts[row["witness_id"]]
+                by_textid[tid] += c
+                by_witness_label[label] += c
+
+        # Trigram extensions: rather than scanning the trigram table with
+        # ``gram LIKE '_xy'`` (unindexable, full-scan over billions of
+        # rows on a merged corpus), we derive them by reading the 1-char
+        # context immediately to the left/right of each match position
+        # in the candidate sources. The set of distinct sources to read
+        # is bounded by the candidate dict, not the position count, so
+        # cost stays bounded even for very common queries.
+        trigram_left, trigram_right = self._extensions_from_candidates(
+            query, candidates, textids=textids, witnesses=witnesses,
+            limit=max_extensions,
+        )
+
+        total = sum(by_witness_label.values())
+        return IndexSummary(
+            total=total,
+            by_textid=dict(by_textid),
+            by_witness_label=dict(by_witness_label),
+            trigram_left=trigram_left,
+            trigram_right=trigram_right,
+        )
 
     def available_voices(self) -> list[str]:
         """Return the sorted set of distinct voice names present in the index."""
@@ -90,6 +212,77 @@ class Index:
                 "SELECT DISTINCT name FROM voice_range ORDER BY name"
             )
         ]
+
+    def _extensions_from_candidates(
+        self,
+        query: str,
+        candidates: dict[tuple[str, int], set[int]],
+        *,
+        textids: set[str] | None,
+        witnesses: set[str] | None,
+        limit: int,
+    ) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
+        """Walk match positions in each candidate source and roll up
+        the 1-char left and right context characters into top-N counts.
+
+        ``limit`` caps each direction. Returned grams are
+        ``left_char + query`` and ``query + right_char`` — i.e. the
+        substring the user would refine to by picking that extension.
+        """
+        qlen = len(query)
+        left_counts: Counter[str] = Counter()
+        right_counts: Counter[str] = Counter()
+        if qlen == 0:
+            return [], []
+
+        bucket_positions: dict[int, set[int]] = {}
+        witness_positions: dict[int, set[int]] = {}
+        for (kind, src_id), positions in candidates.items():
+            if kind == "bucket":
+                bucket_positions[src_id] = positions
+            else:
+                witness_positions[src_id] = positions
+
+        for chunk in _chunked(list(bucket_positions), _SQLITE_VAR_LIMIT):
+            placeholders = ",".join("?" * len(chunk))
+            rows = self._conn.execute(
+                f"SELECT b.bucket_id, b.text, j.textid "
+                f"FROM bucket b JOIN juan j ON b.juan_id = j.juan_id "
+                f"WHERE b.bucket_id IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for row in rows:
+                if textids is not None and row["textid"] not in textids:
+                    continue
+                text = row["text"]
+                for pos in bucket_positions[row["bucket_id"]]:
+                    if pos > 0:
+                        left_counts[text[pos - 1] + query] += 1
+                    if pos + qlen < len(text):
+                        right_counts[query + text[pos + qlen]] += 1
+
+        for chunk in _chunked(list(witness_positions), _SQLITE_VAR_LIMIT):
+            placeholders = ",".join("?" * len(chunk))
+            rows = self._conn.execute(
+                f"SELECT w.witness_id, w.text, w.label, j.textid "
+                f"FROM witness w JOIN bucket b ON w.bucket_id = b.bucket_id "
+                f"JOIN juan j ON b.juan_id = j.juan_id "
+                f"WHERE w.witness_id IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for row in rows:
+                if textids is not None and row["textid"] not in textids:
+                    continue
+                if witnesses is not None and row["label"] not in witnesses:
+                    continue
+                text = row["text"]
+                for pos in witness_positions[row["witness_id"]]:
+                    if pos > 0:
+                        left_counts[text[pos - 1] + query] += 1
+                    if pos + qlen < len(text):
+                        right_counts[query + text[pos + qlen]] += 1
+
+        return left_counts.most_common(limit), right_counts.most_common(limit)
 
     # -- candidate enumeration ------------------------------------------------
 
@@ -347,6 +540,11 @@ def _passes_voice_filter(hit: Hit, voices: set[str] | None) -> bool:
 def _decode_segments(blob) -> list[Segment]:
     raw = json.loads(bytes(blob).decode("utf-8"))
     return [Segment(s[0], s[1], s[2], s[3], bool(s[4])) for s in raw]
+
+
+def _chunked(seq, size):
+    for i in range(0, len(seq), size):
+        yield seq[i:i + size]
 
 
 def _find_all(text: str, needle: str) -> list[int]:

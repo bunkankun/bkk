@@ -127,6 +127,36 @@ class SearchFacets(BaseModel):
     date: SearchDateFacets = Field(default_factory=SearchDateFacets)
 
 
+class TrigramExtension(BaseModel):
+    gram: str
+    count: int
+
+
+class SearchOverview(BaseModel):
+    """Bird's-eye view served when a query exceeds ``max_search_hits``.
+
+    ``hits`` is empty in overview mode; the UI uses this block (plus the
+    SQL-aggregated facets) to help the user narrow the query before any
+    KWIC lines are materialised.
+    """
+
+    approximate: bool = Field(
+        False,
+        description="True for queries of length ≥ 3, where the total is an "
+                    "upper bound from trigram candidates rather than a "
+                    "string-verified count.",
+    )
+    threshold: int = Field(..., description="value of max_search_hits in effect")
+    trigram_left: list[TrigramExtension] = Field(default_factory=list)
+    trigram_right: list[TrigramExtension] = Field(default_factory=list)
+    kwic_filters_ignored: bool = Field(
+        False,
+        description="True when the request set a KWIC-based filter "
+                    "(left_char, right_bigram, around_binom, …) that "
+                    "cannot be honoured without materialising hits.",
+    )
+
+
 class SearchResponse(BaseModel):
     query: str
     total: int
@@ -135,6 +165,7 @@ class SearchResponse(BaseModel):
     sort: str
     facets: SearchFacets = Field(default_factory=SearchFacets)
     hits: list[HitOut]
+    overview: SearchOverview | None = None
 
 
 class SearchTextidsResponse(BaseModel):

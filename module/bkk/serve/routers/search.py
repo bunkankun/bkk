@@ -11,7 +11,7 @@ from typing import Iterable, Literal
 
 from fastapi import APIRouter, Query, Request
 
-from bkk.index.ir import Hit
+from bkk.index.ir import Hit, IndexSummary
 
 from .. import _examples as ex
 from .. import errors
@@ -21,8 +21,10 @@ from ..schemas import (
     SearchDateFacets,
     SearchFacets,
     SearchFacetValue,
+    SearchOverview,
     SearchResponse,
     SearchTextidsResponse,
+    TrigramExtension,
     VariantOverlayOut,
 )
 
@@ -450,6 +452,109 @@ def _build_facets(
     )
 
 
+def _overview_response(
+    *,
+    q: str,
+    sort: "Sort",
+    offset: int,
+    limit: int,
+    facet_limit: int,
+    summary: IndexSummary,
+    meta: dict[str, _CatalogMeta],
+    cap: int,
+    selected_textid: str | None,
+    excluded_textids: set[str],
+    selected_categories: set[str],
+    excluded_categories: set[str],
+    selected_witnesses: set[str],
+    excluded_witnesses: set[str],
+    selected_voices: set[str],
+    excluded_voices: set[str],
+    date_before: int | None,
+    date_after: int | None,
+    pivot_textid: str | None,
+    kwic_filters_ignored: bool,
+) -> SearchResponse:
+    """Assemble a SearchResponse in overview mode from an IndexSummary.
+
+    No Hit objects are constructed. SQL-aggregable facets (textid,
+    category, witness, date) are built from the summary's roll-ups; KWIC
+    facets come back empty so the SPA's facet groups collapse.
+    """
+    text_counts = Counter(summary.by_textid)
+    category_counts: Counter[str] = Counter()
+    for tid, c in summary.by_textid.items():
+        m = meta.get(tid)
+        if m and m.section_code:
+            category_counts[m.section_code] += c
+    witness_counts = Counter(summary.by_witness_label)
+    labels = {tid: m.title for tid, m in meta.items() if m.title}
+    category_labels = {
+        m.section_code: m.section_title
+        for m in meta.values()
+        if m.section_code and m.section_title
+    }
+    dates: list[int] = []
+    for tid, c in summary.by_textid.items():
+        m = meta.get(tid)
+        if m and m.index_date is not None:
+            dates.extend([m.index_date] * c)
+    pivot_date = meta.get(pivot_textid).index_date if pivot_textid in meta else None
+    facets = SearchFacets(
+        textid=_facet_values(
+            text_counts,
+            {selected_textid} if selected_textid else set(),
+            excluded=excluded_textids,
+            labels=labels,
+            limit=facet_limit,
+        ),
+        category=_facet_values(
+            category_counts,
+            selected_categories,
+            excluded=excluded_categories,
+            labels=category_labels,
+            limit=facet_limit,
+        ),
+        witness=_facet_values(
+            witness_counts,
+            selected_witnesses,
+            excluded=excluded_witnesses,
+            limit=facet_limit,
+        ),
+        voice=[],
+        left_char=[],
+        right_char=[],
+        left_bigram=[],
+        right_bigram=[],
+        around_binom=[],
+        date=SearchDateFacets(
+            min=min(dates) if dates else None,
+            max=max(dates) if dates else None,
+            current_textid=pivot_textid,
+            current_text_date=pivot_date,
+            before_count=sum(1 for d in dates if date_before is not None and d < date_before),
+            after_count=sum(1 for d in dates if date_after is not None and d > date_after),
+        ),
+    )
+    overview = SearchOverview(
+        approximate=len(q) > 2,
+        threshold=cap,
+        trigram_left=[TrigramExtension(gram=g, count=c) for g, c in summary.trigram_left],
+        trigram_right=[TrigramExtension(gram=g, count=c) for g, c in summary.trigram_right],
+        kwic_filters_ignored=kwic_filters_ignored,
+    )
+    return SearchResponse(
+        query=q,
+        total=summary.total,
+        offset=offset,
+        limit=limit,
+        sort=sort,
+        facets=facets,
+        hits=[],
+        overview=overview,
+    )
+
+
 router = APIRouter(tags=["search"])
 
 
@@ -481,11 +586,12 @@ def _search_hits(
     around_binom_not: list[str] | None = None,
     sort: Sort = "match",
     context: int = 20,
-) -> tuple[list[Hit], dict[str, _CatalogMeta], set[str] | None, set[str], set[str] | None, set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], CorpusSnapshot | None]:
+) -> tuple[list[Hit], dict[str, _CatalogMeta], set[str] | None, set[str], set[str] | None, set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], CorpusSnapshot | None, IndexSummary | None]:
     state = request.app.state.bkk
     ix = state.open_index()
     if ix is None:
         raise errors.index_unavailable(state._index_error or "index not built")
+    cap = state.config.max_search_hits
 
     witnesses = set(witness) if witness else None
     voices = set(voice) if voice else None
@@ -518,6 +624,43 @@ def _search_hits(
                 available=sorted(available),
             )
     try:
+        candidates, _raw_total = ix.candidates_and_total(q)
+        # Cap check uses the scope-aware summary so a tightly-scoped query
+        # whose unscoped total is huge still falls back to the normal hit
+        # path when the scoped subset fits under the limit.
+        summary = ix.summarise(
+            q,
+            candidates=candidates,
+            textids=scoped_textids or None,
+            witnesses=witnesses,
+        )
+        if summary.total > cap:
+            empty_hits: list[Hit] = []
+            meta = _catalog_meta(request, None)
+            return (
+                empty_hits,
+                meta,
+                witnesses,
+                excluded_witnesses,
+                voices,
+                excluded_voices,
+                categories,
+                excluded_categories,
+                selected_left_char,
+                excluded_left_char,
+                selected_right_char,
+                excluded_right_char,
+                selected_left_bigram,
+                excluded_left_bigram,
+                selected_right_bigram,
+                excluded_right_bigram,
+                selected_around_binom,
+                excluded_around_binom,
+                scoped_textids,
+                excluded_textids,
+                None,
+                summary,
+            )
         if scoped_textids:
             all_hits = [
                 hit
@@ -528,6 +671,7 @@ def _search_hits(
                     witnesses=witnesses,
                     textid=tid,
                     voices=voices,
+                    candidates=candidates,
                 )
             ]
         else:
@@ -537,6 +681,7 @@ def _search_hits(
                 witnesses=witnesses,
                 textid=textid,
                 voices=voices,
+                candidates=candidates,
             ))
     finally:
         ix.close()
@@ -589,6 +734,7 @@ def _search_hits(
         scoped_textids,
         excluded_textids,
         snap,
+        None,
     )
 
 
@@ -695,6 +841,7 @@ def search(
         _scoped_textids,
         excluded_textids,
         snap,
+        summary,
     ) = _search_hits(
         request,
         q=q,
@@ -723,6 +870,37 @@ def search(
         sort=sort,
         context=context,
     )
+    if summary is not None:
+        cap = request.app.state.bkk.config.max_search_hits
+        kwic_filters_ignored = bool(
+            selected_left_char or excluded_left_char
+            or selected_right_char or excluded_right_char
+            or selected_left_bigram or excluded_left_bigram
+            or selected_right_bigram or excluded_right_bigram
+            or selected_around_binom or excluded_around_binom
+        )
+        return _overview_response(
+            q=q,
+            sort=sort,
+            offset=offset,
+            limit=limit,
+            facet_limit=facet_limit,
+            summary=summary,
+            meta=meta,
+            cap=cap,
+            selected_textid=textid,
+            excluded_textids=excluded_textids,
+            selected_categories=categories,
+            excluded_categories=excluded_categories,
+            selected_witnesses=witnesses or set(),
+            excluded_witnesses=excluded_witnesses,
+            selected_voices=voices or set(),
+            excluded_voices=excluded_voices,
+            date_before=date_before,
+            date_after=date_after,
+            pivot_textid=pivot_textid,
+            kwic_filters_ignored=kwic_filters_ignored,
+        )
     facets = _build_facets(
         sorted_hits,
         meta=meta,

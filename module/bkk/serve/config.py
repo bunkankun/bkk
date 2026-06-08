@@ -34,6 +34,7 @@ class ServeConfig:
     workspace_repo_name: str = "BKK-Workspace"
     source_root: Path | None = None
     source_branch: str = "master"
+    max_search_hits: int = 20000
 
     def __post_init__(self) -> None:
         if self.catalog_path is None:
@@ -238,6 +239,12 @@ class ServeConfig:
             else rc.get("source_branch", "master")
         )
 
+        env_max_search_hits = os.environ.get("BKK_MAX_SEARCH_HITS")
+        if env_max_search_hits is not None:
+            max_search_hits = int(env_max_search_hits)
+        else:
+            max_search_hits = int(rc.get("max_search_hits", 20000))
+
         env_workspace_repo_name = os.environ.get("BKK_WORKSPACE_REPO_NAME")
         workspace_repo_name = (
             env_workspace_repo_name
@@ -281,6 +288,7 @@ class ServeConfig:
             workspace_repo_name=workspace_repo_name,
             source_root=source_root,
             source_branch=source_branch,
+            max_search_hits=max_search_hits,
         )
 
     def merge_cli(

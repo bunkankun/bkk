@@ -1694,6 +1694,67 @@ button {
 .kwic-empty-reset:hover:not(:disabled) {
   background: var(--amb-d);
 }
+.kwic-overview {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kwic-overview-banner {
+  padding: 8px 10px;
+  border: 1px solid var(--amb);
+  border-radius: 4px;
+  background: var(--amb-d);
+  color: var(--amb);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.kwic-overview-note {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+.kwic-overview-extensions {
+  display: flex;
+  gap: 14px;
+}
+.kwic-overview-col {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.kwic-overview-col-title {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+.kwic-overview-ext {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 8px;
+  border: 1px solid var(--bdr-l);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.kwic-overview-ext:hover:not(:disabled) {
+  background: var(--bg-soft, var(--amb-d));
+}
+.kwic-overview-ext-gram {
+  font-family: var(--mono, monospace);
+  font-size: 14px;
+}
+.kwic-overview-ext-count {
+  font-size: 11px;
+  color: var(--muted);
+}
 .kwic-facets {
   padding: 8px 10px 9px;
   border-bottom: 1px solid var(--bdr-l);
