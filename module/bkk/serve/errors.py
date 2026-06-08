@@ -43,14 +43,14 @@ def install_handlers(app: FastAPI, *, spa_index: Path | None = None) -> None:
     If ``spa_index`` is provided, 404s on non-API paths return that file so
     client-side routes work after a hard refresh.
     """
-    from .static import API_PREFIXES
+    from .static import API_PREFIX, NON_API_BACKEND_PATHS
 
     @app.exception_handler(StarletteHTTPException)
     async def _on_http_exc(request: Request, exc: StarletteHTTPException):
         if (
             spa_index is not None
             and exc.status_code == 404
-            and not _is_api_path(request.url.path, API_PREFIXES)
+            and not _is_backend_path(request.url.path, API_PREFIX, NON_API_BACKEND_PATHS)
         ):
             return FileResponse(spa_index)
         if isinstance(exc.detail, dict) and "error" in exc.detail:
@@ -64,5 +64,7 @@ def install_handlers(app: FastAPI, *, spa_index: Path | None = None) -> None:
         )
 
 
-def _is_api_path(path: str, prefixes: tuple[str, ...]) -> bool:
-    return path == "/" or any(path == p or path.startswith(p + "/") for p in prefixes)
+def _is_backend_path(path: str, api_prefix: str, extras: tuple[str, ...]) -> bool:
+    if path == api_prefix or path.startswith(api_prefix + "/"):
+        return True
+    return any(path == p or path.startswith(p + "/") for p in extras)

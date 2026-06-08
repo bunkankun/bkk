@@ -1,11 +1,8 @@
 // Thin fetch wrappers around the BKK serve API.
 //
-// In dev the Vite proxy maps `/api/*` to `http://127.0.0.1:8000/*`
-// (with the `/api` prefix stripped). In prod the SPA is mounted at
-// the same origin as the API, so apiBase is empty.
-//
-// `getServerInfo` deliberately targets the literal `/api/info` endpoint
-// (not `GET /`) because in prod the backend serves the SPA index at `/`.
+// All backend routes live under `/api`. In dev the Vite proxy forwards
+// `/api/*` to `http://127.0.0.1:8000/api/*` unchanged; in prod the SPA
+// is mounted at the same origin as the API.
 
 import type {
   AdminInfoResponse,
@@ -53,7 +50,7 @@ import type {
   WorkspaceWriteResult,
 } from "./types";
 
-export const apiBase = import.meta.env.DEV ? "/api" : "";
+export const apiBase = "/api";
 
 const manifestCache = new Map<string, Promise<Manifest>>();
 
@@ -86,6 +83,12 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     throw new ApiError(res.status, `${res.status} ${res.statusText} for ${url}`, body);
+  }
+  // Refuse a 200 OK that isn't JSON — typically means the request fell through
+  // to the SPA fallback (HTML) or a proxy interstitial, and returning that as
+  // T would crash downstream consumers with confusing undefined-access errors.
+  if (!ct.includes("application/json")) {
+    throw new ApiError(res.status, `non-JSON response (content-type: ${ct || "none"}) for ${url}`, body);
   }
   return body as T;
 }

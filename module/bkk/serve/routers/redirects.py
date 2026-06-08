@@ -14,7 +14,7 @@ router = APIRouter(tags=["redirects"])
 
 @router.get(
     "/by-canonical",
-    summary="Redirect to /bundles/{textid} for a canonical_identifier",
+    summary="Redirect to /api/bundles/{textid} for a canonical_identifier",
     responses={
         302: {"description": "redirect to the resolved bundle"},
         300: {"model": MultipleChoicesResponse},
@@ -44,10 +44,10 @@ def by_canonical(
                     edition_short=c.edition_short,
                     base_edition=c.base_edition,
                     title=c.title,
-                    link=f"/bundles/{c.textid}",
+                    link=f"/api/bundles/{c.textid}",
                 )
                 for c in candidates
             ],
         )
         return JSONResponse(status_code=300, content=body.model_dump())
-    return RedirectResponse(url=f"/bundles/{chosen.textid}", status_code=302)
+    return RedirectResponse(url=f"/api/bundles/{chosen.textid}", status_code=302)

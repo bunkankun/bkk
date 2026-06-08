@@ -40,15 +40,7 @@ def _callback_url(request: Request) -> str:
     config = _state(request).config
     if config.github_callback_url:
         return config.github_callback_url
-    origin = _origin(request)
-    parsed = urlparse(origin)
-    # On :5173 the registered GitHub OAuth callback is the /api form so the
-    # same OAuth app works for both vite dev (which proxies /api/* to the
-    # backend on :8000) and bkk serve hosting the dist on :5173 directly.
-    # In the latter case the auth router is also mounted under /api so the
-    # path resolves without a proxy in front.
-    prefix = "/api" if parsed.port == 5173 else ""
-    return f"{origin}{prefix}/auth/github/callback"
+    return f"{_origin(request)}/api/auth/github/callback"
 
 
 def _require_github_config(state: AppState) -> tuple[str, str]:

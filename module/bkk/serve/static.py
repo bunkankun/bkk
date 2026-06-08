@@ -18,19 +18,14 @@ from fastapi.staticfiles import StaticFiles
 log = logging.getLogger("bkk.serve")
 
 
-# Path prefixes that must always 404 cleanly instead of falling back to
-# index.html. Used by errors.install_handlers when web_dist is configured.
-API_PREFIXES = (
-    "/server-info",
-    "/bundles",
-    "/texts",
-    "/catalog",
-    "/search",
-    "/overlays",
-    "/translations",
-    "/recipes",
-    "/admin",
-    "/by-canonical",
+# All HTTP API routes live under this prefix. errors.install_handlers
+# uses it to decide whether a 404 should stay JSON or fall back to
+# index.html for client-side routing.
+API_PREFIX = "/api"
+
+# OpenAPI / docs / healthz are not under /api but should still 404 cleanly
+# instead of falling back to the SPA.
+NON_API_BACKEND_PATHS = (
     "/healthz",
     "/docs",
     "/redoc",

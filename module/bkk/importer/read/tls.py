@@ -26,6 +26,8 @@ from pathlib import Path
 
 from lxml import etree
 
+from bkk.serialize.uuid import strip_uuid_prefix
+
 from ..charset import is_allowed_body_char
 from ..classify import _split_section_at
 from ..ir import Annotation, Bundle, Juan, Marker, Section
@@ -1834,7 +1836,7 @@ def _annotation_payload(ann) -> dict:
         sense_dict: dict = {}
         corresp = sense.get("corresp")
         if corresp:
-            sense_dict["id"] = corresp.lstrip("#")
+            sense_dict["id"] = strip_uuid_prefix(corresp.lstrip("#"))
         gram = sense.find(_q("gramGrp"))
         if gram is not None:
             pos_el = gram.find(_q("pos"))

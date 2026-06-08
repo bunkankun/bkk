@@ -36,9 +36,9 @@ bkk serve --corpus module/samples \
           --upstream-repo krp-yaml/krp-yaml
 ```
 
-Open <http://127.0.0.1:8000>. FastAPI serves the built SPA at `/` and the API at `/bundles`, `/catalog`, `/server-info`, etc. Unknown non-API paths fall back to `index.html` so client-side routing works after a hard refresh.
+Open <http://127.0.0.1:8000>. FastAPI serves the built SPA at `/` and all backend routes under `/api/*` (e.g. `/api/bundles`, `/api/catalog`, `/api/server-info`). Unknown non-API paths fall back to `index.html` so client-side routing works after a hard refresh.
 
-To exercise the prod bundle against the same GitHub OAuth app used for vite dev, run `bkk serve --port 5173 --web-dist module/web/dist`. The auth router is also mounted under `/api`, so the callback URL `http://localhost:5173/api/auth/github/callback` registered for vite dev resolves whether or not vite is in front.
+To exercise the prod bundle against the same GitHub OAuth app used for vite dev, run `bkk serve --port 5173 --web-dist module/web/dist`. The OAuth callback `http://localhost:5173/api/auth/github/callback` works identically whether vite is in front or not, because the backend always serves auth under `/api`.
 
 ### Configuration
 

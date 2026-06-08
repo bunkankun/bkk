@@ -71,7 +71,7 @@ def test_text_lookup_by_canonical(client: TestClient):
     r2 = client.get("/by-canonical", params={"id": "bkk:test/TEST0001/v1"})
     assert r2.status_code in (302, 200)
     if r2.status_code == 302:
-        assert r2.headers["location"] == "/bundles/TEST0001"
+        assert r2.headers["location"] == "/api/bundles/TEST0001"
 
 
 def test_text_unknown_identifier_returns_400(client: TestClient):

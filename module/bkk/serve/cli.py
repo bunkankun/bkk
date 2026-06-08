@@ -77,7 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="GitHub OAuth app client secret (default: $BKK_GITHUB_CLIENT_SECRET)")
     p.add_argument("--github-callback-url", default=None,
                    help="OAuth callback URL registered with GitHub "
-                        "(default: <server-origin>/auth/github/callback)")
+                        "(default: <server-origin>/api/auth/github/callback)")
     p.add_argument("--workspace-template-repo", default=None,
                    help="template repo for first-login workspaces "
                         "(default: bunkankun/BKK-Workspace)")

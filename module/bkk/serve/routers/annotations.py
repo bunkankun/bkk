@@ -19,6 +19,8 @@ from typing import Any
 from fastapi import APIRouter, Path as PathParam, Request
 from pydantic import BaseModel
 
+from bkk.serialize.uuid import strip_uuid_prefix
+
 from .. import _examples as ex
 from .. import errors
 from ..state import AppState
@@ -65,8 +67,9 @@ def _coerce_form(raw: Any) -> AnnotationForm | None:
 def _coerce_sense(raw: Any) -> AnnotationSense | None:
     if not isinstance(raw, dict):
         return None
+    raw_id = raw.get("id")
     sense = AnnotationSense(
-        id=raw.get("id"),
+        id=strip_uuid_prefix(raw_id) if isinstance(raw_id, str) else raw_id,
         pos=raw.get("pos"),
         syn_func=raw.get("syn_func"),
         sem_feat=raw.get("sem_feat"),
@@ -192,8 +195,7 @@ def _sense_uuid_variants(sense_uuid: str) -> tuple[str, ...]:
     return (sense_uuid, f"uuid-{sense_uuid}")
 
 
-def _canonical_sense_uuid(sense_uuid: str) -> str:
-    return sense_uuid[5:] if sense_uuid.startswith("uuid-") else sense_uuid
+_canonical_sense_uuid = strip_uuid_prefix
 
 
 def _ann_root_locations(state: AppState, sense_uuid: str) -> list[BySenseLocation]:

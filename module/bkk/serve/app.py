@@ -74,26 +74,25 @@ def create_app(config: ServeConfig) -> FastAPI:
         else None
     )
     errors.install_handlers(app, spa_index=spa_index)
+    # All HTTP API routes live under /api. Anything else is either the SPA
+    # (served from web_dist with index.html fallback) or one of the small
+    # set of meta endpoints registered directly on `app` below.
     # Register specific sub-routes BEFORE bundles/texts so they win over the
     # generic /juan/{seq}/{bucket} wildcard in bundles_router.
-    app.include_router(annotations_router.router)
-    app.include_router(annotations_write_router.router)
-    app.include_router(translations_router.router)
-    app.include_router(bundles_router.router)
-    app.include_router(texts_router.router)
-    app.include_router(catalog_router.router)
-    app.include_router(core_router.router)
-    app.include_router(core_edit_router.router)
-    app.include_router(search_router.router)
-    app.include_router(recipes_router.router)
-    app.include_router(auth_router.router)
-    # Alias under /api so the GitHub OAuth callback registered for vite dev
-    # (http://localhost:5173/api/auth/github/callback) also resolves when
-    # bkk serve hosts the dist on :5173 without vite in front.
+    app.include_router(annotations_router.router, prefix="/api")
+    app.include_router(annotations_write_router.router, prefix="/api")
+    app.include_router(translations_router.router, prefix="/api")
+    app.include_router(bundles_router.router, prefix="/api")
+    app.include_router(texts_router.router, prefix="/api")
+    app.include_router(catalog_router.router, prefix="/api")
+    app.include_router(core_router.router, prefix="/api")
+    app.include_router(core_edit_router.router, prefix="/api")
+    app.include_router(search_router.router, prefix="/api")
+    app.include_router(recipes_router.router, prefix="/api")
     app.include_router(auth_router.router, prefix="/api")
-    app.include_router(workspace_router.router)
-    app.include_router(admin_router.router)
-    app.include_router(redirects_router.router)
+    app.include_router(workspace_router.router, prefix="/api")
+    app.include_router(admin_router.router, prefix="/api")
+    app.include_router(redirects_router.router, prefix="/api")
 
     spa_will_mount = (
         config.web_dist is not None
@@ -119,7 +118,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     def healthz() -> dict:
         return {"status": "ok"}
 
-    @app.get("/server-welcome", tags=["meta"], summary="Welcome markdown (if configured)")
+    @app.get("/api/server-welcome", tags=["meta"], summary="Welcome markdown (if configured)")
     def server_welcome() -> dict:
         path = config.welcome_path
         if path is None:
@@ -136,7 +135,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             )
         return {"markdown": text}
 
-    @app.get("/server-info", tags=["meta"], summary="Server identity + corpus pointer (always JSON)")
+    @app.get("/api/server-info", tags=["meta"], summary="Server identity + corpus pointer (always JSON)")
     def server_info() -> dict:
         return {
             "service": "bkk-serve",

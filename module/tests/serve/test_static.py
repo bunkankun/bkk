@@ -10,6 +10,19 @@ from fastapi.testclient import TestClient
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
 
+from .conftest import ORIGINAL_TESTCLIENT_REQUEST
+
+
+class _RawClient(TestClient):
+    """TestClient that bypasses the ``/api`` auto-prefix in ``conftest.py``.
+
+    SPA-vs-API routing tests need literal URLs (e.g. ``/assets/app.js``,
+    ``/some/spa/route``) to verify the fallback behavior.
+    """
+
+    def request(self, method, url, *args, **kwargs):  # type: ignore[override]
+        return ORIGINAL_TESTCLIENT_REQUEST(self, method, url, *args, **kwargs)
+
 
 @pytest.fixture
 def web_dist(tmp_path: Path) -> Path:
@@ -32,7 +45,7 @@ def _client(corpus: Path, *, web_dist: Path | None) -> TestClient:
         index_path=corpus / "_corpus.bkkx",
         web_dist=web_dist,
     )
-    return TestClient(create_app(config))
+    return _RawClient(create_app(config))
 
 
 def test_root_serves_index_when_web_dist_set(corpus: Path, web_dist: Path):
@@ -59,14 +72,14 @@ def test_static_asset_served(corpus: Path, web_dist: Path):
 
 def test_api_paths_still_return_json_with_web_dist(corpus: Path, web_dist: Path):
     client = _client(corpus, web_dist=web_dist)
-    r = client.get("/catalog")
+    r = client.get("/api/catalog")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("application/json")
 
 
 def test_api_404_returns_json_not_index(corpus: Path, web_dist: Path):
     client = _client(corpus, web_dist=web_dist)
-    r = client.get("/bundles/NO_SUCH_ID")
+    r = client.get("/api/bundles/NO_SUCH_ID")
     assert r.status_code == 404
     assert r.headers["content-type"].startswith("application/json")
     assert r.json()["error"] == "bundle_not_found"

@@ -13,6 +13,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
+from bkk.serialize.uuid import strip_uuid_prefix
+
 log = logging.getLogger("bkk.index.annotations")
 
 ANNOTATION_SCHEMA_VERSION = 1
@@ -159,7 +161,7 @@ def _location_row(raw: dict[str, Any], text_id: str, seq: int) -> tuple[Any, ...
     sense_uuid = sense.get("id")
     if not isinstance(sense_uuid, str) or not sense_uuid:
         return None
-    sense_uuid = _strip_uuid_prefix(sense_uuid)
+    sense_uuid = strip_uuid_prefix(sense_uuid)
     bucket_offset = raw.get("bucket_offset")
     if not isinstance(bucket_offset, int):
         return None
@@ -201,5 +203,3 @@ def _location_row(raw: dict[str, Any], text_id: str, seq: int) -> tuple[Any, ...
     )
 
 
-def _strip_uuid_prefix(value: str) -> str:
-    return value[5:] if value.startswith("uuid-") else value

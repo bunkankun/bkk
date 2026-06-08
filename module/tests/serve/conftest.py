@@ -129,6 +129,34 @@ def corpus(tmp_path: Path) -> Path:
     return tmp_path
 
 
+_NON_API_PATHS = ("/api", "/healthz", "/docs", "/redoc", "/openapi.json")
+
+
+# All HTTP API routes live under ``/api`` in the real app. Existing tests
+# write paths as ``client.get("/bundles/...")``; this monkey-patch rewrites
+# them to ``/api/bundles/...`` transparently so the test suite doesn't need
+# a flag day of edits. Paths already starting with ``/api`` or hitting a
+# backend meta endpoint (``/healthz``, ``/docs``, ``/openapi.json``) pass
+# through untouched. ``test_static.py`` tests SPA-vs-API routing directly
+# and opts out by writing literal URLs — its fixture stashes the original
+# method on the client instance.
+ORIGINAL_TESTCLIENT_REQUEST = TestClient.request
+
+
+def _request_with_api_prefix(self, method, url, *args, **kwargs):
+    if (
+        isinstance(url, str)
+        and url.startswith("/")
+        and url != "/"
+        and not url.startswith(_NON_API_PATHS)
+    ):
+        url = "/api" + url
+    return ORIGINAL_TESTCLIENT_REQUEST(self, method, url, *args, **kwargs)
+
+
+TestClient.request = _request_with_api_prefix  # type: ignore[method-assign]
+
+
 @pytest.fixture
 def client(corpus: Path) -> TestClient:
     config = ServeConfig(

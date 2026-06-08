@@ -179,10 +179,10 @@ No CSS modules, no Tailwind. Components add classes directly; style rules live i
 
 **Theme** — `workspace.setTheme()` writes to `uiPrefs`, persists, and sets `document.documentElement.dataset.theme`. CSS handles the rest.
 
-**Auth** — `startGithubLogin()` redirects to `/auth/github/start`; the backend completes the OAuth dance and sets a session cookie. On boot, `loadAuthSession()` calls `GET /auth/session`. Logout clears the cookie and resets in-memory session-derived slices. Workspace sync (pull `session.json`, push debounced) is triggered by login.
+**Auth** — `startGithubLogin()` redirects to `/api/auth/github/start`; the backend completes the OAuth dance and sets a session cookie. On boot, `loadAuthSession()` calls `GET /api/auth/session`. Logout clears the cookie and resets in-memory session-derived slices. Workspace sync (pull `session.json`, push debounced) is triggered by login.
 
 **Search lifecycle** — `runSearch()` aborts any in-flight request via `searchAbort`, fires the new one, and writes status (`idle`/`loading`/`ok`/`error`) into `state.search`. List filters narrow the textid scope via `scopedListTextids()` before the request.
 
-**Dev vs prod** — only one switch: `import.meta.env.DEV` picks the `/api` base. Vite handles the dev proxy ([vite.config.ts](../../module/web/vite.config.ts)). The OAuth callback uses the same `/api` form in both setups; see [../web.md](../web.md) (Prod mode) for how the backend mounts the auth router under `/api` so the dev-registered callback resolves either way.
+**Dev vs prod** — all backend routes live under `/api` in both setups. `apiBase` is the constant `/api`. Vite proxies `/api/*` straight through to the FastAPI backend in dev ([vite.config.ts](../../module/web/vite.config.ts)); in prod the SPA and API share the same origin.
 
 **No global error boundary, no service worker, no websockets.** Long-running admin jobs are polled (`getAdminJob(id)` on an interval). All other backend interactions are request/response.

@@ -57,7 +57,7 @@ WorkingDirectory=/var/lib/bkk
 # Required for /admin/* and the admin web UI:
 Environment=BKK_GITHUB_CLIENT_ID=...
 Environment=BKK_GITHUB_CLIENT_SECRET=...
-Environment=BKK_GITHUB_CALLBACK_URL=https://bunkankun.org/auth/github/callback
+Environment=BKK_GITHUB_CALLBACK_URL=https://bunkankun.org/api/auth/github/callback
 # Override the default admin team (bunkankun/bkk-admin) if needed:
 # Environment=BKK_ADMIN_TEAM=your-org/your-team
 # Required for the in-UI "Update" + "Restart server" buttons:
@@ -171,7 +171,7 @@ curl -sS https://bkk.example.org/healthz      # through Apache
   unit, or restart will simply stop the server.
 - **OAuth callback**: if you use GitHub login, the callback URL must match
   what's registered with the GitHub app *and* what Apache exposes
-  (`https://bkk.example.org/auth/github/callback`).
+  (`https://bkk.example.org/api/auth/github/callback`).
 - **Corpus paths outside `/home/bkk`**: systemd's `ProtectHome=read-only`
   blocks `/home/*`. Either move corpus to `/var/lib/bkk/...`, or drop
   `ProtectHome` and add explicit `ReadOnlyPaths=`/`ReadWritePaths=` entries.
