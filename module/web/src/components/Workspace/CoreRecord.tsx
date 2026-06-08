@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  deleteCoreRecord,
   getAnnotationSenseCounts,
   getCoreBacklinks,
   getCoreConceptWords,
@@ -1081,6 +1082,9 @@ export function CoreRecord({
     return tab?.type === "core-record" ? tab.history?.length ?? 0 : 0;
   });
   const authenticated = useWorkspace((s) => s.auth.status === "authenticated");
+  const isEditor = useWorkspace((s) => s.auth.session?.user?.is_editor ?? false);
+  const [deleted, setDeleted] = useState<{ compareUrl: string; prUrl: string | null } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1218,7 +1222,68 @@ export function CoreRecord({
             {editing ? "Editing" : "Edit"}
           </button>
         )}
+        {isEditor && (
+          <button
+            type="button"
+            disabled={deleting || deleted !== null}
+            onClick={async () => {
+              const label = record.display_label || record.uuid;
+              if (!window.confirm(
+                `Delete ${record.collection}/${label}? ` +
+                "This commits a deletion to your fork branch.",
+              )) return;
+              setDeleting(true);
+              try {
+                const resp = await deleteCoreRecord(record.collection, record.uuid);
+                setDeleted({ compareUrl: resp.compare_url, prUrl: resp.pr_url });
+              } catch (e) {
+                window.alert(`Delete failed: ${e instanceof Error ? e.message : String(e)}`);
+              } finally {
+                setDeleting(false);
+              }
+            }}
+            style={{
+              marginLeft: authenticated ? 4 : "auto",
+              fontSize: 11,
+              padding: "2px 8px",
+              background: "var(--bg-1)",
+              color: "var(--t1)",
+              border: "1px solid var(--bd)",
+              borderRadius: 3,
+              cursor: deleting || deleted !== null ? "default" : "pointer",
+            }}
+            title="Delete this record on your fork"
+          >
+            {deleting ? "…" : "×"}
+          </button>
+        )}
       </div>
+      {deleted && (
+        <div
+          style={{
+            fontSize: 12,
+            marginBottom: 12,
+            padding: 8,
+            background: "var(--bg-1)",
+            border: "1px solid var(--bd)",
+            borderRadius: 3,
+            color: "var(--t1)",
+          }}
+        >
+          Deleted on your fork.{" "}
+          <a href={deleted.compareUrl} target="_blank" rel="noreferrer" style={{ color: "var(--link)" }}>
+            View diff
+          </a>
+          {deleted.prUrl && (
+            <>
+              {" · "}
+              <a href={deleted.prUrl} target="_blank" rel="noreferrer" style={{ color: "var(--link)" }}>
+                Open PR
+              </a>
+            </>
+          )}
+        </div>
+      )}
       <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 12 }}>
         {record.collection} · {record.uuid}
       </div>

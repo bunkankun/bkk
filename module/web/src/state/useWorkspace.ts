@@ -45,6 +45,7 @@ export type Activity =
   | "lists"
   | "history"
   | "core"
+  | "edit"
   | "admin"
   | "settings";
 export type RightTab = "annotations" | "chat" | "search";
@@ -1921,8 +1922,10 @@ export const workspace = {
     try {
       const session = await getAuthSession();
       const isAdmin = session.user?.is_admin ?? false;
-      const activity =
-        state.activity === "admin" && !isAdmin ? "texts" : state.activity;
+      const isEditor = session.user?.is_editor ?? false;
+      let activity = state.activity;
+      if (activity === "admin" && !isAdmin) activity = "texts";
+      if (activity === "edit" && !isEditor) activity = "texts";
       state = {
         ...state,
         activity,

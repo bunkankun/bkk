@@ -18,6 +18,8 @@ import type {
   CoreBacklinksResponse,
   CoreCollectionsResponse,
   CoreConceptWordsResponse,
+  CoreDeleteRequest,
+  CoreDeleteResponse,
   CoreEditRequest,
   CoreEditResponse,
   CoreListResponse,
@@ -501,6 +503,21 @@ export async function patchCoreRecord(
     `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}`,
     {
       method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export async function deleteCoreRecord(
+  collection: string,
+  uuid: string,
+  body: CoreDeleteRequest = {},
+): Promise<CoreDeleteResponse> {
+  return fetchJson<CoreDeleteResponse>(
+    `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}`,
+    {
+      method: "DELETE",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     },

@@ -118,6 +118,7 @@ class UserSession:
     access_token: str
     workspace: dict[str, Any]
     is_admin: bool = False
+    is_editor: bool = False
     bluesky: BlueskySession | None = None
     created_at: float = field(default_factory=time.time)
 
@@ -129,6 +130,7 @@ class UserSession:
             "html_url": self.html_url,
             "workspace": self.workspace,
             "is_admin": self.is_admin,
+            "is_editor": self.is_editor,
             "bluesky": (
                 {"did": self.bluesky.did, "handle": self.bluesky.handle}
                 if self.bluesky is not None
@@ -154,6 +156,7 @@ class SessionRegistry:
         access_token: str,
         workspace: dict[str, Any],
         is_admin: bool = False,
+        is_editor: bool = False,
     ) -> UserSession:
         session = UserSession(
             id=uuid.uuid4().hex,
@@ -164,6 +167,7 @@ class SessionRegistry:
             access_token=access_token,
             workspace=workspace,
             is_admin=is_admin,
+            is_editor=is_editor,
         )
         with self._lock:
             self._sessions[session.id] = session

@@ -366,6 +366,7 @@ def github_callback(request: Request, code: str, state: str) -> RedirectResponse
 
     workspace = _workspace_for_user(app_state, access_token, login)
     is_admin = _is_team_member(access_token, app_state.config.admin_team, login)
+    is_editor = _is_team_member(access_token, app_state.config.editor_team, login)
     user_session = app_state.sessions.create(
         login=login,
         name=user.get("name") if isinstance(user.get("name"), str) else None,
@@ -378,6 +379,7 @@ def github_callback(request: Request, code: str, state: str) -> RedirectResponse
         access_token=access_token,
         workspace=workspace,
         is_admin=is_admin,
+        is_editor=is_editor,
     )
 
     response = RedirectResponse("/", status_code=302)

@@ -495,6 +495,7 @@ export interface AuthUser {
   html_url?: string | null;
   workspace: WorkspaceInfo;
   is_admin: boolean;
+  is_editor: boolean;
   bluesky?: { handle: string; did: string } | null;
 }
 
@@ -683,6 +684,20 @@ export interface CoreEditResponse {
   pr_url: string | null;
   data: Record<string, unknown>;
   extras: CoreEditExtraFileResult[];
+}
+
+export interface CoreDeleteRequest {
+  parent_sha?: string;
+  branch?: string;
+  message?: string;
+}
+
+export interface CoreDeleteResponse {
+  branch: string;
+  commit_sha: string;
+  fork_repo: string;
+  compare_url: string;
+  pr_url: string | null;
 }
 
 export interface CoreOpenPrRequest {

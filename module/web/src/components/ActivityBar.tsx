@@ -172,6 +172,27 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
     ),
   },
   {
+    id: "edit",
+    label: "EDIT",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+        <path
+          d="M2.5 13.5 3.2 10 10.8 2.4a1.4 1.4 0 0 1 2 2L5.2 12 1.7 12.7l.8-1.8"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="m9.4 3.8 2.8 2.8"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "admin",
     label: "Admin",
     icon: (
@@ -212,7 +233,11 @@ const ITEMS: { id: Activity; label: string; icon: JSX.Element }[] = [
 export function ActivityBar() {
   const activity = useWorkspace((s) => s.activity);
   const isAdmin = useWorkspace((s) => s.auth.session?.user?.is_admin ?? false);
-  const items = ITEMS.filter((it) => it.id !== "admin" || isAdmin);
+  const isEditor = useWorkspace((s) => s.auth.session?.user?.is_editor ?? false);
+  const items = ITEMS.filter(
+    (it) =>
+      (it.id !== "admin" || isAdmin) && (it.id !== "edit" || isEditor),
+  );
   return (
     <div className="act">
       {items.map((it) => (

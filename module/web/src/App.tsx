@@ -4,6 +4,7 @@ import { ActivityBar } from "./components/ActivityBar";
 import { Admin } from "./components/LeftPanel/Admin";
 import { Catalog } from "./components/LeftPanel/Catalog";
 import { Core } from "./components/LeftPanel/Core";
+import { EditingTasks } from "./components/LeftPanel/EditingTasks";
 import { History } from "./components/LeftPanel/History";
 import { Lists } from "./components/LeftPanel/Lists";
 import { Translations } from "./components/LeftPanel/Translations";
@@ -71,6 +72,8 @@ function LeftPanel() {
       ? "Settings"
     : activity === "admin"
       ? "Admin"
+    : activity === "edit"
+      ? "Editing Tasks"
     : activity === "core"
       ? "CORE"
     : activity === "catalog"
@@ -94,6 +97,8 @@ function LeftPanel() {
           <Settings />
         ) : activity === "admin" ? (
           <Admin />
+        ) : activity === "edit" ? (
+          <EditingTasks />
         ) : activity === "core" ? (
           <Core />
         ) : activity === "catalog" ? (

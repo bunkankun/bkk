@@ -22,6 +22,7 @@ class ServeConfig:
     host: str = "127.0.0.1"
     port: int = 8000
     admin_team: str = "bunkankun/bkk-admin"
+    editor_team: str = "bunkankun/bkk-editor"
     reload: bool = False
     upstream_repo: str | None = None
     web_dist: Path | None = None
@@ -186,6 +187,13 @@ class ServeConfig:
             else rc.get("admin_team", "bunkankun/bkk-admin")
         )
 
+        env_editor_team = os.environ.get("BKK_EDITOR_TEAM")
+        editor_team = (
+            env_editor_team
+            if env_editor_team is not None
+            else rc.get("editor_team", "bunkankun/bkk-editor")
+        )
+
         env_repo = os.environ.get("BKK_UPSTREAM_REPO")
         upstream_repo = env_repo if env_repo is not None else rc.get("upstream_repo")
 
@@ -276,6 +284,7 @@ class ServeConfig:
             host=host,
             port=port,
             admin_team=admin_team,
+            editor_team=editor_team,
             reload=False,
             upstream_repo=upstream_repo,
             web_dist=web_dist,
@@ -307,6 +316,7 @@ class ServeConfig:
         host: str | None = None,
         port: int | None = None,
         admin_team: str | None = None,
+        editor_team: str | None = None,
         reload: bool | None = None,
         upstream_repo: str | None = None,
         web_dist: Path | str | None = None,
@@ -347,6 +357,8 @@ class ServeConfig:
             updates["port"] = port
         if admin_team is not None:
             updates["admin_team"] = admin_team
+        if editor_team is not None:
+            updates["editor_team"] = editor_team
         if reload is not None:
             updates["reload"] = reload
         if upstream_repo is not None:

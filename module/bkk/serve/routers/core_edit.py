@@ -86,6 +86,20 @@ class EditResponse(BaseModel):
     extras: list[ExtraFileResult] = Field(default_factory=list)
 
 
+class DeleteRequest(BaseModel):
+    parent_sha: str | None = None
+    branch: str | None = None
+    message: str | None = None
+
+
+class DeleteResponse(BaseModel):
+    branch: str
+    commit_sha: str
+    fork_repo: str
+    compare_url: str
+    pr_url: str | None
+
+
 class OpenPrRequest(BaseModel):
     branch: str
     title: str | None = None
@@ -106,6 +120,13 @@ def _session(request: Request) -> UserSession:
     user_session = request.app.state.bkk.sessions.get(session_id)
     if user_session is None:
         raise HTTPException(status_code=401, detail="Login required")
+    return user_session
+
+
+def _editor_session(request: Request) -> UserSession:
+    user_session = _session(request)
+    if not user_session.is_editor:
+        raise HTTPException(status_code=403, detail="Editor role required")
     return user_session
 
 
@@ -679,3 +700,83 @@ async def open_pr(
     if not isinstance(pr_url, str) or not isinstance(pr_number, int):
         raise HTTPException(status_code=502, detail="GitHub PR payload missing url/number")
     return OpenPrResponse(pr_url=pr_url, pr_number=pr_number, already_existed=False)
+
+
+@router.delete(
+    "/{collection}/{uuid}",
+    response_model=DeleteResponse,
+    summary="Delete one core record on the user's fork branch (editor-only)",
+)
+async def delete_record(
+    request: Request, collection: str, uuid: str,
+) -> DeleteResponse:
+    user_session = _editor_session(request)
+    state: AppState = request.app.state.bkk
+    upstream = _require_upstream(state)
+    _require_collection(collection)
+
+    try:
+        raw = await request.body()
+        payload = await request.json() if raw else {}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Expected JSON request body") from exc
+    req = DeleteRequest.model_validate(payload)
+
+    _type_name, rel_path, display_label = _lookup_record(state, collection, uuid)
+
+    token = user_session.access_token
+    upstream_branch = state.config.core_pr_base
+    fork = _ensure_fork(token, user_session.login, upstream, upstream_branch)
+    fork_owner = user_session.login
+
+    branch = req.branch or _default_branch_name(collection, uuid)
+    _ensure_branch(
+        token=token, fork=fork, branch=branch,
+        upstream=upstream, upstream_branch=upstream_branch,
+    )
+
+    if req.parent_sha is not None:
+        parent_sha = req.parent_sha
+    else:
+        head_payload = _fetch_file(token, fork, rel_path, branch)
+        if head_payload is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"{rel_path} not found on {fork}@{branch}; nothing to delete",
+            )
+        parent_sha = head_payload.get("sha")
+        if not isinstance(parent_sha, str):
+            raise HTTPException(
+                status_code=502,
+                detail="GitHub file payload has no sha for parent",
+            )
+
+    commit_message = req.message or f"Delete {collection}/{display_label or uuid}"
+    commit_sha = _delete_file(
+        token=token, fork=fork, rel_path=rel_path, branch=branch,
+        message=commit_message, parent_sha=parent_sha,
+    )
+
+    existing_pr = _find_existing_pr(token, upstream, fork_owner, branch)
+    pr_url = (
+        existing_pr.get("html_url")
+        if isinstance(existing_pr, dict)
+        and isinstance(existing_pr.get("html_url"), str)
+        else None
+    )
+
+    upstream_owner = upstream.split("/", 1)[0]
+    compare_url = (
+        f"https://github.com/{upstream}/compare/{upstream_branch}..."
+        f"{fork_owner}:{branch}"
+    )
+    if upstream_owner == fork_owner:
+        compare_url = f"https://github.com/{upstream}/compare/{upstream_branch}...{branch}"
+
+    return DeleteResponse(
+        branch=branch,
+        commit_sha=commit_sha,
+        fork_repo=fork,
+        compare_url=compare_url,
+        pr_url=pr_url,
+    )
