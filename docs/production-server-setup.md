@@ -57,7 +57,7 @@ WorkingDirectory=/var/lib/bkk
 # Required for /admin/* and the admin web UI:
 Environment=BKK_GITHUB_CLIENT_ID=...
 Environment=BKK_GITHUB_CLIENT_SECRET=...
-Environment=BKK_GITHUB_CALLBACK_URL=https://bkk.example.org/auth/github/callback
+Environment=BKK_GITHUB_CALLBACK_URL=https://bunkankun.org/auth/github/callback
 # Override the default admin team (bunkankun/bkk-admin) if needed:
 # Environment=BKK_ADMIN_TEAM=your-org/your-team
 # Required for the in-UI "Update" + "Restart server" buttons:

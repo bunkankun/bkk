@@ -87,6 +87,10 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(search_router.router)
     app.include_router(recipes_router.router)
     app.include_router(auth_router.router)
+    # Alias under /api so the GitHub OAuth callback registered for vite dev
+    # (http://localhost:5173/api/auth/github/callback) also resolves when
+    # bkk serve hosts the dist on :5173 without vite in front.
+    app.include_router(auth_router.router, prefix="/api")
     app.include_router(workspace_router.router)
     app.include_router(admin_router.router)
     app.include_router(redirects_router.router)

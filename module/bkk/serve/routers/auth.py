@@ -42,9 +42,11 @@ def _callback_url(request: Request) -> str:
         return config.github_callback_url
     origin = _origin(request)
     parsed = urlparse(origin)
-    # Vite dev serves the browser origin on :5173 and proxies /api/* to
-    # FastAPI. The OAuth callback must therefore include /api even if the
-    # backend itself was not started with uvicorn --reload.
+    # On :5173 the registered GitHub OAuth callback is the /api form so the
+    # same OAuth app works for both vite dev (which proxies /api/* to the
+    # backend on :8000) and bkk serve hosting the dist on :5173 directly.
+    # In the latter case the auth router is also mounted under /api so the
+    # path resolves without a proxy in front.
     prefix = "/api" if parsed.port == 5173 else ""
     return f"{origin}{prefix}/auth/github/callback"
 

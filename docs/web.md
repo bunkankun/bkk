@@ -38,6 +38,8 @@ bkk serve --corpus module/samples \
 
 Open <http://127.0.0.1:8000>. FastAPI serves the built SPA at `/` and the API at `/bundles`, `/catalog`, `/server-info`, etc. Unknown non-API paths fall back to `index.html` so client-side routing works after a hard refresh.
 
+To exercise the prod bundle against the same GitHub OAuth app used for vite dev, run `bkk serve --port 5173 --web-dist module/web/dist`. The auth router is also mounted under `/api`, so the callback URL `http://localhost:5173/api/auth/github/callback` registered for vite dev resolves whether or not vite is in front.
+
 ### Configuration
 
 | Flag                      | Env var               | Notes |
