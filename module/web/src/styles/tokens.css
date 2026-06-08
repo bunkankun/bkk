@@ -2,14 +2,14 @@
  * Keep this file restricted to design tokens — layout/components live in
  * app.css and per-component CSS modules. */
 :root {
-  --bg: #12111a;
-  --bg-act: #0d0c14;
-  --bg-pan: #191727;
-  --bg-ed: #141320;
-  --bg-tab: #1d1b2e;
+  --bg: #f8f8fb;
+  --bg-act: #eceef5;
+  --bg-pan: #ffffff;
+  --bg-ed: #ffffff;
+  --bg-tab: #f0f1f6;
 
-  --bdr: #252338;
-  --bdr-l: #1e1c30;
+  --bdr: #d7d9e2;
+  --bdr-l: #e6e8ef;
 
   /* Aliases for ad-hoc names used by inline styles in components. */
   --bg-0: var(--bg-pan);
@@ -19,28 +19,28 @@
   --accent: var(--grn);
   --err: var(--kr2);
 
-  --t1: #dcd8f0;
-  --t2: #7a778f;
-  --t3: #4a4762;
+  --t1: #1d2230;
+  --t2: #596174;
+  --t3: #8a91a2;
 
-  --amb: oklch(0.72 0.14 65);
-  --amb-d: oklch(0.72 0.14 65 / 0.12);
-  --amb-b: oklch(0.72 0.14 65 / 0.28);
+  --amb: oklch(0.48 0.14 55);
+  --amb-d: oklch(0.48 0.14 55 / 0.12);
+  --amb-b: oklch(0.48 0.14 55 / 0.24);
 
-  --blu: oklch(0.65 0.10 255);
-  --grn: oklch(0.65 0.10 160);
-  --hov: rgba(255, 255, 255, 0.045);
+  --blu: oklch(0.48 0.12 252);
+  --grn: oklch(0.47 0.12 155);
+  --hov: rgba(24, 31, 50, 0.07);
 
   --ff: "IBM Plex Sans", sans-serif;
   --fm: "IBM Plex Mono", monospace;
   --fc: "Noto Serif SC", "Songti SC", "SimSun", serif;
 
-  --kr1: #66BB6A;
-  --kr2: #EF5350;
-  --kr3: #42A5F5;
-  --kr4: #BDBDBD;
-  --kr5: #BA68C8;
-  --kr6: #FFCA28;
+  --kr1: #2E7D32;
+  --kr2: #C62828;
+  --kr3: #1565C0;
+  --kr4: #424242;
+  --kr5: #7B4FA3;
+  --kr6: #D4A017;
 }
 
 :root[data-theme="dark"] {
