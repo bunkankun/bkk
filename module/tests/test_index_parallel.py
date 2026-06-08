@@ -11,6 +11,7 @@ import yaml
 from bkk.index import build_index, merge_bundles
 from bkk.index.cli import run as cli_run
 from bkk.index.parallel import discover_parallel_passages
+from bkk.index.parallel_scan import discover_parallel_passages_scan
 
 
 def _write_bundle(
@@ -222,3 +223,128 @@ def test_parallel_seed_postings_cap_prevents_blowup(tmp_path):
         assert "more than 3 times" in str(e)
     else:
         raise AssertionError("expected seed posting cap to raise")
+
+
+def test_parallel_scan_finds_repeated_passage(tmp_path):
+    shared = "SCAN-PASSAGE-ALPHA"
+    _write_bundle(tmp_path, "KR0a0001", f"aaa{shared}bbb")
+    _write_bundle(tmp_path, "KR0a0002", f"ccc{shared}ddd")
+    out = _merge(tmp_path)
+
+    clusters, stats = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=4,
+        work_dir=tmp_path,
+    )
+
+    assert stats.bucket_count == 2
+    assert stats.anchors_written > 0
+    assert len(clusters) == 1
+    assert clusters[0].text == shared
+    assert clusters[0].occurrence_count == 2
+
+
+def test_parallel_scan_extends_at_bucket_boundaries(tmp_path):
+    shared = "BOUNDARY-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"{shared}tail")
+    _write_bundle(tmp_path, "KR0a0002", f"{shared}end")
+    out = _merge(tmp_path)
+
+    clusters, _stats = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=2,
+        work_dir=tmp_path,
+    )
+
+    assert [c.text for c in clusters] == [shared]
+    assert [loc.start for loc in clusters[0].locations] == [0, 0]
+
+
+def test_parallel_scan_skips_common_anchor_group(tmp_path):
+    for i in range(6):
+        _write_bundle(tmp_path, f"KR0a{i:04d}", "xxCOMMON-ANCHOR-yy")
+    out = _merge(tmp_path)
+
+    clusters, stats = discover_parallel_passages_scan(
+        out,
+        min_length=8,
+        anchor_length=6,
+        max_anchor_occurrences=3,
+        partitions=1,
+        work_dir=tmp_path,
+    )
+
+    assert clusters == []
+    assert stats.skipped_anchor_groups > 0
+    assert stats.candidate_spans == 0
+
+
+def test_parallel_scan_partitioned_matches_unpartitioned(tmp_path):
+    shared = "PARTITIONED-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    _write_bundle(tmp_path, "KR0a0003", f"ee{shared}ff")
+    out = _merge(tmp_path)
+
+    one_part, _ = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=1,
+        work_dir=tmp_path,
+    )
+    many_parts, _ = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=5,
+        work_dir=tmp_path,
+    )
+
+    assert [(c.text, c.occurrence_count) for c in many_parts] == [
+        (c.text, c.occurrence_count) for c in one_part
+    ]
+
+
+def test_parallel_scan_cli_writes_jsonl_and_progress(tmp_path, capsys):
+    shared = "CLI-SCAN-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    report = tmp_path / "scan.jsonl"
+
+    rc = cli_run([
+        "parallel-scan",
+        str(out),
+        "--out",
+        str(report),
+        "--work-dir",
+        str(tmp_path),
+        "--min-length",
+        "10",
+        "--anchor-length",
+        "5",
+        "--partitions",
+        "3",
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "anchors written" in captured.err
+    rows = [json.loads(line) for line in report.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["text"] == shared
+
+
+def test_parallel_full_scan_disabled_for_corpus_index(tmp_path):
+    _write_bundle(tmp_path, "KR0a0001", "abcdef")
+    out = _merge(tmp_path)
+
+    with pytest.raises(SystemExit) as exc:
+        cli_run(["parallel", str(out), "--full-scan"])
+
+    assert exc.value.code == 2

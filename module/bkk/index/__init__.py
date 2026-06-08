@@ -20,11 +20,13 @@ from .parallel import (
     discover_parallel_passages,
     write_parallel_report,
 )
+from .parallel_scan import ParallelScanStats, discover_parallel_passages_scan
 from .query import Index
 from .translation import build_translation_index, merge_translations
 
 __all__ = [
-    "Index", "Hit", "VariantOverlay", "ParallelCluster", "ParallelLocation",
+    "Index", "Hit", "VariantOverlay", "ParallelCluster", "ParallelLocation", "ParallelScanStats",
     "build_index", "build_annotation_index", "build_catalog_index", "build_translation_index",
-    "merge_bundles", "merge_translations", "discover_parallel_passages", "write_parallel_report",
+    "merge_bundles", "merge_translations", "discover_parallel_passages",
+    "discover_parallel_passages_scan", "write_parallel_report",
 ]
