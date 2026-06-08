@@ -700,8 +700,9 @@ function OverviewPanel({
   return (
     <div className="kwic-overview">
       <div className="kwic-overview-banner">
-        <strong>{totalLabel}</strong> results for “{query}” — too broad to
-        list. Pick a context extension or facet below to narrow the search.
+        <strong>Too many results</strong> — {totalLabel} hits for “{query}”.
+        Pick a context extension below (or use the facets) to bring the
+        result set under the {overview.threshold} threshold.
       </div>
       {overview.kwic_filters_ignored ? (
         <div className="kwic-overview-note">
@@ -892,6 +893,14 @@ export function SearchTab() {
           </button>
         ) : null}
       </div>
+      {isOverview ? (
+        <OverviewPanel
+          query={response.query}
+          total={response.total}
+          overview={response.overview!}
+          disabled={disabled}
+        />
+      ) : null}
       <div className="kwic-facets">
         <ListFacetGroup
           lists={activeLists}
@@ -988,18 +997,11 @@ export function SearchTab() {
           onMore={() => expandFacet("aroundBinom")}
         />
       </div>
-      {isOverview ? (
-        <OverviewPanel
-          query={response.query}
-          total={response.total}
-          overview={response.overview!}
-          disabled={disabled}
-        />
-      ) : (
-        response.hits.map((h, i) => (
-          <HitRow key={`${h.textid}:${h.juan_seq}:${h.master_offset}:${i}`} hit={h} />
-        ))
-      )}
+      {isOverview
+        ? null
+        : response.hits.map((h, i) => (
+            <HitRow key={`${h.textid}:${h.juan_seq}:${h.master_offset}:${i}`} hit={h} />
+          ))}
       {(hasPrev || hasNext) && (
         <div className="kwic-pager">
           <button
