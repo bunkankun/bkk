@@ -162,13 +162,15 @@ bkk serve startup
    │
    ▼
 ContributionFeed.run()
-   │   wss://jetstream2.us-east.bsky.network/subscribe
-   │   wantedCollections=org.bunkankun.{annotation.note,
-   │                                    annotation,
-   │                                    comment.post,
-   │                                    translation.segment}
-   │   [&wantedDids=… per [annotations].dids if set]
-   │   cursor=<24h ago>           (backfill on first connect)
+   │  1. seed: for each DID in [annotations].dids,
+   │     com.atproto.repo.listRecords per NSID (limit 100 each)
+   │  2. subscribe: wss://jetstream2.us-east.bsky.network/subscribe
+   │     wantedCollections=org.bunkankun.{annotation.note,
+   │                                      annotation,
+   │                                      comment.post,
+   │                                      translation.segment}
+   │     [&wantedDids=… per [annotations].dids if set]
+   │     cursor=<24h ago>           (gap-recovery on first connect)
    ▼
 async for raw in ws:  (commit events filtered + parsed)
    │
@@ -178,6 +180,12 @@ OrderedDict[uri → entry]  (cap=500)
    ▼ snapshot(limit)
 GET /api/contributions ─► ChatTab  (15s poll)
 ```
+
+The seed step is what gives the chat real historical depth: Jetstream's
+own backfill window is only a few hours, so without seeding the chat
+would be empty after a long server downtime even if records exist in
+authors' repos. Seeding from `[annotations].dids` re-hydrates everything
+those authors have ever posted (up to 100 per kind).
 
 Code: [`serve/contributions_feed.py`](../../module/bkk/serve/contributions_feed.py),
 [`serve/routers/contributions.py`](../../module/bkk/serve/routers/contributions.py),

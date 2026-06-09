@@ -1,18 +1,22 @@
 """Jetstream subscriber for the live BKK contributions feed.
 
-Connects to Bluesky's Jetstream firehose
-(``wss://jetstream2.us-east.bsky.network/subscribe``) filtered to our four
-NSIDs and streams every ``commit`` event into an in-memory ring buffer that
-the Chat tab reads via ``GET /api/contributions``.
+Two ingestion paths run in parallel:
 
-This was previously a per-DID poller because the relay didn't propagate our
-custom NSIDs. That's no longer true (the authority DID is published and DNS
-``_lexicon`` TXT records resolve per group), so we get every record from
-every DID in real time without a roster.
+1. **Startup seed** — for every DID in ``[annotations].dids``, one-shot
+   ``com.atproto.repo.listRecords`` per NSID gives the buffer real
+   historical depth (up to ``SEED_LIMIT`` records per DID per kind).
+   Without this, the chat would only ever show whatever Jetstream still
+   has in its (short) retention window.
 
-If ``dids`` is set in the constructor (from ``.bkkrc [annotations].dids``)
-it's passed as a ``wantedDids`` filter to scope the firehose; otherwise the
-feed is firehose-wide.
+2. **Live subscriber** — Jetstream firehose
+   (``wss://jetstream2.us-east.bsky.network/subscribe``) filtered to our
+   four NSIDs streams every ``commit`` event into the same buffer. The
+   roster, if set, doubles as a ``wantedDids`` filter; otherwise the feed
+   is firehose-wide so we pick up records from any DID in real time.
+
+This was previously a per-DID poller because the relay didn't propagate
+our custom NSIDs. That's no longer true (the authority DID is published
+and DNS ``_lexicon`` TXT records resolve per group).
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ import json
 import logging
 import time
 from collections import OrderedDict
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
 
@@ -33,6 +38,7 @@ from .atproto import (
     COMMENT_NSID,
     LEGACY_ANNOTATION_NSID,
     TRANSLATION_NSID,
+    list_records,
 )
 
 
@@ -40,7 +46,8 @@ log = logging.getLogger("bkk.serve.contributions_feed")
 
 BUFFER_MAX = 500
 JETSTREAM_URL = "wss://jetstream2.us-east.bsky.network/subscribe"
-BACKFILL_WINDOW_S = 24 * 3600  # initial cursor goes 24h back so the chat isn't empty on boot
+BACKFILL_WINDOW_S = 24 * 3600  # Jetstream cursor for live-side gap recovery
+SEED_LIMIT = 100  # per (DID, NSID) on startup
 RECONNECT_MIN_S = 1.0
 RECONNECT_MAX_S = 60.0
 
@@ -162,6 +169,43 @@ def _entry_from_commit(
     return None
 
 
+def _created_at_us(s: Any) -> int:
+    """Parse a record's ``createdAt`` string to microseconds since epoch.
+
+    Returns 0 when unparseable; sortable without crashing.
+    """
+    if not isinstance(s, str):
+        return 0
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    return int(dt.timestamp() * 1_000_000)
+
+
+def _entry_from_listrecord(rec: dict[str, Any], *, did: str) -> dict[str, Any] | None:
+    """Translate a ``listRecords`` record dict to the same shape as commits.
+
+    The wire shape from listRecords is ``{uri, cid, value}``; we parse the
+    collection + rkey out of the URI and use the record's own ``createdAt``
+    as ``time_us`` since there's no relay envelope to lift it from.
+    """
+    uri = rec.get("uri")
+    cid = rec.get("cid")
+    value = rec.get("value")
+    if not isinstance(uri, str) or not isinstance(cid, str) or not isinstance(value, dict):
+        return None
+    # at://<did>/<collection>/<rkey>
+    try:
+        _, _, _did, collection, rkey = uri.split("/", 4)
+    except ValueError:
+        return None
+    return _entry_from_commit(
+        did=did, time_us=_created_at_us(value.get("createdAt")),
+        collection=collection, rkey=rkey, cid=cid, record=value,
+    )
+
+
 def _build_url(*, dids: list[str], cursor_us: int | None) -> str:
     params: list[tuple[str, str]] = []
     for nsid, _ in COLLECTIONS:
@@ -257,6 +301,60 @@ class ContributionFeed:
         if entry is not None:
             await self._insert(entry)
 
+    async def _seed_did(self, did: str) -> int:
+        """One-shot listRecords seed across all collections for ``did``.
+
+        Resolves the PDS in a thread to avoid blocking the loop on a slow
+        plc.directory call. Returns the count of entries successfully
+        inserted (post-dedupe).
+        """
+        from bkk.annotations.pds import resolve_pds
+
+        try:
+            service = await asyncio.to_thread(resolve_pds, did)
+        except Exception as exc:
+            log.warning("seed: resolve_pds(%s) failed: %s", did, exc)
+            return 0
+        new = 0
+        for nsid, _ in COLLECTIONS:
+            try:
+                result = await asyncio.to_thread(
+                    list_records, service=service, repo=did,
+                    collection=nsid, limit=SEED_LIMIT, cursor=None,
+                )
+            except Exception as exc:
+                log.debug("seed: listRecords(%s) failed for %s: %s", nsid, did, exc)
+                continue
+            records = result.get("records") if isinstance(result, dict) else None
+            if not isinstance(records, list):
+                continue
+            for rec in records:
+                if not isinstance(rec, dict):
+                    continue
+                entry = _entry_from_listrecord(rec, did=did)
+                if entry is None:
+                    continue
+                before = len(self._by_uri)
+                await self._insert(entry)
+                if len(self._by_uri) > before:
+                    new += 1
+        return new
+
+    async def _seed_all(self) -> None:
+        if not self._dids:
+            log.info(
+                "contributions: no seed DIDs configured "
+                "([annotations].dids in .bkkrc); skipping historical seed"
+            )
+            return
+        log.info("contributions: seeding from %d DID(s)…", len(self._dids))
+        total = 0
+        for did in self._dids:
+            if self._stop.is_set():
+                return
+            total += await self._seed_did(did)
+        log.info("contributions: seed complete (+%d entries, buffer=%d)", total, len(self._by_uri))
+
     async def _consume(self, ws: Any) -> None:
         async for raw in ws:
             if self._stop.is_set():
@@ -273,7 +371,8 @@ class ContributionFeed:
                 log.exception("error handling commit event")
 
     async def run(self) -> None:
-        """Main loop: connect to Jetstream, consume, reconnect on drop."""
+        """Main loop: seed historical records, then consume Jetstream forever."""
+        await self._seed_all()
         if self._cursor_us is None and self._backfill_window_s > 0:
             self._cursor_us = int((time.time() - self._backfill_window_s) * 1_000_000)
 
