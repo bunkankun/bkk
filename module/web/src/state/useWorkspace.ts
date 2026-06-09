@@ -2447,6 +2447,57 @@ export const workspace = {
     notify();
     scheduleSessionSave();
   },
+  openContributionLocation(loc: {
+    textid: string;
+    seq: number;
+    bucket: string | null;
+    masterOffset: number | null;
+    length: number | null;
+  }) {
+    const tabId = `${loc.textid}:${loc.seq}`;
+    const target = activePaneLeaf(state.pane);
+    const sourceTab = activeTabForLeaf(target);
+    const sourceText = isTextTab(sourceTab) ? sourceTab : null;
+    const tab: TextTab = {
+      id: tabId,
+      type: "text",
+      textid: loc.textid,
+      seq: loc.seq,
+      pinned: false,
+      readMode: state.openMode === "sticky"
+        ? (sourceText?.pinned ? state.readMode : sourceText?.readMode ?? state.readMode)
+        : state.openMode,
+      lineMode: sourceText?.pinned
+        ? state.readPrefs.lineMode
+        : sourceText?.lineMode ?? state.readPrefs.lineMode,
+    };
+    const pane = paneForOpenTab(tab);
+    const focusedPaneId = leafIdForTab(pane, tabId);
+    const highlight =
+      loc.bucket != null && loc.masterOffset != null
+        ? {
+            textid: loc.textid,
+            seq: loc.seq,
+            bucket: loc.bucket,
+            offset: loc.masterOffset,
+            length: Math.max(1, loc.length ?? 1),
+          }
+        : null;
+    state = {
+      ...state,
+      activeTextid: loc.textid,
+      activeSeq: loc.seq,
+      focusedPaneId,
+      selection: null,
+      currentPage: null,
+      pane,
+      activity: "texts",
+      pendingHighlight: highlight,
+    };
+    rememberTextVisit({ textid: loc.textid, seq: loc.seq, pinned: tab.pinned === true });
+    notify();
+    scheduleSessionSave();
+  },
   openAnnotationLocation(loc: AnnotationBySenseLocation) {
     if (loc.offset == null || loc.bucket == null) return;
     const tabId = `${loc.text_id}:${loc.seq}`;

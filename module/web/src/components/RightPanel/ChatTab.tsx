@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getContributions } from "../../api/client";
+import {
+  getContributions,
+  patchContributionCuration,
+  type CurationState,
+} from "../../api/client";
 import type { Contribution } from "../../api/types";
+import { useWorkspace, workspace } from "../../state/useWorkspace";
+import { useLabelStore, type LabelStore } from "../Workspace/CoreRecordEditor";
+import { AnnotationPayload } from "./AnnotationDisplay";
+
+const CURATION_STATES: CurationState[] = [
+  "proposed",
+  "accepted",
+  "rejected",
+  "superseded",
+];
 
 const REFRESH_MS = 15_000;
 const SHORT_DID_HEAD = 12;
@@ -20,82 +34,142 @@ function relativeTime(timeUs: number, nowMs: number): string {
   return `${Math.floor(deltaSec / 86400)}d ago`;
 }
 
-function AnnotationBody({ c }: { c: Contribution }) {
-  const { form, sense, translation, concept, metadata } = c.payload ?? {};
-  if (form?.orth || form?.pron) {
-    return (
-      <div className="ann-head">
-        {form.orth && <span className="ann-orth">{form.orth}</span>}
-        {form.pron && <span className="ann-pron">{form.pron}</span>}
-      </div>
-    );
-  }
-  if (sense) {
-    const def = sense.def_text ?? sense.def;
-    if (sense.syn_func || sense.sem_feat || def) {
-      return (
-        <div className="ann-def">
-          {sense.syn_func && <strong>{sense.syn_func}</strong>}
-          {sense.sem_feat && <>{sense.syn_func && " "}<em>{sense.sem_feat}</em></>}
-          {def && <>{(sense.syn_func || sense.sem_feat) && " "}{def}</>}
-        </div>
-      );
-    }
-    if (sense.id) return <div className="ann-def">sense {sense.id}</div>;
-  }
-  if (translation?.text) {
-    return (
-      <div className="ann-tr">
-        "{translation.text}"
-        {translation.src ? ` — ${translation.src}` : ""}
-      </div>
-    );
-  }
-  if (concept) return <div className="ann-concept">{concept}</div>;
-  if (metadata && Object.keys(metadata).length > 0) {
-    return <div className="ann-def">{JSON.stringify(metadata)}</div>;
-  }
-  return null;
-}
-
-function ContribBody({ c }: { c: Contribution }) {
-  if (c.kind === "comment") {
-    return <div className="ann-def">{c.body ?? ""}</div>;
-  }
-  if (c.kind === "translation") {
-    return (
-      <div className="ann-tr">
-        "{c.text ?? ""}"
-        {c.translation_id ? <span className="ann-offset"> · {c.translation_id}</span> : null}
-      </div>
-    );
-  }
-  return <AnnotationBody c={c} />;
-}
-
-function ContribHeader({ c }: { c: Contribution }) {
-  const parts: string[] = [c.text_id];
-  if (c.edition) parts.push(c.edition);
+function LocationHeader({ c }: { c: Contribution }) {
+  const juan = c.juan_seq ?? null;
+  const canOpen = juan != null;
+  const label = c.title ?? c.text_id;
+  const parts: string[] = [label];
+  if (juan != null) parts.push(`juan ${juan}`);
+  else if (c.kind === "comment" && c.parent) parts.push("reply");
+  const detail: string[] = [];
+  if (c.edition) detail.push(c.edition);
   if (c.marker_id) {
     const offset = c.offset ?? 0;
-    parts.push(`${c.marker_id}@${offset}`);
-  } else if (c.kind === "comment" && c.parent) {
-    parts.push("reply");
+    detail.push(`${c.marker_id}@${offset}`);
   }
-  return <span>{parts.join(" · ")}</span>;
+  const onClick = () => {
+    if (!canOpen) return;
+    workspace.openContributionLocation({
+      textid: c.text_id,
+      seq: juan!,
+      bucket: c.bucket ?? null,
+      masterOffset: c.master_offset ?? null,
+      length: c.length ?? null,
+    });
+  };
+  return (
+    <div className="ann-head">
+      <button
+        type="button"
+        className="contrib-location"
+        onClick={onClick}
+        disabled={!canOpen}
+        title={canOpen ? "Open in workspace" : undefined}
+      >
+        {parts.join(" · ")}
+      </button>
+      {detail.length > 0 && (
+        <span className="ann-offset">{detail.join(" · ")}</span>
+      )}
+    </div>
+  );
 }
 
-function ContribCard({ c, nowMs }: { c: Contribution; nowMs: number }) {
+function CurationSelect({
+  uri,
+  current,
+  onChange,
+}: {
+  uri: string;
+  current: CurationState | null;
+  onChange: (state: CurationState) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const value = current ?? "";
+
+  const onSelect = async (next: CurationState) => {
+    if (busy || next === current) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await patchContributionCuration(uri, next);
+      onChange(res.curation_state);
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <span className="contrib-curation">
+      <select
+        value={value}
+        disabled={busy}
+        onChange={(ev) => void onSelect(ev.currentTarget.value as CurationState)}
+        title={error ?? "Set curation state"}
+      >
+        {current == null && <option value="">curation…</option>}
+        {CURATION_STATES.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
+function ContribCard({
+  c,
+  nowMs,
+  store,
+  isEditor,
+  onCurationChange,
+}: {
+  c: Contribution;
+  nowMs: number;
+  store: LabelStore;
+  isEditor: boolean;
+  onCurationChange: (uri: string, state: CurationState) => void;
+}) {
   return (
     <div className="ann">
       <div className="ann-head">
         <span className="ann-pron">{shortDid(c.did)}</span>
         <span className="ann-offset">{c.kind} · {relativeTime(c.time_us, nowMs)}</span>
+        {isEditor && (
+          <CurationSelect
+            uri={c.uri}
+            current={(c.curation_state ?? null) as CurationState | null}
+            onChange={(s) => onCurationChange(c.uri, s)}
+          />
+        )}
       </div>
-      <div className="ann-head">
-        <ContribHeader c={c} />
-      </div>
-      <ContribBody c={c} />
+      <LocationHeader c={c} />
+      {c.kind === "annotation" && (
+        <AnnotationPayload
+          parts={{
+            form: c.payload?.form,
+            sense: c.payload?.sense,
+            concept: c.payload?.concept,
+            translation: c.payload?.translation,
+          }}
+          store={store}
+        />
+      )}
+      {c.kind === "comment" && c.body && (
+        <div className="ann-def">{c.body}</div>
+      )}
+      {c.kind === "translation" && c.text && (
+        <div className="ann-tr">
+          "{c.text}"
+          {c.translation_id ? (
+            <span className="ann-offset"> · {c.translation_id}</span>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -135,6 +209,20 @@ export function ChatTab() {
     return () => window.clearInterval(id);
   }, [load]);
 
+  const labelStore = useLabelStore(new Map());
+  const isEditor = useWorkspace(
+    (s) => s.auth.session?.user?.is_editor ?? false,
+  );
+
+  const handleCurationChange = useCallback(
+    (uri: string, state: CurationState) => {
+      setItems((prev) =>
+        prev.map((it) => (it.uri === uri ? { ...it, curation_state: state } : it)),
+      );
+    },
+    [],
+  );
+
   return (
     <div className="rc">
       <div className="rc-head">
@@ -158,7 +246,14 @@ export function ChatTab() {
         <div className="empty">No contributions yet — start chatting!</div>
       )}
       {items.map((c) => (
-        <ContribCard key={c.uri} c={c} nowMs={nowMs} />
+        <ContribCard
+          key={c.uri}
+          c={c}
+          nowMs={nowMs}
+          store={labelStore}
+          isEditor={isEditor}
+          onCurationChange={handleCurationChange}
+        />
       ))}
       {truncated && (
         <div className="empty">Buffer full (500) — older posts evicted.</div>

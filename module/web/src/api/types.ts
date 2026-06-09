@@ -299,6 +299,17 @@ export interface Contribution {
 
   // Shared between comment + translation.
   lang?: string | null;
+
+  // Server-enriched location fields (resolved at read-time from the
+  // marker_id). Null when the bundle is unknown or the marker can't be
+  // located.
+  title?: string | null;
+  juan_seq?: number | null;
+  bucket?: string | null;
+  master_offset?: number | null;
+
+  // Server-side curation gate (proposed / accepted / rejected / superseded).
+  curation_state?: string | null;
 }
 
 export interface ContributionsResponse {

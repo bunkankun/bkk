@@ -252,6 +252,16 @@ class ContributionFeed:
         truncated = len(self._by_uri) >= self._max
         return items[:limit], truncated
 
+    def find(self, uri: str) -> dict[str, Any] | None:
+        return self._by_uri.get(uri)
+
+    def set_curation_state(self, uri: str, state: str) -> bool:
+        entry = self._by_uri.get(uri)
+        if entry is None:
+            return False
+        entry["curation_state"] = state
+        return True
+
     async def _insert(self, entry: dict[str, Any]) -> None:
         async with self._lock:
             uri = entry["uri"]

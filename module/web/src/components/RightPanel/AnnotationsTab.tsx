@@ -5,33 +5,10 @@ import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { AnnotationCompose } from "./AnnotationCompose";
 import { ContribCompose } from "./ContribCompose";
 import { CoreTargetPicker } from "./CoreTargetPicker";
-import {
-  SenseRowLabel,
-  useLabelStore,
-  type LabelStore,
-} from "../Workspace/CoreRecordEditor";
-
-function SenseTriple({ a, store }: { a: Annotation; store: LabelStore }) {
-  if (a.sense?.id) {
-    return <SenseRowLabel uuid={a.sense.id} store={store} />;
-  }
-  const syn = a.sense?.syn_func;
-  const sem = a.sense?.sem_feat;
-  const def = a.sense?.def_text ?? a.sense?.def;
-  if (!syn && !sem && !def) return null;
-  return (
-    <span>
-      {syn && <strong>{syn}</strong>}
-      {sem && <>{syn && " "}<em>{sem}</em></>}
-      {def && <>{(syn || sem) && " "}{def}</>}
-    </span>
-  );
-}
+import { useLabelStore, type LabelStore } from "../Workspace/CoreRecordEditor";
+import { AnnotationPayload } from "./AnnotationDisplay";
 
 function AnnCard({ a, store }: { a: Annotation; store: LabelStore }) {
-  const hasSense =
-    a.sense?.id || a.sense?.syn_func || a.sense?.sem_feat ||
-    a.sense?.def_text || a.sense?.def;
   return (
     <div className="ann">
       <div className="ann-head">
@@ -39,18 +16,15 @@ function AnnCard({ a, store }: { a: Annotation; store: LabelStore }) {
         {a.form?.pron && <span className="ann-pron">{a.form.pron}</span>}
         <span className="ann-offset">@{a.offset}</span>
       </div>
-      {a.concept && <div className="ann-concept">{a.concept}</div>}
-      {hasSense && (
-        <div className="ann-def">
-          <SenseTriple a={a} store={store} />
-        </div>
-      )}
-      {a.translation?.text && (
-        <div className="ann-tr">
-          "{a.translation.text}"
-          {a.translation.src ? ` — ${a.translation.src}` : ""}
-        </div>
-      )}
+      <AnnotationPayload
+        parts={{
+          form: undefined,
+          sense: a.sense,
+          concept: a.concept,
+          translation: a.translation,
+        }}
+        store={store}
+      />
     </div>
   );
 }

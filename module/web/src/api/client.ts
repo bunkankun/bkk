@@ -345,6 +345,33 @@ export async function getContributions(
   return fetchJson<ContributionsResponse>(`${apiBase}/contributions?${q}`);
 }
 
+export type CurationState =
+  | "proposed"
+  | "accepted"
+  | "rejected"
+  | "superseded";
+
+export interface CurationStateResponse {
+  uri: string;
+  text_id: string;
+  juan_seq: number | null;
+  curation_state: CurationState;
+}
+
+export async function patchContributionCuration(
+  uri: string,
+  state: CurationState,
+): Promise<CurationStateResponse> {
+  return fetchJson<CurationStateResponse>(
+    `${apiBase}/annotations/curation-state`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ uri, state }),
+    },
+  );
+}
+
 export async function getOverlays(): Promise<OverlaysResponse> {
   return fetchJson<OverlaysResponse>(`${apiBase}/overlays`);
 }
