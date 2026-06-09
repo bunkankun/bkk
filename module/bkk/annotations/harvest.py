@@ -20,10 +20,16 @@ from typing import Any
 
 import yaml
 
+from bkk.index.merge import find_bundle
 from bkk.importer.write.annotations import (
     bucket_sort_key,
     juan_archive_path,
     write_records_jsonl,
+)
+from bkk.marker_assets import (
+    VALID_BUCKETS,
+    effective_markers_for_bucket,
+    load_marker_asset,
 )
 from bkk.serve.atproto import ANNOTATION_NSID, list_records
 from bkk.serve.routers.annotations import read_raw_records
@@ -35,31 +41,99 @@ log = logging.getLogger("bkk.annotations.harvest")
 
 
 # Marker-id shape: <text-id>_<edition>_<juan:03d>-<rest>
-_JUAN_RE = re.compile(r"_[^_]+_(\d{3})-")
+_MARKER_RE = re.compile(r"_(?P<edition>[^_]+)_(?P<seq>\d{3})-")
+
+
+def parse_marker_id(marker_id: str) -> tuple[str, int] | None:
+    """Return ``(edition_short, juan_seq)`` parsed from ``marker_id``."""
+    m = _MARKER_RE.search(marker_id)
+    if m is None:
+        return None
+    return m.group("edition"), int(m.group("seq"))
 
 
 def juan_seq_from_marker_id(marker_id: str) -> int | None:
-    m = _JUAN_RE.search(marker_id)
-    return int(m.group(1)) if m else None
+    parsed = parse_marker_id(marker_id)
+    return parsed[1] if parsed else None
 
 
-def _load_juan_yaml(corpus_root: Path, text_id: str, juan_seq: int) -> dict | None:
-    # Bundle dirs live under <corpus_root>/<category>/<text_id>/.
-    candidates = list(corpus_root.glob(f"*/{text_id}/{text_id}_{juan_seq:03d}.yaml"))
-    if not candidates:
+def _load_yaml(path: Path) -> dict | None:
+    if not path.exists():
         return None
     try:
-        return yaml.safe_load(candidates[0].read_text(encoding="utf-8")) or {}
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
-        log.warning("failed to load %s: %s", candidates[0], exc)
+        log.warning("failed to load %s: %s", path, exc)
         return None
+    return data if isinstance(data, dict) else None
+
+
+def _juan_dir_and_filename(
+    bundle: Path, manifest: dict, seq: int,
+) -> tuple[Path, str] | None:
+    parts = (manifest.get("assets") or {}).get("parts") or []
+    entry = next(
+        (p for p in parts if isinstance(p, dict) and p.get("seq") == seq),
+        None,
+    )
+    if entry is None:
+        return None
+    filename = entry.get("filename")
+    if not isinstance(filename, str):
+        return None
+    return bundle, filename
+
+
+def _load_juan_with_markers(
+    corpus_root: Path, text_id: str, edition_short: str, juan_seq: int,
+) -> dict | None:
+    """Load ``juan_seq`` for ``edition_short``, hydrated with its marker asset.
+
+    Prefers the edition layer at ``editions/<edition>/`` so anchors against
+    edition-specific seg ids resolve. Falls back to the master bundle when no
+    edition manifest is present (e.g. for ``edition: bkk``).
+    """
+    bundle = find_bundle(corpus_root, text_id)
+    if bundle is None:
+        return None
+
+    edition_dir = bundle / "editions" / edition_short
+    edition_manifest = _load_yaml(
+        edition_dir / f"{text_id}-{edition_short}.manifest.yaml",
+    )
+    if edition_manifest is not None:
+        located = _juan_dir_and_filename(edition_dir, edition_manifest, juan_seq)
+        if located is not None:
+            base, filename = located
+            juan = _load_yaml(base / filename)
+            if juan is not None:
+                return _hydrate(juan, edition_dir, edition_manifest, juan_seq)
+
+    master_manifest = _load_yaml(bundle / f"{text_id}.manifest.yaml") or {}
+    juan = _load_yaml(bundle / f"{text_id}_{juan_seq:03d}.yaml")
+    if juan is None:
+        return None
+    return _hydrate(juan, bundle, master_manifest, juan_seq)
+
+
+def _hydrate(
+    juan: dict, manifest_dir: Path, manifest: dict, juan_seq: int,
+) -> dict:
+    """Attach effective markers (inline + asset) to each bucket on ``juan``."""
+    asset = load_marker_asset(manifest_dir, manifest, juan_seq)
+    for bucket_name in VALID_BUCKETS:
+        bucket = juan.get(bucket_name)
+        if not isinstance(bucket, dict):
+            continue
+        bucket["markers"] = effective_markers_for_bucket(juan, bucket_name, asset)
+    return juan
 
 
 def compute_bucket_position(
     juan_doc: dict, marker_id: str, anchor_offset: int,
 ) -> tuple[str, int] | None:
     """Return ``(bucket, bucket_offset)`` for ``marker_id`` in ``juan_doc``."""
-    for bucket in ("front", "body", "back"):
+    for bucket in VALID_BUCKETS:
         section = juan_doc.get(bucket)
         if not isinstance(section, dict):
             continue
@@ -170,7 +244,7 @@ def harvest(
     Returns ``{harvested, replaced, files_touched, skipped}``.
     """
     incoming_by_juan: dict[tuple[str, int], list[dict]] = defaultdict(list)
-    juan_cache: dict[tuple[str, int], dict | None] = {}
+    juan_cache: dict[tuple[str, str, int], dict | None] = {}
     skipped = 0
     harvested = 0
 
@@ -183,30 +257,39 @@ def harvest(
                 continue
             text_id = archive["text_id"]
             marker_id = archive["anchor"]["marker_id"]
-            juan_seq = juan_seq_from_marker_id(marker_id)
-            if juan_seq is None:
-                log.warning("cannot derive juan_seq from marker_id %s", marker_id)
+            parsed = parse_marker_id(marker_id)
+            if parsed is None:
+                log.warning(
+                    "cannot parse edition/juan from marker_id %s", marker_id,
+                )
                 skipped += 1
                 continue
+            edition_short, juan_seq = parsed
 
-            key = (text_id, juan_seq)
-            if key not in juan_cache:
-                juan_cache[key] = _load_juan_yaml(corpus_root, text_id, juan_seq)
-            juan_doc = juan_cache[key]
+            cache_key = (text_id, edition_short, juan_seq)
+            if cache_key not in juan_cache:
+                juan_cache[cache_key] = _load_juan_with_markers(
+                    corpus_root, text_id, edition_short, juan_seq,
+                )
+            juan_doc = juan_cache[cache_key]
             if juan_doc is None:
-                log.warning("juan not found in corpus: %s seq=%d", text_id, juan_seq)
+                log.warning(
+                    "juan not found in corpus: %s edition=%s seq=%d",
+                    text_id, edition_short, juan_seq,
+                )
                 skipped += 1
                 continue
 
             pos = compute_bucket_position(juan_doc, marker_id, archive["anchor"]["offset"])
             if pos is None:
                 log.warning(
-                    "marker_id %s not found in %s seq=%d", marker_id, text_id, juan_seq,
+                    "marker_id %s not found in %s edition=%s seq=%d",
+                    marker_id, text_id, edition_short, juan_seq,
                 )
                 skipped += 1
                 continue
             archive["bucket"], archive["bucket_offset"] = pos
-            incoming_by_juan[key].append(archive)
+            incoming_by_juan[(text_id, juan_seq)].append(archive)
             harvested += 1
 
     replaced = 0
@@ -248,4 +331,5 @@ __all__ = [
     "wire_to_archive",
     "compute_bucket_position",
     "juan_seq_from_marker_id",
+    "parse_marker_id",
 ]
