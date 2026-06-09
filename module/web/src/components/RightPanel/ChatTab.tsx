@@ -112,7 +112,7 @@ export function ChatTab() {
     if (inFlight.current) return;
     inFlight.current = true;
     try {
-      const res = await getContributions(200);
+      const res = await getContributions(50);
       setItems(res.items);
       setTruncated(res.truncated);
       setStatus("ok");

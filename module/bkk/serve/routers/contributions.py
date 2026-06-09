@@ -1,9 +1,9 @@
 """Read-path endpoint for the live Bluesky contributions feed.
 
 The feed is populated by ``bkk.serve.contributions_feed.ContributionFeed``, a
-background poller attached to ``AppState.contributions`` by ``app.py``'s
-lifespan. When the subscriber is disabled (e.g. ``BKK_DISABLE_JETSTREAM=1`` or
-tests), this endpoint returns an empty list.
+Jetstream subscriber attached to ``AppState.contributions`` by ``app.py``'s
+lifespan. When the subscriber is disabled (e.g. ``BKK_DISABLE_CONTRIBUTIONS_POLL=1``
+or tests), this endpoint returns an empty list.
 
 Items carry a ``kind`` discriminator (``annotation`` / ``comment`` /
 ``translation``); the SPA branches on kind to render each shape.

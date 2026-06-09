@@ -38,20 +38,23 @@ log = logging.getLogger("bkk.serve")
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Start the contributions poller on boot; cancel it on shutdown.
+    """Start the Jetstream subscriber on boot; cancel it on shutdown.
 
     Gated by ``BKK_DISABLE_CONTRIBUTIONS_POLL`` so tests and offline dev don't
     hit the network on every ``create_app``. The feed object is always
     attached so ``/contributions`` returns an empty response uniformly.
+
+    The ``dids`` from ``[annotations].dids`` (if any) become a ``wantedDids``
+    filter on the Jetstream subscription; an empty list means firehose-wide.
     """
     state = app.state.bkk
     feed = ContributionFeed(dids=list(state.config.annotation_dids))
     state.contributions = feed
     task: asyncio.Task | None = None
     if not os.environ.get("BKK_DISABLE_CONTRIBUTIONS_POLL"):
-        task = asyncio.create_task(feed.run(), name="bkk-contributions-poll")
+        task = asyncio.create_task(feed.run(), name="bkk-contributions-jetstream")
     else:
-        log.info("contributions poller disabled (BKK_DISABLE_CONTRIBUTIONS_POLL set)")
+        log.info("contributions subscriber disabled (BKK_DISABLE_CONTRIBUTIONS_POLL set)")
     try:
         yield
     finally:

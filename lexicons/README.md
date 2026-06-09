@@ -17,32 +17,38 @@ as leaf) leaves room for sibling schemas under each namespace (e.g.
 `org.bunkankun.annotation.update`, `org.bunkankun.comment.reaction`) without
 crowding the parent NSID.
 
-## Status: drafted, not yet published
+## Status: published
 
-These lexicons are **drafted** and used in production by `bkk serve` (post
-path) and `bkk annotations harvest` (read path), but they are **not yet
-resolvable** through Bluesky's relay because the authority DID for
-`bunkankun.org` has not been provisioned.
+These lexicons are **published** under the authority DID
+`did:plc:bqv4y6ootthsrh6pdkpqhq73` and resolve via `_lexicon` TXT records
+on `bunkankun.org`. The relay propagates records under all four NSIDs;
+[`module/bkk/serve/contributions_feed.py`](../module/bkk/serve/contributions_feed.py)
+subscribes to Jetstream directly.
 
-Until that happens, records under these NSIDs only flow through the
-private polling loop (see
-[`docs/bkk-annotations/workflow.md`](../docs/bkk-annotations/workflow.md));
-the public firehose / Jetstream drops them silently.
+### DNS resolution (per group)
 
-### Path to publication
+`goat lex status` resolves NSID **groups** (all segments except the leaf
+record name), so each group needs its own TXT record:
 
-1. Confirm ownership of `bunkankun.org`.
-2. Provision an authority DID (`did:web:bunkankun.org` is simplest;
-   `did:plc` via Bluesky is more portable).
-3. Publish the DID document (for `did:web`, at
-   `https://bunkankun.org/.well-known/did.json`).
-4. Post each lexicon as a `com.atproto.lexicon.schema` record under that
-   DID (one record per NSID, including `defs.anchor`).
-5. Verify a Jetstream subscriber sees records with our NSIDs end-to-end.
-6. Swap [`module/bkk/serve/contributions_feed.py`](../module/bkk/serve/contributions_feed.py)
-   from per-DID polling to a Jetstream subscriber (the previous
-   subscriber implementation lives in git history just before the polling
-   rewrite).
+| Group | DNS name | Value |
+|---|---|---|
+| `org.bunkankun.annotation` | `_lexicon.annotation.bunkankun.org` | `did:plc:bqv4y6ootthsrh6pdkpqhq73` |
+| `org.bunkankun.comment` | `_lexicon.comment.bunkankun.org` | `did:plc:bqv4y6ootthsrh6pdkpqhq73` |
+| `org.bunkankun.defs` | `_lexicon.defs.bunkankun.org` | `did:plc:bqv4y6ootthsrh6pdkpqhq73` |
+| `org.bunkankun.translation` | `_lexicon.translation.bunkankun.org` | `did:plc:bqv4y6ootthsrh6pdkpqhq73` |
+
+A root-only TXT at `_lexicon.bunkankun.org` is **not enough** — clients
+look up the group-specific name, not a parent. If a future schema group
+(e.g. `org.bunkankun.reaction`) lands, add a matching TXT.
+
+Verify end-to-end with:
+
+```bash
+goat lex status
+```
+
+All four NSIDs should be green; if any go orange, check the TXT record
+for that group's DNS name.
 
 ## Round-trip coverage
 

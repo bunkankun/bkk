@@ -1,91 +1,59 @@
-"""Periodic per-DID ``listRecords`` poller for the live contributions feed.
+"""Jetstream subscriber for the live BKK contributions feed.
 
-We originally tried Bluesky's Jetstream firehose, but the Bluesky relay does
-not propagate our custom NSIDs — it only carries collections whose lexicons
-are resolvable (or explicitly allowlisted), and we have not yet published
-``org.bunkankun.*``'s lexicons. Until that lands, this poller walks the DID
-roster configured under ``[annotations].dids`` in ``.bkkrc`` (the same list
-``bkk annotations harvest`` uses) and calls ``com.atproto.repo.listRecords``
-on each one for each NSID we know about.
+Connects to Bluesky's Jetstream firehose
+(``wss://jetstream2.us-east.bsky.network/subscribe``) filtered to our four
+NSIDs and streams every ``commit`` event into an in-memory ring buffer that
+the Chat tab reads via ``GET /api/contributions``.
 
-When the lexicons are published and records start appearing on the firehose,
-this file should be swapped back to the jetstream subscriber (see the git
-history immediately before this rewrite).
+This was previously a per-DID poller because the relay didn't propagate our
+custom NSIDs. That's no longer true (the authority DID is published and DNS
+``_lexicon`` TXT records resolve per group), so we get every record from
+every DID in real time without a roster.
+
+If ``dids`` is set in the constructor (from ``.bkkrc [annotations].dids``)
+it's passed as a ``wantedDids`` filter to scope the firehose; otherwise the
+feed is firehose-wide.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections import OrderedDict
-from datetime import datetime
 from typing import Any
+from urllib.parse import urlencode
+
+import websockets
+from websockets.exceptions import ConnectionClosed
 
 from .atproto import (
     ANNOTATION_NSID,
     COMMENT_NSID,
     LEGACY_ANNOTATION_NSID,
     TRANSLATION_NSID,
-    list_records,
 )
 
 
 log = logging.getLogger("bkk.serve.contributions_feed")
 
 BUFFER_MAX = 500
-POLL_INTERVAL_S = 30.0
-PAGE_LIMIT = 100  # max records per DID per cycle (atproto listRecords cap)
+JETSTREAM_URL = "wss://jetstream2.us-east.bsky.network/subscribe"
+BACKFILL_WINDOW_S = 24 * 3600  # initial cursor goes 24h back so the chat isn't empty on boot
+RECONNECT_MIN_S = 1.0
+RECONNECT_MAX_S = 60.0
 
 
-# (NSID, kind) — kind is the discriminator surfaced to the frontend so the
-# Chat tab can render each record type appropriately. The legacy flat NSID
-# rides along as kind=annotation.
+# (NSID, kind) pairs. ``kind`` is the discriminator the SPA branches on.
+# Legacy flat NSID rides along as kind=annotation.
 COLLECTIONS: tuple[tuple[str, str], ...] = (
     (ANNOTATION_NSID, "annotation"),
     (LEGACY_ANNOTATION_NSID, "annotation"),
     (COMMENT_NSID, "comment"),
     (TRANSLATION_NSID, "translation"),
 )
-
-
-def _created_at_to_us(s: Any) -> int:
-    """Parse a record's ``createdAt`` string to microseconds since epoch.
-
-    Returns 0 when unparseable; callers can sort by it without crashing.
-    """
-    if not isinstance(s, str):
-        return 0
-    try:
-        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
-    except ValueError:
-        return 0
-    return int(dt.timestamp() * 1_000_000)
-
-
-def _common_entry(
-    record: dict[str, Any], *, did: str, kind: str,
-) -> dict[str, Any] | None:
-    """Extract the fields every kind shares; ``None`` when the record is malformed."""
-    uri = record.get("uri")
-    cid = record.get("cid")
-    value = record.get("value") or {}
-    if not isinstance(uri, str) or not isinstance(cid, str) or not isinstance(value, dict):
-        return None
-    text_id = value.get("textId")
-    if not isinstance(text_id, str):
-        return None
-    created_at = value.get("createdAt")
-    return {
-        "kind": kind,
-        "did": did,
-        "cid": cid,
-        "uri": uri,
-        "text_id": text_id,
-        "created_at": created_at if isinstance(created_at, str) else None,
-        "time_us": _created_at_to_us(created_at),
-        "value": value,
-    }
+_KIND_BY_NSID: dict[str, str] = {nsid: kind for nsid, kind in COLLECTIONS}
 
 
 def _anchor_fields(value: dict[str, Any]) -> dict[str, Any]:
@@ -116,22 +84,35 @@ def _anchor_fields(value: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _entry_from_record(
-    record: dict[str, Any], *, did: str, kind: str,
+def _entry_from_commit(
+    *, did: str, time_us: int, collection: str, rkey: str, cid: str,
+    record: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Translate a ``listRecords`` record dict to our flat contribution shape."""
-    common = _common_entry(record, did=did, kind=kind)
-    if common is None:
+    """Translate a Jetstream commit event to our flat contribution shape."""
+    kind = _KIND_BY_NSID.get(collection)
+    if kind is None:
         return None
-    value = common.pop("value")
-    anchor = _anchor_fields(value)
+    text_id = record.get("textId")
+    if not isinstance(text_id, str):
+        return None
+    created_at = record.get("createdAt")
+    common: dict[str, Any] = {
+        "kind": kind,
+        "did": did,
+        "cid": cid,
+        "uri": f"at://{did}/{collection}/{rkey}",
+        "text_id": text_id,
+        "created_at": created_at if isinstance(created_at, str) else None,
+        "time_us": time_us,
+    }
+    anchor = _anchor_fields(record)
 
     if kind == "annotation":
-        edition = value.get("edition")
+        edition = record.get("edition")
         if not isinstance(edition, str) or not anchor:
             return None
-        payload = value.get("payload")
-        source_role = value.get("sourceRole")
+        payload = record.get("payload")
+        source_role = record.get("sourceRole")
         return {
             **common,
             "edition": edition,
@@ -141,33 +122,26 @@ def _entry_from_record(
         }
 
     if kind == "comment":
-        body = value.get("body")
-        lang = value.get("lang")
+        body = record.get("body")
+        lang = record.get("lang")
         if not isinstance(body, str) or not isinstance(lang, str):
             return None
-        edition = value.get("edition")
-        parent = value.get("parent")
-        entry: dict[str, Any] = {
-            **common,
-            "body": body,
-            "lang": lang,
-        }
+        edition = record.get("edition")
+        parent = record.get("parent")
+        entry: dict[str, Any] = {**common, "body": body, "lang": lang}
         if anchor:
             entry.update(anchor)
         if isinstance(edition, str):
             entry["edition"] = edition
         if isinstance(parent, dict) and isinstance(parent.get("uri"), str):
-            entry["parent"] = {
-                "uri": parent["uri"],
-                "cid": parent.get("cid"),
-            }
+            entry["parent"] = {"uri": parent["uri"], "cid": parent.get("cid")}
         return entry
 
     if kind == "translation":
-        text = value.get("text")
-        lang = value.get("lang")
-        edition = value.get("edition")
-        translation_id = value.get("translationId")
+        text = record.get("text")
+        lang = record.get("lang")
+        edition = record.get("edition")
+        translation_id = record.get("translationId")
         if (
             not isinstance(text, str)
             or not isinstance(lang, str)
@@ -188,44 +162,23 @@ def _entry_from_record(
     return None
 
 
-def _poll_did_sync(did: str) -> list[dict[str, Any]]:
-    """Blocking helper: pull one page of records for ``did`` from every collection.
-
-    Runs inside ``asyncio.to_thread`` from the poll loop. PDS resolution is
-    deferred to here so a slow plc.directory call doesn't stall the loop.
-    """
-    from bkk.annotations.pds import resolve_pds
-
-    service = resolve_pds(did)
-    entries: list[dict[str, Any]] = []
-    for nsid, kind in COLLECTIONS:
-        try:
-            result = list_records(
-                service=service, repo=did, collection=nsid,
-                limit=PAGE_LIMIT, cursor=None,
-            )
-        except Exception as exc:
-            log.debug("listRecords(%s) failed for %s: %s", nsid, did, exc)
-            continue
-
-        records = result.get("records") if isinstance(result, dict) else None
-        if not isinstance(records, list):
-            continue
-        for record in records:
-            if not isinstance(record, dict):
-                continue
-            entry = _entry_from_record(record, did=did, kind=kind)
-            if entry is not None:
-                entries.append(entry)
-    return entries
+def _build_url(*, dids: list[str], cursor_us: int | None) -> str:
+    params: list[tuple[str, str]] = []
+    for nsid, _ in COLLECTIONS:
+        params.append(("wantedCollections", nsid))
+    for did in dids:
+        params.append(("wantedDids", did))
+    if cursor_us is not None:
+        params.append(("cursor", str(cursor_us)))
+    return f"{JETSTREAM_URL}?{urlencode(params)}"
 
 
 class ContributionFeed:
-    """In-memory ring buffer of recent contributions, populated by polling.
+    """In-memory ring buffer of recent contributions, populated by Jetstream.
 
-    ``_by_uri`` is keyed by atproto URI for cheap O(1) dedupe and eviction in
-    insertion order. ``snapshot`` returns items sorted by ``time_us`` desc so
-    the UI shows newest first.
+    ``_by_uri`` is keyed by atproto URI for O(1) dedupe and eviction in
+    insertion order. ``snapshot`` returns items sorted by ``time_us`` desc
+    so the UI shows newest first.
     """
 
     def __init__(
@@ -233,14 +186,19 @@ class ContributionFeed:
         dids: list[str] | None = None,
         *,
         max_entries: int = BUFFER_MAX,
-        poll_interval: float = POLL_INTERVAL_S,
+        url: str = JETSTREAM_URL,
+        backfill_window_s: float = BACKFILL_WINDOW_S,
     ) -> None:
         self._dids = list(dids or [])
-        self._by_uri: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._max = max_entries
-        self._poll_interval = poll_interval
+        self._url = url
+        self._backfill_window_s = backfill_window_s
+        self._by_uri: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._lock = asyncio.Lock()
         self._stop = asyncio.Event()
+        # Cursor advances as we process events; survives reconnects so we
+        # don't lose anything during a transient disconnect.
+        self._cursor_us: int | None = None
 
     def stop(self) -> None:
         self._stop.set()
@@ -250,64 +208,102 @@ class ContributionFeed:
         truncated = len(self._by_uri) >= self._max
         return items[:limit], truncated
 
-    async def _ingest(self, entries: list[dict[str, Any]]) -> int:
-        new = 0
+    async def _insert(self, entry: dict[str, Any]) -> None:
         async with self._lock:
-            for entry in entries:
-                uri = entry["uri"]
-                if uri in self._by_uri:
-                    continue
+            uri = entry["uri"]
+            # On update, refresh in place; on create, append.
+            if uri in self._by_uri:
                 self._by_uri[uri] = entry
-                new += 1
+                self._by_uri.move_to_end(uri)
+            else:
+                self._by_uri[uri] = entry
                 while len(self._by_uri) > self._max:
                     self._by_uri.popitem(last=False)
-        return new
 
-    async def _poll_once(self) -> None:
-        for did in self._dids:
+    async def _delete(self, uri: str) -> None:
+        async with self._lock:
+            self._by_uri.pop(uri, None)
+
+    async def _handle_commit(self, msg: dict[str, Any]) -> None:
+        commit = msg.get("commit")
+        if not isinstance(commit, dict):
+            return
+        did = msg.get("did")
+        time_us = msg.get("time_us")
+        collection = commit.get("collection")
+        rkey = commit.get("rkey")
+        op = commit.get("operation")
+        if not (
+            isinstance(did, str)
+            and isinstance(time_us, int)
+            and isinstance(collection, str)
+            and isinstance(rkey, str)
+        ):
+            return
+        self._cursor_us = time_us
+        if op == "delete":
+            await self._delete(f"at://{did}/{collection}/{rkey}")
+            return
+        if op not in ("create", "update"):
+            return
+        cid = commit.get("cid")
+        record = commit.get("record")
+        if not isinstance(cid, str) or not isinstance(record, dict):
+            return
+        entry = _entry_from_commit(
+            did=did, time_us=time_us, collection=collection, rkey=rkey,
+            cid=cid, record=record,
+        )
+        if entry is not None:
+            await self._insert(entry)
+
+    async def _consume(self, ws: Any) -> None:
+        async for raw in ws:
             if self._stop.is_set():
                 return
             try:
-                entries = await asyncio.to_thread(_poll_did_sync, did)
-            except Exception as exc:
-                log.warning("poll cycle error for %s: %s", did, exc)
+                msg = json.loads(raw)
+            except (TypeError, ValueError):
                 continue
-            if entries:
-                new = await self._ingest(entries)
-                if new:
-                    log.info(
-                        "contributions: +%d from %s (buffer=%d)",
-                        new, did, len(self._by_uri),
-                    )
+            if msg.get("kind") != "commit":
+                continue
+            try:
+                await self._handle_commit(msg)
+            except Exception:
+                log.exception("error handling commit event")
 
     async def run(self) -> None:
-        """Main loop: poll every ``poll_interval`` seconds until cancelled."""
-        if not self._dids:
-            log.info(
-                "contributions: no DIDs configured "
-                "(set [annotations].dids in .bkkrc); feed will stay empty"
-            )
-            await self._stop.wait()
-            return
+        """Main loop: connect to Jetstream, consume, reconnect on drop."""
+        if self._cursor_us is None and self._backfill_window_s > 0:
+            self._cursor_us = int((time.time() - self._backfill_window_s) * 1_000_000)
 
-        log.info(
-            "contributions: polling %d DID(s) every %.0fs across %d collection(s)",
-            len(self._dids), self._poll_interval, len(COLLECTIONS),
-        )
+        backoff = RECONNECT_MIN_S
         while not self._stop.is_set():
-            started = time.monotonic()
+            url = _build_url(dids=self._dids, cursor_us=self._cursor_us)
             try:
-                await self._poll_once()
+                log.info("contributions: connecting to Jetstream (cursor=%s)", self._cursor_us)
+                async with websockets.connect(url, max_size=2**20) as ws:
+                    backoff = RECONNECT_MIN_S
+                    log.info(
+                        "contributions: subscribed to %d collection(s)%s",
+                        len(COLLECTIONS),
+                        f", {len(self._dids)} DID filter(s)" if self._dids else "",
+                    )
+                    await self._consume(ws)
             except asyncio.CancelledError:
                 raise
+            except ConnectionClosed as exc:
+                log.warning("contributions: connection closed: %s", exc)
             except Exception as exc:
-                log.exception("contributions poll cycle crashed: %s", exc)
-            elapsed = time.monotonic() - started
-            wait = max(0.0, self._poll_interval - elapsed)
+                log.warning("contributions: connect/consume failed: %s", exc)
+
+            if self._stop.is_set():
+                return
             try:
-                await asyncio.wait_for(self._stop.wait(), timeout=wait)
+                await asyncio.wait_for(self._stop.wait(), timeout=backoff)
             except asyncio.TimeoutError:
                 pass
+            backoff = min(backoff * 2, RECONNECT_MAX_S)
 
 
 __all__ = ["ContributionFeed"]

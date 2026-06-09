@@ -152,70 +152,81 @@ produces a byte-identical output file.
 
 The right-hand **Chat** tab in the SPA
 ([`ChatTab.tsx`](../../module/web/src/components/RightPanel/ChatTab.tsx))
-shows the most recent annotation records from the configured DID roster,
-auto-refreshing every 15s. It is *not* fed from the on-disk archive — it
-calls `GET /api/contributions`, which is served from an in-memory ring
-buffer populated by a background poller:
+shows the most recent BKK records seen anywhere on the AT Protocol
+network, auto-refreshing every 15s. It is *not* fed from the on-disk
+archive — it calls `GET /api/contributions`, which is served from an
+in-memory ring buffer populated by a Jetstream subscriber:
 
 ```text
 bkk serve startup
    │
    ▼
-ContributionFeed.run()  ─────────────┐
-   │   every 30s, for each DID in    │
-   │   [annotations].dids:           │
-   ▼                                 │
-asyncio.to_thread(_poll_did_sync)    │
-   │                                 │
-   ▼                                 │
-resolve_pds(did) ──► listRecords ────┘
-   │                                 ▲
-   ▼                                 │
-OrderedDict[uri → entry]  (cap=500)  │
-   │                                 │
-   ▼ snapshot(limit)                 │
-GET /api/contributions ─► ChatTab ───┘  (15s poll)
+ContributionFeed.run()
+   │   wss://jetstream2.us-east.bsky.network/subscribe
+   │   wantedCollections=org.bunkankun.{annotation.note,
+   │                                    annotation,
+   │                                    comment.post,
+   │                                    translation.segment}
+   │   [&wantedDids=… per [annotations].dids if set]
+   │   cursor=<24h ago>           (backfill on first connect)
+   ▼
+async for raw in ws:  (commit events filtered + parsed)
+   │
+   ▼
+OrderedDict[uri → entry]  (cap=500)
+   │
+   ▼ snapshot(limit)
+GET /api/contributions ─► ChatTab  (15s poll)
 ```
 
 Code: [`serve/contributions_feed.py`](../../module/bkk/serve/contributions_feed.py),
 [`serve/routers/contributions.py`](../../module/bkk/serve/routers/contributions.py),
 lifespan wiring in [`serve/app.py`](../../module/bkk/serve/app.py).
 
-### Why polling and not the firehose
+### Why Jetstream (and not per-DID polling)
 
-Bluesky's relay does not currently propagate our custom NSIDs (we confirmed
-empirically against `org.bunkankun.annotation` by subscribing to
-`wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=org.bunkankun.annotation`
-with a 24h backfill cursor and seeing zero `commit` events while a control
-filter on `app.bsky.feed.post` produced hundreds per second). The relay's
-collection filter is enforced server-side; nothing the client can do works
-around it. See the **future requirements** below for the lexicon-publishing
-path that unblocks this for all four NSIDs at once.
+The relay propagates our four NSIDs end-to-end now that the authority
+DID (`did:plc:bqv4y6ootthsrh6pdkpqhq73`) is published and `_lexicon`
+TXT records resolve per group (see
+[`lexicons/README.md`](../../lexicons/README.md)). That removes the need
+for the per-DID `listRecords` poll the feed used during bootstrap — we
+can subscribe to the firehose directly and pick up records from any DID
+in real time. If `[annotations].dids` is configured, the list is passed
+as a `wantedDids` filter so deployments that want to scope the feed
+still can.
+
+A previous implementation polled `com.atproto.repo.listRecords` per DID
+on a 30s cycle because the relay was dropping our NSIDs. The git commit
+that switched to Jetstream documents the empirical verification.
 
 ### Buffer semantics
 
 - Keyed by atproto URI (`at://<did>/<collection>/<rkey>`) for O(1) dedupe.
-- Ordering on read: sorted by `time_us` (parsed from the record's
-  `createdAt`) descending. Zero is used as a sentinel for unparseable
-  timestamps so they sort last instead of crashing.
+- `time_us` comes from the Jetstream commit envelope (relay-assigned
+  microseconds since epoch) rather than the record's `createdAt`, so
+  ordering is monotonic even when authors lie about timestamps.
+- Ordering on read: sorted by `time_us` descending.
 - Eviction: oldest by insertion order once the buffer reaches `BUFFER_MAX`
   (500). `truncated: true` is returned alongside the items so the UI can
   surface the fact that older records have been dropped.
-- Per-DID errors (PDS unreachable, 4xx, malformed payload) are logged and
-  skipped — they never poison the cycle for other DIDs.
-- The poller pulls a single page of `PAGE_LIMIT=100` per DID per cycle.
-  When a DID has more than 100 fresh records (post-backlog flood, a single
-  burst), only the newest 100 land in any given cycle; the rest will catch
-  up on subsequent cycles because the buffer dedupes on URI.
+- `update` events refresh the buffer entry in place; `delete` events
+  drop the URI from the buffer.
+- Reconnect: on `ConnectionClosed` or any subscribe exception, the
+  subscriber sleeps with exponential backoff (1s → 60s) and reconnects.
+  The cursor advances with every consumed event and is reused on
+  reconnect so no commits are lost during a transient disconnect.
+- Initial backfill: on first connect the cursor is set 24h in the past
+  so the chat is populated immediately rather than empty until the next
+  post.
 
 ### Wire shape
 
-`/api/contributions` returns the camelCase atproto wire shape flattened
-(see [`ContributionOut`](../../module/bkk/serve/routers/contributions.py)),
-not the archive (`wire_to_archive`) shape. The Chat tab consumes that
-directly without bucket/`bucket_offset` resolution — chat is a stream view,
-not an anchor-resolved view, so we skip the corpus lookup that `harvest`
-needs.
+`/api/contributions` returns a flattened snake_case projection of the
+record (see [`ContributionOut`](../../module/bkk/serve/routers/contributions.py)),
+not the on-disk archive shape produced by `wire_to_archive`. The Chat
+tab consumes that directly without bucket/`bucket_offset` resolution —
+chat is a stream view, not an anchor-resolved view, so we skip the
+corpus lookup that `harvest` needs.
 
 ### Configuration
 
@@ -295,51 +306,9 @@ GitHub-only path.
 
 ## Future requirements
 
-The live contributions feed has two structural limitations that future
-work needs to unblock. Both belong in their own planning docs (sketch
-here, not full design).
+Sketches for follow-up work — own planning docs when scoped.
 
-### 1. Lexicon publishing for the `org.bunkankun.*` NSIDs
-
-**Goal:** records authored under our four NSIDs propagate through the
-public relay/Jetstream so the Chat tab can show contributions from *any*
-atproto user — not just DIDs in our roster.
-
-**What we know:**
-
-- The owner of the NSID's authority domain (`bunkankun.org`) does not
-  need Bluesky's permission to publish custom NSIDs; lexicons are
-  discovered via DNS + an authority DID, not a central registry.
-- The relay carries collections whose lexicons are resolvable through
-  that chain. Until ours are, the records stay invisible past the PDS.
-- All four lexicons are drafted in [`lexicons/`](../../lexicons/) and the
-  record shapes have round-trip test coverage
-  ([`module/tests/test_bsky_lexicon_roundtrip.py`](../../module/tests/test_bsky_lexicon_roundtrip.py)).
-
-**What a plan needs to nail down:**
-
-- Exact lexicon-discovery mechanism in the current AT Protocol spec
-  (DNS label name, TXT record format, lexicon-record collection NSID and
-  shape). The spec has been moving; resolve against current
-  implementations, not stale docs.
-- Authority DID: create one for `bunkankun.org` (`did:web:bunkankun.org`
-  is simplest; `did:plc` more portable), host its DID document, bind it
-  to the domain.
-- Publish path: post each of the four lexicons (`defs.anchor`,
-  `annotation.note`, `comment.post`, `translation.segment`) as records
-  under the authority DID via the standard lexicon collection.
-- Verification: a third-party tool / Jetstream subscriber sees our
-  records appear on the firehose end-to-end.
-
-**Once lexicon publishing lands**, swap
-[`serve/contributions_feed.py`](../../module/bkk/serve/contributions_feed.py)
-back to a Jetstream subscriber. The previous implementation lives in
-git history (one commit before the polling rewrite) — same
-`ContributionFeed` class shape, same buffer semantics, just a different
-ingestion side. Both can coexist behind an env-var toggle if a transition
-window helps.
-
-### 2. Sub-tabs by annotation kind
+### 1. Sub-tabs by annotation kind
 
 **Goal:** filter the Chat stream by payload kind (`form`, `sense`,
 `translation`, `concept`, `metadata`) without losing the "all" view.
@@ -359,7 +328,7 @@ window helps.
 Recommended split: client-side filter first (cheap, no API churn), revisit
 if buffer size grows or per-kind backfill becomes valuable.
 
-### 3. Click-to-navigate from a contribution card
+### 2. Click-to-navigate from a contribution card
 
 **Goal:** clicking a card in the Chat tab opens the referenced
 `text_id`/`edition`/`marker_id` in the text viewer with the anchor
@@ -378,7 +347,7 @@ selected.
 - Behavior when the referenced juan / marker is not in the loaded
   corpus: show a clear "not in this corpus" message rather than a 404.
 
-### 4. DID → handle resolution
+### 3. DID → handle resolution
 
 **Goal:** show `@handle.bsky.social` instead of `did:plc:abc…` on each
 card.
