@@ -271,6 +271,9 @@ export interface WorkspaceState {
   currentPage: CurrentPage | null;
   // user-tunable read-mode display preferences (persisted in localStorage).
   readPrefs: { lineMode: LineMode; showPageBreaks: boolean; lineBreakDisplay: LineBreakDisplay };
+  // user-tunable search preferences (persisted in localStorage and, when
+  // logged in, in the user's GitHub workspace session file).
+  searchPrefs: SearchPrefs;
   // broader UI preferences (persisted locally and, when logged in, in the
   // user's GitHub workspace session file).
   uiPrefs: { theme: Theme; leftSidebarVisible: boolean; rightSidebarVisible: boolean };
@@ -291,6 +294,7 @@ export interface WorkspaceState {
 }
 
 const READ_PREFS_KEY = "bkk.readPrefs";
+const SEARCH_PREFS_KEY = "bkk.searchPrefs";
 const UI_PREFS_KEY = "bkk.uiPrefs";
 const PANEL_WIDTHS_KEY = "bkk.panelWidths";
 const TEXT_LISTS_KEY = "bkk.textLists";
@@ -339,6 +343,45 @@ function saveReadPrefs(prefs: ReadPrefs): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(READ_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* localStorage disabled — silently keep state in memory only */
+  }
+}
+
+type SearchPrefs = { masterOnly: boolean; maxResults: number };
+
+const DEFAULT_SEARCH_PREFS: SearchPrefs = {
+  masterOnly: true,
+  maxResults: 20000,
+};
+const SEARCH_MAX_RESULTS_MIN = 100;
+const SEARCH_MAX_RESULTS_MAX = 200000;
+
+function coerceMaxResults(value: unknown): number {
+  const n = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : NaN;
+  if (Number.isNaN(n)) return DEFAULT_SEARCH_PREFS.maxResults;
+  return Math.max(SEARCH_MAX_RESULTS_MIN, Math.min(SEARCH_MAX_RESULTS_MAX, n));
+}
+
+function loadSearchPrefs(): SearchPrefs {
+  if (typeof window === "undefined") return { ...DEFAULT_SEARCH_PREFS };
+  try {
+    const raw = window.localStorage.getItem(SEARCH_PREFS_KEY);
+    if (!raw) return { ...DEFAULT_SEARCH_PREFS };
+    const parsed = JSON.parse(raw);
+    return {
+      masterOnly: parsed?.masterOnly !== false,
+      maxResults: coerceMaxResults(parsed?.maxResults),
+    };
+  } catch {
+    return { ...DEFAULT_SEARCH_PREFS };
+  }
+}
+
+function saveSearchPrefs(prefs: SearchPrefs): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SEARCH_PREFS_KEY, JSON.stringify(prefs));
   } catch {
     /* localStorage disabled — silently keep state in memory only */
   }
@@ -562,6 +605,7 @@ let state: WorkspaceState = {
   pendingHighlight: null,
   currentPage: null,
   readPrefs: loadReadPrefs(),
+  searchPrefs: loadSearchPrefs(),
   uiPrefs: loadUiPrefs(),
   panelWidths: loadPanelWidths(),
   persistence: { status: "idle", error: null },
@@ -772,6 +816,8 @@ async function runSearchInternal(offset: number): Promise<void> {
       aroundBinom: filters.aroundBinom,
       aroundBinomNot: filters.aroundBinomExclude,
       facetLimit: state.search.facetLimit,
+      masterOnly: state.searchPrefs.masterOnly,
+      maxResults: state.searchPrefs.maxResults,
       signal: controller.signal,
     });
     if (runId !== searchRunId) return;
@@ -1236,6 +1282,7 @@ async function saveSessionState(): Promise<void> {
       openMode: state.openMode,
       rightTab: state.rightTab,
       readPrefs: state.readPrefs,
+      searchPrefs: state.searchPrefs,
       uiPrefs: state.uiPrefs,
       panelWidths: state.panelWidths,
       activeListPaths: state.activeListPaths,
@@ -1272,6 +1319,7 @@ async function loadWorkspacePersistence(): Promise<void> {
         openMode?: unknown;
         rightTab?: unknown;
         readPrefs?: unknown;
+        searchPrefs?: unknown;
         uiPrefs?: unknown;
         panelWidths?: unknown;
         activeListPaths?: unknown;
@@ -1335,6 +1383,22 @@ async function loadWorkspacePersistence(): Promise<void> {
                 : coerceLineBreakDisplay(sessionReadPrefs.lineBreakDisplay),
           }
         : state.readPrefs;
+      const sessionSearchPrefs =
+        typeof sessionDoc.searchPrefs === "object" && sessionDoc.searchPrefs != null
+          ? (sessionDoc.searchPrefs as { masterOnly?: unknown; maxResults?: unknown })
+          : null;
+      const searchPrefs = sessionSearchPrefs
+        ? {
+            masterOnly:
+              typeof sessionSearchPrefs.masterOnly === "boolean"
+                ? sessionSearchPrefs.masterOnly
+                : state.searchPrefs.masterOnly,
+            maxResults:
+              typeof sessionSearchPrefs.maxResults === "number"
+                ? coerceMaxResults(sessionSearchPrefs.maxResults)
+                : state.searchPrefs.maxResults,
+          }
+        : state.searchPrefs;
       const sessionUiPrefs =
         typeof sessionDoc.uiPrefs === "object" && sessionDoc.uiPrefs != null
           ? (sessionDoc.uiPrefs as {
@@ -1383,6 +1447,7 @@ async function loadWorkspacePersistence(): Promise<void> {
           )
         : state.textHistory;
       if (sessionReadPrefs) saveReadPrefs(readPrefs);
+      if (sessionSearchPrefs) saveSearchPrefs(searchPrefs);
       if (sessionUiPrefs) saveUiPrefs(uiPrefs);
       if (sessionPanelWidths) savePanelWidths(panelWidths);
       saveListPrefs(listFilterMode);
@@ -1392,6 +1457,7 @@ async function loadWorkspacePersistence(): Promise<void> {
         openMode,
         rightTab,
         readPrefs,
+        searchPrefs,
         uiPrefs,
         panelWidths,
         activeListPaths,
@@ -2466,6 +2532,25 @@ export const workspace = {
     saveReadPrefs(readPrefs);
     notify();
     scheduleSessionSave();
+  },
+  setMasterOnly(value: boolean) {
+    if (state.searchPrefs.masterOnly === value) return;
+    const searchPrefs = { ...state.searchPrefs, masterOnly: value };
+    state = { ...state, searchPrefs };
+    saveSearchPrefs(searchPrefs);
+    notify();
+    scheduleSessionSave();
+    if (state.search.query.trim()) void runSearchInternal(0);
+  },
+  setMaxResults(value: number) {
+    const next = coerceMaxResults(value);
+    if (state.searchPrefs.maxResults === next) return;
+    const searchPrefs = { ...state.searchPrefs, maxResults: next };
+    state = { ...state, searchPrefs };
+    saveSearchPrefs(searchPrefs);
+    notify();
+    scheduleSessionSave();
+    if (state.search.query.trim()) void runSearchInternal(0);
   },
   setTheme(theme: Theme) {
     const next = coerceTheme(theme, state.uiPrefs.theme);

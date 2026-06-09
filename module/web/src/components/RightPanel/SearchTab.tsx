@@ -127,6 +127,7 @@ function FacetGroup({
   expanded,
   hasMore,
   onMore,
+  masterOnly,
 }: {
   label: string;
   values: SearchFacetValue[];
@@ -135,6 +136,7 @@ function FacetGroup({
   expanded: boolean;
   hasMore: boolean;
   onMore: () => void;
+  masterOnly?: boolean;
 }) {
   if (values.length === 0) return null;
   const shown = expanded ? values : values.slice(0, DEFAULT_FACET_LIMIT);
@@ -142,21 +144,27 @@ function FacetGroup({
     <div className="kwic-facet-group">
       <div className="kwic-facet-label">{label}</div>
       <div className="kwic-facet-values">
-        {shown.map((v) => (
-          <button
-            key={v.value}
-            type="button"
-            className={`kwic-facet-chip${v.selected ? " on" : ""}${v.excluded ? " off" : ""}`}
-            disabled={disabled}
-            onClick={(e) =>
-              void workspace.toggleSearchFacet(kind, v.value, e.ctrlKey ? "exclude" : "include")
-            }
-            title={facetTitle(v)}
-          >
-            <span className={`kwic-facet-value ${krClass(v.value)}`}>{v.value}</span>
-            <span className="kwic-facet-count">{v.count}</span>
-          </button>
-        ))}
+        {shown.map((v) => {
+          const isMasterToggle = kind === "witness" && v.value === "master";
+          const selected = isMasterToggle ? !!masterOnly : v.selected;
+          const onClick = isMasterToggle
+            ? () => workspace.setMasterOnly(!masterOnly)
+            : (e: React.MouseEvent) =>
+                void workspace.toggleSearchFacet(kind, v.value, e.ctrlKey ? "exclude" : "include");
+          return (
+            <button
+              key={v.value}
+              type="button"
+              className={`kwic-facet-chip${selected ? " on" : ""}${v.excluded ? " off" : ""}`}
+              disabled={disabled}
+              onClick={onClick}
+              title={isMasterToggle ? "Show only master-edition matches" : facetTitle(v)}
+            >
+              <span className={`kwic-facet-value ${krClass(v.value)}`}>{v.value}</span>
+              <span className="kwic-facet-count">{v.count}</span>
+            </button>
+          );
+        })}
         {!expanded && hasMore ? (
           <button
             type="button"
@@ -766,6 +774,7 @@ export function SearchTab() {
   const query = useWorkspace((s) => s.search.query);
   const filters = useWorkspace((s) => s.search.filters);
   const facetLimit = useWorkspace((s) => s.search.facetLimit);
+  const masterOnly = useWorkspace((s) => s.searchPrefs.masterOnly);
   const textLists = useWorkspace((s) => s.textLists);
   const activeListPaths = useWorkspace((s) => s.activeListPaths);
   const listFilterMode = useWorkspace((s) => s.listFilterMode);
@@ -941,6 +950,7 @@ export function SearchTab() {
           expanded={expandedFacets.has("witness")}
           hasMore={facetHasMore(facets.witness)}
           onMore={() => expandFacet("witness")}
+          masterOnly={masterOnly}
         />
         <FacetGroup
           label="Voice"

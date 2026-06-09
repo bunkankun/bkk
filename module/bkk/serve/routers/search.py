@@ -586,12 +586,14 @@ def _search_hits(
     around_binom_not: list[str] | None = None,
     sort: Sort = "match",
     context: int = 20,
+    master_only: bool = False,
+    max_results: int | None = None,
 ) -> tuple[list[Hit], dict[str, _CatalogMeta], set[str] | None, set[str], set[str] | None, set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], CorpusSnapshot | None, IndexSummary | None]:
     state = request.app.state.bkk
     ix = state.open_index()
     if ix is None:
         raise errors.index_unavailable(state._index_error or "index not built")
-    cap = state.config.max_search_hits
+    cap = max_results if max_results is not None else state.config.max_search_hits
 
     witnesses = set(witness) if witness else None
     voices = set(voice) if voice else None
@@ -633,6 +635,7 @@ def _search_hits(
             candidates=candidates,
             textids=scoped_textids or None,
             witnesses=witnesses,
+            master_only=master_only,
         )
         if summary.total > cap:
             empty_hits: list[Hit] = []
@@ -685,6 +688,9 @@ def _search_hits(
             ))
     finally:
         ix.close()
+
+    if master_only:
+        all_hits = [h for h in all_hits if h.matched_via == "master"]
 
     snap = None
     meta = _catalog_meta(request, None)
@@ -818,6 +824,17 @@ def search(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     facet_limit: int = Query(12, ge=1, le=200),
+    master_only: bool = Query(
+        False,
+        description="when true, drop witness-side hits and count only master matches against the cap",
+    ),
+    max_results: int | None = Query(
+        None,
+        ge=1,
+        le=200000,
+        description="override the configured overview cap for this request; "
+                    "defaults to the server's max_search_hits",
+    ),
 ) -> SearchResponse:
     (
         sorted_hits,
@@ -869,9 +886,11 @@ def search(
         around_binom_not=around_binom_not,
         sort=sort,
         context=context,
+        master_only=master_only,
+        max_results=max_results,
     )
     if summary is not None:
-        cap = request.app.state.bkk.config.max_search_hits
+        cap = max_results if max_results is not None else request.app.state.bkk.config.max_search_hits
         kwic_filters_ignored = bool(
             selected_left_char or excluded_left_char
             or selected_right_char or excluded_right_char

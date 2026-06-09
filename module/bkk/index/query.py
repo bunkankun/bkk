@@ -120,6 +120,7 @@ class Index:
         candidates: dict[tuple[str, int], set[int]] | None = None,
         textids: set[str] | None = None,
         witnesses: set[str] | None = None,
+        master_only: bool = False,
         max_extensions: int = 20,
     ) -> IndexSummary:
         """Bird's-eye rollup over candidate positions — no Hits, no KWIC.
@@ -164,25 +165,26 @@ class Index:
                 by_textid[tid] += c
                 by_witness_label["master"] += c
 
-        for chunk in _chunked(list(witness_counts), _SQLITE_VAR_LIMIT):
-            placeholders = ",".join("?" * len(chunk))
-            rows = self._conn.execute(
-                f"SELECT w.witness_id, w.label, j.textid "
-                f"FROM witness w JOIN bucket b ON w.bucket_id = b.bucket_id "
-                f"JOIN juan j ON b.juan_id = j.juan_id "
-                f"WHERE w.witness_id IN ({placeholders})",
-                chunk,
-            ).fetchall()
-            for row in rows:
-                tid = row["textid"]
-                if textids is not None and tid not in textids:
-                    continue
-                label = row["label"]
-                if witnesses is not None and label not in witnesses:
-                    continue
-                c = witness_counts[row["witness_id"]]
-                by_textid[tid] += c
-                by_witness_label[label] += c
+        if not master_only:
+            for chunk in _chunked(list(witness_counts), _SQLITE_VAR_LIMIT):
+                placeholders = ",".join("?" * len(chunk))
+                rows = self._conn.execute(
+                    f"SELECT w.witness_id, w.label, j.textid "
+                    f"FROM witness w JOIN bucket b ON w.bucket_id = b.bucket_id "
+                    f"JOIN juan j ON b.juan_id = j.juan_id "
+                    f"WHERE w.witness_id IN ({placeholders})",
+                    chunk,
+                ).fetchall()
+                for row in rows:
+                    tid = row["textid"]
+                    if textids is not None and tid not in textids:
+                        continue
+                    label = row["label"]
+                    if witnesses is not None and label not in witnesses:
+                        continue
+                    c = witness_counts[row["witness_id"]]
+                    by_textid[tid] += c
+                    by_witness_label[label] += c
 
         # Trigram extensions: rather than scanning the trigram table with
         # ``gram LIKE '_xy'`` (unindexable, full-scan over billions of

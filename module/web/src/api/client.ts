@@ -430,6 +430,8 @@ export async function searchCorpus(params: {
   limit?: number;
   offset?: number;
   facetLimit?: number;
+  masterOnly?: boolean;
+  maxResults?: number;
   signal?: AbortSignal;
 }): Promise<SearchResponse> {
   const q = new URLSearchParams();
@@ -464,6 +466,8 @@ export async function searchCorpus(params: {
   if (params.limit != null) q.set("limit", String(params.limit));
   if (params.offset != null) q.set("offset", String(params.offset));
   if (params.facetLimit != null) q.set("facet_limit", String(params.facetLimit));
+  if (params.masterOnly) q.set("master_only", "true");
+  if (params.maxResults != null) q.set("max_results", String(params.maxResults));
   return fetchJson<SearchResponse>(`${apiBase}/search?${q.toString()}`, {
     signal: params.signal,
   });
