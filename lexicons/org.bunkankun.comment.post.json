@@ -1,0 +1,72 @@
+{
+  "lexicon": 1,
+  "id": "org.bunkankun.comment.post",
+  "description": "Markdown commentary on a text passage or on another BKK record. Exactly one of `anchor` (passage) or `parent` (reply to another record) must be present; this constraint is enforced by the harvester since the lexicon schema cannot express xor.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["textId", "body", "lang", "format", "createdAt"],
+        "properties": {
+          "textId": {
+            "type": "string",
+            "description": "BKK source-text identifier the comment relates to. Kept even on pure replies to support text-scoped indexing and filtering."
+          },
+          "edition": {
+            "type": "string",
+            "description": "Short edition id; required when `anchor` is present."
+          },
+          "anchor": {
+            "type": "ref",
+            "ref": "lex:org.bunkankun.defs.anchor#main",
+            "description": "Anchored span this comment is about. Mutually exclusive with `parent`."
+          },
+          "parent": {
+            "type": "ref",
+            "ref": "#strongRef",
+            "description": "Direct parent record being replied to. Mutually exclusive with `anchor`."
+          },
+          "root": {
+            "type": "ref",
+            "ref": "#strongRef",
+            "description": "Thread root for replies; equals `parent` for top-level replies. Bluesky convention."
+          },
+          "body": {
+            "type": "string",
+            "maxGraphemes": 3000,
+            "description": "Comment body. Format is given by `format` (currently always `markdown`)."
+          },
+          "lang": {
+            "type": "string",
+            "description": "BCP-47 language tag of `body` (e.g. en, zh-Hant, ja). Defaults to en when absent."
+          },
+          "format": {
+            "type": "string",
+            "knownValues": ["markdown"],
+            "description": "Body format. `markdown` is the only currently defined value; reserved enum leaves room for `plain`."
+          },
+          "supersedes": {
+            "type": "string",
+            "format": "cid",
+            "description": "CID of a prior comment this one replaces."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "strongRef": {
+      "type": "object",
+      "required": ["uri", "cid"],
+      "description": "AT-Protocol strong reference (uri + cid) to another record.",
+      "properties": {
+        "uri": {"type": "string", "format": "at-uri"},
+        "cid": {"type": "string", "format": "cid"}
+      }
+    }
+  }
+}

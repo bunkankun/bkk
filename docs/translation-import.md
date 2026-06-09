@@ -258,3 +258,30 @@ reproducibility, snapshot coexistence, license/responsibility
 extraction, conditional `lang` emission, source-hash resolution when
 the source bundle is present, per-juan header shape, body-ref/header
 correspondence, and bundle-hash sensitivity to segment edits.
+
+## Live translation contributions (`org.bunkankun.translation.segment`)
+
+Translations posted to Bluesky carry their text inline in the record (see
+[`lexicons/org.bunkankun.translation.segment.json`](../lexicons/org.bunkankun.translation.segment.json)).
+The record references a target bundle via `translation_id` — matching the
+`<bundle-id>` produced above — so a harvested segment knows which bundle
+it belongs in. The shape parallels annotations: each record anchors one
+span in the source text and supplies the translated `text`, `lang`, and
+optional `title` / `note`.
+
+Today, `bkk annotations harvest` writes harvested translation records as
+JSONL under `<translations_root>/<translation_id>/<text-id>_NNN.tr.jsonl`
+(see [`docs/bkk-annotations/README.md`](bkk-annotations/README.md#translation-segment-archive)).
+Folding those JSONL segments into the matching bundle's juan markdown
+files — the inverse of the TLS importer above — is a separate task. The
+shape needed for that fold:
+
+- Bundle id resolution: `translation_id` → `<translations_root>/<source-text-id>/<lang>/<bundle-id>/`.
+- Juan resolution: parse `NNN` from the marker id (same logic the
+  harvester already uses) → `<bundle-id>_NNN.md`.
+- Segment placement: each harvested record becomes one `<seg corresp="…">`-
+  equivalent block in the per-juan markdown body; ordering by
+  `(bucket, bucket_offset)` matches the bundle's existing convention.
+- Bundle-doesn't-exist: drop with a warning. Creating the bundle from
+  scratch is a separate operation (a translator first needs the bundle
+  manifest, license, etc.).

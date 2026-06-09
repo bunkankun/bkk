@@ -1,0 +1,46 @@
+{
+  "lexicon": 1,
+  "id": "org.bunkankun.annotation.note",
+  "description": "A BKK annotation pinned to a span in a premodern Chinese text. The payload is intentionally free-form so different annotation kinds (form / sense / concept / translation / metadata) can share one record type. See docs/bkk-annotations/README.md for the payload conventions and the archive-side counterpart. Renamed from org.bunkankun.annotation in 2026.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["textId", "edition", "anchor", "payload", "createdAt"],
+        "properties": {
+          "textId": {
+            "type": "string",
+            "description": "BKK source-text identifier (e.g. KR1h0004)."
+          },
+          "edition": {
+            "type": "string",
+            "description": "Short edition id within the source text (e.g. tls, CK-KZ)."
+          },
+          "anchor": {
+            "type": "ref",
+            "ref": "lex:org.bunkankun.defs.anchor#main"
+          },
+          "payload": {
+            "type": "unknown",
+            "description": "Free-form annotation content. Shape per source role; see docs/bkk-annotations/README.md."
+          },
+          "sourceRole": {
+            "type": "string",
+            "description": "What kind of annotation this is in the source pipeline. Defaults to bsky:org.bunkankun.annotation.note when produced by this lexicon."
+          },
+          "supersedes": {
+            "type": "string",
+            "format": "cid",
+            "description": "CID of a prior record this one replaces."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

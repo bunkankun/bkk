@@ -3,6 +3,7 @@ import { getAnnotations, getManifest, getSegmentTranslations } from "../../api/c
 import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { AnnotationCompose } from "./AnnotationCompose";
+import { ContribCompose } from "./ContribCompose";
 import { CoreTargetPicker } from "./CoreTargetPicker";
 import {
   SenseRowLabel,
@@ -252,6 +253,7 @@ export function AnnotationsTab() {
           </div>
           <CoreTargetPicker selection={sel} edition={edition} />
           {edition && <AnnotationCompose selection={sel} edition={edition} />}
+          {edition && <ContribCompose selection={sel} edition={edition} />}
           <label className="sel-pin-toggle">
             <input
               type="checkbox"

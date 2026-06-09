@@ -1,0 +1,64 @@
+{
+  "lexicon": 1,
+  "id": "org.bunkankun.translation.segment",
+  "description": "Translation of one anchored span of a source text. The translated text is carried inline; the harvester collects records into the referenced bkk-tr-<translationId> bundle. The Bluesky record is the live source of truth — the bundle is the curated downstream archive.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["textId", "edition", "anchor", "translationId", "text", "lang", "format", "createdAt"],
+        "properties": {
+          "textId": {
+            "type": "string",
+            "description": "BKK source-text identifier (e.g. KR1h0004)."
+          },
+          "edition": {
+            "type": "string",
+            "description": "Short edition id of the source the anchor refers to."
+          },
+          "anchor": {
+            "type": "ref",
+            "ref": "lex:org.bunkankun.defs.anchor#main",
+            "description": "Span in the source text being translated."
+          },
+          "translationId": {
+            "type": "string",
+            "description": "Id of the target translation bundle (matches TranslationSummary.id; typically the bkk-tr-* bundle name)."
+          },
+          "text": {
+            "type": "string",
+            "description": "Translation body. Format is given by `format` (currently always `markdown`)."
+          },
+          "lang": {
+            "type": "string",
+            "description": "BCP-47 language tag of `text` (e.g. en, de, ja)."
+          },
+          "format": {
+            "type": "string",
+            "knownValues": ["markdown"],
+            "description": "Body format. `markdown` is the only currently defined value."
+          },
+          "title": {
+            "type": "string",
+            "description": "Optional segment title (for structured passages where a heading is appropriate)."
+          },
+          "note": {
+            "type": "string",
+            "description": "Optional translator's note on this segment."
+          },
+          "supersedes": {
+            "type": "string",
+            "format": "cid",
+            "description": "CID of a prior translation segment this one replaces."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

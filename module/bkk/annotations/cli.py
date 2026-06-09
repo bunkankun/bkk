@@ -30,6 +30,12 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="DID to harvest from; repeatable. Defaults to [annotations].dids in .bkkrc.")
     h.add_argument("--annotations-root", type=Path, default=None,
                    help="archive root (default: [annotations].annotations_root or [serve].annotations_root)")
+    h.add_argument("--comments-root", type=Path, default=None,
+                   help="comments archive root "
+                        "(default: [annotations].comments_root, else <annotations-root>/../bkk-comments)")
+    h.add_argument("--translations-root", type=Path, default=None,
+                   help="translations archive root "
+                        "(default: [annotations].translations_root, else <annotations-root>/../bkk-translations)")
     h.add_argument("--corpus", type=Path, default=None,
                    help="corpus root (default: [global].corpus)")
     h.add_argument("--limit", type=int, default=None,
@@ -96,6 +102,9 @@ def _cmd_harvest(args: argparse.Namespace) -> int:
         return 2
     annotations_root = Path(annotations_root)
 
+    comments_root = args.comments_root or ann_rc.get("comments_root")
+    translations_root = args.translations_root or ann_rc.get("translations_root")
+
     corpus_root = args.corpus or g.get("corpus")
     if corpus_root is None:
         print("error: no corpus configured "
@@ -106,6 +115,8 @@ def _cmd_harvest(args: argparse.Namespace) -> int:
     summary = harvest(
         dids=list(dids),
         annotations_root=annotations_root,
+        comments_root=Path(comments_root) if comments_root else None,
+        translations_root=Path(translations_root) if translations_root else None,
         corpus_root=corpus_root,
         limit_per_did=args.limit,
         dry_run=args.dry_run,

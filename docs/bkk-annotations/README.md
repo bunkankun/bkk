@@ -107,6 +107,70 @@ diff-friendly commits.
   bucket-relative codepoint offset. Regenerable from the anchor and the
   source bundle; carried inline for fast frontend rendering.
 
+## Annotation `payload` conventions
+
+`payload` is declared `unknown` in the lexicon so each annotation kind can
+carry its own shape; the conventions below are what the BKK frontend and
+the TLS importer actually produce. New keys may appear later; readers must
+ignore unknown ones.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `form` | object | Word/graph form: `orth` (Han graph / variant), `pron` (pinyin / reading). |
+| `sense` | object | Lexical sense: `id` (sense uuid), `syn_func`, `sem_feat`, `def` / `def_text`. |
+| `concept` | string | Concept URI (`concept://…`) when the annotation pins a span to a HXWD concept. |
+| `concept_id` | string | Concept identifier (separate from `concept` for legacy reasons). |
+| `translation` | object | Inline gloss-style translation: `text`, optional `src`. *(Sentence-level translations belong in `translation.segment` records, not here.)* |
+| `metadata` | object | Free-form key/value bag for source-specific carry-over (e.g. TLS `seg_id`). |
+
+The first non-empty field in roughly the order above determines what the
+Chat tab renders ([`ChatTab.tsx`](../../module/web/src/components/RightPanel/ChatTab.tsx)).
+When in doubt, look at the TLS importer for the canonical producer.
+
+## Comment archive
+
+Records harvested from `org.bunkankun.comment.post` land alongside the
+annotation archive at `<comments_root>/<text-id>/`:
+
+- `<text-id>_NNN.cmt.jsonl` — comments anchored to a passage (one file per
+  juan, same `(bucket, bucket_offset, id)` sort).
+- `<text-id>_replies.cmt.jsonl` — comments that are *replies* to another
+  record (no anchor; reply has a `parent` strong-ref instead).
+
+Record shape mirrors the wire form with snake_case:
+
+```json
+{
+  "id": "<uuid>",
+  "text_id": "KR1h0004",
+  "edition": "tls",
+  "anchor": { "marker_id": "…", "offset": 0, "length": 1 },
+  "body": "**markdown** comment",
+  "lang": "en",
+  "format": "markdown",
+  "parent": null,
+  "root": null,
+  "provenance": { "did": "…", "cid": "…", "source_role": "bsky:org.bunkankun.comment.post", … },
+  "curation_state": "proposed",
+  "bucket": "body",
+  "bucket_offset": 1234
+}
+```
+
+Anchored comments have `anchor` set and `parent`/`root` null; reply
+comments have it the other way around (the harvester enforces the xor).
+
+## Translation segment archive
+
+Records from `org.bunkankun.translation.segment` carry an inline
+translation of one anchored span. They currently land as JSONL under
+`<translations_root>/<translation_id>/<text-id>_NNN.tr.jsonl`. Folding the
+segments into the corresponding `bkk-tr-<translation_id>` bundle's juan
+markdown files is a separate follow-up task (see
+[`docs/translation-import.md`](../translation-import.md)). Until then the
+JSONL is the authoritative archive and bundle authors can opt to import
+from it manually.
+
 ## Provenance and migrations
 
 The TLS-seed corpus is a one-time migration: re-running it overwrites the

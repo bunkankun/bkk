@@ -1,0 +1,36 @@
+{
+  "lexicon": 1,
+  "id": "org.bunkankun.defs.anchor",
+  "description": "Shared anchor object for BKK lexicons. A span pinned to a stable marker id plus an offset and length in canonical PUA characters; optionally crosses into a second marker via endMarkerId/endLength.",
+  "defs": {
+    "main": {
+      "type": "object",
+      "required": ["markerId", "offset", "length"],
+      "properties": {
+        "markerId": {
+          "type": "string",
+          "description": "Id of a marker in the source bundle that serves as the anchor point."
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-indexed distance in canonical PUA characters from the marker to the start of the span."
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Span length in canonical PUA characters; 0 = point annotation."
+        },
+        "endMarkerId": {
+          "type": "string",
+          "description": "Optional end-anchor marker id when the span crosses another marker."
+        },
+        "endLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Length past endMarkerId when the span crosses another marker."
+        }
+      }
+    }
+  }
+}

@@ -1,10 +1,15 @@
-"""Write-path endpoints for annotations: Bluesky auth + record creation.
+"""Write-path endpoints for annotations, comments, and translation segments.
 
 All state lives in the in-memory ``UserSession`` (see ``state.py``). The
 backend exchanges the user's app password for an atproto session, signs
 ``com.atproto.repo.createRecord`` calls with the resulting JWT, and never
 persists Bluesky credentials to disk. A server restart logs the user out of
 Bluesky (not GitHub) — documented in the panel UI.
+
+This module is one half of the "two-place rule": every conversion from the
+SPA's snake_case archive shape to the camelCase Bluesky wire shape lives in
+``_*_archive_to_wire`` below. The matching wire→archive direction lives in
+``bkk.annotations.harvest``.
 """
 
 from __future__ import annotations
@@ -17,7 +22,9 @@ from pydantic import BaseModel, Field
 
 from ..atproto import (
     ANNOTATION_NSID,
+    COMMENT_NSID,
     DEFAULT_PDS,
+    TRANSLATION_NSID,
     create_record,
     create_session,
 )
@@ -107,12 +114,40 @@ def delete_bluesky_session(request: Request) -> dict[str, bool]:
     return {"ok": True}
 
 
+# ── Shared request pieces ────────────────────────────────────────────────
+
+
 class AnchorIn(BaseModel):
     marker_id: str = Field(..., min_length=1)
     offset: int = Field(..., ge=0)
     length: int = Field(..., ge=0)
     end_marker_id: str | None = None
     end_length: int | None = Field(default=None, ge=0)
+
+
+class StrongRefIn(BaseModel):
+    uri: str = Field(..., min_length=1)
+    cid: str = Field(..., min_length=1)
+
+
+def _anchor_to_wire(anchor: AnchorIn) -> dict[str, Any]:
+    wire: dict[str, Any] = {
+        "markerId": anchor.marker_id,
+        "offset": anchor.offset,
+        "length": anchor.length,
+    }
+    if anchor.end_marker_id is not None:
+        wire["endMarkerId"] = anchor.end_marker_id
+    if anchor.end_length is not None:
+        wire["endLength"] = anchor.end_length
+    return wire
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+# ── Annotation ───────────────────────────────────────────────────────────
 
 
 class AnnotationPostRequest(BaseModel):
@@ -124,31 +159,24 @@ class AnnotationPostRequest(BaseModel):
     supersedes: str | None = None
 
 
-class AnnotationPostResponse(BaseModel):
+class PostResponse(BaseModel):
     uri: str
     cid: str
     did: str
 
 
-def _archive_to_wire(req: AnnotationPostRequest) -> dict[str, Any]:
-    """Translate the BKK archive shape (snake_case) to lexicon shape (camelCase)."""
-    anchor: dict[str, Any] = {
-        "markerId": req.anchor.marker_id,
-        "offset": req.anchor.offset,
-        "length": req.anchor.length,
-    }
-    if req.anchor.end_marker_id is not None:
-        anchor["endMarkerId"] = req.anchor.end_marker_id
-    if req.anchor.end_length is not None:
-        anchor["endLength"] = req.anchor.end_length
+# Backwards-compatible alias — older imports/types referred to this name.
+AnnotationPostResponse = PostResponse
 
+
+def _annotation_archive_to_wire(req: AnnotationPostRequest) -> dict[str, Any]:
     record: dict[str, Any] = {
         "$type": ANNOTATION_NSID,
         "textId": req.text_id,
         "edition": req.edition,
-        "anchor": anchor,
+        "anchor": _anchor_to_wire(req.anchor),
         "payload": req.payload,
-        "createdAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        "createdAt": _now_iso(),
     }
     record["sourceRole"] = req.source_role or f"bsky:{ANNOTATION_NSID}"
     if req.supersedes is not None:
@@ -158,21 +186,138 @@ def _archive_to_wire(req: AnnotationPostRequest) -> dict[str, Any]:
 
 @router.post(
     "/annotations",
-    response_model=AnnotationPostResponse,
-    summary="Post an annotation as a Bluesky record under org.bunkankun.annotation",
+    response_model=PostResponse,
+    summary=f"Post an annotation under {ANNOTATION_NSID}",
 )
 def post_annotation(
     request: Request, body: AnnotationPostRequest,
-) -> AnnotationPostResponse:
+) -> PostResponse:
+    return _post_record(
+        request, ANNOTATION_NSID, _annotation_archive_to_wire(body),
+    )
+
+
+# ── Comment ──────────────────────────────────────────────────────────────
+
+
+class CommentPostRequest(BaseModel):
+    text_id: str = Field(..., min_length=1)
+    edition: str | None = None
+    anchor: AnchorIn | None = None
+    parent: StrongRefIn | None = None
+    root: StrongRefIn | None = None
+    body: str = Field(..., min_length=1)
+    lang: str = "en"
+    supersedes: str | None = None
+
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+        has_anchor = self.anchor is not None
+        has_parent = self.parent is not None
+        if has_anchor == has_parent:
+            raise ValueError(
+                "comment requires exactly one of `anchor` or `parent`",
+            )
+        if has_anchor and not self.edition:
+            raise ValueError("comment with `anchor` requires `edition`")
+
+
+def _comment_archive_to_wire(req: CommentPostRequest) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "$type": COMMENT_NSID,
+        "textId": req.text_id,
+        "body": req.body,
+        "lang": req.lang,
+        "format": "markdown",
+        "createdAt": _now_iso(),
+    }
+    if req.edition is not None:
+        record["edition"] = req.edition
+    if req.anchor is not None:
+        record["anchor"] = _anchor_to_wire(req.anchor)
+    if req.parent is not None:
+        record["parent"] = {"uri": req.parent.uri, "cid": req.parent.cid}
+    if req.root is not None:
+        record["root"] = {"uri": req.root.uri, "cid": req.root.cid}
+    if req.supersedes is not None:
+        record["supersedes"] = req.supersedes
+    return record
+
+
+@router.post(
+    "/comments",
+    response_model=PostResponse,
+    summary=f"Post a comment under {COMMENT_NSID}",
+)
+def post_comment(
+    request: Request, body: CommentPostRequest,
+) -> PostResponse:
+    return _post_record(request, COMMENT_NSID, _comment_archive_to_wire(body))
+
+
+# ── Translation segment ──────────────────────────────────────────────────
+
+
+class TranslationPostRequest(BaseModel):
+    text_id: str = Field(..., min_length=1)
+    edition: str = Field(..., min_length=1)
+    anchor: AnchorIn
+    translation_id: str = Field(..., min_length=1)
+    text: str = Field(..., min_length=1)
+    lang: str = Field(..., min_length=2)
+    title: str | None = None
+    note: str | None = None
+    supersedes: str | None = None
+
+
+def _translation_archive_to_wire(req: TranslationPostRequest) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "$type": TRANSLATION_NSID,
+        "textId": req.text_id,
+        "edition": req.edition,
+        "anchor": _anchor_to_wire(req.anchor),
+        "translationId": req.translation_id,
+        "text": req.text,
+        "lang": req.lang,
+        "format": "markdown",
+        "createdAt": _now_iso(),
+    }
+    if req.title is not None:
+        record["title"] = req.title
+    if req.note is not None:
+        record["note"] = req.note
+    if req.supersedes is not None:
+        record["supersedes"] = req.supersedes
+    return record
+
+
+@router.post(
+    "/translations",
+    response_model=PostResponse,
+    summary=f"Post a translation segment under {TRANSLATION_NSID}",
+)
+def post_translation(
+    request: Request, body: TranslationPostRequest,
+) -> PostResponse:
+    return _post_record(
+        request, TRANSLATION_NSID, _translation_archive_to_wire(body),
+    )
+
+
+# ── Shared post helper ───────────────────────────────────────────────────
+
+
+def _post_record(
+    request: Request, collection: str, record: dict[str, Any],
+) -> PostResponse:
     session_id, user = _require_user(request)
     bluesky = _require_bluesky(user)
-    record = _archive_to_wire(body)
     result, new_tokens = create_record(
         service=bluesky.service_endpoint,
         access_jwt=bluesky.access_jwt,
         refresh_jwt=bluesky.refresh_jwt,
         repo=bluesky.did,
-        collection=ANNOTATION_NSID,
+        collection=collection,
         record=record,
     )
     if new_tokens is not None:
@@ -184,8 +329,10 @@ def post_annotation(
     uri = result.get("uri")
     cid = result.get("cid")
     if not isinstance(uri, str) or not isinstance(cid, str):
-        raise HTTPException(status_code=502, detail="atproto createRecord returned no uri/cid")
-    return AnnotationPostResponse(uri=uri, cid=cid, did=bluesky.did)
+        raise HTTPException(
+            status_code=502, detail="atproto createRecord returned no uri/cid",
+        )
+    return PostResponse(uri=uri, cid=cid, did=bluesky.did)
 
 
 __all__ = ["router"]

@@ -1,28 +1,41 @@
-"""Harvest annotation records from Bluesky into the archive.
+"""Harvest BKK records from Bluesky into the on-disk archive.
 
-The harvester walks ``com.atproto.repo.listRecords`` for one or more DIDs,
-translates each lexicon record to BKK archive shape, and merges it into the
-per-juan JSONL files under ``<annotations_root>/<text_id>/<text_id>_NNN.ann.jsonl``.
+The harvester walks ``com.atproto.repo.listRecords`` for one or more DIDs
+across the four BKK collections (annotation.note, comment.post,
+translation.segment, plus the legacy flat annotation NSID), translates each
+wire record into archive shape, and merges into per-juan JSONL files:
+
+* annotations: ``<annotations_root>/<text_id>/<text_id>_NNN.ann.jsonl``
+* comments:    ``<comments_root>/<text_id>/<text_id>_NNN.cmt.jsonl``
+                (pure replies without an anchor: ``<text_id>/_replies.cmt.jsonl``)
+* translations: ``<translations_root>/<text_id>/<text_id>_NNN.tr.jsonl``
+
+Folding harvested translation segments back into the actual ``bkk-tr-*``
+bundles is a separate task; for now they live alongside annotations and
+comments as JSONL.
 
 Merge is idempotent: existing lines whose ``provenance.cid`` matches an
 incoming record are dropped before append. Seed records
 (``did:plc:bkk-tls-legacy`` + ``synth-*`` CIDs) are never produced by the
 harvester and are preserved untouched.
+
+This module is one half of the "two-place rule"; the matching
+archive→wire side lives in ``bkk.serve.routers.annotations_write``.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
 from bkk.index.merge import find_bundle
 from bkk.importer.write.annotations import (
-    bucket_sort_key,
     juan_archive_path,
     write_records_jsonl,
 )
@@ -31,7 +44,13 @@ from bkk.marker_assets import (
     effective_markers_for_bucket,
     load_marker_asset,
 )
-from bkk.serve.atproto import ANNOTATION_NSID, list_records
+from bkk.serve.atproto import (
+    ANNOTATION_NSID,
+    COMMENT_NSID,
+    LEGACY_ANNOTATION_NSID,
+    TRANSLATION_NSID,
+    list_records,
+)
 from bkk.serve.routers.annotations import read_raw_records
 
 from .pds import resolve_pds
@@ -148,27 +167,25 @@ def compute_bucket_position(
     return None
 
 
-def wire_to_archive(
-    wire: dict[str, Any], *, did: str, cid: str,
-) -> dict[str, Any] | None:
-    """Translate a lexicon record (camelCase) to archive shape (snake_case).
+# ── Wire → archive (one converter per NSID) ──────────────────────────────
 
-    Returns ``None`` if required fields are missing.
+
+def _anchor_from_wire(anchor_in: Any) -> dict[str, Any] | None:
+    """Convert the wire anchor object back to snake_case archive shape.
+
+    Returns ``None`` when the required fields are missing or mistyped.
     """
-    text_id = wire.get("textId")
-    edition = wire.get("edition")
-    anchor_in = wire.get("anchor") or {}
-    payload = wire.get("payload") or {}
-    if not isinstance(text_id, str) or not isinstance(edition, str):
-        return None
     if not isinstance(anchor_in, dict):
         return None
     marker_id = anchor_in.get("markerId")
     offset = anchor_in.get("offset")
     length = anchor_in.get("length")
-    if not isinstance(marker_id, str) or not isinstance(offset, int) or not isinstance(length, int):
+    if (
+        not isinstance(marker_id, str)
+        or not isinstance(offset, int)
+        or not isinstance(length, int)
+    ):
         return None
-
     anchor: dict[str, Any] = {
         "marker_id": marker_id,
         "offset": offset,
@@ -180,41 +197,183 @@ def wire_to_archive(
         anchor["end_marker_id"] = end_marker_id
     if isinstance(end_length, int):
         anchor["end_length"] = end_length
+    return anchor
 
+
+def _provenance(
+    *, did: str, cid: str, wire: dict[str, Any], default_source_role: str,
+) -> dict[str, Any]:
     source_role = wire.get("sourceRole")
     if not isinstance(source_role, str):
-        source_role = f"bsky:{ANNOTATION_NSID}"
-
-    supersedes = wire.get("supersedes")
+        source_role = default_source_role
     created_at = wire.get("createdAt")
+    supersedes = wire.get("supersedes")
+    return {
+        "did": did,
+        "cid": cid,
+        "created_at": created_at if isinstance(created_at, str) else None,
+        "source_role": source_role,
+        "supersedes": supersedes if isinstance(supersedes, str) else None,
+    }
+
+
+def annotation_wire_to_archive(
+    wire: dict[str, Any], *, did: str, cid: str, nsid: str = ANNOTATION_NSID,
+) -> dict[str, Any] | None:
+    """Translate an annotation lexicon record (camelCase) to archive shape.
+
+    Returns ``None`` if required fields are missing. ``nsid`` is parameterised
+    so the legacy flat NSID flows through the same path.
+    """
+    text_id = wire.get("textId")
+    edition = wire.get("edition")
+    payload = wire.get("payload") or {}
+    if not isinstance(text_id, str) or not isinstance(edition, str):
+        return None
+    anchor = _anchor_from_wire(wire.get("anchor"))
+    if anchor is None:
+        return None
+    return {
+        "id": cid,
+        "text_id": text_id,
+        "edition": edition,
+        "anchor": anchor,
+        "payload": payload if isinstance(payload, dict) else {},
+        "provenance": _provenance(
+            did=did, cid=cid, wire=wire,
+            default_source_role=f"bsky:{nsid}",
+        ),
+        "curation_state": "proposed",
+    }
+
+
+# Backwards-compatible alias for the previous name; one-callsite reference
+# in tests and external scripts.
+wire_to_archive = annotation_wire_to_archive
+
+
+def comment_wire_to_archive(
+    wire: dict[str, Any], *, did: str, cid: str,
+) -> dict[str, Any] | None:
+    """Translate a comment.post wire record to archive shape.
+
+    Enforces the lexicon-level xor: exactly one of ``anchor`` / ``parent``
+    must be present.
+    """
+    text_id = wire.get("textId")
+    body = wire.get("body")
+    lang = wire.get("lang")
+    fmt = wire.get("format")
+    if (
+        not isinstance(text_id, str)
+        or not isinstance(body, str)
+        or not isinstance(lang, str)
+        or not isinstance(fmt, str)
+    ):
+        return None
+
+    anchor_wire = wire.get("anchor")
+    parent_wire = wire.get("parent")
+    anchor = _anchor_from_wire(anchor_wire) if anchor_wire is not None else None
+    has_anchor = anchor is not None
+    has_parent = isinstance(parent_wire, dict) and isinstance(parent_wire.get("uri"), str)
+    if has_anchor == has_parent:
+        # both or neither — invalid per the lexicon
+        return None
+
+    edition = wire.get("edition")
+    record: dict[str, Any] = {
+        "id": cid,
+        "text_id": text_id,
+        "body": body,
+        "lang": lang,
+        "format": fmt,
+        "provenance": _provenance(
+            did=did, cid=cid, wire=wire,
+            default_source_role=f"bsky:{COMMENT_NSID}",
+        ),
+        "curation_state": "proposed",
+    }
+    if has_anchor:
+        if not isinstance(edition, str):
+            return None
+        record["edition"] = edition
+        record["anchor"] = anchor
+    else:
+        record["parent"] = {
+            "uri": parent_wire["uri"],
+            "cid": parent_wire.get("cid"),
+        }
+        root_wire = wire.get("root")
+        if isinstance(root_wire, dict) and isinstance(root_wire.get("uri"), str):
+            record["root"] = {
+                "uri": root_wire["uri"],
+                "cid": root_wire.get("cid"),
+            }
+    return record
+
+
+def translation_wire_to_archive(
+    wire: dict[str, Any], *, did: str, cid: str,
+) -> dict[str, Any] | None:
+    """Translate a translation.segment wire record to archive shape."""
+    text_id = wire.get("textId")
+    edition = wire.get("edition")
+    translation_id = wire.get("translationId")
+    text = wire.get("text")
+    lang = wire.get("lang")
+    fmt = wire.get("format")
+    if (
+        not isinstance(text_id, str)
+        or not isinstance(edition, str)
+        or not isinstance(translation_id, str)
+        or not isinstance(text, str)
+        or not isinstance(lang, str)
+        or not isinstance(fmt, str)
+    ):
+        return None
+    anchor = _anchor_from_wire(wire.get("anchor"))
+    if anchor is None:
+        return None
 
     record: dict[str, Any] = {
         "id": cid,
         "text_id": text_id,
         "edition": edition,
         "anchor": anchor,
-        "payload": payload if isinstance(payload, dict) else {},
-        "provenance": {
-            "did": did,
-            "cid": cid,
-            "created_at": created_at if isinstance(created_at, str) else None,
-            "source_role": source_role,
-            "supersedes": supersedes if isinstance(supersedes, str) else None,
-        },
+        "translation_id": translation_id,
+        "text": text,
+        "lang": lang,
+        "format": fmt,
+        "provenance": _provenance(
+            did=did, cid=cid, wire=wire,
+            default_source_role=f"bsky:{TRANSLATION_NSID}",
+        ),
         "curation_state": "proposed",
     }
+    title = wire.get("title")
+    note = wire.get("note")
+    if isinstance(title, str):
+        record["title"] = title
+    if isinstance(note, str):
+        record["note"] = note
     return record
 
 
-def fetch_did_records(did: str, *, limit: int | None = None) -> list[tuple[dict, str]]:
-    """Page through listRecords for one DID. Returns (value, cid) pairs."""
+# ── Listing / fetching ───────────────────────────────────────────────────
+
+
+def fetch_did_records(
+    did: str, *, collection: str = ANNOTATION_NSID, limit: int | None = None,
+) -> list[tuple[dict, str]]:
+    """Page through listRecords for one DID + collection. Returns (value, cid)."""
     service = resolve_pds(did)
     out: list[tuple[dict, str]] = []
     cursor: str | None = None
     page_size = 100
     while True:
         result = list_records(
-            service=service, repo=did, collection=ANNOTATION_NSID,
+            service=service, repo=did, collection=collection,
             limit=page_size, cursor=cursor,
         )
         for record in result.get("records") or []:
@@ -231,90 +390,221 @@ def fetch_did_records(did: str, *, limit: int | None = None) -> list[tuple[dict,
             return out
 
 
+# ── Archive paths for new record kinds ───────────────────────────────────
+
+
+def comment_archive_path(
+    comments_root: Path, text_id: str, juan_seq: int | None,
+) -> Path:
+    """JSONL path for one juan's anchored comments, or the replies file."""
+    if juan_seq is None:
+        return comments_root / text_id / "_replies.cmt.jsonl"
+    return comments_root / text_id / f"{text_id}_{juan_seq:03d}.cmt.jsonl"
+
+
+def translation_archive_path(
+    translations_root: Path, text_id: str, juan_seq: int,
+) -> Path:
+    return translations_root / text_id / f"{text_id}_{juan_seq:03d}.tr.jsonl"
+
+
+def _write_jsonl_merged(
+    out_path: Path, incoming: list[dict[str, Any]], *, sort: bool,
+    dry_run: bool,
+) -> int:
+    """Merge ``incoming`` into ``out_path``, deduping by ``provenance.cid``.
+
+    Returns the number of pre-existing records that were replaced.
+    """
+    incoming_cids = {r["provenance"]["cid"] for r in incoming}
+    superseded = {
+        r["provenance"]["supersedes"]
+        for r in incoming
+        if r["provenance"].get("supersedes")
+    }
+    existing: list[dict[str, Any]] = []
+    replaced = 0
+    if out_path.exists():
+        for raw in read_raw_records(out_path):
+            cid = (raw.get("provenance") or {}).get("cid")
+            if cid in incoming_cids or cid in superseded:
+                replaced += 1
+                continue
+            existing.append(raw)
+    merged = existing + incoming
+    if dry_run:
+        log.info("dry-run: would write %d records to %s", len(merged), out_path)
+    elif sort:
+        write_records_jsonl(out_path, merged, sort=True)
+    else:
+        # Comments/translations have no bucket sort key; write in arrival order.
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with out_path.open("w", encoding="utf-8") as f:
+            for r in merged:
+                f.write(json.dumps(r, ensure_ascii=False, sort_keys=True))
+                f.write("\n")
+    return replaced
+
+
+# ── Main harvest entry point ─────────────────────────────────────────────
+
+
 def harvest(
     dids: list[str],
     *,
     annotations_root: Path,
     corpus_root: Path,
+    comments_root: Path | None = None,
+    translations_root: Path | None = None,
     limit_per_did: int | None = None,
     dry_run: bool = False,
 ) -> dict[str, int]:
-    """Pull records for each DID and merge into the archive.
+    """Pull records for each DID across all BKK collections and merge.
 
-    Returns ``{harvested, replaced, files_touched, skipped}``.
+    Returns counts: ``{harvested, replaced, files_touched, skipped}``. The
+    comment and translation roots default to siblings of ``annotations_root``
+    when not supplied, which matches the conventional `.bkkrc` layout
+    documented in workflow.md.
     """
-    incoming_by_juan: dict[tuple[str, int], list[dict]] = defaultdict(list)
+    if comments_root is None:
+        comments_root = annotations_root.parent / "bkk-comments"
+    if translations_root is None:
+        translations_root = annotations_root.parent / "bkk-translations"
+
     juan_cache: dict[tuple[str, str, int], dict | None] = {}
+    incoming_annotations: dict[tuple[str, int], list[dict]] = defaultdict(list)
+    incoming_comments: dict[tuple[str, int | None], list[dict]] = defaultdict(list)
+    incoming_translations: dict[tuple[str, int], list[dict]] = defaultdict(list)
+
     skipped = 0
     harvested = 0
 
+    def _resolve_juan(archive: dict) -> tuple[int | None, str | None]:
+        """Return (juan_seq, edition) for an anchored archive record, or (None, None)."""
+        anchor = archive.get("anchor") or {}
+        marker_id = anchor.get("marker_id")
+        if not isinstance(marker_id, str):
+            return None, None
+        parsed = parse_marker_id(marker_id)
+        if parsed is None:
+            return None, None
+        return parsed[1], parsed[0]
+
+    def _attach_bucket(archive: dict, juan_seq: int, edition_short: str) -> bool:
+        text_id = archive["text_id"]
+        cache_key = (text_id, edition_short, juan_seq)
+        if cache_key not in juan_cache:
+            juan_cache[cache_key] = _load_juan_with_markers(
+                corpus_root, text_id, edition_short, juan_seq,
+            )
+        juan_doc = juan_cache[cache_key]
+        if juan_doc is None:
+            log.warning(
+                "juan not found in corpus: %s edition=%s seq=%d",
+                text_id, edition_short, juan_seq,
+            )
+            return False
+        anchor = archive["anchor"]
+        pos = compute_bucket_position(juan_doc, anchor["marker_id"], anchor["offset"])
+        if pos is None:
+            log.warning(
+                "marker_id %s not found in %s edition=%s seq=%d",
+                anchor["marker_id"], text_id, edition_short, juan_seq,
+            )
+            return False
+        archive["bucket"], archive["bucket_offset"] = pos
+        return True
+
+    # Each (collection, converter) pair is walked once per DID.
+    collections: list[tuple[str, Callable[..., dict | None], str]] = [
+        (ANNOTATION_NSID, annotation_wire_to_archive, "annotation"),
+        (LEGACY_ANNOTATION_NSID, annotation_wire_to_archive, "annotation"),
+        (COMMENT_NSID, comment_wire_to_archive, "comment"),
+        (TRANSLATION_NSID, translation_wire_to_archive, "translation"),
+    ]
+
     for did in dids:
-        log.info("harvesting records for %s", did)
-        for wire, cid in fetch_did_records(did, limit=limit_per_did):
-            archive = wire_to_archive(wire, did=did, cid=cid)
-            if archive is None:
-                skipped += 1
-                continue
-            text_id = archive["text_id"]
-            marker_id = archive["anchor"]["marker_id"]
-            parsed = parse_marker_id(marker_id)
-            if parsed is None:
-                log.warning(
-                    "cannot parse edition/juan from marker_id %s", marker_id,
+        for collection, converter, kind in collections:
+            log.info("harvesting %s from %s", collection, did)
+            try:
+                records = fetch_did_records(
+                    did, collection=collection, limit=limit_per_did,
                 )
-                skipped += 1
-                continue
-            edition_short, juan_seq = parsed
-
-            cache_key = (text_id, edition_short, juan_seq)
-            if cache_key not in juan_cache:
-                juan_cache[cache_key] = _load_juan_with_markers(
-                    corpus_root, text_id, edition_short, juan_seq,
-                )
-            juan_doc = juan_cache[cache_key]
-            if juan_doc is None:
-                log.warning(
-                    "juan not found in corpus: %s edition=%s seq=%d",
-                    text_id, edition_short, juan_seq,
-                )
-                skipped += 1
+            except Exception as exc:
+                # PDS may not host every collection; treat as empty.
+                log.warning("listRecords(%s) failed for %s: %s", collection, did, exc)
                 continue
 
-            pos = compute_bucket_position(juan_doc, marker_id, archive["anchor"]["offset"])
-            if pos is None:
-                log.warning(
-                    "marker_id %s not found in %s edition=%s seq=%d",
-                    marker_id, text_id, edition_short, juan_seq,
-                )
-                skipped += 1
-                continue
-            archive["bucket"], archive["bucket_offset"] = pos
-            incoming_by_juan[(text_id, juan_seq)].append(archive)
-            harvested += 1
+            for wire, cid in records:
+                # The legacy NSID flows through the annotation converter; we
+                # tag its provenance with the *new* NSID so harvested records
+                # land in a uniform source_role namespace.
+                kwargs: dict[str, Any] = {"did": did, "cid": cid}
+                if converter is annotation_wire_to_archive:
+                    kwargs["nsid"] = ANNOTATION_NSID
+                archive = converter(wire, **kwargs)
+                if archive is None:
+                    skipped += 1
+                    continue
+
+                if kind == "annotation":
+                    juan_seq, edition_short = _resolve_juan(archive)
+                    if juan_seq is None or edition_short is None:
+                        log.warning(
+                            "cannot parse edition/juan from marker_id %s",
+                            (archive.get("anchor") or {}).get("marker_id"),
+                        )
+                        skipped += 1
+                        continue
+                    if not _attach_bucket(archive, juan_seq, edition_short):
+                        skipped += 1
+                        continue
+                    incoming_annotations[(archive["text_id"], juan_seq)].append(archive)
+                    harvested += 1
+                elif kind == "comment":
+                    if "anchor" in archive:
+                        juan_seq, edition_short = _resolve_juan(archive)
+                        if juan_seq is None or edition_short is None:
+                            log.warning(
+                                "cannot parse edition/juan from comment anchor"
+                            )
+                            skipped += 1
+                            continue
+                        # Bucket info is informational for comments; attach
+                        # when possible but don't fail the whole record if not.
+                        _attach_bucket(archive, juan_seq, edition_short)
+                        incoming_comments[(archive["text_id"], juan_seq)].append(archive)
+                    else:
+                        incoming_comments[(archive["text_id"], None)].append(archive)
+                    harvested += 1
+                elif kind == "translation":
+                    juan_seq, edition_short = _resolve_juan(archive)
+                    if juan_seq is None or edition_short is None:
+                        log.warning(
+                            "cannot parse edition/juan from translation anchor"
+                        )
+                        skipped += 1
+                        continue
+                    _attach_bucket(archive, juan_seq, edition_short)
+                    incoming_translations[(archive["text_id"], juan_seq)].append(archive)
+                    harvested += 1
 
     replaced = 0
     files_touched = 0
-    for (text_id, juan_seq), incoming in incoming_by_juan.items():
+
+    for (text_id, juan_seq), incoming in incoming_annotations.items():
         out_path = juan_archive_path(annotations_root, text_id, juan_seq)
-        incoming_cids = {r["provenance"]["cid"] for r in incoming}
-        superseded = {
-            r["provenance"]["supersedes"]
-            for r in incoming
-            if r["provenance"].get("supersedes")
-        }
-        existing: list[dict] = []
-        if out_path.exists():
-            for raw in read_raw_records(out_path):
-                cid = (raw.get("provenance") or {}).get("cid")
-                if cid in incoming_cids or cid in superseded:
-                    replaced += 1
-                    continue
-                existing.append(raw)
-        merged = existing + incoming
-        if dry_run:
-            log.info("dry-run: would write %d records to %s", len(merged), out_path)
-        else:
-            write_records_jsonl(out_path, merged, sort=True)
+        replaced += _write_jsonl_merged(out_path, incoming, sort=True, dry_run=dry_run)
+        files_touched += 1
+
+    for (text_id, juan_seq), incoming in incoming_comments.items():
+        out_path = comment_archive_path(comments_root, text_id, juan_seq)
+        replaced += _write_jsonl_merged(out_path, incoming, sort=False, dry_run=dry_run)
+        files_touched += 1
+
+    for (text_id, juan_seq), incoming in incoming_translations.items():
+        out_path = translation_archive_path(translations_root, text_id, juan_seq)
+        replaced += _write_jsonl_merged(out_path, incoming, sort=False, dry_run=dry_run)
         files_touched += 1
 
     return {
@@ -328,8 +618,13 @@ def harvest(
 __all__ = [
     "harvest",
     "fetch_did_records",
+    "annotation_wire_to_archive",
+    "comment_wire_to_archive",
+    "translation_wire_to_archive",
     "wire_to_archive",
     "compute_bucket_position",
     "juan_seq_from_marker_id",
     "parse_marker_id",
+    "comment_archive_path",
+    "translation_archive_path",
 ]

@@ -225,19 +225,61 @@ export interface AnnotationPostResponse {
   did: string;
 }
 
-// Live firehose feed of org.bunkankun.annotation records (Bluesky Jetstream).
+// Shared response shape across all three lexicons.
+export type PostResponse = AnnotationPostResponse;
+
+export interface StrongRef {
+  uri: string;
+  cid: string;
+}
+
+export interface CommentPostRequest {
+  text_id: string;
+  // Exactly one of `anchor` or `parent` must be present. `edition` is
+  // required when `anchor` is set. Enforced server-side; the SPA should
+  // surface a friendly error if the user manages to submit both.
+  edition?: string | null;
+  anchor?: AnnotationAnchor | null;
+  parent?: StrongRef | null;
+  root?: StrongRef | null;
+  body: string;
+  lang?: string;
+  supersedes?: string | null;
+}
+
+export interface TranslationPostRequest {
+  text_id: string;
+  edition: string;
+  anchor: AnnotationAnchor;
+  translation_id: string;
+  text: string;
+  lang: string;
+  title?: string | null;
+  note?: string | null;
+  supersedes?: string | null;
+}
+
+// Live feed of BKK records on Bluesky. The shape is a union discriminated
+// by `kind`; only the fields relevant to each kind are populated.
 export interface Contribution {
+  kind: "annotation" | "comment" | "translation";
   did: string;
   cid: string;
   uri: string;
   text_id: string;
-  edition: string;
-  marker_id: string;
-  offset: number;
-  length: number;
+  created_at?: string | null;
+  time_us: number;
+
+  // Anchor (annotation + translation always; comment when not a reply).
+  edition?: string | null;
+  marker_id?: string | null;
+  offset?: number | null;
+  length?: number | null;
   end_marker_id?: string | null;
   end_length?: number | null;
-  payload: {
+
+  // Annotation-only.
+  payload?: {
     concept?: string;
     concept_id?: string;
     form?: AnnotationForm;
@@ -245,9 +287,18 @@ export interface Contribution {
     translation?: AnnotationTranslation;
     metadata?: Record<string, unknown>;
   };
-  created_at?: string | null;
-  time_us: number;
   source_role?: string | null;
+
+  // Comment-only.
+  body?: string | null;
+  parent?: StrongRef | null;
+
+  // Translation-only.
+  translation_id?: string | null;
+  text?: string | null;
+
+  // Shared between comment + translation.
+  lang?: string | null;
 }
 
 export interface ContributionsResponse {

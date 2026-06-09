@@ -19,23 +19,37 @@ bkk serve  ──►  com.atproto.repo.createRecord  ──►  user's PDS
                                        <annotations_root>/<text>/<text>_NNN.ann.jsonl
 ```
 
-## Lexicon
+## Lexicons
 
-Records live under NSID **`org.bunkankun.annotation`**, defined in
-[`lexicons/org.bunkankun.annotation.json`](../../lexicons/org.bunkankun.annotation.json).
-The lexicon uses atproto's camelCase convention (`textId`, `markerId`,
-`createdAt`); the JSONL archive uses BKK's snake_case (`text_id`, `marker_id`,
+Three hierarchical NSIDs cover the three contribution kinds, plus one
+shared anchor def:
+
+| NSID | Purpose | File |
+|---|---|---|
+| `org.bunkankun.defs.anchor` | shared `#main` anchor object | [`lexicons/org.bunkankun.defs.anchor.json`](../../lexicons/org.bunkankun.defs.anchor.json) |
+| `org.bunkankun.annotation.note` | structured annotation payload | [`lexicons/org.bunkankun.annotation.note.json`](../../lexicons/org.bunkankun.annotation.note.json) |
+| `org.bunkankun.comment.post` | markdown comment on a passage or a record | [`lexicons/org.bunkankun.comment.post.json`](../../lexicons/org.bunkankun.comment.post.json) |
+| `org.bunkankun.translation.segment` | translation of one anchored span | [`lexicons/org.bunkankun.translation.segment.json`](../../lexicons/org.bunkankun.translation.segment.json) |
+
+The lexicons use atproto's camelCase convention (`textId`, `markerId`,
+`createdAt`); the JSONL archives use BKK's snake_case (`text_id`, `marker_id`,
 `bucket_offset`).
 
-Two-place rule: the only modules that convert between the two shapes are
-[`serve/routers/annotations_write.py:_archive_to_wire`](../../module/bkk/serve/routers/annotations_write.py)
-on the post path and
-[`bkk/annotations/harvest.py:wire_to_archive`](../../module/bkk/annotations/harvest.py)
-on the harvest path. Add a new field in both places or in neither.
+Two-place rule per kind: the only modules that convert between the two shapes
+are
+[`serve/routers/annotations_write.py`](../../module/bkk/serve/routers/annotations_write.py)
+on the post path (`_annotation_archive_to_wire`, `_comment_archive_to_wire`,
+`_translation_archive_to_wire`) and
+[`bkk/annotations/harvest.py`](../../module/bkk/annotations/harvest.py)
+on the harvest path (`annotation_wire_to_archive`, `comment_wire_to_archive`,
+`translation_wire_to_archive`). Add a new field in both places or in neither.
 
-The NSID is centralised as `ANNOTATION_NSID` in
-[`module/bkk/serve/atproto.py`](../../module/bkk/serve/atproto.py); a rename to
-a DNS-verifiable namespace later is mechanical.
+NSIDs are centralised in
+[`module/bkk/serve/atproto.py`](../../module/bkk/serve/atproto.py) as
+`ANNOTATION_NSID`, `COMMENT_NSID`, `TRANSLATION_NSID`, plus
+`LEGACY_ANNOTATION_NSID = "org.bunkankun.annotation"` which the harvester
+still reads (records posted before the `.note` rename can't be rewritten
+in-place; their archive shape is identical so they fold into the same JSONL).
 
 ## Posting from the SPA
 
@@ -57,6 +71,16 @@ a DNS-verifiable namespace later is mechanical.
    translates archive→wire, calls `com.atproto.repo.createRecord`, returns
    the PDS-assigned `{uri, cid, did}`, and the SPA optimistically inserts the
    new card via `workspace.prependLocalAnnotation`.
+
+   The sibling endpoints `POST /api/comments` and `POST /api/translations`
+   follow the same pattern with kind-specific request models:
+
+   - `POST /api/comments` accepts either an `anchor` (with `edition`) or a
+     `parent` strong-ref (for replies) — exactly one. Body is markdown plus
+     a BCP-47 `lang` tag.
+   - `POST /api/translations` accepts an anchor plus inline translation
+     `text`, BCP-47 `lang`, and the bundle id (`translation_id`); optional
+     `title` and `note` ride along.
 
 3. Token lifecycle is handled in
    [`atproto.create_record`](../../module/bkk/serve/atproto.py): on
@@ -80,18 +104,29 @@ bkk annotations harvest \
 
 Defaults fall back through `.bkkrc`: `--did` → `[annotations].dids`,
 `--annotations-root` → `[annotations].annotations_root` →
-`[serve].annotations_root`, `--corpus` → `[global].corpus`.
+`[serve].annotations_root`, `--comments-root` → `[annotations].comments_root`,
+`--translations-root` → `[annotations].translations_root`, `--corpus` →
+`[global].corpus`.
 
-For each configured DID:
+For each configured DID, four `listRecords` calls run (one per collection:
+`annotation.note`, legacy `annotation`, `comment.post`, `translation.segment`):
 
 1. The PDS endpoint is resolved via `https://plc.directory/<did>`, falling
    back to `https://bsky.social`
    ([`pds.py`](../../module/bkk/annotations/pds.py)).
-2. `com.atproto.repo.listRecords` is paged for `collection=
-   org.bunkankun.annotation` until exhausted or `--limit` is hit.
-3. Each wire record is translated to archive shape; juan seq is parsed from
-   the marker id (`<text>_<edition>_<NNN>-<rest>` → `NNN`); the bundle's
-   juan YAML is read to compute `bucket` and `bucket_offset`.
+2. `com.atproto.repo.listRecords` is paged per collection until exhausted or
+   `--limit` is hit. Legacy records are tagged with the new NSID's
+   `source_role` so the archive stays uniform.
+3. Each wire record is translated to archive shape via the matching
+   `wire_to_archive` sibling; anchored records additionally have juan seq
+   parsed from the marker id (`<text>_<edition>_<NNN>-<rest>` → `NNN`) so
+   the bundle's juan YAML can be read for `bucket` and `bucket_offset`.
+4. Records land under the kind-specific root: annotations under
+   `annotations_root/<text>/<text>_NNN.ann.jsonl`, comments under
+   `comments_root/<text>/<text>_NNN.cmt.jsonl` (replies without an anchor
+   land in `<text>_replies.cmt.jsonl`), translations under
+   `translations_root/<translation_id>/<text>_NNN.tr.jsonl` (folding into
+   the proper bkk-tr bundle juan files is future work).
 
 ### Merge semantics
 
@@ -148,14 +183,14 @@ lifespan wiring in [`serve/app.py`](../../module/bkk/serve/app.py).
 
 ### Why polling and not the firehose
 
-Bluesky's relay does not currently propagate our custom NSID
-`org.bunkankun.annotation`. We confirmed empirically by subscribing to
+Bluesky's relay does not currently propagate our custom NSIDs (we confirmed
+empirically against `org.bunkankun.annotation` by subscribing to
 `wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=org.bunkankun.annotation`
 with a 24h backfill cursor and seeing zero `commit` events while a control
-filter on `app.bsky.feed.post` produced hundreds per second. The relay's
+filter on `app.bsky.feed.post` produced hundreds per second). The relay's
 collection filter is enforced server-side; nothing the client can do works
 around it. See the **future requirements** below for the lexicon-publishing
-path that unblocks this.
+path that unblocks this for all four NSIDs at once.
 
 ### Buffer semantics
 
@@ -264,20 +299,22 @@ The live contributions feed has two structural limitations that future
 work needs to unblock. Both belong in their own planning docs (sketch
 here, not full design).
 
-### 1. Lexicon publishing for `org.bunkankun.annotation`
+### 1. Lexicon publishing for the `org.bunkankun.*` NSIDs
 
-**Goal:** records authored under this NSID propagate through the public
-relay/Jetstream so the Chat tab can show contributions from *any*
+**Goal:** records authored under our four NSIDs propagate through the
+public relay/Jetstream so the Chat tab can show contributions from *any*
 atproto user — not just DIDs in our roster.
 
 **What we know:**
 
-- The owner of the NSID's authority domain (`bunkankun.org` for
-  `org.bunkankun.annotation`) does not need Bluesky's permission to
-  publish a custom NSID; lexicons are discovered via DNS + an authority
-  DID, not a central registry.
+- The owner of the NSID's authority domain (`bunkankun.org`) does not
+  need Bluesky's permission to publish custom NSIDs; lexicons are
+  discovered via DNS + an authority DID, not a central registry.
 - The relay carries collections whose lexicons are resolvable through
-  that chain. Until ours is, the records stay invisible past the PDS.
+  that chain. Until ours are, the records stay invisible past the PDS.
+- All four lexicons are drafted in [`lexicons/`](../../lexicons/) and the
+  record shapes have round-trip test coverage
+  ([`module/tests/test_bsky_lexicon_roundtrip.py`](../../module/tests/test_bsky_lexicon_roundtrip.py)).
 
 **What a plan needs to nail down:**
 
@@ -285,22 +322,14 @@ atproto user — not just DIDs in our roster.
   (DNS label name, TXT record format, lexicon-record collection NSID and
   shape). The spec has been moving; resolve against current
   implementations, not stale docs.
-- Authority DID: create one for `bunkankun.org`, host its DID document,
-  bind it to the domain.
-- Lexicon JSON for `org.bunkankun.annotation` — already drafted at
-  [`lexicons/org.bunkankun.annotation.json`](../../lexicons/org.bunkankun.annotation.json);
-  verify it still matches the record shape we post.
-- Publish path: post the lexicon as records under the authority DID via
-  the standard lexicon collection.
+- Authority DID: create one for `bunkankun.org` (`did:web:bunkankun.org`
+  is simplest; `did:plc` more portable), host its DID document, bind it
+  to the domain.
+- Publish path: post each of the four lexicons (`defs.anchor`,
+  `annotation.note`, `comment.post`, `translation.segment`) as records
+  under the authority DID via the standard lexicon collection.
 - Verification: a third-party tool / Jetstream subscriber sees our
   records appear on the firehose end-to-end.
-
-**Out of scope for the lexicon work itself:** changing the record shape
-on the wire, renaming the NSID, or migrating existing records.
-`ANNOTATION_NSID` lives in
-[`module/bkk/serve/atproto.py`](../../module/bkk/serve/atproto.py) so a
-rename is mechanical, but it has compounding effects (archived URIs,
-in-flight posts, harvest provenance) and should be a separate decision.
 
 **Once lexicon publishing lands**, swap
 [`serve/contributions_feed.py`](../../module/bkk/serve/contributions_feed.py)

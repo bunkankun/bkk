@@ -20,8 +20,8 @@ function relativeTime(timeUs: number, nowMs: number): string {
   return `${Math.floor(deltaSec / 86400)}d ago`;
 }
 
-function ContribBody({ c }: { c: Contribution }) {
-  const { form, sense, translation, concept, metadata } = c.payload;
+function AnnotationBody({ c }: { c: Contribution }) {
+  const { form, sense, translation, concept, metadata } = c.payload ?? {};
   if (form?.orth || form?.pron) {
     return (
       <div className="ann-head">
@@ -58,15 +58,42 @@ function ContribBody({ c }: { c: Contribution }) {
   return null;
 }
 
+function ContribBody({ c }: { c: Contribution }) {
+  if (c.kind === "comment") {
+    return <div className="ann-def">{c.body ?? ""}</div>;
+  }
+  if (c.kind === "translation") {
+    return (
+      <div className="ann-tr">
+        "{c.text ?? ""}"
+        {c.translation_id ? <span className="ann-offset"> · {c.translation_id}</span> : null}
+      </div>
+    );
+  }
+  return <AnnotationBody c={c} />;
+}
+
+function ContribHeader({ c }: { c: Contribution }) {
+  const parts: string[] = [c.text_id];
+  if (c.edition) parts.push(c.edition);
+  if (c.marker_id) {
+    const offset = c.offset ?? 0;
+    parts.push(`${c.marker_id}@${offset}`);
+  } else if (c.kind === "comment" && c.parent) {
+    parts.push("reply");
+  }
+  return <span>{parts.join(" · ")}</span>;
+}
+
 function ContribCard({ c, nowMs }: { c: Contribution; nowMs: number }) {
   return (
     <div className="ann">
       <div className="ann-head">
         <span className="ann-pron">{shortDid(c.did)}</span>
-        <span className="ann-offset">{relativeTime(c.time_us, nowMs)}</span>
+        <span className="ann-offset">{c.kind} · {relativeTime(c.time_us, nowMs)}</span>
       </div>
       <div className="ann-head">
-        <span>{c.text_id} · {c.edition} · {c.marker_id}@{c.offset}</span>
+        <ContribHeader c={c} />
       </div>
       <ContribBody c={c} />
     </div>

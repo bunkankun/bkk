@@ -10,6 +10,9 @@ import type {
   Annotation,
   AnnotationPostRequest,
   AnnotationPostResponse,
+  CommentPostRequest,
+  PostResponse,
+  TranslationPostRequest,
   AuthSession,
   BlueskyLoginRequest,
   BlueskyStatus,
@@ -309,6 +312,26 @@ export async function postAnnotation(
   body: AnnotationPostRequest,
 ): Promise<AnnotationPostResponse> {
   return fetchJson<AnnotationPostResponse>(`${apiBase}/annotations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function postComment(
+  body: CommentPostRequest,
+): Promise<PostResponse> {
+  return fetchJson<PostResponse>(`${apiBase}/comments`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function postTranslation(
+  body: TranslationPostRequest,
+): Promise<PostResponse> {
+  return fetchJson<PostResponse>(`${apiBase}/translations`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),

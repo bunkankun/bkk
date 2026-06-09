@@ -52,9 +52,9 @@ They *share* one thing: the anchor scheme into source texts (sentence/punctuatio
   - Frontmatter: target language, translator identity (DID or bibliography ref), source text + edition reference, coverage notes
   - Segments anchored to source via stable marker IDs (sentence/punctuation-unit granularity — matches existing TLS-aligned data)
   - Sparse coverage is normal; missing segments are simply absent, not placeholders
-- Authoring is git-native (drafts as branches/PRs); this matches translator workflow better than streaming
+- Authoring is parallel to the annotation workflow: The bluesky post contains the translated text segment. 
 - Working store: the same backend DB caches translations for the read path, joined to source on `(text_id, edition, anchor_id)`
-- Bluesky is used only for *comments/proposals about* translations (review notes, suggested alternatives), not for the translation text itself
+- Bluesky is used to publish the translation, which can be commented on and will ultimately be harvested into the translation bundles. 
 - The existing ~1100 TLS-derived translations are the seed corpus: a one-time extraction from the external DB into per-translation repos, with translator attribution preserved
 
 **Annotations — new dedicated layer, three tiers**

@@ -23,6 +23,7 @@ _PATH_KEYS = frozenset(
      "cbeta_root",
      "root", "mapping",
      "annotations_out", "annotations_root", "annotations_index",
+     "comments_root", "translations_root",
      "source_root"}
 )
 

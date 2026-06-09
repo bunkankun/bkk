@@ -1,16 +1,16 @@
 """Periodic per-DID ``listRecords`` poller for the live contributions feed.
 
 We originally tried Bluesky's Jetstream firehose, but the Bluesky relay does
-not propagate our custom NSID ``org.bunkankun.annotation`` — it only carries
-collections whose lexicons are resolvable (or explicitly allowlisted), and we
-have not yet published ``org.bunkankun.annotation``'s lexicon. Until that
-lands, this poller walks the DID roster configured under
-``[annotations].dids`` in ``.bkkrc`` (the same list ``bkk annotations
-harvest`` uses) and calls ``com.atproto.repo.listRecords`` on each one.
+not propagate our custom NSIDs — it only carries collections whose lexicons
+are resolvable (or explicitly allowlisted), and we have not yet published
+``org.bunkankun.*``'s lexicons. Until that lands, this poller walks the DID
+roster configured under ``[annotations].dids`` in ``.bkkrc`` (the same list
+``bkk annotations harvest`` uses) and calls ``com.atproto.repo.listRecords``
+on each one for each NSID we know about.
 
-When the lexicon is published and records start appearing on the firehose,
-the file ``bkk/serve/contributions_feed.py`` should be swapped back to the
-jetstream subscriber (see the git history immediately before this rewrite).
+When the lexicons are published and records start appearing on the firehose,
+this file should be swapped back to the jetstream subscriber (see the git
+history immediately before this rewrite).
 """
 
 from __future__ import annotations
@@ -22,7 +22,13 @@ from collections import OrderedDict
 from datetime import datetime
 from typing import Any
 
-from .atproto import ANNOTATION_NSID, list_records
+from .atproto import (
+    ANNOTATION_NSID,
+    COMMENT_NSID,
+    LEGACY_ANNOTATION_NSID,
+    TRANSLATION_NSID,
+    list_records,
+)
 
 
 log = logging.getLogger("bkk.serve.contributions_feed")
@@ -30,6 +36,17 @@ log = logging.getLogger("bkk.serve.contributions_feed")
 BUFFER_MAX = 500
 POLL_INTERVAL_S = 30.0
 PAGE_LIMIT = 100  # max records per DID per cycle (atproto listRecords cap)
+
+
+# (NSID, kind) — kind is the discriminator surfaced to the frontend so the
+# Chat tab can render each record type appropriately. The legacy flat NSID
+# rides along as kind=annotation.
+COLLECTIONS: tuple[tuple[str, str], ...] = (
+    (ANNOTATION_NSID, "annotation"),
+    (LEGACY_ANNOTATION_NSID, "annotation"),
+    (COMMENT_NSID, "comment"),
+    (TRANSLATION_NSID, "translation"),
+)
 
 
 def _created_at_to_us(s: Any) -> int:
@@ -46,58 +63,133 @@ def _created_at_to_us(s: Any) -> int:
     return int(dt.timestamp() * 1_000_000)
 
 
-def _entry_from_record(record: dict[str, Any], *, did: str) -> dict[str, Any] | None:
-    """Translate a ``listRecords`` record dict to our flat contribution shape.
-
-    Returns ``None`` when required fields are missing — we skip silently.
-    """
+def _common_entry(
+    record: dict[str, Any], *, did: str, kind: str,
+) -> dict[str, Any] | None:
+    """Extract the fields every kind shares; ``None`` when the record is malformed."""
     uri = record.get("uri")
     cid = record.get("cid")
     value = record.get("value") or {}
     if not isinstance(uri, str) or not isinstance(cid, str) or not isinstance(value, dict):
         return None
-
-    anchor = value.get("anchor") or {}
     text_id = value.get("textId")
-    edition = value.get("edition")
-    marker_id = anchor.get("markerId") if isinstance(anchor, dict) else None
-    offset = anchor.get("offset") if isinstance(anchor, dict) else None
-    length = anchor.get("length") if isinstance(anchor, dict) else None
-    if (
-        not isinstance(text_id, str)
-        or not isinstance(edition, str)
-        or not isinstance(marker_id, str)
-        or not isinstance(offset, int)
-        or not isinstance(length, int)
-    ):
+    if not isinstance(text_id, str):
         return None
-
-    end_marker = anchor.get("endMarkerId")
-    end_length = anchor.get("endLength")
-    payload = value.get("payload")
     created_at = value.get("createdAt")
-    source_role = value.get("sourceRole")
-
     return {
+        "kind": kind,
         "did": did,
         "cid": cid,
         "uri": uri,
         "text_id": text_id,
-        "edition": edition,
-        "marker_id": marker_id,
-        "offset": offset,
-        "length": length,
-        "end_marker_id": end_marker if isinstance(end_marker, str) else None,
-        "end_length": end_length if isinstance(end_length, int) else None,
-        "payload": payload if isinstance(payload, dict) else {},
         "created_at": created_at if isinstance(created_at, str) else None,
         "time_us": _created_at_to_us(created_at),
-        "source_role": source_role if isinstance(source_role, str) else None,
+        "value": value,
     }
 
 
+def _anchor_fields(value: dict[str, Any]) -> dict[str, Any]:
+    """Pull the anchor sub-object into snake_case fields. Empty dict if absent."""
+    anchor = value.get("anchor")
+    if not isinstance(anchor, dict):
+        return {}
+    marker_id = anchor.get("markerId")
+    offset = anchor.get("offset")
+    length = anchor.get("length")
+    if (
+        not isinstance(marker_id, str)
+        or not isinstance(offset, int)
+        or not isinstance(length, int)
+    ):
+        return {}
+    out: dict[str, Any] = {
+        "marker_id": marker_id,
+        "offset": offset,
+        "length": length,
+    }
+    end_marker = anchor.get("endMarkerId")
+    end_length = anchor.get("endLength")
+    if isinstance(end_marker, str):
+        out["end_marker_id"] = end_marker
+    if isinstance(end_length, int):
+        out["end_length"] = end_length
+    return out
+
+
+def _entry_from_record(
+    record: dict[str, Any], *, did: str, kind: str,
+) -> dict[str, Any] | None:
+    """Translate a ``listRecords`` record dict to our flat contribution shape."""
+    common = _common_entry(record, did=did, kind=kind)
+    if common is None:
+        return None
+    value = common.pop("value")
+    anchor = _anchor_fields(value)
+
+    if kind == "annotation":
+        edition = value.get("edition")
+        if not isinstance(edition, str) or not anchor:
+            return None
+        payload = value.get("payload")
+        source_role = value.get("sourceRole")
+        return {
+            **common,
+            "edition": edition,
+            **anchor,
+            "payload": payload if isinstance(payload, dict) else {},
+            "source_role": source_role if isinstance(source_role, str) else None,
+        }
+
+    if kind == "comment":
+        body = value.get("body")
+        lang = value.get("lang")
+        if not isinstance(body, str) or not isinstance(lang, str):
+            return None
+        edition = value.get("edition")
+        parent = value.get("parent")
+        entry: dict[str, Any] = {
+            **common,
+            "body": body,
+            "lang": lang,
+        }
+        if anchor:
+            entry.update(anchor)
+        if isinstance(edition, str):
+            entry["edition"] = edition
+        if isinstance(parent, dict) and isinstance(parent.get("uri"), str):
+            entry["parent"] = {
+                "uri": parent["uri"],
+                "cid": parent.get("cid"),
+            }
+        return entry
+
+    if kind == "translation":
+        text = value.get("text")
+        lang = value.get("lang")
+        edition = value.get("edition")
+        translation_id = value.get("translationId")
+        if (
+            not isinstance(text, str)
+            or not isinstance(lang, str)
+            or not isinstance(edition, str)
+            or not isinstance(translation_id, str)
+            or not anchor
+        ):
+            return None
+        return {
+            **common,
+            "edition": edition,
+            **anchor,
+            "translation_id": translation_id,
+            "text": text,
+            "lang": lang,
+        }
+
+    return None
+
+
 def _poll_did_sync(did: str) -> list[dict[str, Any]]:
-    """Blocking helper: pull one page of records for ``did`` and translate.
+    """Blocking helper: pull one page of records for ``did`` from every collection.
 
     Runs inside ``asyncio.to_thread`` from the poll loop. PDS resolution is
     deferred to here so a slow plc.directory call doesn't stall the loop.
@@ -105,25 +197,26 @@ def _poll_did_sync(did: str) -> list[dict[str, Any]]:
     from bkk.annotations.pds import resolve_pds
 
     service = resolve_pds(did)
-    try:
-        result = list_records(
-            service=service, repo=did, collection=ANNOTATION_NSID,
-            limit=PAGE_LIMIT, cursor=None,
-        )
-    except Exception as exc:
-        log.warning("listRecords failed for %s: %s", did, exc)
-        return []
-
-    records = result.get("records") if isinstance(result, dict) else None
-    if not isinstance(records, list):
-        return []
     entries: list[dict[str, Any]] = []
-    for record in records:
-        if not isinstance(record, dict):
+    for nsid, kind in COLLECTIONS:
+        try:
+            result = list_records(
+                service=service, repo=did, collection=nsid,
+                limit=PAGE_LIMIT, cursor=None,
+            )
+        except Exception as exc:
+            log.debug("listRecords(%s) failed for %s: %s", nsid, did, exc)
             continue
-        entry = _entry_from_record(record, did=did)
-        if entry is not None:
-            entries.append(entry)
+
+        records = result.get("records") if isinstance(result, dict) else None
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            entry = _entry_from_record(record, did=did, kind=kind)
+            if entry is not None:
+                entries.append(entry)
     return entries
 
 
@@ -198,8 +291,8 @@ class ContributionFeed:
             return
 
         log.info(
-            "contributions: polling %d DID(s) every %.0fs",
-            len(self._dids), self._poll_interval,
+            "contributions: polling %d DID(s) every %.0fs across %d collection(s)",
+            len(self._dids), self._poll_interval, len(COLLECTIONS),
         )
         while not self._stop.is_set():
             started = time.monotonic()

@@ -15,7 +15,16 @@ import requests
 from fastapi import HTTPException
 
 
-ANNOTATION_NSID = "org.bunkankun.annotation"
+ANNOTATION_NSID = "org.bunkankun.annotation.note"
+COMMENT_NSID = "org.bunkankun.comment.post"
+TRANSLATION_NSID = "org.bunkankun.translation.segment"
+
+# Records posted before the 2026 hierarchical-NSID rename live forever under
+# the old flat NSID; the harvester and live feed read both. Once the active
+# DID population has re-posted (or aged out), drop this constant and the
+# legacy reader paths that key off it.
+LEGACY_ANNOTATION_NSID = "org.bunkankun.annotation"
+
 DEFAULT_PDS = "https://bsky.social"
 
 
@@ -155,6 +164,9 @@ def list_records(
 
 __all__ = [
     "ANNOTATION_NSID",
+    "COMMENT_NSID",
+    "TRANSLATION_NSID",
+    "LEGACY_ANNOTATION_NSID",
     "DEFAULT_PDS",
     "create_session",
     "refresh_session",
