@@ -225,6 +225,36 @@ export interface AnnotationPostResponse {
   did: string;
 }
 
+// Live firehose feed of org.bunkankun.annotation records (Bluesky Jetstream).
+export interface Contribution {
+  did: string;
+  cid: string;
+  uri: string;
+  text_id: string;
+  edition: string;
+  marker_id: string;
+  offset: number;
+  length: number;
+  end_marker_id?: string | null;
+  end_length?: number | null;
+  payload: {
+    concept?: string;
+    concept_id?: string;
+    form?: AnnotationForm;
+    sense?: AnnotationSense;
+    translation?: AnnotationTranslation;
+    metadata?: Record<string, unknown>;
+  };
+  created_at?: string | null;
+  time_us: number;
+  source_role?: string | null;
+}
+
+export interface ContributionsResponse {
+  items: Contribution[];
+  truncated: boolean;
+}
+
 // Search
 export type SearchSort =
   | "match"

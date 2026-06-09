@@ -12,9 +12,10 @@ This layer is the **archive**. In the eventual full architecture
 - **Working store:** a backend DB harvested from Bluesky.
 - **Archive:** this repo — periodic snapshot of the working store.
 
-The Bluesky transport (post + manual harvest) is now wired in — see
-[`workflow.md`](workflow.md). The DB working store is still deferred; harvested
-records land in this archive directly alongside the TLS-seed lines.
+The Bluesky transport (post, manual harvest, and a live in-memory feed of
+recent posts) is now wired in — see [`workflow.md`](workflow.md). The DB
+working store is still deferred; harvested records land in this archive
+directly alongside the TLS-seed lines.
 
 ## Layout
 

@@ -9,7 +9,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 
@@ -19,6 +19,9 @@ from bkk.index.merge import find_bundle
 from .catalog import CatalogService
 from .config import ServeConfig
 from .resolver import BundleRecord, CorpusCache, IdentifierResolver
+
+if TYPE_CHECKING:
+    from .contributions_feed import ContributionFeed
 
 log = logging.getLogger("bkk.serve")
 
@@ -219,6 +222,7 @@ class AppState:
     _bundle_records: dict[str, BundleRecord] = field(default_factory=dict, repr=False)
     jobs: JobRegistry = field(default_factory=JobRegistry, repr=False)
     sessions: SessionRegistry = field(default_factory=SessionRegistry, repr=False)
+    contributions: "ContributionFeed | None" = field(default=None, repr=False)
 
     @property
     def corpus_root(self) -> Path:

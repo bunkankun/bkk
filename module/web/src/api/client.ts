@@ -15,6 +15,7 @@ import type {
   BlueskyStatus,
   CatalogResponse,
   CategoriesResponse,
+  ContributionsResponse,
   CoreBacklinksResponse,
   CoreCollectionsResponse,
   CoreConceptWordsResponse,
@@ -312,6 +313,13 @@ export async function postAnnotation(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+export async function getContributions(
+  limit = 200,
+): Promise<ContributionsResponse> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  return fetchJson<ContributionsResponse>(`${apiBase}/contributions?${q}`);
 }
 
 export async function getOverlays(): Promise<OverlaysResponse> {
