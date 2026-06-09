@@ -744,6 +744,24 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
     workspace.setRightTab("annotations");
   }, [textid, seq, resolveAnchor]);
 
+  // iOS Safari often doesn't deliver mouseup after the selection grippers are
+  // dragged, so commit via a debounced selectionchange as well.
+  useEffect(() => {
+    let timer: number | null = null;
+    const onSelChange = () => {
+      if (timer != null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        handleMouseUp();
+      }, 250);
+    };
+    document.addEventListener("selectionchange", onSelChange);
+    return () => {
+      document.removeEventListener("selectionchange", onSelChange);
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [handleMouseUp]);
+
   if (error) {
     return <div className="empty-pane">Failed to load: {error}</div>;
   }
