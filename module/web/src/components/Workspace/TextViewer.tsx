@@ -749,6 +749,13 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
   useEffect(() => {
     let timer: number | null = null;
     const onSelChange = () => {
+      // Caret movement inside a textarea/input/contenteditable also fires
+      // selectionchange; ignore it so typing in the compose box doesn't
+      // clear the document selection.
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT" || ae.isContentEditable)) {
+        return;
+      }
       if (timer != null) window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         timer = null;
