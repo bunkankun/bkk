@@ -1476,7 +1476,7 @@ button {
 }
 .ann-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   margin-bottom: 4px;
 }
@@ -1541,6 +1541,97 @@ button {
   border: 1px solid var(--t4);
   border-radius: 2px;
   padding: 1px 2px;
+}
+.ann-reply {
+  margin-left: 14px;
+  border-left-color: var(--t4);
+}
+.contrib-actions-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+}
+.contrib-action-icon {
+  margin-left: 6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--t3);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.contrib-action-icon:hover {
+  color: var(--t1);
+  border-color: var(--amb);
+  background: var(--hov);
+}
+.contrib-action-select {
+  font: inherit;
+  font-size: 10px;
+  background: var(--b1);
+  color: var(--t2);
+  border: 1px solid var(--bdr);
+  border-radius: 3px;
+  padding: 1px 2px;
+  cursor: pointer;
+}
+.contrib-state {
+  font-family: var(--fm);
+  font-size: 10px;
+  margin-left: 6px;
+}
+.state-accepted { color: var(--grn, #4c8); font-weight: 600; }
+.state-proposed { color: var(--t3); }
+.state-rejected { color: var(--t3); text-decoration: line-through; }
+.state-superseded { color: var(--t3); font-style: italic; }
+.contrib-action-btn {
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--t2);
+  border-radius: 3px;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.contrib-action-btn:hover:not(:disabled) {
+  background: var(--hov);
+  color: var(--t1);
+  border-color: var(--amb);
+}
+.contrib-action-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.contrib-inline-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  width: 100%;
+}
+.contrib-inline-compose textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+  font-size: 11px;
+  background: var(--b2);
+  color: var(--t1);
+  border: 1px solid var(--bdr);
+  border-radius: 3px;
+  padding: 4px 6px;
+}
+.contrib-inline-compose-actions {
+  display: flex;
+  gap: 5px;
 }
 .ann-concept {
   font-size: 10px;
