@@ -47,6 +47,7 @@ from bkk.marker_assets import (
 from bkk.serve.atproto import (
     ANNOTATION_NSID,
     COMMENT_NSID,
+    CURATION_NSID,
     LEGACY_ANNOTATION_NSID,
     TRANSLATION_NSID,
     list_records,
@@ -360,6 +361,40 @@ def translation_wire_to_archive(
     return record
 
 
+def curation_wire_to_archive(
+    wire: dict[str, Any], *, did: str, rkey: str, cid: str,
+) -> dict[str, Any] | None:
+    """Translate a curation.judgment wire record to resolver-input shape.
+
+    Curation records are never persisted as their own JSONL — the resolver
+    consumes them and stamps the resolved ``(state, rating)`` onto the
+    target record's archive line. Returns ``None`` when required fields
+    are missing.
+    """
+    target = wire.get("target")
+    if not isinstance(target, dict):
+        return None
+    target_uri = target.get("uri")
+    target_cid = target.get("cid")
+    state = wire.get("state")
+    if not isinstance(target_uri, str) or not isinstance(state, str):
+        return None
+    rating = wire.get("rating")
+    if not isinstance(rating, int) or rating < 0 or rating > 2:
+        rating = 0
+    created_at = wire.get("createdAt")
+    supersedes = wire.get("supersedes")
+    return {
+        "target_uri": target_uri,
+        "target_cid": target_cid if isinstance(target_cid, str) else None,
+        "state": state,
+        "rating": rating,
+        "created_at": created_at if isinstance(created_at, str) else None,
+        "supersedes": supersedes if isinstance(supersedes, str) else None,
+        "provenance": {"did": did, "rkey": rkey, "cid": cid},
+    }
+
+
 # ── Listing / fetching ───────────────────────────────────────────────────
 
 
@@ -621,6 +656,7 @@ __all__ = [
     "annotation_wire_to_archive",
     "comment_wire_to_archive",
     "translation_wire_to_archive",
+    "curation_wire_to_archive",
     "wire_to_archive",
     "compute_bucket_position",
     "juan_seq_from_marker_id",

@@ -18,6 +18,7 @@ from fastapi import HTTPException
 ANNOTATION_NSID = "org.bunkankun.annotation.note"
 COMMENT_NSID = "org.bunkankun.comment.post"
 TRANSLATION_NSID = "org.bunkankun.translation.segment"
+CURATION_NSID = "org.bunkankun.curation.judgment"
 
 # Records posted before the 2026 hierarchical-NSID rename live forever under
 # the old flat NSID; the harvester and live feed read both. Once the active

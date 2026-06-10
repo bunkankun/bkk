@@ -11,11 +11,13 @@ from __future__ import annotations
 from bkk.annotations.harvest import (
     annotation_wire_to_archive,
     comment_wire_to_archive,
+    curation_wire_to_archive,
     translation_wire_to_archive,
 )
 from bkk.serve.atproto import (
     ANNOTATION_NSID,
     COMMENT_NSID,
+    CURATION_NSID,
     LEGACY_ANNOTATION_NSID,
     TRANSLATION_NSID,
 )
@@ -261,6 +263,54 @@ def test_required_fields_missing_returns_none():
 
     bad_tr = {"$type": TRANSLATION_NSID, "textId": "KR1h0004"}
     assert translation_wire_to_archive(bad_tr, did=DID, cid="b") is None
+
+
+def test_curation_judgment_wire_to_archive_round_trips():
+    target_uri = "at://did:plc:authority/org.bunkankun.annotation.note/abc"
+    target_cid = "bafytarget"
+    wire = {
+        "$type": CURATION_NSID,
+        "target": {"uri": target_uri, "cid": target_cid},
+        "state": "accepted",
+        "rating": 2,
+        "createdAt": "2026-06-10T12:00:00.000000Z",
+    }
+    archive = curation_wire_to_archive(wire, did=DID, rkey="3kxyz", cid="bafyj")
+    assert archive is not None
+    assert archive["target_uri"] == target_uri
+    assert archive["target_cid"] == target_cid
+    assert archive["state"] == "accepted"
+    assert archive["rating"] == 2
+    assert archive["created_at"] == "2026-06-10T12:00:00.000000Z"
+    assert archive["provenance"] == {"did": DID, "rkey": "3kxyz", "cid": "bafyj"}
+
+
+def test_curation_judgment_rating_defaults_to_zero_when_absent():
+    wire = {
+        "$type": CURATION_NSID,
+        "target": {"uri": "at://x/y/z", "cid": "bafyt"},
+        "state": "proposed",
+        "createdAt": "2026-06-10T12:00:00.000000Z",
+    }
+    archive = curation_wire_to_archive(wire, did=DID, rkey="r1", cid="bafyj")
+    assert archive is not None
+    assert archive["rating"] == 0
+
+
+def test_curation_judgment_required_fields_missing_returns_none():
+    # Missing target
+    assert curation_wire_to_archive(
+        {"$type": CURATION_NSID, "state": "accepted",
+         "createdAt": "2026-06-10T12:00:00.000000Z"},
+        did=DID, rkey="r1", cid="b",
+    ) is None
+    # Missing state
+    assert curation_wire_to_archive(
+        {"$type": CURATION_NSID,
+         "target": {"uri": "at://x/y/z", "cid": "bafyt"},
+         "createdAt": "2026-06-10T12:00:00.000000Z"},
+        did=DID, rkey="r1", cid="b",
+    ) is None
 
 
 def test_archive_to_wire_strips_metadata_from_round_trip():

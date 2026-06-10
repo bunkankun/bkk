@@ -1581,6 +1581,43 @@ button {
   padding: 1px 2px;
   cursor: pointer;
 }
+.contrib-rating-star {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--t3);
+}
+.contrib-rating-star:hover {
+  border-color: var(--amb);
+  background: var(--hov);
+}
+.contrib-rating-star.rating-0 { color: var(--t3); }
+.contrib-rating-star.rating-0 .core-target-action-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.contrib-rating-star.rating-1 { color: var(--amb); }
+.contrib-rating-star.rating-1 .core-target-action-icon { fill: currentColor; }
+.contrib-rating-star.rating-2 {
+  color: var(--amb);
+  background: var(--amb-d);
+  border-color: var(--amb-b);
+}
+.contrib-rating-star.rating-2 .core-target-action-icon {
+  fill: currentColor;
+  transform: scale(1.25);
+  transform-origin: center;
+  filter: drop-shadow(0 0 1.5px var(--amb));
+}
 .contrib-state {
   font-family: var(--fm);
   font-size: 10px;

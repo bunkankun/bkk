@@ -101,7 +101,15 @@ diff-friendly commits.
   original `<seg xml:id>` and 1-indexed `pos` from the TLS source, so the
   TLS exporter can reconstruct source positions. Absent on non-TLS records.
 - **`curation_state`** — one of `proposed`, `accepted`, `rejected`,
-  `superseded`. TLS-seed records start as `accepted`.
+  `superseded`. TLS-seed records start as `accepted`. Federated curation
+  records (`org.bunkankun.curation.judgment`) on Bluesky are the source
+  of truth; the value here is stamped by the harvester after resolving
+  the latest judgment from any allowlisted editor DID. Lines written
+  before the curation lexicon shipped keep their existing value until
+  an editor re-curates.
+- **`rating`** — integer `0` / `1` / `2`, also resolved from the latest
+  `org.bunkankun.curation.judgment` and stamped by the harvester
+  (default `0` when no curation record has been observed).
 - **`bucket`** / **`bucket_offset`** — derived fields: which juan bucket
   (`front` / `body` / `back`) the resolved anchor falls in, and the
   bucket-relative codepoint offset. Regenerable from the anchor and the

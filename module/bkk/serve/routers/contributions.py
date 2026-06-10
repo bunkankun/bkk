@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from bkk.annotations.harvest import (
     COMMENT_NSID,
@@ -30,10 +30,17 @@ from bkk.importer.write.annotations import (
 )
 
 from .. import selection
-from ..atproto import ANNOTATION_NSID, LEGACY_ANNOTATION_NSID
+from ..atproto import (
+    ANNOTATION_NSID,
+    CURATION_NSID,
+    LEGACY_ANNOTATION_NSID,
+    create_record,
+)
+from ..contributions_feed import _created_at_us
+from ..curation import Judgment
 from ..state import AppState
 from .annotations import read_raw_records
-from .auth import SESSION_COOKIE
+from .annotations_write import _now_iso, _require_bluesky, _require_user
 
 
 router = APIRouter(tags=["contributions"])
@@ -90,6 +97,7 @@ class ContributionOut(BaseModel):
     # Server-side curation gate. None until the harvester or a curator has
     # written a value.
     curation_state: str | None = None
+    rating: int | None = None
 
     # Author profile resolved from Bluesky AppView; None when not yet cached.
     handle: str | None = None
@@ -201,7 +209,16 @@ def list_contributions(
 
 class CurationStatePatch(BaseModel):
     uri: str
-    state: Literal["proposed", "accepted", "rejected", "superseded"]
+    state: Literal["proposed", "accepted", "rejected", "superseded"] | None = None
+    rating: int | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> "CurationStatePatch":
+        if self.state is None and self.rating is None:
+            raise ValueError("at least one of `state` or `rating` must be set")
+        if self.rating is not None and self.rating not in (0, 1, 2):
+            raise ValueError("rating must be 0, 1, or 2")
+        return self
 
 
 class CurationStateResponse(BaseModel):
@@ -209,6 +226,8 @@ class CurationStateResponse(BaseModel):
     text_id: str
     juan_seq: int | None
     curation_state: str
+    rating: int
+    curation_uri: str
 
 
 def _archive_path_for(
@@ -233,25 +252,35 @@ def _archive_path_for(
     return None
 
 
+def _parse_uri(uri: str) -> tuple[str, str]:
+    """Return ``(target_author_did, collection)`` parsed from an at-URI."""
+    try:
+        _, _, did, collection, _ = uri.split("/", 4)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Bad URI: {uri}") from exc
+    if collection not in (ANNOTATION_NSID, LEGACY_ANNOTATION_NSID, COMMENT_NSID, TRANSLATION_NSID):
+        raise HTTPException(status_code=400, detail=f"Unknown collection: {collection}")
+    return did, collection
+
+
 @router.patch(
     "/annotations/curation-state",
     response_model=CurationStateResponse,
-    summary="Set a contribution's curation_state (editor only)",
+    summary="Curate a contribution: set state and/or rating (editor only)",
 )
 def patch_curation_state(
     request: Request, body: CurationStatePatch,
 ) -> CurationStateResponse:
     state: AppState = request.app.state.bkk
 
-    session_id = request.cookies.get(SESSION_COOKIE)
-    user = state.sessions.get(session_id)
-    if not session_id or user is None:
-        raise HTTPException(status_code=401, detail="Not logged in")
+    session_id, user = _require_user(request)
     if not user.is_editor:
         raise HTTPException(status_code=403, detail="Editor role required")
 
     feed = state.contributions
-    entry = feed.find(body.uri) if feed is not None else None
+    if feed is None:
+        raise HTTPException(status_code=503, detail="Contributions feed disabled")
+    entry = feed.find(body.uri)
     if entry is None:
         raise HTTPException(status_code=404, detail="Contribution not in live buffer")
 
@@ -266,45 +295,100 @@ def patch_curation_state(
     if not isinstance(kind, str):
         raise HTTPException(status_code=500, detail="Buffer entry missing kind")
 
-    _collection_from_uri(body.uri)  # validate URI shape early; raises 400 otherwise
+    target_author_did, _collection = _parse_uri(body.uri)
+
+    # Require Bluesky only once we're sure the request is otherwise actionable.
+    bluesky = _require_bluesky(user)
+
+    admin_dids = set(state.config.annotation_admin_dids)
+    if (
+        body.state is not None
+        and bluesky.did == target_author_did
+        and bluesky.did not in admin_dids
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Authors may not change curation state on their own records",
+        )
+
+    current_state, current_rating = feed.resolver.get(body.uri)
+    new_state = body.state if body.state is not None else current_state
+    new_rating = body.rating if body.rating is not None else current_rating
+
+    created_at = _now_iso()
+    record = {
+        "$type": CURATION_NSID,
+        "target": {"uri": body.uri, "cid": cid},
+        "state": new_state,
+        "rating": new_rating,
+        "createdAt": created_at,
+    }
+    result, new_tokens = create_record(
+        service=bluesky.service_endpoint,
+        access_jwt=bluesky.access_jwt,
+        refresh_jwt=bluesky.refresh_jwt,
+        repo=bluesky.did,
+        collection=CURATION_NSID,
+        record=record,
+    )
+    if new_tokens is not None:
+        state.sessions.update_bluesky_tokens(
+            session_id,
+            access_jwt=new_tokens["access_jwt"],
+            refresh_jwt=new_tokens["refresh_jwt"],
+        )
+    curation_uri = result.get("uri")
+    curation_cid = result.get("cid")
+    if not isinstance(curation_uri, str) or not isinstance(curation_cid, str):
+        raise HTTPException(
+            status_code=502, detail="atproto createRecord returned no uri/cid",
+        )
+
+    try:
+        _, _, _did, _coll, rkey = curation_uri.split("/", 4)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"atproto returned malformed uri: {curation_uri}",
+        ) from exc
+
+    feed.resolver.apply(Judgment(
+        did=bluesky.did,
+        rkey=rkey,
+        cid=curation_cid,
+        target_uri=body.uri,
+        target_cid=cid,
+        state=new_state,
+        rating=new_rating,
+        created_at_us=_created_at_us(created_at),
+    ))
+    resolved_state, resolved_rating = feed.resolver.get(body.uri)
+
     archive_path = _archive_path_for(
         state, kind=kind, text_id=text_id, juan_seq=seq,
     )
-    if archive_path is None:
-        raise HTTPException(
-            status_code=409,
-            detail="Archive path unavailable for this contribution kind",
+    if archive_path is not None and archive_path.exists():
+        records = list(read_raw_records(archive_path))
+        hit_idx = next(
+            (i for i, r in enumerate(records)
+             if isinstance(r.get("provenance"), dict)
+             and r["provenance"].get("cid") == cid),
+            None,
         )
-    if not archive_path.exists():
-        raise HTTPException(status_code=404, detail=f"Archive file missing: {archive_path}")
+        if hit_idx is not None:
+            records[hit_idx]["curation_state"] = resolved_state
+            records[hit_idx]["rating"] = resolved_rating
+            write_records_jsonl(archive_path, records, sort=(kind == "annotation"))
 
-    records = list(read_raw_records(archive_path))
-    hit_idx = next(
-        (i for i, r in enumerate(records)
-         if isinstance(r.get("provenance"), dict)
-         and r["provenance"].get("cid") == cid),
-        None,
-    )
-    if hit_idx is None:
-        raise HTTPException(status_code=404, detail="Record not found in archive")
-
-    records[hit_idx]["curation_state"] = body.state
-    write_records_jsonl(archive_path, records, sort=(kind == "annotation"))
-    feed.set_curation_state(body.uri, body.state)
+    feed.set_curation(body.uri, resolved_state, resolved_rating)
 
     return CurationStateResponse(
-        uri=body.uri, text_id=text_id, juan_seq=seq, curation_state=body.state,
+        uri=body.uri,
+        text_id=text_id,
+        juan_seq=seq,
+        curation_state=resolved_state,
+        rating=resolved_rating,
+        curation_uri=curation_uri,
     )
-
-
-def _collection_from_uri(uri: str) -> str:
-    try:
-        _, _, _, collection, _ = uri.split("/", 4)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Bad URI: {uri}") from exc
-    if collection not in (ANNOTATION_NSID, LEGACY_ANNOTATION_NSID, COMMENT_NSID, TRANSLATION_NSID):
-        raise HTTPException(status_code=400, detail=f"Unknown collection: {collection}")
-    return collection
 
 
 __all__ = ["router"]

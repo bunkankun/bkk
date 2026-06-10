@@ -20,6 +20,7 @@ class ServeConfig:
     annotations_root: Path | None = None
     annotations_index_path: Path | None = None
     annotation_dids: tuple[str, ...] = ()
+    annotation_admin_dids: tuple[str, ...] = ()
     host: str = "127.0.0.1"
     port: int = 8000
     admin_team: str = "bunkankun/bkk-admin"
@@ -154,6 +155,15 @@ class ServeConfig:
                 "[annotations].dids must be a YAML list of strings, got a scalar"
             )
         annotation_dids = tuple(d for d in rc_dids if isinstance(d, str))
+
+        rc_admin_dids = rc.get("admin_dids") or ()
+        if isinstance(rc_admin_dids, str):
+            raise ValueError(
+                "[annotations].admin_dids must be a YAML list of strings, got a scalar"
+            )
+        annotation_admin_dids = tuple(
+            d for d in rc_admin_dids if isinstance(d, str)
+        )
 
         env_translation_search = os.environ.get("BKK_TRANSLATION_SEARCH_PATH")
         rc_translation_search = rc.get("translation_search")
@@ -290,6 +300,7 @@ class ServeConfig:
             annotations_root=annotations_root,
             annotations_index_path=annotations_index,
             annotation_dids=annotation_dids,
+            annotation_admin_dids=annotation_admin_dids,
             host=host,
             port=port,
             admin_team=admin_team,

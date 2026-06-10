@@ -5,13 +5,14 @@ import {
   postComment,
   type CurationState,
 } from "../../api/client";
-import type { Contribution } from "../../api/types";
-import { CommentIcon } from "../SenseUses";
+import type { Contribution, Rating } from "../../api/types";
+import { CommentIcon, StarIcon } from "../SenseUses";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { useLabelStore, type LabelStore } from "../Workspace/CoreRecordEditor";
 import { AnnotationPayload } from "./AnnotationDisplay";
 
 const REFRESH_MS = 15_000;
+const RATING_DEBOUNCE_MS = 1500;
 const SHORT_DID_HEAD = 12;
 const SHORT_DID_TAIL = 4;
 
@@ -134,33 +135,58 @@ function ContribActions({
   c: Contribution;
   isEditor: boolean;
   hasBluesky: boolean;
-  onCurationChange: (uri: string, state: CurationState) => void;
+  onCurationChange: (uri: string, state: CurationState, rating: Rating) => void;
   onToggleCompose: () => void;
 }) {
   const [action, setAction] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingRating, setPendingRating] = useState<Rating | null>(null);
+  const ratingTimer = useRef<number | null>(null);
 
   const state = (c.curation_state ?? "proposed") as CurationState;
+  const serverRating = (c.rating ?? 0) as Rating;
+  const rating = pendingRating ?? serverRating;
+
+  useEffect(() => {
+    return () => {
+      if (ratingTimer.current != null) {
+        window.clearTimeout(ratingTimer.current);
+      }
+    };
+  }, []);
 
   if (!hasBluesky) {
     if (c.kind === "comment") return null;
     return <span className={`contrib-state state-${state}`}>{state}</span>;
   }
 
-  const showCurationDropdown = isEditor && c.kind !== "comment";
+  const showCurationControls = isEditor && c.kind !== "comment";
 
-  const patch = async (next: CurationState) => {
+  const patch = async (patch: { state?: CurationState; rating?: Rating }) => {
     setBusy(true);
     setError(null);
     try {
-      const res = await patchContributionCuration(c.uri, next);
-      onCurationChange(c.uri, res.curation_state);
+      const res = await patchContributionCuration(c.uri, patch);
+      onCurationChange(c.uri, res.curation_state, res.rating);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setBusy(false);
     }
+  };
+
+  const cycleRating = () => {
+    const next: Rating = (((rating + 1) % 3) as Rating);
+    setPendingRating(next);
+    setError(null);
+    if (ratingTimer.current != null) {
+      window.clearTimeout(ratingTimer.current);
+    }
+    ratingTimer.current = window.setTimeout(() => {
+      ratingTimer.current = null;
+      void patch({ rating: next }).finally(() => setPendingRating(null));
+    }, RATING_DEBOUNCE_MS);
   };
 
   const onPost = () => {
@@ -169,12 +195,12 @@ function ContribActions({
       onToggleCompose();
       setAction("");
     } else {
-      void patch(action as CurationState);
+      void patch({ state: action as CurationState });
       setAction("");
     }
   };
 
-  if (!showCurationDropdown) {
+  if (!showCurationControls) {
     return (
       <button
         type="button"
@@ -190,6 +216,16 @@ function ContribActions({
 
   return (
     <span className="contrib-actions-inline">
+      <button
+        type="button"
+        className={`contrib-rating-star rating-${rating}`}
+        onClick={cycleRating}
+        title={error ?? `Rating: ${rating} (click to cycle 0→1→2)`}
+        aria-label={`Rating ${rating}`}
+        aria-pressed={rating > 0}
+      >
+        <StarIcon />
+      </button>
       <select
         className={`contrib-action-select ${action === "" ? `state-${state}` : ""}`}
         value={action}
@@ -302,7 +338,7 @@ function ContribCard({
   isEditor: boolean;
   hasBluesky: boolean;
   depth: number;
-  onCurationChange: (uri: string, state: CurationState) => void;
+  onCurationChange: (uri: string, state: CurationState, rating: Rating) => void;
 }) {
   const [showCompose, setShowCompose] = useState(false);
   const authorLabel = c.display_name ?? c.handle ?? shortDid(c.did);
@@ -396,9 +432,11 @@ export function ChatTab() {
   const hasBluesky = useWorkspace((s) => s.blueskyStatus != null);
 
   const handleCurationChange = useCallback(
-    (uri: string, state: CurationState) => {
+    (uri: string, state: CurationState, rating: Rating) => {
       setItems((prev) =>
-        prev.map((it) => (it.uri === uri ? { ...it, curation_state: state } : it)),
+        prev.map((it) =>
+          it.uri === uri ? { ...it, curation_state: state, rating } : it,
+        ),
       );
     },
     [],

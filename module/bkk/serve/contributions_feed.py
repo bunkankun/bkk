@@ -36,11 +36,13 @@ from websockets.exceptions import ConnectionClosed
 from .atproto import (
     ANNOTATION_NSID,
     COMMENT_NSID,
+    CURATION_NSID,
     LEGACY_ANNOTATION_NSID,
     TRANSLATION_NSID,
     get_profiles,
     list_records,
 )
+from .curation import CurationResolver, Judgment
 
 
 log = logging.getLogger("bkk.serve.contributions_feed")
@@ -60,6 +62,7 @@ COLLECTIONS: tuple[tuple[str, str], ...] = (
     (LEGACY_ANNOTATION_NSID, "annotation"),
     (COMMENT_NSID, "comment"),
     (TRANSLATION_NSID, "translation"),
+    (CURATION_NSID, "curation"),
 )
 _KIND_BY_NSID: dict[str, str] = {nsid: kind for nsid, kind in COLLECTIONS}
 
@@ -170,6 +173,38 @@ def _entry_from_commit(
     return None
 
 
+def _judgment_from_record(
+    *, did: str, rkey: str, cid: str, record: dict[str, Any],
+) -> Judgment | None:
+    """Parse a curation.judgment wire record into a Judgment.
+
+    Returns ``None`` when required fields are missing or mistyped.
+    """
+    target = record.get("target")
+    if not isinstance(target, dict):
+        return None
+    target_uri = target.get("uri")
+    if not isinstance(target_uri, str):
+        return None
+    state = record.get("state")
+    if not isinstance(state, str):
+        return None
+    rating = record.get("rating")
+    if not isinstance(rating, int) or rating < 0 or rating > 2:
+        rating = 0
+    target_cid = target.get("cid")
+    return Judgment(
+        did=did,
+        rkey=rkey,
+        cid=cid,
+        target_uri=target_uri,
+        target_cid=target_cid if isinstance(target_cid, str) else None,
+        state=state,
+        rating=rating,
+        created_at_us=_created_at_us(record.get("createdAt")),
+    )
+
+
 def _created_at_us(s: Any) -> int:
     """Parse a record's ``createdAt`` string to microseconds since epoch.
 
@@ -233,6 +268,7 @@ class ContributionFeed:
         max_entries: int = BUFFER_MAX,
         url: str = JETSTREAM_URL,
         backfill_window_s: float = BACKFILL_WINDOW_S,
+        resolver: CurationResolver | None = None,
     ) -> None:
         self._dids = list(dids or [])
         self._max = max_entries
@@ -245,6 +281,9 @@ class ContributionFeed:
         # Cursor advances as we process events; survives reconnects so we
         # don't lose anything during a transient disconnect.
         self._cursor_us: int | None = None
+        # Resolver consumes curation.judgment records; everything we insert
+        # into the buffer gets its current resolved (state, rating) stamped.
+        self.resolver: CurationResolver = resolver or CurationResolver()
 
     def stop(self) -> None:
         self._stop.set()
@@ -268,11 +307,12 @@ class ContributionFeed:
     def get_cached_profile(self, did: str) -> dict[str, Any] | None:
         return self._profile_cache.get(did)
 
-    def set_curation_state(self, uri: str, state: str) -> bool:
+    def set_curation(self, uri: str, state: str, rating: int) -> bool:
         entry = self._by_uri.get(uri)
         if entry is None:
             return False
         entry["curation_state"] = state
+        entry["rating"] = rating
         return True
 
     async def _insert(self, entry: dict[str, Any]) -> None:
@@ -308,6 +348,11 @@ class ContributionFeed:
         ):
             return
         self._cursor_us = time_us
+        if collection == CURATION_NSID:
+            await self._handle_curation_commit(
+                op=op, did=did, rkey=rkey, commit=commit,
+            )
+            return
         if op == "delete":
             await self._delete(f"at://{did}/{collection}/{rkey}")
             return
@@ -322,7 +367,42 @@ class ContributionFeed:
             cid=cid, record=record,
         )
         if entry is not None:
+            self._stamp_curation(entry)
             await self._insert(entry)
+
+    async def _handle_curation_commit(
+        self, *, op: str | None, did: str, rkey: str, commit: dict[str, Any],
+    ) -> None:
+        if op == "delete":
+            affected = self.resolver.remove(did=did, rkey=rkey)
+            if affected is not None:
+                await self._refresh_curation(affected)
+            return
+        if op not in ("create", "update"):
+            return
+        cid = commit.get("cid")
+        record = commit.get("record")
+        if not isinstance(cid, str) or not isinstance(record, dict):
+            return
+        j = _judgment_from_record(did=did, rkey=rkey, cid=cid, record=record)
+        if j is None:
+            return
+        if self.resolver.apply(j):
+            await self._refresh_curation(j.target_uri)
+
+    def _stamp_curation(self, entry: dict[str, Any]) -> None:
+        state, rating = self.resolver.get(entry["uri"])
+        entry["curation_state"] = state
+        entry["rating"] = rating
+
+    async def _refresh_curation(self, uri: str) -> None:
+        async with self._lock:
+            entry = self._by_uri.get(uri)
+            if entry is None:
+                return
+            state, rating = self.resolver.get(uri)
+            entry["curation_state"] = state
+            entry["rating"] = rating
 
     async def _seed_did(self, did: str) -> int:
         """One-shot listRecords seed across all collections for ``did``.
@@ -354,14 +434,38 @@ class ContributionFeed:
             for rec in records:
                 if not isinstance(rec, dict):
                     continue
+                if nsid == CURATION_NSID:
+                    if self._apply_curation_listrecord(rec, did=did):
+                        new += 1
+                    continue
                 entry = _entry_from_listrecord(rec, did=did)
                 if entry is None:
                     continue
+                self._stamp_curation(entry)
                 before = len(self._by_uri)
                 await self._insert(entry)
                 if len(self._by_uri) > before:
                     new += 1
         return new
+
+    def _apply_curation_listrecord(
+        self, rec: dict[str, Any], *, did: str,
+    ) -> bool:
+        """Apply a seed-fetched curation record to the resolver. Returns True
+        when the resolved value for the target changed."""
+        uri = rec.get("uri")
+        cid = rec.get("cid")
+        value = rec.get("value")
+        if not isinstance(uri, str) or not isinstance(cid, str) or not isinstance(value, dict):
+            return False
+        try:
+            _, _, _did, _coll, rkey = uri.split("/", 4)
+        except ValueError:
+            return False
+        j = _judgment_from_record(did=did, rkey=rkey, cid=cid, record=value)
+        if j is None:
+            return False
+        return self.resolver.apply(j)
 
     async def _seed_all(self) -> None:
         if not self._dids:

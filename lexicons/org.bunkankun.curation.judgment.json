@@ -1,0 +1,52 @@
+{
+  "lexicon": 1,
+  "id": "org.bunkankun.curation.judgment",
+  "description": "An editor's judgment about another BKK record (annotation, comment, or translation). Carries two independent axes — workflow `state` and quality `rating` — so every editorial pass is a complete snapshot. Resolution: latest record (by `createdAt`) from any DID in the `[annotations].dids` allowlist wins per target uri; `target.cid` is informational and a judgment carries forward across record edits. Authors may rate but not change state on their own records; `bkk-admin` DIDs (configured server-side) bypass that restriction.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["target", "state", "createdAt"],
+        "properties": {
+          "target": {
+            "type": "ref",
+            "ref": "#strongRef",
+            "description": "The record being curated. Resolver keys on `uri` only; `cid` is informational."
+          },
+          "state": {
+            "type": "string",
+            "knownValues": ["proposed", "accepted", "rejected", "superseded"],
+            "description": "Workflow state. Open enum to match other BKK lexicons."
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 0,
+            "description": "Quality rating. 0 is the default and means unrated/baseline."
+          },
+          "supersedes": {
+            "type": "string",
+            "format": "cid",
+            "description": "CID of a prior curation judgment this one replaces."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "strongRef": {
+      "type": "object",
+      "required": ["uri", "cid"],
+      "description": "AT-Protocol strong reference (uri + cid) to another record.",
+      "properties": {
+        "uri": {"type": "string", "format": "at-uri"},
+        "cid": {"type": "string", "format": "cid"}
+      }
+    }
+  }
+}

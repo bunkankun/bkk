@@ -39,6 +39,7 @@ import type {
   Manifest,
   ManifestPart,
   OverlaysResponse,
+  Rating,
   SearchResponse,
   SearchSort,
   SearchTextidsResponse,
@@ -356,18 +357,20 @@ export interface CurationStateResponse {
   text_id: string;
   juan_seq: number | null;
   curation_state: CurationState;
+  rating: Rating;
+  curation_uri: string;
 }
 
 export async function patchContributionCuration(
   uri: string,
-  state: CurationState,
+  patch: { state?: CurationState; rating?: Rating },
 ): Promise<CurationStateResponse> {
   return fetchJson<CurationStateResponse>(
     `${apiBase}/annotations/curation-state`,
     {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ uri, state }),
+      body: JSON.stringify({ uri, ...patch }),
     },
   );
 }

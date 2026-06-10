@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import errors
 from .config import ServeConfig
 from .contributions_feed import ContributionFeed
+from .curation import CurationResolver
 from .routers import admin as admin_router
 from .routers import annotations as annotations_router
 from .routers import annotations_write as annotations_write_router
@@ -48,7 +49,13 @@ async def _lifespan(app: FastAPI):
     filter on the Jetstream subscription; an empty list means firehose-wide.
     """
     state = app.state.bkk
-    feed = ContributionFeed(dids=list(state.config.annotation_dids))
+    resolver = CurationResolver(
+        editor_dids=state.config.annotation_dids,
+        admin_dids=state.config.annotation_admin_dids,
+    )
+    feed = ContributionFeed(
+        dids=list(state.config.annotation_dids), resolver=resolver,
+    )
     state.contributions = feed
     task: asyncio.Task | None = None
     if not os.environ.get("BKK_DISABLE_CONTRIBUTIONS_POLL"):

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from collections import OrderedDict
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,9 @@ from fastapi.testclient import TestClient
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
 from bkk.serve.contributions_feed import ContributionFeed
+from bkk.serve.curation import CurationResolver
 from bkk.serve.routers.auth import SESSION_COOKIE
+from bkk.serve.state import BlueskySession
 
 
 TEXT_ID = "CON0001"
@@ -22,6 +23,8 @@ JUAN_SEQ = 1
 MARKER_ID = f"{TEXT_ID}_{EDITION_SHORT}_001-1a"
 MARKER_OFFSET = 3
 DID = "did:plc:contrib-test"
+EDITOR_DID = "did:plc:editor-test"
+ADMIN_DID = "did:plc:admin-test"
 
 
 def _write_bundle_with_marker(corpus_root: Path) -> None:
@@ -113,9 +116,15 @@ def env(tmp_path: Path):
         corpus_root=corpus_root,
         index_path=corpus_root / "_corpus.bkkx",
         annotations_root=annotations_root,
+        annotation_dids=(EDITOR_DID, ADMIN_DID, DID),
+        annotation_admin_dids=(ADMIN_DID,),
     )
     app = create_app(config)
-    feed = ContributionFeed(dids=[])
+    resolver = CurationResolver(
+        editor_dids=config.annotation_dids,
+        admin_dids=config.annotation_admin_dids,
+    )
+    feed = ContributionFeed(dids=[], resolver=resolver)
     app.state.bkk.contributions = feed
     client = TestClient(app)
     try:
@@ -200,6 +209,41 @@ def _login_as(client: TestClient, app, *, is_editor: bool) -> str:
     return session.id
 
 
+def _attach_bluesky(app, session_id: str, did: str) -> None:
+    app.state.bkk.sessions.attach_bluesky(
+        session_id,
+        BlueskySession(
+            did=did,
+            handle="editor.test",
+            access_jwt="jwt-access",
+            refresh_jwt="jwt-refresh",
+            service_endpoint="https://bsky.social",
+        ),
+    )
+
+
+def _patch_create_record(monkeypatch: pytest.MonkeyPatch, *, did: str, rkey: str = "rkey-1", cid: str = "cid-jdg-1"):
+    """Stub bkk.serve.routers.contributions.create_record; return calls list."""
+    calls: list[dict] = []
+
+    def _stub(*, service, access_jwt, refresh_jwt, repo, collection, record):
+        calls.append({
+            "service": service,
+            "repo": repo,
+            "collection": collection,
+            "record": record,
+        })
+        return (
+            {"uri": f"at://{did}/{collection}/{rkey}", "cid": cid},
+            None,
+        )
+
+    monkeypatch.setattr(
+        "bkk.serve.routers.contributions.create_record", _stub,
+    )
+    return calls
+
+
 def test_patch_curation_state_requires_editor_role(env):
     app, client, feed, _ = env
     _put_entry(feed, _ann_entry(cid="cid-non-editor"))
@@ -246,12 +290,7 @@ def test_patch_curation_state_404_when_not_in_buffer(env):
     assert r.status_code == 404
 
 
-def test_patch_curation_state_round_trip(env):
-    app, client, feed, annotations_root = env
-    entry = _ann_entry(cid="cid-happy")
-    _put_entry(feed, entry)
-
-    # Seed the on-disk archive with the matching cid in provenance.
+def _seed_archive(annotations_root: Path, *, cid: str) -> Path:
     archive_dir = annotations_root / TEXT_ID
     archive_dir.mkdir(parents=True, exist_ok=True)
     archive_path = archive_dir / f"{TEXT_ID}_{JUAN_SEQ:03d}.ann.jsonl"
@@ -261,7 +300,7 @@ def test_patch_curation_state_round_trip(env):
         "edition": EDITION_SHORT,
         "anchor": {"marker_id": MARKER_ID, "offset": 2, "length": 1},
         "payload": {"form": {"orth": "甲"}},
-        "provenance": {"did": DID, "cid": "cid-happy", "source_role": "manual"},
+        "provenance": {"did": DID, "cid": cid, "source_role": "manual"},
         "curation_state": "proposed",
         "bucket": "body",
         "bucket_offset": MARKER_OFFSET + 2,
@@ -270,8 +309,19 @@ def test_patch_curation_state_round_trip(env):
         json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    return archive_path
 
-    _login_as(client, app, is_editor=True)
+
+def test_patch_curation_state_round_trip(env, monkeypatch):
+    app, client, feed, annotations_root = env
+    entry = _ann_entry(cid="cid-happy")
+    _put_entry(feed, entry)
+    archive_path = _seed_archive(annotations_root, cid="cid-happy")
+
+    session_id = _login_as(client, app, is_editor=True)
+    _attach_bluesky(app, session_id, EDITOR_DID)
+    calls = _patch_create_record(monkeypatch, did=EDITOR_DID)
+
     r = client.patch(
         "/annotations/curation-state",
         json={"uri": entry["uri"], "state": "rejected"},
@@ -279,8 +329,18 @@ def test_patch_curation_state_round_trip(env):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["curation_state"] == "rejected"
+    assert body["rating"] == 0
     assert body["text_id"] == TEXT_ID
     assert body["juan_seq"] == JUAN_SEQ
+    assert body["curation_uri"].startswith(f"at://{EDITOR_DID}/")
+
+    # Posted via Bluesky.
+    assert len(calls) == 1
+    assert calls[0]["collection"] == "org.bunkankun.curation.judgment"
+    assert calls[0]["repo"] == EDITOR_DID
+    assert calls[0]["record"]["target"]["uri"] == entry["uri"]
+    assert calls[0]["record"]["state"] == "rejected"
+    assert calls[0]["record"]["rating"] == 0
 
     # File on disk reflects the new state.
     on_disk = [
@@ -289,7 +349,128 @@ def test_patch_curation_state_round_trip(env):
         if line.strip()
     ]
     assert on_disk[0]["curation_state"] == "rejected"
+    assert on_disk[0]["rating"] == 0
 
     # Buffer entry also reflects the new state so the next snapshot doesn't lag.
     refreshed = client.get("/contributions").json()["items"][0]
     assert refreshed["curation_state"] == "rejected"
+    assert refreshed["rating"] == 0
+
+
+def test_patch_posts_curation_record(env, monkeypatch):
+    """PATCH posts a record with the expected lexicon shape."""
+    app, client, feed, _ = env
+    entry = _ann_entry(cid="cid-post")
+    _put_entry(feed, entry)
+
+    session_id = _login_as(client, app, is_editor=True)
+    _attach_bluesky(app, session_id, EDITOR_DID)
+    calls = _patch_create_record(monkeypatch, did=EDITOR_DID)
+
+    r = client.patch(
+        "/annotations/curation-state",
+        json={"uri": entry["uri"], "state": "accepted", "rating": 2},
+    )
+    assert r.status_code == 200, r.text
+
+    rec = calls[0]["record"]
+    assert rec["$type"] == "org.bunkankun.curation.judgment"
+    assert rec["target"] == {"uri": entry["uri"], "cid": "cid-post"}
+    assert rec["state"] == "accepted"
+    assert rec["rating"] == 2
+    assert "createdAt" in rec
+
+
+def test_patch_fills_missing_field_from_resolver(env, monkeypatch):
+    """When only `rating` is sent, the posted record preserves the existing state."""
+    app, client, feed, _ = env
+    entry = _ann_entry(cid="cid-fill")
+    _put_entry(feed, entry)
+
+    # Pre-seed resolver: a prior editor has already accepted this record.
+    from bkk.serve.curation import Judgment
+    feed.resolver.apply(Judgment(
+        did=EDITOR_DID,
+        rkey="rk-prior",
+        cid="cid-prior-jdg",
+        target_uri=entry["uri"],
+        target_cid="cid-fill",
+        state="accepted",
+        rating=0,
+        created_at_us=1_700_000_000_000_000,
+    ))
+
+    session_id = _login_as(client, app, is_editor=True)
+    _attach_bluesky(app, session_id, EDITOR_DID)
+    calls = _patch_create_record(monkeypatch, did=EDITOR_DID, rkey="rk-new")
+
+    r = client.patch(
+        "/annotations/curation-state",
+        json={"uri": entry["uri"], "rating": 1},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    # State carried forward from the resolver; rating updated.
+    assert body["curation_state"] == "accepted"
+    assert body["rating"] == 1
+    # Posted record is a full snapshot.
+    assert calls[0]["record"]["state"] == "accepted"
+    assert calls[0]["record"]["rating"] == 1
+
+
+def test_patch_rejects_self_state_change(env, monkeypatch):
+    """Editors may not change `state` on a record they authored."""
+    app, client, feed, _ = env
+    entry = _ann_entry(cid="cid-self")  # entry["did"] is DID
+    _put_entry(feed, entry)
+
+    session_id = _login_as(client, app, is_editor=True)
+    # Editor's Bluesky DID matches the contribution's author DID.
+    _attach_bluesky(app, session_id, DID)
+    calls = _patch_create_record(monkeypatch, did=DID)
+
+    r = client.patch(
+        "/annotations/curation-state",
+        json={"uri": entry["uri"], "state": "accepted"},
+    )
+    assert r.status_code == 403
+    assert not calls  # nothing was posted
+
+
+def test_patch_allows_self_rating_change(env, monkeypatch):
+    """Authors may set `rating` on their own records."""
+    app, client, feed, _ = env
+    entry = _ann_entry(cid="cid-self-rating")
+    _put_entry(feed, entry)
+
+    session_id = _login_as(client, app, is_editor=True)
+    _attach_bluesky(app, session_id, DID)
+    calls = _patch_create_record(monkeypatch, did=DID)
+
+    r = client.patch(
+        "/annotations/curation-state",
+        json={"uri": entry["uri"], "rating": 2},
+    )
+    assert r.status_code == 200, r.text
+    assert calls[0]["record"]["rating"] == 2
+
+
+def test_admin_can_patch_own_state(env, monkeypatch):
+    """A DID listed in admin_dids bypasses the self-curation restriction."""
+    app, client, feed, _ = env
+    # Entry authored by ADMIN_DID — the admin is both author and curator.
+    entry = _ann_entry(cid="cid-admin-self")
+    entry["did"] = ADMIN_DID
+    entry["uri"] = f"at://{ADMIN_DID}/org.bunkankun.annotation.note/cid-admin-self"
+    _put_entry(feed, entry)
+
+    session_id = _login_as(client, app, is_editor=True)
+    _attach_bluesky(app, session_id, ADMIN_DID)
+    calls = _patch_create_record(monkeypatch, did=ADMIN_DID)
+
+    r = client.patch(
+        "/annotations/curation-state",
+        json={"uri": entry["uri"], "state": "accepted"},
+    )
+    assert r.status_code == 200, r.text
+    assert calls[0]["record"]["state"] == "accepted"

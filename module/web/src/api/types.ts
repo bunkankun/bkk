@@ -310,6 +310,7 @@ export interface Contribution {
 
   // Server-side curation gate (proposed / accepted / rejected / superseded).
   curation_state?: string | null;
+  rating?: Rating | null;
 
   // Author profile resolved from Bluesky AppView.
   handle?: string | null;
@@ -321,6 +322,8 @@ export interface ContributionsResponse {
   items: Contribution[];
   truncated: boolean;
 }
+
+export type Rating = 0 | 1 | 2;
 
 // Search
 export type SearchSort =
