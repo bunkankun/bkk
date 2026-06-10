@@ -23,3 +23,12 @@ export function parseMarkerId(id: string): ParsedMarkerId | null {
   const textid = parts.slice(0, parts.length - 2).join("_");
   return { textid, edition, location };
 }
+
+// Returns true only for KRP-shaped marker ids whose location starts with a
+// 3- or 4-digit juan number (e.g. "001-1a.1"). Non-KRP markers (TLS word
+// ids, bare offsets, etc.) are excluded so they are never used as anchors.
+export function hasKrpLocation(id: string): boolean {
+  const parsed = parseMarkerId(id);
+  if (!parsed) return false;
+  return /^\d{3,4}(?!\d)/.test(parsed.location);
+}

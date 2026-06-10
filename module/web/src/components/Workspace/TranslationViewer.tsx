@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getTranslationAlignment } from "../../api/client";
 import type { TranslationAlignedRow, TranslationAlignmentResponse } from "../../api/types";
 import { krRefToChar } from "../../lib/pua";
+import { hasKrpLocation } from "../../lib/markers";
 import { isResizing, useWorkspace, workspace } from "../../state/useWorkspace";
 
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
@@ -136,9 +137,12 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
       const cp = ch.codePointAt(0) ?? 0;
       if (PUNCT_RE.test(ch)) return;
       if (!isCjk(ch) && !isPua(cp)) return;
-      if (offsets.length === 0) {
-        anchorMarkerId = sp.dataset.anchorId ?? null;
-        anchorRowOffset = Number(sp.dataset.anchorRowOffset ?? "0");
+      if (anchorMarkerId === null) {
+        const id = sp.dataset.anchorId ?? null;
+        if (id && hasKrpLocation(id)) {
+          anchorMarkerId = id;
+          anchorRowOffset = Number(sp.dataset.anchorRowOffset ?? "0");
+        }
       }
       offsets.push(off);
       const endOff = Number(sp.dataset.endOffset);

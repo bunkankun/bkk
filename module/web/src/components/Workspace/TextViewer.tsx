@@ -22,7 +22,7 @@ import {
   type LineBreakDisplay,
   type LineMode,
 } from "../../state/useWorkspace";
-import { parseMarkerId } from "../../lib/markers";
+import { parseMarkerId, hasKrpLocation } from "../../lib/markers";
 import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
 
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
@@ -681,9 +681,13 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
           hi = mid - 1;
         }
       }
-      if (bestIdx < 0) return { anchorMarkerId: null, anchorOffset: offset };
-      const m = markers[bestIdx];
-      return { anchorMarkerId: m.id, anchorOffset: offset - m.offset };
+      for (let i = bestIdx; i >= 0; i--) {
+        if (hasKrpLocation(markers[i].id)) {
+          const m = markers[i];
+          return { anchorMarkerId: m.id, anchorOffset: offset - m.offset };
+        }
+      }
+      return { anchorMarkerId: null, anchorOffset: offset };
     },
     [idMarkers],
   );
