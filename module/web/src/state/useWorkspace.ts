@@ -248,6 +248,9 @@ export interface WorkspaceState {
   openMode: OpenMode;
   selectedTranslation: TranslationSummary | null;
   selectedSegment: { textid: string; seq: number; corresp: string; sourceText: string } | null;
+  // annotation card the user clicked (in text or list); drives scroll/highlight
+  // in AnnotationsTab and flash-on-text from the card.
+  selectedAnnotationId: string | null;
   // info from GET /api/info (loaded once at startup).
   serverInfo: { upstream_repo?: string | null; version?: string } | null;
   auth: {
@@ -550,6 +553,7 @@ let state: WorkspaceState = {
   openMode: "read",
   selectedTranslation: null,
   selectedSegment: null,
+  selectedAnnotationId: null,
   serverInfo: null,
   auth: {
     status: "unknown",
@@ -1656,6 +1660,25 @@ export const workspace = {
   },
   setSelection(sel: SelectionRange | null) {
     state = { ...state, selection: sel, coreTarget: null };
+    notify();
+  },
+  setSelectedAnnotationId(id: string | null) {
+    if (state.selectedAnnotationId === id) return;
+    state = { ...state, selectedAnnotationId: id };
+    notify();
+  },
+  jumpToAnnotation(ann: { offset: number; length?: number; bucket?: string }) {
+    if (state.activeTextid == null || state.activeSeq == null) return;
+    state = {
+      ...state,
+      pendingHighlight: {
+        textid: state.activeTextid,
+        seq: state.activeSeq,
+        bucket: ann.bucket ?? "body",
+        offset: ann.offset,
+        length: Math.max(1, ann.length ?? 1),
+      },
+    };
     notify();
   },
   setCoreTarget(target: CoreTarget | null) {

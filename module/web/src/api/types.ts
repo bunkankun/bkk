@@ -855,6 +855,8 @@ export interface AnnotationBySenseLocation {
   translation_text: string | null;
   resp: string | null;
   curation_state: string | null;
+  rating: Rating;
+  uri: string | null;
   context_left: string | null;
   context_match: string | null;
   context_right: string | null;

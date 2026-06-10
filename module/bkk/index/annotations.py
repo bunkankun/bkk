@@ -17,7 +17,7 @@ from bkk.serialize.uuid import strip_uuid_prefix
 
 log = logging.getLogger("bkk.index.annotations")
 
-ANNOTATION_SCHEMA_VERSION = 1
+ANNOTATION_SCHEMA_VERSION = 2
 
 DDL = """
 CREATE TABLE meta (
@@ -43,7 +43,8 @@ CREATE TABLE annotation_location (
   translation_title TEXT,
   translation_text TEXT,
   resp TEXT,
-  curation_state TEXT
+  curation_state TEXT,
+  rating INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_annotation_location_sense
@@ -82,8 +83,8 @@ def build_annotation_index(
             "INSERT INTO annotation_location"
             "(sense_uuid, text_id, juan_seq, bucket, bucket_offset, length, "
             "marker_id, annotation_id, concept, concept_id, orth, pron, sense_def, note, "
-            "translation_title, translation_text, resp, curation_state) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "translation_title, translation_text, resp, curation_state, rating) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             rows,
         )
         conn.commit()
@@ -181,6 +182,8 @@ def _location_row(raw: dict[str, Any], text_id: str, seq: int) -> tuple[Any, ...
     if note is None and isinstance(payload.get("note"), str):
         note = payload.get("note")
     length = anchor.get("length")
+    rating_raw = raw.get("rating")
+    rating = rating_raw if isinstance(rating_raw, int) and rating_raw in (0, 1, 2) else 0
     return (
         sense_uuid,
         text_id,
@@ -200,6 +203,7 @@ def _location_row(raw: dict[str, Any], text_id: str, seq: int) -> tuple[Any, ...
         translation.get("text") if isinstance(translation.get("text"), str) else None,
         metadata.get("resp") if isinstance(metadata.get("resp"), str) else None,
         state if isinstance(state, str) else None,
+        rating,
     )
 
 

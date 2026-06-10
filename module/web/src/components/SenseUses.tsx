@@ -1,6 +1,11 @@
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
-import { getAnnotationsBySense } from "../api/client";
-import type { AnnotationBySenseLocation } from "../api/types";
+import {
+  getAnnotationsBySense,
+  patchContributionCuration,
+  patchLocalRating,
+} from "../api/client";
+import type { AnnotationBySenseLocation, Rating } from "../api/types";
+import { RatingStar } from "./RatingStar";
 import { workspace } from "../state/useWorkspace";
 
 export type UsesStatus = "loading" | "ok" | "error";
@@ -71,6 +76,10 @@ export function LocationRow({
   extraAction?: ReactNode;
 }) {
   const jumpDisabled = loc.offset == null || loc.bucket == null;
+  const [rating, setRating] = useState<Rating>(loc.rating ?? 0);
+  useEffect(() => {
+    setRating(loc.rating ?? 0);
+  }, [loc.rating]);
   return (
     <li>
       <div className="core-target-where-head">
@@ -97,15 +106,24 @@ export function LocationRow({
           >
             <ThumbIcon />
           </button>
-          <button
-            type="button"
-            className="core-target-where-action icon"
-            onClick={stopLocationAction}
-            title="Star this location"
-            aria-label="Star this location"
-          >
-            <StarIcon />
-          </button>
+          <RatingStar
+            rating={rating}
+            onRate={(next) =>
+              loc.uri
+                ? patchContributionCuration(loc.uri, { rating: next }).then(
+                    (r) => r.rating,
+                  )
+                : loc.id
+                ? patchLocalRating({
+                    text_id: loc.text_id,
+                    juan_seq: loc.seq,
+                    id: loc.id,
+                    rating: next,
+                  }).then((r) => r.rating)
+                : Promise.reject(new Error("No id for local rating"))
+            }
+            onPersisted={(r) => setRating(r)}
+          />
           <button
             type="button"
             className="core-target-where-action icon"

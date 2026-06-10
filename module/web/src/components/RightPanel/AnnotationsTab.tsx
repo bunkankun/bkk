@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getAnnotations, getManifest, getSegmentTranslations } from "../../api/client";
 import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
@@ -8,9 +8,29 @@ import { CoreTargetPicker } from "./CoreTargetPicker";
 import { useLabelStore, type LabelStore } from "../Workspace/CoreRecordEditor";
 import { AnnotationPayload } from "./AnnotationDisplay";
 
-function AnnCard({ a, store }: { a: Annotation; store: LabelStore }) {
+const AnnCard = ({
+  a,
+  store,
+  selected,
+  cardRef,
+}: {
+  a: Annotation;
+  store: LabelStore;
+  selected: boolean;
+  cardRef?: (el: HTMLDivElement | null) => void;
+}) => {
   return (
-    <div className="ann">
+    <div
+      ref={cardRef}
+      className={`ann${selected ? " ann-selected" : ""}`}
+      onClick={() =>
+        workspace.jumpToAnnotation({
+          offset: a.offset,
+          length: a.length,
+          bucket: a.bucket,
+        })
+      }
+    >
       <div className="ann-head">
         {a.form?.orth && <span className="ann-orth">{a.form.orth}</span>}
         {a.form?.pron && <span className="ann-pron">{a.form.pron}</span>}
@@ -27,7 +47,7 @@ function AnnCard({ a, store }: { a: Annotation; store: LabelStore }) {
       />
     </div>
   );
-}
+};
 
 function SegTransCard({ entry, textid }: { entry: SegmentTranslationEntry; textid: string }) {
   const onLoad = () => {
@@ -68,6 +88,8 @@ export function AnnotationsTab() {
   const sel = useWorkspace((s) => s.selection);
   const selectedSegment = useWorkspace((s) => s.selectedSegment);
   const localAnnotations = useWorkspace((s) => s.localAnnotations);
+  const selectedAnnId = useWorkspace((s) => s.selectedAnnotationId);
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [anns, setAnns] = useState<Annotation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [edition, setEdition] = useState<string | null>(null);
@@ -131,6 +153,29 @@ export function AnnotationsTab() {
     return () => { cancelled = true; };
   }, [selectedSegment, textid, seq]);
 
+  useEffect(() => {
+    if (selectedAnnId == null) return;
+    if (anns == null) return;
+    const el = cardRefs.current.get(selectedAnnId);
+    if (el == null) return;
+    // Lazy-loaded labels in cards above the target can shift layout after the
+    // initial scroll, leaving the target off-center. Re-center a few times
+    // until things settle.
+    let cancelled = false;
+    const recenter = (behavior: ScrollBehavior) => {
+      if (cancelled) return;
+      el.scrollIntoView({ block: "center", behavior });
+    };
+    recenter("smooth");
+    const t1 = window.setTimeout(() => recenter("auto"), 250);
+    const t2 = window.setTimeout(() => recenter("auto"), 700);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [selectedAnnId, anns]);
+
   if (textid == null || seq == null) {
     return <div className="rc empty">Open a juan to see annotations.</div>;
   }
@@ -140,14 +185,7 @@ export function AnnotationsTab() {
   const localKey = `${textid}_${seq}`;
   const locals = localAnnotations[localKey] ?? [];
   const merged = locals.length > 0 ? [...locals, ...anns] : anns;
-
-  // Filter by selection if present.
-  let visible = merged;
-  if (sel && sel.textid === textid && sel.seq === seq && sel.bucket === "body") {
-    visible = merged.filter((a) => a.offset >= sel.start && a.offset < sel.end);
-  } else if (sel && sel.textid === textid && sel.seq === seq) {
-    visible = [];
-  }
+  const visible = merged;
 
   const selectionLines = sel
     ? [
@@ -265,15 +303,28 @@ export function AnnotationsTab() {
       )}
 
       {visible.length === 0 ? (
-        <div className="empty">
-          {merged.length === 0
-            ? "No annotations for this juan."
-            : "No annotations in selection."}
-        </div>
+        <div className="empty">No annotations for this juan.</div>
       ) : (
-        visible.map((a, i) => (
-          <AnnCard key={a.id ?? `${a.offset}-${i}`} a={a} store={labelStore} />
-        ))
+        visible.map((a, i) => {
+          const key = a.id ?? `${a.offset}-${i}`;
+          const isSelected = a.id != null && a.id === selectedAnnId;
+          return (
+            <AnnCard
+              key={key}
+              a={a}
+              store={labelStore}
+              selected={isSelected}
+              cardRef={
+                a.id != null
+                  ? (el) => {
+                      if (el == null) cardRefs.current.delete(a.id!);
+                      else cardRefs.current.set(a.id!, el);
+                    }
+                  : undefined
+              }
+            />
+          );
+        })
       )}
     </div>
   );

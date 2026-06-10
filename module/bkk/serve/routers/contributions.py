@@ -377,6 +377,9 @@ def patch_curation_state(
         if hit_idx is not None:
             records[hit_idx]["curation_state"] = resolved_state
             records[hit_idx]["rating"] = resolved_rating
+            provenance = records[hit_idx].get("provenance")
+            if isinstance(provenance, dict) and not provenance.get("uri"):
+                provenance["uri"] = body.uri
             write_records_jsonl(archive_path, records, sort=(kind == "annotation"))
 
     feed.set_curation(body.uri, resolved_state, resolved_rating)

@@ -1473,6 +1473,12 @@ button {
   margin-bottom: 10px;
   background: rgba(100, 120, 220, 0.05);
   border-radius: 0 4px 4px 0;
+  cursor: pointer;
+}
+.ann-selected {
+  background: rgba(100, 120, 220, 0.18);
+  border-left-color: var(--acc, var(--blu));
+  box-shadow: 0 0 0 1px rgba(100, 120, 220, 0.35);
 }
 .ann-head {
   display: flex;

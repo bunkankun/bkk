@@ -375,6 +375,29 @@ export async function patchContributionCuration(
   );
 }
 
+export interface LocalRatingResponse {
+  text_id: string;
+  juan_seq: number;
+  id: string;
+  rating: Rating;
+}
+
+export async function patchLocalRating(params: {
+  text_id: string;
+  juan_seq: number;
+  id: string;
+  rating: Rating;
+}): Promise<LocalRatingResponse> {
+  return fetchJson<LocalRatingResponse>(
+    `${apiBase}/annotations/local-rating`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(params),
+    },
+  );
+}
+
 export async function getOverlays(): Promise<OverlaysResponse> {
   return fetchJson<OverlaysResponse>(`${apiBase}/overlays`);
 }
@@ -550,13 +573,23 @@ export async function getCoreSuperEntry(uuid: string): Promise<CoreSuperEntryExp
   );
 }
 
+const coreRecordCache = new Map<string, Promise<CoreRecordResponse>>();
+
 export async function getCoreRecord(
   collection: string,
   uuid: string,
 ): Promise<CoreRecordResponse> {
-  return fetchJson<CoreRecordResponse>(
+  const key = `${collection}/${uuid}`;
+  const cached = coreRecordCache.get(key);
+  if (cached != null) return cached;
+  const promise = fetchJson<CoreRecordResponse>(
     `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}`,
-  );
+  ).catch((err) => {
+    coreRecordCache.delete(key);
+    throw err;
+  });
+  coreRecordCache.set(key, promise);
+  return promise;
 }
 
 export async function patchCoreRecord(

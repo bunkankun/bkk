@@ -16,9 +16,10 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from fastapi import APIRouter, Path as PathParam, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Path as PathParam, Request
+from pydantic import BaseModel, model_validator
 
+from bkk.importer.write.annotations import write_records_jsonl
 from bkk.serialize.uuid import strip_uuid_prefix
 
 from .. import _examples as ex
@@ -34,6 +35,7 @@ from ..schemas import (
 from .. import selection
 from . import bundles as bundles_router
 from . import texts as texts_router
+from .annotations_write import _require_user
 
 
 router = APIRouter(tags=["annotations"])
@@ -169,6 +171,8 @@ class BySenseLocation(BaseModel):
     translation_text: str | None = None
     resp: str | None = None
     curation_state: str | None = None
+    rating: int = 0
+    uri: str | None = None
     context_left: str | None = None
     context_match: str | None = None
     context_right: str | None = None
@@ -234,6 +238,8 @@ def _ann_root_locations(state: AppState, sense_uuid: str) -> list[BySenseLocatio
                 if isinstance(payload.get("translation"), dict)
                 else {}
             )
+            provenance = raw.get("provenance") if isinstance(raw.get("provenance"), dict) else {}
+            rating_raw = raw.get("rating")
             out.append(BySenseLocation(
                 text_id=text_id,
                 seq=seq,
@@ -252,6 +258,8 @@ def _ann_root_locations(state: AppState, sense_uuid: str) -> list[BySenseLocatio
                 translation_text=translation.get("text") if isinstance(translation.get("text"), str) else None,
                 resp=metadata.get("resp") if isinstance(metadata.get("resp"), str) else None,
                 curation_state=raw.get("curation_state") if isinstance(raw.get("curation_state"), str) else None,
+                rating=rating_raw if isinstance(rating_raw, int) and rating_raw in (0, 1, 2) else 0,
+                uri=provenance.get("uri") if isinstance(provenance.get("uri"), str) else None,
             ))
     out.sort(key=lambda loc: (loc.text_id, loc.seq, loc.offset if loc.offset is not None else -1, loc.id or ""))
     return out
@@ -290,7 +298,7 @@ def _ann_index_locations(state: AppState, sense_uuid: str) -> list[BySenseLocati
             f"""
             SELECT text_id, juan_seq, marker_id, bucket_offset, bucket, length,
                    annotation_id, concept, concept_id, orth, pron, sense_def, note,
-                   translation_title, translation_text, resp, curation_state
+                   translation_title, translation_text, resp, curation_state, rating
             FROM annotation_location
             WHERE sense_uuid IN ({placeholders})
             ORDER BY text_id, juan_seq, bucket_offset, annotation_id
@@ -320,6 +328,7 @@ def _ann_index_locations(state: AppState, sense_uuid: str) -> list[BySenseLocati
             translation_text=row[14],
             resp=row[15],
             curation_state=row[16],
+            rating=row[17] if isinstance(row[17], int) and row[17] in (0, 1, 2) else 0,
         )
         for row in rows
     ]
@@ -479,6 +488,75 @@ def get_text_juan_annotations(
     if multi is not None:
         return multi
     return get_juan_annotations(request, textid=ref.textid, seq=seq)
+
+
+class LocalRatingPatch(BaseModel):
+    text_id: str
+    juan_seq: int
+    id: str
+    rating: int
+
+    @model_validator(mode="after")
+    def _check_rating(self) -> "LocalRatingPatch":
+        if self.rating not in (0, 1, 2):
+            raise ValueError("rating must be 0, 1, or 2")
+        return self
+
+
+class LocalRatingResponse(BaseModel):
+    text_id: str
+    juan_seq: int
+    id: str
+    rating: int
+
+
+@router.patch(
+    "/annotations/local-rating",
+    response_model=LocalRatingResponse,
+    summary="Set rating on a local annotation row (no Bluesky); editor only",
+)
+def patch_local_rating(
+    request: Request, body: LocalRatingPatch,
+) -> LocalRatingResponse:
+    state: AppState = request.app.state.bkk
+    _, user = _require_user(request)
+    if not user.is_editor:
+        raise HTTPException(status_code=403, detail="Editor role required")
+    path = _ann_path(state, body.text_id, body.juan_seq)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Annotation file not found")
+    records = list(read_raw_records(path))
+    hit = next(
+        (i for i, r in enumerate(records) if r.get("id") == body.id),
+        None,
+    )
+    if hit is None:
+        raise HTTPException(status_code=404, detail="Annotation row not found")
+    records[hit]["rating"] = body.rating
+    write_records_jsonl(path, records, sort=True)
+
+    index_path = state.annotations_index_path
+    if index_path is not None and index_path.exists():
+        try:
+            conn = sqlite3.connect(str(index_path))
+            try:
+                conn.execute(
+                    "UPDATE annotation_location SET rating = ? "
+                    "WHERE text_id = ? AND juan_seq = ? AND annotation_id = ?",
+                    (body.rating, body.text_id, body.juan_seq, body.id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except sqlite3.DatabaseError:
+            pass
+
+    return LocalRatingResponse(
+        text_id=body.text_id,
+        juan_seq=body.juan_seq,
+        id=body.id,
+        rating=body.rating,
+    )
 
 
 __all__ = ["router", "get_juan_annotations"]

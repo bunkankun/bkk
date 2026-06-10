@@ -6,13 +6,13 @@ import {
   type CurationState,
 } from "../../api/client";
 import type { Contribution, Rating } from "../../api/types";
-import { CommentIcon, StarIcon } from "../SenseUses";
+import { CommentIcon } from "../SenseUses";
+import { RatingStar } from "../RatingStar";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { useLabelStore, type LabelStore } from "../Workspace/CoreRecordEditor";
 import { AnnotationPayload } from "./AnnotationDisplay";
 
 const REFRESH_MS = 15_000;
-const RATING_DEBOUNCE_MS = 1500;
 const SHORT_DID_HEAD = 12;
 const SHORT_DID_TAIL = 4;
 
@@ -141,20 +141,9 @@ function ContribActions({
   const [action, setAction] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingRating, setPendingRating] = useState<Rating | null>(null);
-  const ratingTimer = useRef<number | null>(null);
 
   const state = (c.curation_state ?? "proposed") as CurationState;
-  const serverRating = (c.rating ?? 0) as Rating;
-  const rating = pendingRating ?? serverRating;
-
-  useEffect(() => {
-    return () => {
-      if (ratingTimer.current != null) {
-        window.clearTimeout(ratingTimer.current);
-      }
-    };
-  }, []);
+  const rating = (c.rating ?? 0) as Rating;
 
   if (!hasBluesky) {
     if (c.kind === "comment") return null;
@@ -163,11 +152,11 @@ function ContribActions({
 
   const showCurationControls = isEditor && c.kind !== "comment";
 
-  const patch = async (patch: { state?: CurationState; rating?: Rating }) => {
+  const patchState = async (next: CurationState) => {
     setBusy(true);
     setError(null);
     try {
-      const res = await patchContributionCuration(c.uri, patch);
+      const res = await patchContributionCuration(c.uri, { state: next });
       onCurationChange(c.uri, res.curation_state, res.rating);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
@@ -176,26 +165,13 @@ function ContribActions({
     }
   };
 
-  const cycleRating = () => {
-    const next: Rating = (((rating + 1) % 3) as Rating);
-    setPendingRating(next);
-    setError(null);
-    if (ratingTimer.current != null) {
-      window.clearTimeout(ratingTimer.current);
-    }
-    ratingTimer.current = window.setTimeout(() => {
-      ratingTimer.current = null;
-      void patch({ rating: next }).finally(() => setPendingRating(null));
-    }, RATING_DEBOUNCE_MS);
-  };
-
   const onPost = () => {
     if (!action) return;
     if (action === "comment") {
       onToggleCompose();
       setAction("");
     } else {
-      void patch({ state: action as CurationState });
+      void patchState(action as CurationState);
       setAction("");
     }
   };
@@ -216,16 +192,13 @@ function ContribActions({
 
   return (
     <span className="contrib-actions-inline">
-      <button
-        type="button"
-        className={`contrib-rating-star rating-${rating}`}
-        onClick={cycleRating}
-        title={error ?? `Rating: ${rating} (click to cycle 0→1→2)`}
-        aria-label={`Rating ${rating}`}
-        aria-pressed={rating > 0}
-      >
-        <StarIcon />
-      </button>
+      <RatingStar
+        rating={rating}
+        onRate={(next) =>
+          patchContributionCuration(c.uri, { rating: next }).then((r) => r.rating)
+        }
+        onPersisted={(r) => onCurationChange(c.uri, state, r)}
+      />
       <select
         className={`contrib-action-select ${action === "" ? `state-${state}` : ""}`}
         value={action}

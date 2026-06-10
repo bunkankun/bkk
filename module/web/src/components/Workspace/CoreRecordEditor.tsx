@@ -17,6 +17,7 @@ import type {
   CoreMatch,
   CoreRecordResponse,
 } from "../../api/types";
+import { useInView } from "../../hooks/useInView";
 
 // Collection short-name used by the API routes.
 type Collection =
@@ -932,25 +933,27 @@ function ConceptForm({
 }
 
 export function SenseRowLabel({ uuid, store }: { uuid: string; store: LabelStore }) {
+  const [ref, inView] = useInView<HTMLSpanElement>();
   const [rec, setRec] = useState<CoreRecordResponse | null>(null);
   useEffect(() => {
+    if (!inView) return;
     let cancelled = false;
     getCoreRecord("senses", uuid)
       .then((r) => { if (!cancelled) setRec(r); })
       .catch(() => { if (!cancelled) setRec(null); });
     return () => { cancelled = true; };
-  }, [uuid]);
+  }, [uuid, inView]);
   if (!rec) {
-    return <span style={{ color: "var(--t3)" }}>{uuid.slice(0, 8)}…</span>;
+    return <span ref={ref} style={{ color: "var(--t3)" }}>{uuid.slice(0, 8)}…</span>;
   }
   const syn = asStringArray(rec.data.syntactic_function_uuids);
   const sem = asStringArray(rec.data.semantic_feature_uuids);
   const definition = asString(rec.data.definition);
   if (syn.length === 0 && sem.length === 0 && !definition) {
-    return <span style={{ color: "var(--t3)" }}>{uuid.slice(0, 8)}…</span>;
+    return <span ref={ref} style={{ color: "var(--t3)" }}>{uuid.slice(0, 8)}…</span>;
   }
   return (
-    <span>
+    <span ref={ref}>
       {syn.length > 0 && (
         <strong>
           {syn.map((u, i) => (
@@ -1139,9 +1142,10 @@ function InlineResolvedLabel({
   collection: Collection;
   store: LabelStore;
 }) {
+  const [ref, inView] = useInView<HTMLSpanElement>();
   const label = store.labelFor(uuid);
   useEffect(() => {
-    if (label != null || !uuid) return;
+    if (label != null || !uuid || !inView) return;
     let cancelled = false;
     getCoreRecord(collection, uuid)
       .then((r) => {
@@ -1153,8 +1157,8 @@ function InlineResolvedLabel({
     return () => {
       cancelled = true;
     };
-  }, [uuid, collection, label, store]);
-  return <>{label ?? uuid.slice(0, 8)}</>;
+  }, [uuid, collection, label, store, inView]);
+  return <span ref={ref}>{label ?? uuid.slice(0, 8)}</span>;
 }
 
 function SenseHeading({

@@ -202,24 +202,33 @@ def _anchor_from_wire(anchor_in: Any) -> dict[str, Any] | None:
 
 
 def _provenance(
-    *, did: str, cid: str, wire: dict[str, Any], default_source_role: str,
+    *,
+    did: str,
+    cid: str,
+    wire: dict[str, Any],
+    default_source_role: str,
+    uri: str | None = None,
 ) -> dict[str, Any]:
     source_role = wire.get("sourceRole")
     if not isinstance(source_role, str):
         source_role = default_source_role
     created_at = wire.get("createdAt")
     supersedes = wire.get("supersedes")
-    return {
+    prov: dict[str, Any] = {
         "did": did,
         "cid": cid,
         "created_at": created_at if isinstance(created_at, str) else None,
         "source_role": source_role,
         "supersedes": supersedes if isinstance(supersedes, str) else None,
     }
+    if uri is not None:
+        prov["uri"] = uri
+    return prov
 
 
 def annotation_wire_to_archive(
-    wire: dict[str, Any], *, did: str, cid: str, nsid: str = ANNOTATION_NSID,
+    wire: dict[str, Any], *, did: str, cid: str,
+    uri: str | None = None, nsid: str = ANNOTATION_NSID,
 ) -> dict[str, Any] | None:
     """Translate an annotation lexicon record (camelCase) to archive shape.
 
@@ -241,7 +250,7 @@ def annotation_wire_to_archive(
         "anchor": anchor,
         "payload": payload if isinstance(payload, dict) else {},
         "provenance": _provenance(
-            did=did, cid=cid, wire=wire,
+            did=did, cid=cid, uri=uri, wire=wire,
             default_source_role=f"bsky:{nsid}",
         ),
         "curation_state": "proposed",
@@ -254,7 +263,7 @@ wire_to_archive = annotation_wire_to_archive
 
 
 def comment_wire_to_archive(
-    wire: dict[str, Any], *, did: str, cid: str,
+    wire: dict[str, Any], *, did: str, cid: str, uri: str | None = None,
 ) -> dict[str, Any] | None:
     """Translate a comment.post wire record to archive shape.
 
@@ -290,7 +299,7 @@ def comment_wire_to_archive(
         "lang": lang,
         "format": fmt,
         "provenance": _provenance(
-            did=did, cid=cid, wire=wire,
+            did=did, cid=cid, uri=uri, wire=wire,
             default_source_role=f"bsky:{COMMENT_NSID}",
         ),
         "curation_state": "proposed",
@@ -315,7 +324,7 @@ def comment_wire_to_archive(
 
 
 def translation_wire_to_archive(
-    wire: dict[str, Any], *, did: str, cid: str,
+    wire: dict[str, Any], *, did: str, cid: str, uri: str | None = None,
 ) -> dict[str, Any] | None:
     """Translate a translation.segment wire record to archive shape."""
     text_id = wire.get("textId")
@@ -347,7 +356,7 @@ def translation_wire_to_archive(
         "lang": lang,
         "format": fmt,
         "provenance": _provenance(
-            did=did, cid=cid, wire=wire,
+            did=did, cid=cid, uri=uri, wire=wire,
             default_source_role=f"bsky:{TRANSLATION_NSID}",
         ),
         "curation_state": "proposed",
@@ -400,10 +409,15 @@ def curation_wire_to_archive(
 
 def fetch_did_records(
     did: str, *, collection: str = ANNOTATION_NSID, limit: int | None = None,
-) -> list[tuple[dict, str]]:
-    """Page through listRecords for one DID + collection. Returns (value, cid)."""
+) -> list[tuple[dict, str, str | None]]:
+    """Page through listRecords for one DID + collection.
+
+    Returns ``(value, cid, uri)`` triples. ``uri`` is the ``at://<did>/<nsid>/<rkey>``
+    handle as returned by listRecords; it may be ``None`` for legacy callers but
+    is populated for every PDS response in practice.
+    """
     service = resolve_pds(did)
-    out: list[tuple[dict, str]] = []
+    out: list[tuple[dict, str, str | None]] = []
     cursor: str | None = None
     page_size = 100
     while True:
@@ -416,8 +430,9 @@ def fetch_did_records(
                 continue
             value = record.get("value")
             cid = record.get("cid")
+            uri = record.get("uri") if isinstance(record.get("uri"), str) else None
             if isinstance(value, dict) and isinstance(cid, str):
-                out.append((value, cid))
+                out.append((value, cid, uri))
                 if limit is not None and len(out) >= limit:
                     return out
         cursor = result.get("cursor")
@@ -570,11 +585,11 @@ def harvest(
                 log.warning("listRecords(%s) failed for %s: %s", collection, did, exc)
                 continue
 
-            for wire, cid in records:
+            for wire, cid, uri in records:
                 # The legacy NSID flows through the annotation converter; we
                 # tag its provenance with the *new* NSID so harvested records
                 # land in a uniform source_role namespace.
-                kwargs: dict[str, Any] = {"did": did, "cid": cid}
+                kwargs: dict[str, Any] = {"did": did, "cid": cid, "uri": uri}
                 if converter is annotation_wire_to_archive:
                     kwargs["nsid"] = ANNOTATION_NSID
                 archive = converter(wire, **kwargs)

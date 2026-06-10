@@ -960,6 +960,8 @@ function BlockView({
                 chars: [rc.ch],
                 ...anchor,
               });
+              const targetId = anns!.find((a) => a.id != null)?.id ?? null;
+              workspace.setSelectedAnnotationId(targetId);
               workspace.setSearchQuery(rc.ch);
               workspace.setRightTab("annotations");
               ev.stopPropagation();
