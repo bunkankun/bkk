@@ -134,10 +134,18 @@ function ContribCard({
   isEditor: boolean;
   onCurationChange: (uri: string, state: CurationState) => void;
 }) {
+  const authorLabel = c.display_name ?? c.handle ?? shortDid(c.did);
+  const authorTitle = [c.display_name, c.handle ? `@${c.handle}` : null]
+    .filter(Boolean).join(" · ") || c.did;
   return (
     <div className="ann">
       <div className="ann-head">
-        <span className="ann-pron">{shortDid(c.did)}</span>
+        <span className="ann-pron" title={authorTitle}>
+          {c.avatar_url && (
+            <img src={c.avatar_url} alt="" className="contrib-avatar" />
+          )}
+          <span className="ann-pron-label">{authorLabel}</span>
+        </span>
         <span className="ann-offset">{c.kind} · {relativeTime(c.time_us, nowMs)}</span>
         {isEditor && (
           <CurationSelect

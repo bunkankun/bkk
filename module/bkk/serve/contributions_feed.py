@@ -38,6 +38,7 @@ from .atproto import (
     COMMENT_NSID,
     LEGACY_ANNOTATION_NSID,
     TRANSLATION_NSID,
+    get_profiles,
     list_records,
 )
 
@@ -238,6 +239,7 @@ class ContributionFeed:
         self._url = url
         self._backfill_window_s = backfill_window_s
         self._by_uri: OrderedDict[str, dict[str, Any]] = OrderedDict()
+        self._profile_cache: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
         self._stop = asyncio.Event()
         # Cursor advances as we process events; survives reconnects so we
@@ -254,6 +256,17 @@ class ContributionFeed:
 
     def find(self, uri: str) -> dict[str, Any] | None:
         return self._by_uri.get(uri)
+
+    def ensure_profiles(self, dids: list[str]) -> None:
+        """Fetch and cache Bluesky profiles for any DIDs not yet resolved. Best-effort."""
+        missing = [d for d in dids if d not in self._profile_cache]
+        if not missing:
+            return
+        fetched = get_profiles(missing)
+        self._profile_cache.update(fetched)
+
+    def get_cached_profile(self, did: str) -> dict[str, Any] | None:
+        return self._profile_cache.get(did)
 
     def set_curation_state(self, uri: str, state: str) -> bool:
         entry = self._by_uri.get(uri)

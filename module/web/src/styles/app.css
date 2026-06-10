@@ -1486,9 +1486,27 @@ button {
   color: var(--t1);
 }
 .ann-pron {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 120px;
+  flex-shrink: 1;
   font-size: 11px;
   color: var(--amb);
   font-family: var(--fm);
+}
+.contrib-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.ann-pron-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .ann-offset {
   margin-left: auto;

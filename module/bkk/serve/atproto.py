@@ -26,6 +26,7 @@ TRANSLATION_NSID = "org.bunkankun.translation.segment"
 LEGACY_ANNOTATION_NSID = "org.bunkankun.annotation"
 
 DEFAULT_PDS = "https://bsky.social"
+APPVIEW_URL = "https://public.api.bsky.app"
 
 
 def _headers(jwt: str | None) -> dict[str, str]:
@@ -145,6 +146,21 @@ def create_record(
     return result, {"access_jwt": new_access, "refresh_jwt": new_refresh}
 
 
+def get_profiles(dids: list[str], *, batch_size: int = 25) -> dict[str, dict[str, Any]]:
+    """Fetch actor profiles from the Bluesky AppView (no auth needed). Returns {did: profile}."""
+    out: dict[str, dict[str, Any]] = {}
+    for i in range(0, len(dids), batch_size):
+        batch = dids[i : i + batch_size]
+        try:
+            data = _xrpc("GET", APPVIEW_URL, "app.bsky.actor.getProfiles", params={"actors": batch})
+            for p in data.get("profiles", []):
+                if isinstance(p.get("did"), str):
+                    out[p["did"]] = p
+        except HTTPException:
+            pass
+    return out
+
+
 def list_records(
     *,
     service: str,
@@ -167,9 +183,11 @@ __all__ = [
     "COMMENT_NSID",
     "TRANSLATION_NSID",
     "LEGACY_ANNOTATION_NSID",
+    "APPVIEW_URL",
     "DEFAULT_PDS",
     "create_session",
     "refresh_session",
     "create_record",
+    "get_profiles",
     "list_records",
 ]

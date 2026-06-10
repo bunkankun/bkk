@@ -91,6 +91,11 @@ class ContributionOut(BaseModel):
     # written a value.
     curation_state: str | None = None
 
+    # Author profile resolved from Bluesky AppView; None when not yet cached.
+    handle: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
+
 
 class ContributionsResponse(BaseModel):
     items: list[ContributionOut]
@@ -132,7 +137,20 @@ def _juan_marker_index(
 
 
 def _enrich(state: AppState, items: list[dict[str, Any]]) -> None:
-    """Annotate buffer entries in-place with title + juan_seq + bucket + master_offset."""
+    """Annotate buffer entries in-place with title, location, and author profile fields."""
+    feed = state.contributions
+    if feed is not None:
+        dids = list({item["did"] for item in items if isinstance(item.get("did"), str)})
+        feed.ensure_profiles(dids)
+        for item in items:
+            did = item.get("did")
+            if isinstance(did, str):
+                profile = feed.get_cached_profile(did)
+                if profile:
+                    item["handle"] = profile.get("handle")
+                    item["display_name"] = profile.get("displayName")
+                    item["avatar_url"] = profile.get("avatar")
+
     juan_cache: dict[tuple[str, int], dict[str, tuple[str, int]] | None] = {}
     for item in items:
         textid = item.get("text_id")
