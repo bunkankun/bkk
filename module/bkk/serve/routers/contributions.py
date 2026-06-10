@@ -17,13 +17,6 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, model_validator
 
-from bkk.annotations.harvest import (
-    COMMENT_NSID,
-    TRANSLATION_NSID,
-    comment_archive_path,
-    juan_seq_from_marker_id,
-    translation_archive_path,
-)
 from bkk.importer.write.annotations import (
     juan_archive_path,
     write_records_jsonl,
@@ -32,8 +25,10 @@ from bkk.importer.write.annotations import (
 from .. import selection
 from ..atproto import (
     ANNOTATION_NSID,
+    COMMENT_NSID,
     CURATION_NSID,
     LEGACY_ANNOTATION_NSID,
+    TRANSLATION_NSID,
     create_record,
 )
 from ..contributions_feed import _created_at_us
@@ -169,6 +164,8 @@ def _enrich(state: AppState, items: list[dict[str, Any]]) -> None:
         marker_id = item.get("marker_id")
         if not isinstance(marker_id, str) or not isinstance(textid, str):
             continue
+        from bkk.annotations.harvest import juan_seq_from_marker_id
+
         seq = juan_seq_from_marker_id(marker_id)
         if seq is None:
             continue
@@ -241,6 +238,8 @@ def _archive_path_for(
     annotations_root = state.annotations_root
     if annotations_root is None:
         return None
+    from bkk.annotations.harvest import comment_archive_path, translation_archive_path
+
     if kind == "annotation" and juan_seq is not None:
         return juan_archive_path(annotations_root, text_id, juan_seq)
     if kind == "comment":
@@ -288,6 +287,8 @@ def patch_curation_state(
     cid = entry.get("cid")
     if not isinstance(text_id, str) or not isinstance(cid, str):
         raise HTTPException(status_code=500, detail="Buffer entry missing text_id/cid")
+
+    from bkk.annotations.harvest import juan_seq_from_marker_id
 
     marker_id = entry.get("marker_id")
     seq = juan_seq_from_marker_id(marker_id) if isinstance(marker_id, str) else None
