@@ -142,14 +142,56 @@ def read_raw_records(path: Path) -> list[dict[str, Any]]:
     return out
 
 
-def _load_annotations(path: Path) -> list[AnnotationOut]:
+def _load_annotations(path: Path, state: AppState | None = None) -> list[AnnotationOut]:
     out: list[AnnotationOut] = []
     for raw in read_raw_records(path):
         ann = _coerce_record(raw)
         if ann is not None:
             out.append(ann)
     out.sort(key=lambda a: a.offset)
+    if state is not None:
+        _stamp_sense_labels(out, state)
     return out
+
+
+def _stamp_sense_labels(annotations: list[AnnotationOut], state: AppState) -> None:
+    """Fill in sense.syntactic_function_label / semantic_feature_label from the core index."""
+    needed: set[str] = set()
+    for ann in annotations:
+        sense = ann.sense
+        if sense is None or not sense.id:
+            continue
+        if sense.syntactic_function_label is None and sense.semantic_feature_label is None:
+            needed.add(sense.id)
+    if not needed:
+        return
+    conn = state.open_core()
+    if conn is None:
+        return
+    try:
+        placeholders = ",".join("?" * len(needed))
+        rows = conn.execute(
+            f"SELECT uuid, syntactic_function_labels, semantic_feature_labels "
+            f"FROM senses WHERE uuid IN ({placeholders})",
+            tuple(needed),
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return
+    finally:
+        conn.close()
+    label_map = {uuid: (syn, sem) for uuid, syn, sem in rows}
+    for ann in annotations:
+        sense = ann.sense
+        if sense is None or not sense.id:
+            continue
+        labels = label_map.get(sense.id)
+        if labels is None:
+            continue
+        syn, sem = labels
+        if sense.syntactic_function_label is None and syn:
+            sense.syntactic_function_label = syn
+        if sense.semantic_feature_label is None and sem:
+            sense.semantic_feature_label = sem
 
 
 class BySenseLocation(BaseModel):
@@ -166,6 +208,8 @@ class BySenseLocation(BaseModel):
     orth: str | None
     pron: str | None
     sense_def: str | None = None
+    syntactic_function_label: str | None = None
+    semantic_feature_label: str | None = None
     note: str | None
     translation_title: str | None = None
     translation_text: str | None = None
@@ -297,8 +341,9 @@ def _ann_index_locations(state: AppState, sense_uuid: str) -> list[BySenseLocati
         rows = conn.execute(
             f"""
             SELECT text_id, juan_seq, marker_id, bucket_offset, bucket, length,
-                   annotation_id, concept, concept_id, orth, pron, sense_def, note,
-                   translation_title, translation_text, resp, curation_state, rating
+                   annotation_id, concept, concept_id, orth, pron, sense_def,
+                   syntactic_function_label, semantic_feature_label,
+                   note, translation_title, translation_text, resp, curation_state, rating
             FROM annotation_location
             WHERE sense_uuid IN ({placeholders})
             ORDER BY text_id, juan_seq, bucket_offset, annotation_id
@@ -323,12 +368,14 @@ def _ann_index_locations(state: AppState, sense_uuid: str) -> list[BySenseLocati
             orth=row[9],
             pron=row[10],
             sense_def=row[11],
-            note=row[12],
-            translation_title=row[13],
-            translation_text=row[14],
-            resp=row[15],
-            curation_state=row[16],
-            rating=row[17] if isinstance(row[17], int) and row[17] in (0, 1, 2) else 0,
+            syntactic_function_label=row[12],
+            semantic_feature_label=row[13],
+            note=row[14],
+            translation_title=row[15],
+            translation_text=row[16],
+            resp=row[17],
+            curation_state=row[18],
+            rating=row[19] if isinstance(row[19], int) and row[19] in (0, 1, 2) else 0,
         )
         for row in rows
     ]
@@ -469,7 +516,7 @@ def get_juan_annotations(
     path = _ann_path(state, textid, seq)
     if path is None:
         return []
-    return _load_annotations(path)
+    return _load_annotations(path, state)
 
 
 @router.get(

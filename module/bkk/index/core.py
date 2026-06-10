@@ -14,6 +14,7 @@ their own collection but addressed through their parent word.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import sqlite3
@@ -26,7 +27,7 @@ from .catalog import normalize_search_text
 
 log = logging.getLogger("bkk.index.core")
 
-CORE_SCHEMA_VERSION = 3
+CORE_SCHEMA_VERSION = 4
 
 COLLECTIONS: tuple[tuple[str, str], ...] = (
     # (collection dir name, type) — ordered so derived JOINs are populated
@@ -53,7 +54,8 @@ CREATE TABLE notes (
   collection TEXT NOT NULL,
   path TEXT NOT NULL,
   display_label TEXT NOT NULL,
-  source_file TEXT
+  source_file TEXT,
+  source_hash TEXT
 );
 
 CREATE TABLE labels (
@@ -96,7 +98,9 @@ CREATE TABLE senses (
   sense_ord INTEGER,
   n TEXT,
   pos TEXT,
-  def_text TEXT
+  def_text TEXT,
+  syntactic_function_labels TEXT,
+  semantic_feature_labels TEXT
 );
 
 CREATE INDEX idx_notes_collection ON notes(collection);
@@ -147,10 +151,13 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
     #   word_info[word_uuid] = (concept_uuid, n, pinyin)
     #   word_display[word_uuid] = "orth: CONCEPT"
     #   sense_position[sense_uuid] = (word_uuid, ord_index)
+    #   syn_code[uuid] / sem_code[uuid] = denormalised `code` for senses pass
     word_info: dict[str, tuple[str | None, str | None, str | None]] = {}
     word_display: dict[str, str] = {}
     sense_position: dict[str, tuple[str, int]] = {}
     concept_display: dict[str, str] = {}
+    syn_code: dict[str, str] = {}
+    sem_code: dict[str, str] = {}
 
     # (src_uuid, src_type, orth) — resolved after the super-entry pass.
     pending_wikilinks: list[tuple[str, str, str]] = []
@@ -161,6 +168,11 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
             log.warning("collection %s not found under %s", coll_dir, core_root)
             continue
         for yml_path in _iter_collection(coll_root):
+            try:
+                raw_bytes = yml_path.read_bytes()
+            except OSError as exc:
+                log.warning("%s: read failed: %s", yml_path, exc)
+                continue
             try:
                 data = load_record(yml_path)
             except Exception as exc:
@@ -181,7 +193,8 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
             ) or uuid
             rel_path = yml_path.relative_to(core_root).as_posix()
             source_file = _source_file(data)
-            notes.append((uuid, type_name, coll_dir, rel_path, display, source_file))
+            source_hash = hashlib.sha1(raw_bytes).hexdigest()
+            notes.append((uuid, type_name, coll_dir, rel_path, display, source_file, source_hash))
             labels.extend(_label_rows(uuid, type_name, data, display))
             links.extend(_link_rows(uuid, type_name, data))
             counts[type_name] = counts.get(type_name, 0) + 1
@@ -192,6 +205,10 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
 
             if type_name == "concept":
                 concept_display[uuid] = display
+            elif type_name == "syntactic-function":
+                syn_code[uuid] = display
+            elif type_name == "semantic-feature":
+                sem_code[uuid] = display
             elif type_name == "word":
                 concept_uuid = _strip_uuid_prefix(data.get("concept_uuid"))
                 n = _str_or_none(data.get("n"))
@@ -205,6 +222,12 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
             elif type_name == "sense":
                 word_uuid = _strip_uuid_prefix(data.get("word_uuid"))
                 pos_value, ord_index = sense_position.get(uuid, (word_uuid, None))
+                syn_labels = _resolve_label_list(
+                    data.get("syntactic_function_uuids"), syn_code,
+                )
+                sem_labels = _resolve_label_list(
+                    data.get("semantic_feature_uuids"), sem_code,
+                )
                 sense_rows.append((
                     uuid,
                     word_uuid or pos_value or "",
@@ -212,6 +235,8 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
                     _str_or_none(data.get("n")),
                     _str_or_none(data.get("pos")),
                     _str_or_none(data.get("definition")),
+                    syn_labels,
+                    sem_labels,
                 ))
             elif type_name == "super-entry":
                 orth = _str_or_none(data.get("orth")) or display
@@ -270,8 +295,8 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
             ],
         )
         conn.executemany(
-            "INSERT INTO notes(uuid, type, collection, path, display_label, source_file)"
-            " VALUES (?,?,?,?,?,?)",
+            "INSERT INTO notes(uuid, type, collection, path, display_label, source_file, source_hash)"
+            " VALUES (?,?,?,?,?,?,?)",
             notes,
         )
         conn.executemany(
@@ -296,8 +321,9 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
         )
         conn.executemany(
             "INSERT INTO senses"
-            "(uuid, word_uuid, sense_ord, n, pos, def_text)"
-            " VALUES (?,?,?,?,?,?)",
+            "(uuid, word_uuid, sense_ord, n, pos, def_text,"
+            " syntactic_function_labels, semantic_feature_labels)"
+            " VALUES (?,?,?,?,?,?,?,?)",
             sense_rows,
         )
         conn.commit()
@@ -609,3 +635,22 @@ def _str_or_none(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _resolve_label_list(
+    uuids: Any, lookup: dict[str, str],
+) -> str | None:
+    """Join the labels for a list of uuids; preserves positional empty slots."""
+    if not isinstance(uuids, list):
+        return None
+    parts: list[str] = []
+    any_resolved = False
+    for raw in uuids:
+        uuid = _strip_uuid_prefix(raw)
+        label = lookup.get(uuid, "") if uuid else ""
+        if label:
+            any_resolved = True
+        parts.append(label)
+    if not parts or not any_resolved:
+        return None
+    return ", ".join(parts)

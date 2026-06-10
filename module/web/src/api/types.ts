@@ -163,6 +163,11 @@ export interface AnnotationSense {
   pos?: string;
   def_text?: string;
   usage?: Record<string, unknown>;
+  // Pre-resolved syn/sem labels from the core index. Present on annotations
+  // served by the API; absent on annotations originated client-side. When
+  // present, the UI can render the triple without any per-card fetches.
+  syntactic_function_label?: string | null;
+  semantic_feature_label?: string | null;
   // Legacy fields preserved for annotations created before the bkk-core overhaul.
   syn_func?: string;
   sem_feat?: string;
@@ -850,6 +855,8 @@ export interface AnnotationBySenseLocation {
   orth: string | null;
   pron: string | null;
   sense_def: string | null;
+  syntactic_function_label?: string | null;
+  semantic_feature_label?: string | null;
   note: string | null;
   translation_title: string | null;
   translation_text: string | null;

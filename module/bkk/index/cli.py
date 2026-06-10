@@ -96,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument("--out", type=Path, default=None,
                     help="annotation .bkka output path "
                          "(default: <annotations_root>/_annotations.bkka)")
+    pa.add_argument("--core-index", type=Path, default=None,
+                    help="path to the .bkki core index used to denormalise "
+                         "syn/sem labels onto annotation rows "
+                         "(defaults to core.index in .bkkrc; "
+                         "missing/stale → NULL labels with a warning)")
 
     pco = sub.add_parser("core", help="build a .bkki index over the bkk-core knowledge layer")
     pco.add_argument("core_root", type=Path, nargs="?", default=None,
@@ -163,6 +168,20 @@ def build_parser() -> argparse.ArgumentParser:
                      help="include clusters wholly contained in longer clusters")
     pps.add_argument("--quiet", action="store_true",
                      help="suppress progress logging")
+
+    pck = sub.add_parser(
+        "check",
+        help="report drift between source YAML/JSONL and the .bkki/.bkka indices",
+    )
+    pck.add_argument("--core-root", type=Path, default=None,
+                     help="core root directory (or set core.root in .bkkrc)")
+    pck.add_argument("--core-index", type=Path, default=None,
+                     help="path to .bkki (defaults to core.index in .bkkrc)")
+    pck.add_argument("--annotations-root", type=Path, default=None,
+                     help="annotations archive root "
+                          "(or set annotations.annotations_root / serve.annotations_root in .bkkrc)")
+    pck.add_argument("--annotations-index", type=Path, default=None,
+                     help="path to .bkka (defaults to <annotations_root>/_annotations.bkka)")
 
     ps = sub.add_parser("search", help="run a KWIC query against a .bkkx index")
     ps.add_argument("index_path", type=Path)
@@ -232,6 +251,29 @@ def run(argv: list[str] | None = None) -> int:
         args.annotations_root = Path(args.annotations_root)
         if args.out is None:
             args.out = args.annotations_root / "_annotations.bkka"
+        if args.core_index is None:
+            rc_core_index = core_rc.get("index")
+            if rc_core_index:
+                args.core_index = Path(rc_core_index)
+            else:
+                rc_core_root = core_rc.get("root")
+                if rc_core_root:
+                    args.core_index = Path(rc_core_root) / "_core.bkki"
+    if args.cmd == "check":
+        if args.core_root is None:
+            rc_core_root = core_rc.get("root")
+            args.core_root = Path(rc_core_root) if rc_core_root else None
+        if args.core_index is None:
+            rc_core_index = core_rc.get("index")
+            if rc_core_index:
+                args.core_index = Path(rc_core_index)
+            elif args.core_root is not None:
+                args.core_index = args.core_root / "_core.bkki"
+        if args.annotations_root is None:
+            rc_ann = ann_rc.get("annotations_root") or serve_rc.get("annotations_root")
+            args.annotations_root = Path(rc_ann) if rc_ann else None
+        if args.annotations_index is None and args.annotations_root is not None:
+            args.annotations_index = args.annotations_root / "_annotations.bkka"
 
     if args.cmd == "build":
         path = build_index(args.bundle_dir, args.out)
@@ -254,7 +296,10 @@ def run(argv: list[str] | None = None) -> int:
         print(f"wrote {path}")
         return 0
     if args.cmd == "annotations":
-        path = build_annotation_index(args.annotations_root, args.out)
+        path = build_annotation_index(
+            args.annotations_root, args.out,
+            core_index_path=args.core_index,
+        )
         print(f"wrote {path}")
         return 0
     if args.cmd == "catalog":
@@ -321,6 +366,14 @@ def run(argv: list[str] | None = None) -> int:
             write_parallel_report(clusters, args.out, format=args.format)
             print(f"wrote {args.out}")
         return 0
+    if args.cmd == "check":
+        from .drift import check_drift
+        return check_drift(
+            core_root=args.core_root,
+            core_index=args.core_index,
+            annotations_root=args.annotations_root,
+            annotations_index=args.annotations_index,
+        )
     if args.cmd == "search":
         with Index(args.index_path) as ix:
             wits = set(args.witness) if args.witness else None

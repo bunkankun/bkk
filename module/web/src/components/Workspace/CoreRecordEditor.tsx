@@ -948,6 +948,8 @@ export function SenseRowLabel({ uuid, store }: { uuid: string; store: LabelStore
   }
   const syn = asStringArray(rec.data.syntactic_function_uuids);
   const sem = asStringArray(rec.data.semantic_feature_uuids);
+  const synLabels = asStringArray(rec.data.syntactic_function_labels);
+  const semLabels = asStringArray(rec.data.semantic_feature_labels);
   const definition = asString(rec.data.definition);
   if (syn.length === 0 && sem.length === 0 && !definition) {
     return <span ref={ref} style={{ color: "var(--t3)" }}>{uuid.slice(0, 8)}…</span>;
@@ -956,24 +958,34 @@ export function SenseRowLabel({ uuid, store }: { uuid: string; store: LabelStore
     <span ref={ref}>
       {syn.length > 0 && (
         <strong>
-          {syn.map((u, i) => (
-            <span key={u}>
-              {i > 0 && ", "}
-              <InlineResolvedLabel uuid={u} collection="syntactic-functions" store={store} />
-            </span>
-          ))}
+          {syn.map((u, i) => {
+            const pre = synLabels[i];
+            return (
+              <span key={u}>
+                {i > 0 && ", "}
+                {pre
+                  ? pre
+                  : <InlineResolvedLabel uuid={u} collection="syntactic-functions" store={store} />}
+              </span>
+            );
+          })}
         </strong>
       )}
       {sem.length > 0 && (
         <>
           {syn.length > 0 && " "}
           <em>
-            {sem.map((u, i) => (
-              <span key={u}>
-                {i > 0 && ", "}
-                <InlineResolvedLabel uuid={u} collection="semantic-features" store={store} />
-              </span>
-            ))}
+            {sem.map((u, i) => {
+              const pre = semLabels[i];
+              return (
+                <span key={u}>
+                  {i > 0 && ", "}
+                  {pre
+                    ? pre
+                    : <InlineResolvedLabel uuid={u} collection="semantic-features" store={store} />}
+                </span>
+              );
+            })}
           </em>
         </>
       )}

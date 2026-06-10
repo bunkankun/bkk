@@ -617,6 +617,7 @@ def get_record(request: Request, collection: str, uuid: str) -> CoreRecordRespon
     type_name = _require_collection(collection)
     state: AppState = request.app.state.bkk
     conn = _open(state)
+    sense_label_row: tuple[str | None, str | None] | None = None
     try:
         row = conn.execute(
             "SELECT uuid, type, collection, path, display_label "
@@ -636,6 +637,12 @@ def get_record(request: Request, collection: str, uuid: str) -> CoreRecordRespon
             "ORDER BY l.rowid",
             (uuid,),
         ).fetchall()
+        if type_name == "sense":
+            sense_label_row = conn.execute(
+                "SELECT syntactic_function_labels, semantic_feature_labels "
+                "FROM senses WHERE uuid = ?",
+                (uuid,),
+            ).fetchone()
     finally:
         conn.close()
 
@@ -668,6 +675,16 @@ def get_record(request: Request, collection: str, uuid: str) -> CoreRecordRespon
         for (t_uuid, t_type, relation, t_label) in link_rows
     ]
 
+    if type_name == "sense" and sense_label_row is not None:
+        syn_joined, sem_joined = sense_label_row
+        data = dict(data)
+        data["syntactic_function_labels"] = _split_labels(
+            syn_joined, data.get("syntactic_function_uuids"),
+        )
+        data["semantic_feature_labels"] = _split_labels(
+            sem_joined, data.get("semantic_feature_uuids"),
+        )
+
     return CoreRecordResponse(
         uuid=row[0],
         type=row[1],
@@ -677,3 +694,18 @@ def get_record(request: Request, collection: str, uuid: str) -> CoreRecordRespon
         data=data,
         links=links,
     )
+
+
+def _split_labels(joined: str | None, uuids: Any) -> list[str]:
+    """Split a ", "-joined label string into a list aligned with the uuid list."""
+    expected = len(uuids) if isinstance(uuids, list) else 0
+    if not joined:
+        return [""] * expected
+    parts = joined.split(", ")
+    if expected and len(parts) != expected:
+        # Be lenient: pad/truncate so the frontend can index by position.
+        if len(parts) < expected:
+            parts = parts + [""] * (expected - len(parts))
+        else:
+            parts = parts[:expected]
+    return parts

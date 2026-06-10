@@ -417,6 +417,10 @@ class AnnotationSense(BaseModel):
     sem_feat: str | None = None
     def_: str | None = Field(default=None, alias="def")
     usage: dict[str, Any] | None = None
+    # Pre-resolved from the core index `senses` table; absent when no core
+    # index is available or the sense id isn't known.
+    syntactic_function_label: str | None = None
+    semantic_feature_label: str | None = None
 
     model_config = {"populate_by_name": True}
 

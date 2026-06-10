@@ -26,6 +26,21 @@ export function SenseTriple({
   sense?: AnnotationSense;
   store: LabelStore;
 }) {
+  // Pre-resolved labels (from the core index) short-circuit the per-card
+  // SenseRowLabel fetch. Fall through to the lazy fetch only when the API
+  // didn't carry them (older index, no rebuild yet).
+  const preSyn = sense?.syntactic_function_label;
+  const preSem = sense?.semantic_feature_label;
+  if (preSyn || preSem) {
+    const def = sense?.def_text ?? sense?.def;
+    return (
+      <span>
+        {preSyn && <strong>{preSyn}</strong>}
+        {preSem && <>{preSyn && " "}<em>{preSem}</em></>}
+        {def && <>{(preSyn || preSem) && " "}{def}</>}
+      </span>
+    );
+  }
   if (sense?.id) {
     return <SenseRowLabel uuid={sense.id} store={store} />;
   }
@@ -45,6 +60,8 @@ export function SenseTriple({
 export function hasSenseContent(sense?: AnnotationSense): boolean {
   return Boolean(
     sense?.id ||
+      sense?.syntactic_function_label ||
+      sense?.semantic_feature_label ||
       sense?.syn_func ||
       sense?.sem_feat ||
       sense?.def_text ||
