@@ -422,6 +422,13 @@ export interface SearchResponse {
   overview?: SearchOverview | null;
 }
 
+export interface BundleSearchResponse {
+  query: string;
+  total: number;
+  capped: boolean;
+  hits: SearchHit[];
+}
+
 export interface SearchTextidsResponse {
   query: string;
   hit_count: number;

@@ -15,9 +15,9 @@ from bkk.index.ir import Hit, IndexSummary
 
 from .. import _examples as ex
 from .. import errors
+from .._hits import hit_out
 from ..resolver import CorpusSnapshot
 from ..schemas import (
-    HitOut,
     SearchDateFacets,
     SearchFacets,
     SearchFacetValue,
@@ -25,7 +25,6 @@ from ..schemas import (
     SearchResponse,
     SearchTextidsResponse,
     TrigramExtension,
-    VariantOverlayOut,
 )
 
 
@@ -42,24 +41,6 @@ class _CatalogMeta:
 
 
 _SECTION_RE = re.compile(r"^(KR\d+[a-z]+)")
-
-
-def _hit_recipe(textid: str, hit) -> dict:
-    """One-pin recipe pinning the hit's master span; re-submittable to /recipes:fulfil."""
-    return {
-        "pins": [
-            {
-                "role": "hit",
-                "textid": textid,
-                "selection": {
-                    "juan": hit.juan_seq,
-                    "bucket": hit.bucket,
-                    "offset": hit.master_offset,
-                    "length": hit.master_length,
-                },
-            }
-        ]
-    }
 
 
 def _nfc(s: str) -> str:
@@ -955,39 +936,7 @@ def search(
         limit=limit,
         sort=sort,
         facets=facets,
-        hits=[
-            HitOut(
-                textid=h.textid,
-                juan_seq=h.juan_seq,
-                bucket=h.bucket,
-                master_offset=h.master_offset,
-                master_length=h.master_length,
-                matched_via=h.matched_via,
-                matched_text=h.matched_text,
-                left=h.left,
-                match=h.match,
-                right=h.right,
-                witness_left=h.witness_left,
-                witness_right=h.witness_right,
-                witness_left_variant_offset=h.witness_left_variant_offset,
-                witness_right_variant_end=h.witness_right_variant_end,
-                overlays=[
-                    VariantOverlayOut(
-                        master_offset=o.master_offset,
-                        length=o.length,
-                        content=o.content,
-                        witness=o.witness,
-                        witness_form=o.witness_form,
-                    )
-                    for o in h.overlays
-                ],
-                toc_label=h.toc_label,
-                voice=h.voice,
-                voice_stack=list(h.voice_stack),
-                recipe=_hit_recipe(h.textid, h),
-            )
-            for h in page
-        ],
+        hits=[hit_out(h.textid, h) for h in page],
     )
 
 

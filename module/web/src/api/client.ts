@@ -16,6 +16,7 @@ import type {
   AuthSession,
   BlueskyLoginRequest,
   BlueskyStatus,
+  BundleSearchResponse,
   CatalogResponse,
   CategoriesResponse,
   ContributionsResponse,
@@ -268,6 +269,21 @@ export async function getManifest(textid: string): Promise<Manifest> {
   });
   manifestCache.set(textid, request);
   return request;
+}
+
+export async function getBundleSearch(
+  textid: string,
+  q: string,
+  opts: { signal?: AbortSignal; context?: number; limit?: number; masterOnly?: boolean } = {},
+): Promise<BundleSearchResponse> {
+  const params = new URLSearchParams({ q });
+  if (opts.context != null) params.set("context", String(opts.context));
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  if (opts.masterOnly) params.set("master_only", "true");
+  return fetchJson<BundleSearchResponse>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/search?${params.toString()}`,
+    { signal: opts.signal },
+  );
 }
 
 export async function getJuanList(textid: string): Promise<ManifestPart[]> {

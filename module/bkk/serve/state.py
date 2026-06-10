@@ -302,6 +302,19 @@ class AppState:
             return None
         return Index(path)
 
+    def bundle_index_path(self, textid: str) -> Path | None:
+        """Return ``<bundle_dir>/<textid>.bkkx`` if present, else ``None``."""
+        rec = self.lookup_bundle(textid)
+        if rec is None:
+            return None
+        path = rec.bundle_dir / f"{textid}.bkkx"
+        return path if path.exists() else None
+
+    def open_bundle_index(self, textid: str) -> Index | None:
+        """Open the per-bundle ``.bkkx``, or ``None`` if missing."""
+        path = self.bundle_index_path(textid)
+        return Index(path) if path is not None else None
+
     def open_catalog(self) -> sqlite3.Connection | None:
         """Open a read-only handle on the catalog index, or ``None`` if absent."""
         path = self.catalog_path

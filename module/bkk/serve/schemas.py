@@ -168,6 +168,28 @@ class SearchResponse(BaseModel):
     overview: SearchOverview | None = None
 
 
+class BundleSearchResponse(BaseModel):
+    """Substring search within one bundle's ``.bkkx``, in text order.
+
+    A navigation aid (no facets, no overview). When ``capped`` is true,
+    the query exceeded the configured ``max_search_hits`` cap and no
+    hits were materialised — the caller should refine the query.
+    """
+
+    query: str
+    total: int = Field(
+        ...,
+        description="number of hits after sort/limit; when ``capped``, the "
+                    "candidate position count from the trigram scan",
+    )
+    capped: bool = Field(
+        False,
+        description="True when ``total`` exceeded ``max_search_hits`` and "
+                    "``hits`` was returned empty rather than materialised",
+    )
+    hits: list[HitOut] = Field(default_factory=list)
+
+
 class SearchTextidsResponse(BaseModel):
     query: str
     hit_count: int

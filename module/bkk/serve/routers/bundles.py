@@ -11,11 +11,13 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from .. import _examples as ex
 from .. import errors
+from .._hits import hit_out
 from ..resolver import BundleRecord
 from ..schemas import (
     BundleAsset,
     BundleAssetsResponse,
     BundleListResponse,
+    BundleSearchResponse,
     BundleSummary,
     EditionInfo,
     JuanSliceOut,
@@ -92,6 +94,55 @@ def get_manifest(request: Request, textid: str = PathParam(..., openapi_examples
     state: AppState = request.app.state.bkk
     rec = _record(state, textid)
     return _manifest_with_image_overrides(rec.manifest, state)
+
+
+_BUCKET_ORDER = {"front": 0, "body": 1, "back": 2}
+
+
+@router.get(
+    "/{textid}/search",
+    response_model=BundleSearchResponse,
+    summary="Substring search within one bundle's .bkkx, in text order",
+)
+def bundle_search(
+    request: Request,
+    textid: str = PathParam(..., openapi_examples=ex.TEXTID),
+    q: str = Query(..., min_length=1, description="substring query (NFC-normalised server-side)"),
+    context: int = Query(7, ge=0, le=200, description="KWIC context window each side"),
+    limit: int = Query(200, ge=1, le=2000),
+    master_only: bool = Query(
+        False,
+        description="when true, drop witness-side hits and count only master matches against the cap",
+    ),
+) -> BundleSearchResponse:
+    state: AppState = request.app.state.bkk
+    _record(state, textid)  # 404 if unknown textid
+    # Prefer the per-bundle .bkkx; fall back to the corpus index with textid filter.
+    ix = state.open_bundle_index(textid) or state.open_index()
+    if ix is None:
+        raise errors.index_unavailable(state._index_error or "index not built")
+    cap = state.config.max_search_hits
+    try:
+        cand, total = ix.candidates_and_total(q)
+        # Iterate hits up to cap+1; the textid filter in ix.search guarantees
+        # we only materialise master/witness rows from this bundle, so even on
+        # the corpus-index fallback we bound the work to this text.
+        hits = []
+        for h in ix.search(q, context=context, textid=textid, candidates=cand):
+            if master_only and h.matched_via != "master":
+                continue
+            hits.append(h)
+            if len(hits) > cap:
+                return BundleSearchResponse(query=q, total=total, capped=True, hits=[])
+    finally:
+        ix.close()
+    hits.sort(key=lambda h: (h.juan_seq, _BUCKET_ORDER.get(h.bucket, 99), h.master_offset))
+    return BundleSearchResponse(
+        query=q,
+        total=len(hits),
+        capped=False,
+        hits=[hit_out(textid, h) for h in hits[:limit]],
+    )
 
 
 def _manifest_with_image_overrides(

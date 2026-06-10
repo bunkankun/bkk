@@ -122,6 +122,36 @@ def test_direct_bundle_lookup_does_not_build_corpus_cache(tmp_path: Path):
     assert rec.title == "Fast path"
 
 
+def test_bundle_search_hits_in_text_order(client):
+    r = client.get("/bundles/TEST0001/search?q=丙丁")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query"] == "丙丁"
+    assert body["capped"] is False
+    assert body["total"] == 1
+    hit = body["hits"][0]
+    assert hit["textid"] == "TEST0001"
+    assert hit["juan_seq"] == 1
+    assert hit["bucket"] == "body"
+    assert hit["match"] == "丙丁"
+    assert hit["master_offset"] == 2
+
+
+def test_bundle_search_scopes_to_one_textid(client):
+    # 'A' appears in TEST0002 only; querying TEST0001 must return zero.
+    r = client.get("/bundles/TEST0001/search?q=A")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 0
+    assert body["hits"] == []
+
+
+def test_bundle_search_unknown_bundle(client):
+    r = client.get("/bundles/TEST9999/search?q=甲")
+    assert r.status_code == 404
+    assert r.json()["error"] == "bundle_not_found"
+
+
 def test_get_juan_not_found(client):
     r = client.get("/bundles/TEST0001/juan/9")
     assert r.status_code == 404
