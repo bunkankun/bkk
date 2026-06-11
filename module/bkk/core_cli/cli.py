@@ -35,45 +35,6 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--pr-base", default=None,
                    help="upstream branch to fast-forward from (default: [core].pr_base, else 'master')")
 
-<<<<<<< HEAD
-=======
-    m = sub.add_parser(
-        "migrate",
-        help="convert a legacy bkk-core tree to v2 typed YAML records",
-    )
-    m.add_argument("old_core_root", type=Path,
-                   help="legacy core root containing collection/*.md records")
-    m.add_argument("--out", dest="out_root", type=Path, required=True,
-                   help="output root for v2 records")
-    m.add_argument("--write-generated", action="store_true",
-                   help="also write deterministic generated Markdown")
-    m.add_argument("--no-schemas", action="store_true",
-                   help="do not write JSON Schema files")
-    m.add_argument("--index", dest="index_path", type=Path, default=None,
-                   help="output .bkki path (default: <out>/_core.bkki)")
-
-    b = sub.add_parser(
-        "backport-markdown",
-        help="apply controlled edits from generated Markdown to v2 YAML records",
-    )
-    b.add_argument("core_root", type=Path,
-                   help="v2 core root containing records/ and generated/markdown/")
-    b.add_argument("--generated-root", type=Path, default=None,
-                   help="generated Markdown root (default: <core-root>/generated/markdown)")
-    b.add_argument("--check", action="store_true",
-                   help="validate and report pending backports without writing YAML")
-
-    r = sub.add_parser(
-        "render-markdown",
-        help="render generated Markdown from existing v2 YAML records",
-    )
-    r.add_argument("core_root", type=Path,
-                   help="v2 core root containing records/")
-    r.add_argument("--check", action="store_true",
-                   help="fail if generated Markdown is missing or stale")
-    r.add_argument("--clean", action="store_true",
-                   help="remove existing generated Markdown before rendering")
-
     l = sub.add_parser(
         "lint-syntactic-functions",
         help="parse and lint syntactic-function code labels",
@@ -85,7 +46,6 @@ def _build_parser() -> argparse.ArgumentParser:
     l.add_argument("--limit", type=int, default=80,
                    help="maximum diagnostics to print (default: 80; 0 prints all)")
 
->>>>>>> 0e72e77 (Add syntactic function label linter)
     return p
 
 
@@ -153,62 +113,6 @@ def _cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
-<<<<<<< HEAD
-=======
-def _cmd_migrate(args: argparse.Namespace) -> int:
-    out_root = args.out_root.resolve()
-    written = migrate_core_tree(
-        args.old_core_root.resolve(),
-        out_root,
-        write_generated=args.write_generated,
-        write_schemas=not args.no_schemas,
-    )
-    index_path = args.index_path.resolve() if args.index_path else out_root / "_core.bkki"
-    build_core_index(out_root, index_path)
-    print(f"wrote {len(written)} file(s) under {out_root}", file=sys.stderr)
-    print(f"wrote {index_path}", file=sys.stderr)
-    return 0
-
-
-def _cmd_backport_markdown(args: argparse.Namespace) -> int:
-    report = backport_generated_markdown(
-        args.core_root.resolve(),
-        generated_root=args.generated_root.resolve() if args.generated_root else None,
-        check=args.check,
-    )
-    for warning in report.warnings:
-        print(f"warning: {warning}", file=sys.stderr)
-    if report.errors:
-        for error in report.errors:
-            print(f"error: {error}", file=sys.stderr)
-        return 1
-    verb = "would update" if args.check else "updated"
-    print(f"{verb} {len(report.updated_records)} record(s)", file=sys.stderr)
-    for field in report.changed_fields:
-        print(field, file=sys.stderr)
-    return 0
-
-
-def _cmd_render_markdown(args: argparse.Namespace) -> int:
-    report = render_generated_markdown(
-        args.core_root.resolve(),
-        check=args.check,
-        clean=args.clean,
-    )
-    if report.errors:
-        for error in report.errors:
-            print(f"error: {error}", file=sys.stderr)
-        return 1
-    if report.stale:
-        for path in report.stale:
-            print(f"stale: {path}", file=sys.stderr)
-        return 1
-    verb = "checked" if args.check else "rendered"
-    count = len(report.stale) if args.check else len(report.written)
-    print(f"{verb} {count} generated Markdown file(s)", file=sys.stderr)
-    return 0
-
-
 def _cmd_lint_syntactic_functions(args: argparse.Namespace) -> int:
     report = lint_syntactic_function_records(args.core_root.resolve())
     diagnostics = sorted(
@@ -245,22 +149,12 @@ def _cmd_lint_syntactic_functions(args: argparse.Namespace) -> int:
     return 0
 
 
->>>>>>> 0e72e77 (Add syntactic function label linter)
 def run(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if args.subcommand == "sync":
         return _cmd_sync(args)
-<<<<<<< HEAD
-=======
-    if args.subcommand == "migrate":
-        return _cmd_migrate(args)
-    if args.subcommand == "backport-markdown":
-        return _cmd_backport_markdown(args)
-    if args.subcommand == "render-markdown":
-        return _cmd_render_markdown(args)
     if args.subcommand == "lint-syntactic-functions":
         return _cmd_lint_syntactic_functions(args)
->>>>>>> 0e72e77 (Add syntactic function label linter)
     return 2
 
 
