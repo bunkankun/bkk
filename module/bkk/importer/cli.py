@@ -62,10 +62,11 @@ Concept invocation::
 
 Consolidated bkk-core invocation::
 
-    # run all six bkk-core sub-importers from one tls-data root.
+    # run all seven bkk-core sub-importers from one tls-data root.
     # Resolves <root>/concepts/, <root>/bibliography/, <root>/guangyun/,
     # <root>/words/, <root>/core/syntactic-functions.xml,
-    # <root>/core/semantic-features.xml automatically.
+    # <root>/core/semantic-features.xml, <root>/core/rhetorical-devices.xml
+    # automatically.
     python -m bkk.importer --format core --in <tls-data-root> --out <out> --yes
 
 Each input XML file becomes one bundle at
@@ -248,10 +249,10 @@ def _find_tls_texts(in_root: Path, text_id: str) -> list[Path]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk.importer")
-    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation", "core", "concepts", "bibliography", "graphs", "syntactic-functions", "semantic-features", "words"], default=None,
-                   help="source format: tls, krp, cbeta, translation, core, concepts, bibliography, graphs, syntactic-functions, semantic-features, or words "
+    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation", "core", "concepts", "bibliography", "graphs", "syntactic-functions", "semantic-features", "rhetorical-devices", "words"], default=None,
+                   help="source format: tls, krp, cbeta, translation, core, concepts, bibliography, graphs, syntactic-functions, semantic-features, rhetorical-devices, or words "
                         "(required; or set import.format in .bkkrc). "
-                        "'core' runs all six bkk-core sub-importers against a single tls-data root, "
+                        "'core' runs all seven bkk-core sub-importers against a single tls-data root, "
                         "resolving the conventional subdir for each.")
     p.add_argument("--recipe", type=Path, default=None,
                    help="recipe YAML pinning per-text knobs (krp); when given, "
@@ -371,7 +372,8 @@ def run(argv: list[str] | None = None) -> int:
     if arg_list and arg_list[0] in (
         "core",
         "concepts", "bibliography", "graphs",
-        "syntactic-functions", "semantic-features", "words",
+        "syntactic-functions", "semantic-features", "rhetorical-devices",
+        "words",
     ):
         arg_list = ["--format", arg_list[0], *arg_list[1:]]
     args = parser.parse_args(arg_list)
@@ -415,6 +417,8 @@ def run(argv: list[str] | None = None) -> int:
         return _run_syntactic_functions(args)
     if args.format == "semantic-features":
         return _run_semantic_features(args)
+    if args.format == "rhetorical-devices":
+        return _run_rhetorical_devices(args)
     if args.format == "words":
         return _run_words(args)
     print(f"error: unknown format {args.format!r}", file=sys.stderr)
@@ -643,6 +647,7 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
     # Annotation files are looked up by the provisional id (the filename stem).
     swl_xml = args.in_root / "tls-data" / "notes" / "swl" / f"{text_id}-ann.xml"
     doc_xml = args.in_root / "tls-data" / "notes" / "doc" / f"{text_id}-ann.xml"
+    rdl_xml = args.in_root / "tls-data" / "notes" / "rdl" / "rdl.xml"
 
     update_ids = getattr(args, "update_ids", False)
     canonical_id, effective_xml = _prepare_tls_xml(
@@ -667,6 +672,7 @@ def _import_one_tls(args, text_id: str, text_xml: Path,
             source_swl=swl_xml if renamed and effective_swl is not swl_xml else None,
             source_doc=doc_xml if renamed and effective_doc is not doc_xml else None,
             xml_elements=getattr(args, "xml_elements", None),
+            rdl_ann=rdl_xml,
         )
     finally:
         if renamed:
@@ -1700,12 +1706,13 @@ _CORE_SUBPATHS: list[tuple[str, str]] = [
     ("graphs", "guangyun"),
     ("syntactic-functions", "core/syntactic-functions.xml"),
     ("semantic-features", "core/semantic-features.xml"),
+    ("rhetorical-devices", "core/rhetorical-devices.xml"),
     ("words", "words"),
 ]
 
 
 def _run_core(args) -> int:
-    """Run all six bkk-core sub-importers against a single tls-data root.
+    """Run all seven bkk-core sub-importers against a single tls-data root.
 
     Each sub-format's source is resolved by appending its conventional
     subdir (or specific XML file) to ``args.in_root``. A single ``--out``
@@ -1733,6 +1740,7 @@ def _run_core(args) -> int:
         "graphs": _run_graphs,
         "syntactic-functions": _run_syntactic_functions,
         "semantic-features": _run_semantic_features,
+        "rhetorical-devices": _run_rhetorical_devices,
         "words": _run_words,
     }
 
@@ -2138,6 +2146,87 @@ def _import_one_semantic_features_file(args, xml_path: Path) -> int:
             continue
         written_path = write_semantic_feature(record, args.out_root)
         print(f"wrote semantic-feature {record.code} under {written_path}")
+        written += 1
+    return written
+
+
+def _run_rhetorical_devices(args) -> int:
+    """Dispatch the rhetorical-device import path."""
+    if args.in_root is None or args.out_root is None:
+        print(
+            "error: --in and --out are required for "
+            "--format rhetorical-devices",
+            file=sys.stderr,
+        )
+        return 2
+
+    paths = _resolve_rhetorical_device_sources(args)
+    if not paths:
+        print("error: no rhetorical-device XML files found to import",
+              file=sys.stderr)
+        return 2
+
+    if len(paths) > 1 and not args.yes:
+        if not _confirm_bulk([(p.stem, p) for p in paths]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    written = 0
+    for xml_path in paths:
+        try:
+            written += _import_one_rhetorical_devices_file(args, xml_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+
+    if args.sample is not None:
+        _emit_divergence(args.sample, args.out_root, args.out_root)
+
+    print(
+        f"wrote {written} rhetorical-device note(s) under "
+        f"{args.out_root / 'rhetorical-devices'}"
+    )
+    return rc
+
+
+def _resolve_rhetorical_device_sources(args) -> list[Path]:
+    """Return TEI XML files that may contain rhet-dev divisions.
+
+    Like syntactic/semantic features, rhetorical devices live as many records
+    in a single XML file, so ``--text-id`` is applied after parsing.
+    """
+    return _collect_xml_paths(args.in_root)
+
+
+def _import_one_rhetorical_devices_file(args, xml_path: Path) -> int:
+    """Read one TEI file and write every contained rhet-dev note."""
+    from .read.rhetorical_device import read_rhetorical_devices
+    from .write.rhetorical_device import (
+        rhetorical_device_note_path,
+        write_rhetorical_device,
+    )
+
+    records = read_rhetorical_devices(xml_path)
+    text_filter = (args.text_id or "").strip() or None
+    if text_filter:
+        records = [
+            record for record in records
+            if record.uuid == text_filter
+            or f"uuid-{record.uuid}" == text_filter
+            or record.code == text_filter
+        ]
+
+    written = 0
+    for record in records:
+        out_path = rhetorical_device_note_path(args.out_root, record.uuid)
+        if _on_exists_skip(args) and out_path.exists():
+            _report_skipped(
+                out_path, kind="rhetorical-device", label=record.code,
+            )
+            continue
+        written_path = write_rhetorical_device(record, args.out_root)
+        print(f"wrote rhetorical-device {record.code} under {written_path}")
         written += 1
     return written
 

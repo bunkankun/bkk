@@ -260,6 +260,28 @@ class SemanticFeatureBundle:
     metadata: dict = field(default_factory=dict)
 
 
+# ---------- Rhetorical devices --------------------------------------------
+
+
+@dataclass
+class RhetoricalDeviceRelation:
+    type: str
+    target_type: str
+    refs: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class RhetoricalDeviceBundle:
+    uuid: str
+    code: str
+    descriptions: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    location: str | None = None
+    translations: dict[str, str] = field(default_factory=dict)
+    relations: list[RhetoricalDeviceRelation] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
+
+
 # ---------- Words ---------------------------------------------------------
 
 

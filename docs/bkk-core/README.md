@@ -21,6 +21,7 @@ core/
   bibliography/
   concepts/
   graphs/
+  rhetorical-devices/
   semantic-features/
   senses/
   super-entries/
@@ -64,6 +65,7 @@ type: <record type>
 - `bibliography`
 - `concept`
 - `graph`
+- `rhetorical-device`
 - `semantic-feature`
 - `sense`
 - `super-entry`
@@ -114,6 +116,8 @@ Prose-bearing fields by record type:
 - `concept.definition`, `concept.criteria[].text`
 - `syntactic-function.description`, `syntactic-function.notes`
 - `semantic-feature.description`, `semantic-feature.notes`
+- `rhetorical-device.description`, `rhetorical-device.notes`,
+  `rhetorical-device.location`
 - `word.definition`
 - `sense.definition`
 
@@ -299,6 +303,65 @@ Index hints:
 - `source_references` is the bibliography pointer list (parallel to
   `concept.bibliography`).
 
+### Rhetorical devices
+
+Path: `rhetorical-devices/<hex>/<uuid>.yml` · Type: `rhetorical-device`
+
+Parsed from `<div type="rhet-dev">` records in
+`core/rhetorical-devices.xml`. Each record names one rhetorical device
+(epiphonema, hendiadys, refocalisation, …); attestations in actual texts
+live in the annotations layer as `rhetorical-device-attestation` records
+(see `bkk-annotations/README.md`).
+
+```yaml
+uuid: afa1ba57-b81d-4da6-a201-b701fec3f01b
+type: rhetorical-device
+code: ACCLAMATIO
+translations:
+  zh: 總結法
+description: |
+  插入總結感嘆法 METALINGUISTIC COMMENT in the form of a summary…
+
+  Greek: Epiphonema.
+notes: |
+  REF: Lausberg 879…
+location: |
+  …optional prose locus marker from <div type="rhet-dev-loc">…
+hypernyms:
+- fea50057-3cb0-4289-beef-3dedf0185d61
+hyponyms:
+- cbbf1df7-8a4f-4a4c-9e40-460cfc0c8ff5
+antonyms:
+- aff6c751-db90-43c2-9f36-5042e0336d79
+source_references:
+- bibliography_uuid: 60d39cc0-d76b-4275-8490-886ace4204be
+  scope: '9.95'
+  scope_unit: page
+source:
+  source_file: rhetorical-devices.xml
+  resp: '#CH'
+  date: '2024-02-14T19:25:38.413+09:00'
+```
+
+Notes:
+
+- `code` is the upper-case device label from `<head>` (HENDIADYS,
+  ACCLAMATIO, …) — primary display and lookup field.
+- `translations` is the top-level `<list type="translations">`
+  (`xml:lang` → text). The pointer-section `translations` list is folded
+  into the same dict.
+- Source-XML `<list type="taxonymy">` becomes `hyponyms` (taxonymy items
+  are sub-devices of the head, matching the `concepts` convention rather
+  than `syntactic-functions`' `taxonomy_parents`).
+- `notes` filters out `<p>undefined</p>` placeholder paragraphs.
+
+Index hints:
+
+- Display label: `code`.
+- Index `translations.*` as alternate labels.
+- Treat `hypernyms` / `hyponyms` / `antonyms` as typed outgoing links
+  inside the collection.
+
 ### Super-entries
 
 Path: `super-entries/<hex>/<uuid>.yml` · Type: `super-entry`
@@ -451,6 +514,7 @@ It dispatches to each sub-importer with the conventional source path:
 | `words`               | `words/`                          |
 | `syntactic-functions` | `core/syntactic-functions.xml`    |
 | `semantic-features`   | `core/semantic-features.xml`      |
+| `rhetorical-devices`  | `core/rhetorical-devices.xml`     |
 
 Individual sub-formats still work for incremental re-imports:
 
@@ -460,13 +524,15 @@ bkk import bibliography        --in <tls-data>/bibliography                 --ou
 bkk import graphs              --in <tls-data>/guangyun                     --out module/output/core --yes
 bkk import syntactic-functions --in <tls-data>/core/syntactic-functions.xml --out module/output/core --yes
 bkk import semantic-features   --in <tls-data>/core/semantic-features.xml   --out module/output/core --yes
+bkk import rhetorical-devices  --in <tls-data>/core/rhetorical-devices.xml  --out module/output/core --yes
 bkk import words               --in <tls-data>/words                        --out module/output/core --yes
 ```
 
 `--text-id` filtering by sub-format:
 
 - concepts, bibliography, graphs: source filename stem or UUID.
-- syntactic-functions, semantic-features: UUID or code.
+- syntactic-functions, semantic-features, rhetorical-devices: UUID or
+  code.
 - words: super-entry UUID, source filename stem, orthograph, word-entry
   UUID, or concept name.
 
@@ -529,6 +595,8 @@ Walk the bare-UUID relation lists per record type:
   `bibliography[].bibliography_uuid`.
 - `syntactic-function`: `taxonomy_parents`.
 - `semantic-feature`: `source_references[].bibliography_uuid`.
+- `rhetorical-device`: `hypernyms`, `hyponyms`, `antonyms`,
+  `source_references[].bibliography_uuid`.
 - `super-entry`: `word_uuids`, `forms[].graph_uuids`.
 - `word`: `super_entry_uuid`, `concept_uuid`, `form.graph_uuids`,
   `bibliography[].bibliography_uuid`, `sense_uuids`.
@@ -541,8 +609,9 @@ orth map at index time.
 ### Collection / type naming
 
 - Collection names are the plural directory names: `concepts`,
-  `graphs`, `syntactic-functions`, `semantic-features`, `senses`,
-  `super-entries`, `words`.
+  `graphs`, `rhetorical-devices`, `syntactic-functions`,
+  `semantic-features`, `senses`, `super-entries`, `words`.
 - `type` values are singular except `super-entry`: `concept`, `graph`,
-  `syntactic-function`, `semantic-feature`, `sense`, `word`.
+  `rhetorical-device`, `syntactic-function`, `semantic-feature`,
+  `sense`, `word`.
 - `bibliography` is both the collection and type name.

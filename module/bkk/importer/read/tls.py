@@ -202,11 +202,14 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
              source_xml: Path | None = None,
              source_swl: Path | None = None,
              source_doc: Path | None = None,
+             rdl_ann: Path | None = None,
              xml_elements=None) -> Bundle:
     """Read one TLS text and return its Bundle.
 
     ``swl_ann`` and ``doc_ann`` are optional; when present they are concatenated
-    in that order to preserve provenance ordering.
+    in that order to preserve provenance ordering. ``rdl_ann`` points at the
+    global ``tls-data/notes/rdl/rdl.xml`` rhetorical-device-attestation file;
+    its records are filtered to those that target ``text_id``.
 
     The edition short id (e.g. ``T``, ``tls``) is derived from the second
     component of the marker ids, which follow ``<text-id>_<edition>_<location>``
@@ -232,6 +235,14 @@ def read_tls(text_xml: Path, swl_ann: Path | None, doc_ann: Path | None,
             ann_files_info[role] = envelope
         except Exception as exc:  # noqa: BLE001
             print(f"warning: {text_id}: skipping {role} ann ({path.name}): {exc}",
+                  file=sys.stderr)
+
+    if rdl_ann is not None and rdl_ann.exists():
+        try:
+            from .rdl import read_rdl_annotations
+            annotations.extend(read_rdl_annotations(rdl_ann, text_id))
+        except Exception as exc:  # noqa: BLE001
+            print(f"warning: {text_id}: skipping rdl ann ({rdl_ann.name}): {exc}",
                   file=sys.stderr)
 
     # Normalize short juan labels in marker ids to JUAN_LABEL_WIDTH digits so

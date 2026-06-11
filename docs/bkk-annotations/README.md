@@ -135,10 +135,57 @@ ignore unknown ones.
 | `concept_id` | string | Concept identifier (separate from `concept` for legacy reasons). |
 | `translation` | object | Inline gloss-style translation: `text`, optional `src`. *(Sentence-level translations belong in `translation.segment` records, not here.)* |
 | `metadata` | object | Free-form key/value bag for source-specific carry-over (e.g. TLS `seg_id`). |
+| `kind` | string | Discriminator for non-default payload shapes. Currently the only value emitted by the importer is `rhetorical-device-attestation` (see below). |
+| `rhet_dev` | string | Rhetorical-device code (`HENDIADYS`, `ACCLAMATIO`, …) — only set when `kind == "rhetorical-device-attestation"`. |
+| `rhet_dev_id` | string | Bare-UUID pointer to the `bkk-core` `rhetorical-device` record. |
+| `note` | string | Optional free-prose annotator note (rhetorical-device attestations and similar). |
+| `source` | object | Optional carry-over of the source-XML snippet: `title`, `text`, and on stretched spans `end_title`, `end_text`. |
 
 The first non-empty field in roughly the order above determines what the
 Chat tab renders ([`ChatTab.tsx`](../../module/web/src/components/RightPanel/ChatTab.tsx)).
 When in doubt, look at the TLS importer for the canonical producer.
+
+### Rhetorical-device attestations (`kind: "rhetorical-device-attestation"`)
+
+Sourced from `tls-data/notes/rdl/rdl.xml`. One record per
+`<tls:span type="rdl">`. Single-srcline spans set `anchor.length` to the
+grapheme count of the underlying source text; stretched spans
+(`role="span-start"` / `role="span-end"`) additionally set
+`anchor.end_marker_id` / `anchor.end_length`. Provenance:
+`source_role: tls:span/rdl`, `source_attribution: rdl`. `payload.rhet_dev_id`
+resolves to a `bkk-core` `rhetorical-device` UUID; see
+[`docs/bkk-core/README.md`](../bkk-core/README.md#rhetorical-devices).
+
+```jsonc
+{
+  "id": "uuid-f460f770-1a58-11eb-a595-a50d97e813a2",
+  "text_id": "KR6b0066",
+  "edition": "T",
+  "anchor": {
+    "marker_id": "KR6b0066_T_003-0549c.12",
+    "offset": 0,
+    "length": 17,
+    "end_marker_id": "KR6b0066_T_003-0549c.13",
+    "end_length": 4
+  },
+  "payload": {
+    "kind": "rhetorical-device-attestation",
+    "rhet_dev": "ENJAMBEMENT-MULTIPLE",
+    "rhet_dev_id": "8cd64093-04af-4fc8-bfc7-cd8349b700bd",
+    "source": { "title": "百喻經", "text": "…", "end_title": "百喻經", "end_text": "…" }
+  },
+  "provenance": {
+    "did": "did:plc:bkk-tls-legacy",
+    "source_role": "tls:span/rdl",
+    "source_attribution": "rdl"
+  }
+}
+```
+
+Caveat: rdl `target="#…"` anchors must resolve to a `tls:seg` or
+`tls:head` marker present in the bundle. TLS-sourced bundles include
+those markers; KRP-only bundles often do not, and unmatched anchors are
+silently dropped by the annotation pipeline.
 
 ## Comment archive
 
