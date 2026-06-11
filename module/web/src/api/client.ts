@@ -305,6 +305,24 @@ export async function getAnnotations(
   );
 }
 
+export interface ArchiveDeleteResponse {
+  text_id: string;
+  juan_seq: number;
+  id: string;
+  deleted: boolean;
+}
+
+export async function archiveDeleteAnnotation(
+  textid: string,
+  seq: number,
+  id: string,
+): Promise<ArchiveDeleteResponse> {
+  return fetchJson<ArchiveDeleteResponse>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/annotations/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function getBlueskyStatus(): Promise<BlueskyStatus> {
   return fetchJson<BlueskyStatus>(`${apiBase}/annotations/bluesky/session`);
 }

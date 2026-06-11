@@ -55,6 +55,10 @@ async def _lifespan(app: FastAPI):
     )
     feed = ContributionFeed(
         dids=list(state.config.annotation_dids), resolver=resolver,
+        annotations_root=state.config.annotations_root,
+        comments_root=state.config.comments_root,
+        translations_root=state.config.translations_root,
+        archive_on_delete=state.config.archive_on_delete,
     )
     state.contributions = feed
     task: asyncio.Task | None = None

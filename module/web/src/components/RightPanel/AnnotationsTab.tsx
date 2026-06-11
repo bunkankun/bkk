@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { getAnnotations, getManifest, getSegmentTranslations } from "../../api/client";
+import {
+  archiveDeleteAnnotation,
+  getAnnotations,
+  getManifest,
+  getSegmentTranslations,
+  patchContributionCuration,
+} from "../../api/client";
 import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import { AnnotationCompose } from "./AnnotationCompose";
@@ -8,21 +14,69 @@ import { CoreTargetPicker } from "./CoreTargetPicker";
 import { useLabelStore, type LabelStore } from "../Workspace/CoreRecordEditor";
 import { AnnotationPayload } from "./AnnotationDisplay";
 
+type AnnAction =
+  | { kind: "reject"; uri: string }
+  | { kind: "unreject"; uri: string }
+  | { kind: "archive-delete" };
+
 const AnnCard = ({
   a,
   store,
   selected,
   cardRef,
+  action,
+  busy,
+  onAction,
 }: {
   a: Annotation;
   store: LabelStore;
   selected: boolean;
   cardRef?: (el: HTMLDivElement | null) => void;
+  action: AnnAction | null;
+  busy: boolean;
+  onAction: (a: Annotation, act: AnnAction) => void;
 }) => {
+  const rejected = a.curation_state === "rejected";
+  const className = `ann${selected ? " ann-selected" : ""}${rejected ? " ann-rejected" : ""}`;
+  const renderAction = () => {
+    if (!action) return null;
+    if (action.kind === "unreject") {
+      return (
+        <button
+          className="ann-action ann-unreject"
+          disabled={busy}
+          title="Restore (set state back to proposed)"
+          onClick={(ev) => {
+            ev.stopPropagation();
+            onAction(a, action);
+          }}
+        >
+          ↺
+        </button>
+      );
+    }
+    const title =
+      action.kind === "reject"
+        ? "Reject (soft delete — hides from indexes)"
+        : "Remove this row from the archive";
+    return (
+      <button
+        className="ann-action ann-delete"
+        disabled={busy}
+        title={title}
+        onClick={(ev) => {
+          ev.stopPropagation();
+          onAction(a, action);
+        }}
+      >
+        ×
+      </button>
+    );
+  };
   return (
     <div
       ref={cardRef}
-      className={`ann${selected ? " ann-selected" : ""}`}
+      className={className}
       onClick={() =>
         workspace.jumpToAnnotation({
           offset: a.offset,
@@ -35,6 +89,7 @@ const AnnCard = ({
         {a.form?.orth && <span className="ann-orth">{a.form.orth}</span>}
         {a.form?.pron && <span className="ann-pron">{a.form.pron}</span>}
         <span className="ann-offset">@{a.offset}</span>
+        {renderAction()}
       </div>
       <AnnotationPayload
         parts={{
@@ -89,6 +144,7 @@ export function AnnotationsTab() {
   const selectedSegment = useWorkspace((s) => s.selectedSegment);
   const localAnnotations = useWorkspace((s) => s.localAnnotations);
   const selectedAnnId = useWorkspace((s) => s.selectedAnnotationId);
+  const authUser = useWorkspace((s) => s.auth.session?.user ?? null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [anns, setAnns] = useState<Annotation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +152,7 @@ export function AnnotationsTab() {
   const [includePin, setIncludePin] = useState(false);
   const [segTranslations, setSegTranslations] = useState<SegmentTranslationEntry[] | null>(null);
   const [segError, setSegError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const labelStore = useLabelStore(new Map());
 
   useEffect(() => {
@@ -232,6 +289,61 @@ export function AnnotationsTab() {
     selectedSegment.textid === textid &&
     selectedSegment.seq === seq;
 
+  const sessionDid = authUser?.bluesky?.did ?? null;
+  const canManage = (a: Annotation): boolean => {
+    if (a.id == null) return false;
+    if (authUser == null) return false;
+    if (authUser.is_editor || authUser.is_admin) return true;
+    return sessionDid != null && a.did != null && a.did === sessionDid;
+  };
+
+  const resolveAction = (a: Annotation): AnnAction | null => {
+    if (!canManage(a)) return null;
+    if (a.curation_state === "rejected" && a.uri) {
+      return { kind: "unreject", uri: a.uri };
+    }
+    if (a.uri) return { kind: "reject", uri: a.uri };
+    return { kind: "archive-delete" };
+  };
+
+  const handleAction = async (a: Annotation, act: AnnAction) => {
+    if (a.id == null || textid == null || seq == null) return;
+    if (act.kind === "reject" || act.kind === "unreject") {
+      const nextState = act.kind === "reject" ? "rejected" : "proposed";
+      setBusyId(a.id);
+      try {
+        await patchContributionCuration(act.uri, { state: nextState });
+        setAnns((prev) =>
+          prev == null
+            ? prev
+            : prev.map((x) =>
+                x.id === a.id
+                  ? { ...x, curation_state: nextState === "proposed" ? undefined : nextState }
+                  : x,
+              ),
+        );
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setBusyId(null);
+      }
+      return;
+    }
+    // archive-delete (synth/legacy)
+    if (!window.confirm("Remove this annotation row from the archive? This cannot be undone.")) {
+      return;
+    }
+    setBusyId(a.id);
+    try {
+      await archiveDeleteAnnotation(textid, seq, a.id);
+      setAnns((prev) => (prev == null ? prev : prev.filter((x) => x.id !== a.id)));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="rc">
       {sel && sel.textid === textid && sel.seq === seq && (
@@ -308,6 +420,8 @@ export function AnnotationsTab() {
         visible.map((a, i) => {
           const key = a.id ?? `${a.offset}-${i}`;
           const isSelected = a.id != null && a.id === selectedAnnId;
+          const action = resolveAction(a);
+          const busy = a.id != null && a.id === busyId;
           return (
             <AnnCard
               key={key}
@@ -322,6 +436,9 @@ export function AnnotationsTab() {
                     }
                   : undefined
               }
+              action={action}
+              busy={busy}
+              onAction={handleAction}
             />
           );
         })

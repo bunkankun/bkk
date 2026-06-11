@@ -292,3 +292,194 @@ def test_annotations_by_sense_empty_without_root(corpus: Path):
     r = client.get("/annotations/by-sense/uuid-s1")
     assert r.status_code == 200
     assert r.json() == {"sense_uuid": "uuid-s1", "total": 0, "locations": []}
+
+
+# ── Provenance exposure + archive DELETE ──────────────────────────────────
+
+
+from bkk.serve.routers.auth import SESSION_COOKIE
+from bkk.serve.state import BlueskySession
+
+
+_AUTHOR_DID = "did:plc:author-x"
+
+
+def _login(client: TestClient, *, is_editor: bool = False, is_admin: bool = False) -> str:
+    app = client.app  # type: ignore[attr-defined]
+    session = app.state.bkk.sessions.create(
+        login="tester",
+        name=None,
+        avatar_url=None,
+        html_url=None,
+        access_token="ghp-test",
+        workspace={},
+        is_editor=is_editor,
+        is_admin=is_admin,
+    )
+    client.cookies.set(SESSION_COOKIE, session.id)
+    return session.id
+
+
+def _attach_bluesky(client: TestClient, session_id: str, did: str) -> None:
+    app = client.app  # type: ignore[attr-defined]
+    app.state.bkk.sessions.attach_bluesky(
+        session_id,
+        BlueskySession(
+            did=did,
+            handle="tester.bsky.social",
+            access_jwt="jwt-access",
+            refresh_jwt="jwt-refresh",
+            service_endpoint="https://bsky.social",
+        ),
+    )
+
+
+def test_annotations_expose_did_for_legacy_records(annotated_client: TestClient):
+    """Legacy records expose ``did`` but no ``uri``."""
+    body = annotated_client.get("/bundles/ANN0001/juan/1/annotations").json()
+    legacy = next(a for a in body if a["id"] == "uuid-1")
+    assert legacy["did"] == "did:plc:bkk-tls-legacy"
+    assert "uri" not in legacy  # synth records have no at-URI
+    # curation_state=accepted is non-default → exposed
+    assert legacy["curation_state"] == "accepted"
+
+
+def test_annotations_suppress_proposed_curation_state(tmp_path: Path):
+    """``proposed`` is the default; don't ship it on every record."""
+    corpus_root = tmp_path / "corpus"
+    archive_root = tmp_path / "archive"
+    corpus_root.mkdir()
+    write_bundle(corpus_root, "PROP0001", "abc", title="t")
+    _write_ann_jsonl(archive_root, "PROP0001", 1, [{
+        "id": "uuid-p",
+        "anchor": {"marker_id": "PROP0001_001-1a", "offset": 0, "length": 1},
+        "payload": {"concept": "X"},
+        "provenance": {"did": _AUTHOR_DID, "cid": "synth-p"},
+        "curation_state": "proposed",
+        "bucket": "body",
+        "bucket_offset": 0,
+    }])
+    config = ServeConfig(
+        corpus_root=corpus_root,
+        index_path=corpus_root / "_corpus.bkkx",
+        annotations_root=archive_root,
+    )
+    client = TestClient(create_app(config))
+    body = client.get("/bundles/PROP0001/juan/1/annotations").json()
+    assert "curation_state" not in body[0]
+
+
+def test_annotations_expose_uri_for_bsky_native(tmp_path: Path):
+    corpus_root = tmp_path / "corpus"
+    archive_root = tmp_path / "archive"
+    corpus_root.mkdir()
+    write_bundle(corpus_root, "BSKY0001", "abc", title="t")
+    bsky_uri = f"at://{_AUTHOR_DID}/org.bunkankun.annotation.note/abc"
+    _write_ann_jsonl(archive_root, "BSKY0001", 1, [{
+        "id": "bafy-cid",
+        "anchor": {"marker_id": "BSKY0001_001-1a", "offset": 0, "length": 1},
+        "payload": {"concept": "X"},
+        "provenance": {"did": _AUTHOR_DID, "cid": "bafy-cid", "uri": bsky_uri},
+        "curation_state": "accepted",
+        "bucket": "body",
+        "bucket_offset": 0,
+    }])
+    config = ServeConfig(
+        corpus_root=corpus_root,
+        index_path=corpus_root / "_corpus.bkkx",
+        annotations_root=archive_root,
+    )
+    client = TestClient(create_app(config))
+    body = client.get("/bundles/BSKY0001/juan/1/annotations").json()
+    assert body[0]["did"] == _AUTHOR_DID
+    assert body[0]["uri"] == bsky_uri
+
+
+def test_delete_archive_annotation_requires_login(annotated_client: TestClient):
+    r = annotated_client.delete("/bundles/ANN0001/juan/1/annotations/uuid-1")
+    assert r.status_code == 401
+
+
+def test_delete_archive_annotation_editor_allowed(annotated_client: TestClient):
+    """An editor can delete a legacy/synth annotation."""
+    _login(annotated_client, is_editor=True)
+    r = annotated_client.delete("/bundles/ANN0001/juan/1/annotations/uuid-1")
+    assert r.status_code == 200, r.text
+    assert r.json() == {
+        "text_id": "ANN0001", "juan_seq": 1, "id": "uuid-1", "deleted": True,
+    }
+    # The other annotation survives; uuid-1 is gone.
+    remaining = annotated_client.get("/bundles/ANN0001/juan/1/annotations").json()
+    assert [a["id"] for a in remaining] == ["uuid-2"]
+
+
+def test_delete_archive_annotation_non_editor_blocked(annotated_client: TestClient):
+    """Non-editor, non-owner gets 403."""
+    sid = _login(annotated_client, is_editor=False)
+    _attach_bluesky(annotated_client, sid, "did:plc:somebody-else")
+    r = annotated_client.delete("/bundles/ANN0001/juan/1/annotations/uuid-1")
+    assert r.status_code == 403
+
+
+def test_delete_archive_annotation_owner_allowed(tmp_path: Path):
+    """A non-editor whose Bluesky DID matches the record's author can delete it."""
+    corpus_root = tmp_path / "corpus"
+    archive_root = tmp_path / "archive"
+    corpus_root.mkdir()
+    write_bundle(corpus_root, "OWN0001", "abc", title="t")
+    _write_ann_jsonl(archive_root, "OWN0001", 1, [{
+        "id": "uuid-mine",
+        "anchor": {"marker_id": "OWN0001_001-1a", "offset": 0, "length": 1},
+        "payload": {"concept": "X"},
+        "provenance": {"did": _AUTHOR_DID, "cid": "synth-mine"},
+        "curation_state": "accepted",
+        "bucket": "body",
+        "bucket_offset": 0,
+    }])
+    config = ServeConfig(
+        corpus_root=corpus_root,
+        index_path=corpus_root / "_corpus.bkkx",
+        annotations_root=archive_root,
+    )
+    client = TestClient(create_app(config))
+    sid = _login(client, is_editor=False)
+    _attach_bluesky(client, sid, _AUTHOR_DID)
+    r = client.delete("/bundles/OWN0001/juan/1/annotations/uuid-mine")
+    assert r.status_code == 200, r.text
+
+
+def test_delete_archive_annotation_rejects_bsky_native(tmp_path: Path):
+    """Bsky-native records must go through the curation PATCH or the CLI."""
+    corpus_root = tmp_path / "corpus"
+    archive_root = tmp_path / "archive"
+    corpus_root.mkdir()
+    write_bundle(corpus_root, "BSKY0002", "abc", title="t")
+    _write_ann_jsonl(archive_root, "BSKY0002", 1, [{
+        "id": "bafy-bsky",
+        "anchor": {"marker_id": "BSKY0002_001-1a", "offset": 0, "length": 1},
+        "payload": {"concept": "X"},
+        "provenance": {
+            "did": _AUTHOR_DID,
+            "cid": "bafy-bsky",
+            "uri": f"at://{_AUTHOR_DID}/org.bunkankun.annotation.note/r",
+        },
+        "curation_state": "accepted",
+        "bucket": "body",
+        "bucket_offset": 0,
+    }])
+    config = ServeConfig(
+        corpus_root=corpus_root,
+        index_path=corpus_root / "_corpus.bkkx",
+        annotations_root=archive_root,
+    )
+    client = TestClient(create_app(config))
+    _login(client, is_editor=True)
+    r = client.delete("/bundles/BSKY0002/juan/1/annotations/bafy-bsky")
+    assert r.status_code == 400
+    assert "curation-state" in r.json()["detail"]
+
+
+def test_delete_archive_annotation_missing(annotated_client: TestClient):
+    _login(annotated_client, is_editor=True)
+    r = annotated_client.delete("/bundles/ANN0001/juan/1/annotations/uuid-nope")
+    assert r.status_code == 404

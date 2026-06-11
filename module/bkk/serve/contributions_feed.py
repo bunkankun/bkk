@@ -27,6 +27,7 @@ import logging
 import time
 from collections import OrderedDict
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
@@ -115,6 +116,12 @@ def _entry_from_commit(
         "text_id": text_id,
         "created_at": created_at if isinstance(created_at, str) else None,
         "time_us": time_us,
+        # Keep the raw camelCase wire record alongside the flat shape so the
+        # PATCH curation endpoint can materialize a JSONL row when the record
+        # has not yet been harvested to disk. Underscore-prefixed so the
+        # pydantic response model drops it.
+        "_wire": record,
+        "_collection": collection,
     }
     anchor = _anchor_fields(record)
 
@@ -269,6 +276,10 @@ class ContributionFeed:
         url: str = JETSTREAM_URL,
         backfill_window_s: float = BACKFILL_WINDOW_S,
         resolver: CurationResolver | None = None,
+        annotations_root: Path | None = None,
+        comments_root: Path | None = None,
+        translations_root: Path | None = None,
+        archive_on_delete: bool = False,
     ) -> None:
         self._dids = list(dids or [])
         self._max = max_entries
@@ -284,6 +295,20 @@ class ContributionFeed:
         # Resolver consumes curation.judgment records; everything we insert
         # into the buffer gets its current resolved (state, rating) stamped.
         self.resolver: CurationResolver = resolver or CurationResolver()
+        # On Jetstream `delete`, also rewrite the on-disk JSONL so an author
+        # deleting from another client doesn't leave a phantom record behind.
+        # Off in tests by default; the server lifespan flips it on. Keys are
+        # the kind strings from ``bkk.annotations.delete`` ("annotation",
+        # "comment", "translation"); imported lazily in ``_archive_delete``
+        # to avoid a circular import.
+        self._archive_roots: dict[str, Path] = {}
+        if archive_on_delete:
+            if annotations_root is not None:
+                self._archive_roots["annotation"] = annotations_root
+            if comments_root is not None:
+                self._archive_roots["comment"] = comments_root
+            if translations_root is not None:
+                self._archive_roots["translation"] = translations_root
 
     def stop(self) -> None:
         self._stop.set()
@@ -331,6 +356,34 @@ class ContributionFeed:
         async with self._lock:
             self._by_uri.pop(uri, None)
 
+    async def _archive_delete(self, *, collection: str, uri: str) -> None:
+        """Propagate a Jetstream delete to the on-disk archive.
+
+        No-op when ``archive_on_delete`` is off or the kind has no root
+        configured. The rewrite is run in a worker thread so it doesn't
+        stall the websocket consumer.
+        """
+        kind = _KIND_BY_NSID.get(collection)
+        if kind is None:
+            return
+        root = self._archive_roots.get(kind)
+        if root is None:
+            return
+        # Deferred import: bkk.annotations.delete pulls in
+        # bkk.serve.routers.annotations, which would cycle back to bkk.serve
+        # at module load time.
+        from bkk.annotations.delete import archive_remove_by_uri
+        try:
+            hit = await asyncio.to_thread(
+                archive_remove_by_uri, uri,
+                **{f"{kind}s_root": root},
+            )
+        except Exception:
+            log.exception("archive delete failed for %s", uri)
+            return
+        if hit is not None:
+            log.info("archive delete: removed %s from %s", uri, hit.path)
+
     async def _handle_commit(self, msg: dict[str, Any]) -> None:
         commit = msg.get("commit")
         if not isinstance(commit, dict):
@@ -354,7 +407,9 @@ class ContributionFeed:
             )
             return
         if op == "delete":
-            await self._delete(f"at://{did}/{collection}/{rkey}")
+            uri = f"at://{did}/{collection}/{rkey}"
+            await self._delete(uri)
+            await self._archive_delete(collection=collection, uri=uri)
             return
         if op not in ("create", "update"):
             return

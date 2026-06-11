@@ -97,6 +97,20 @@ def _ann_entry(*, cid: str, anchor_offset: int = 2) -> dict:
         "length": 1,
         "payload": {"form": {"orth": "甲"}},
         "source_role": "manual",
+        # Mirrors the wire record cached by _entry_from_commit.
+        "_wire": {
+            "textId": TEXT_ID,
+            "edition": EDITION_SHORT,
+            "anchor": {
+                "markerId": MARKER_ID,
+                "offset": anchor_offset,
+                "length": 1,
+            },
+            "payload": {"form": {"orth": "甲"}},
+            "sourceRole": "manual",
+            "createdAt": "2026-06-01T00:00:00Z",
+        },
+        "_collection": "org.bunkankun.annotation.note",
     }
 
 
@@ -357,6 +371,71 @@ def test_patch_curation_state_round_trip(env, monkeypatch):
     assert refreshed["rating"] == 0
 
 
+def test_patch_materializes_jsonl_row_when_record_not_yet_on_disk(env, monkeypatch):
+    """Rejecting a live-feed record that hasn't been harvested writes a fresh JSONL row.
+
+    Without this, the on-disk archive never sees the rejection — the curation
+    update lives only in the in-memory feed + bsky judgment record, and
+    ``bkk annotations delete --rejected`` finds nothing to delete.
+    """
+    app, client, feed, annotations_root = env
+    entry = _ann_entry(cid="cid-fresh")
+    _put_entry(feed, entry)
+    # No _seed_archive: the record has never been harvested to JSONL.
+
+    session_id = _login_as(client, app, is_editor=True)
+    _attach_bluesky(app, session_id, EDITOR_DID)
+    _patch_create_record(monkeypatch, did=EDITOR_DID)
+
+    r = client.patch(
+        "/annotations/curation-state",
+        json={"uri": entry["uri"], "state": "rejected"},
+    )
+    assert r.status_code == 200, r.text
+
+    archive_path = (
+        annotations_root / TEXT_ID / f"{TEXT_ID}_{JUAN_SEQ:03d}.ann.jsonl"
+    )
+    assert archive_path.exists(), "PATCH should materialize the JSONL file"
+    on_disk = [
+        json.loads(line)
+        for line in archive_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(on_disk) == 1
+    row = on_disk[0]
+    assert row["curation_state"] == "rejected"
+    assert row["provenance"]["cid"] == "cid-fresh"
+    assert row["provenance"]["uri"] == entry["uri"]
+    assert row["provenance"]["did"] == DID
+    assert row["anchor"]["marker_id"] == MARKER_ID
+    assert row["bucket"] == "body"
+    assert row["bucket_offset"] == MARKER_OFFSET + 2
+
+
+def test_patch_skips_materialize_without_wire(env, monkeypatch):
+    """Legacy buffer entries (no ``_wire``) don't crash the PATCH path."""
+    app, client, feed, annotations_root = env
+    entry = _ann_entry(cid="cid-no-wire")
+    entry.pop("_wire", None)
+    entry.pop("_collection", None)
+    _put_entry(feed, entry)
+
+    session_id = _login_as(client, app, is_editor=True)
+    _attach_bluesky(app, session_id, EDITOR_DID)
+    _patch_create_record(monkeypatch, did=EDITOR_DID)
+
+    r = client.patch(
+        "/annotations/curation-state",
+        json={"uri": entry["uri"], "state": "rejected"},
+    )
+    assert r.status_code == 200
+    archive_path = (
+        annotations_root / TEXT_ID / f"{TEXT_ID}_{JUAN_SEQ:03d}.ann.jsonl"
+    )
+    assert not archive_path.exists()
+
+
 def test_patch_posts_curation_record(env, monkeypatch):
     """PATCH posts a record with the expected lexicon shape."""
     app, client, feed, _ = env
@@ -418,8 +497,8 @@ def test_patch_fills_missing_field_from_resolver(env, monkeypatch):
     assert calls[0]["record"]["rating"] == 1
 
 
-def test_patch_rejects_self_state_change(env, monkeypatch):
-    """Editors may not change `state` on a record they authored."""
+def test_patch_rejects_self_accept(env, monkeypatch):
+    """Authors may not set `state=accepted` on their own record."""
     app, client, feed, _ = env
     entry = _ann_entry(cid="cid-self")  # entry["did"] is DID
     _put_entry(feed, entry)
@@ -435,6 +514,42 @@ def test_patch_rejects_self_state_change(env, monkeypatch):
     )
     assert r.status_code == 403
     assert not calls  # nothing was posted
+
+
+def test_patch_allows_self_reject(env, monkeypatch):
+    """Authors may retract their own record by setting state=rejected."""
+    app, client, feed, _ = env
+    entry = _ann_entry(cid="cid-self-reject")
+    _put_entry(feed, entry)
+
+    session_id = _login_as(client, app, is_editor=True)
+    _attach_bluesky(app, session_id, DID)
+    calls = _patch_create_record(monkeypatch, did=DID)
+
+    r = client.patch(
+        "/annotations/curation-state",
+        json={"uri": entry["uri"], "state": "rejected"},
+    )
+    assert r.status_code == 200, r.text
+    assert calls[0]["record"]["state"] == "rejected"
+
+
+def test_patch_allows_self_withdraw_to_proposed(env, monkeypatch):
+    """Authors may move their own record back to ``proposed`` (un-reject)."""
+    app, client, feed, _ = env
+    entry = _ann_entry(cid="cid-self-withdraw")
+    _put_entry(feed, entry)
+
+    session_id = _login_as(client, app, is_editor=True)
+    _attach_bluesky(app, session_id, DID)
+    calls = _patch_create_record(monkeypatch, did=DID)
+
+    r = client.patch(
+        "/annotations/curation-state",
+        json={"uri": entry["uri"], "state": "proposed"},
+    )
+    assert r.status_code == 200, r.text
+    assert calls[0]["record"]["state"] == "proposed"
 
 
 def test_patch_allows_self_rating_change(env, monkeypatch):

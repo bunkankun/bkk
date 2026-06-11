@@ -105,8 +105,13 @@ def _coerce_record(raw: dict[str, Any]) -> AnnotationOut | None:
         return None
     anchor = raw.get("anchor") or {}
     payload = raw.get("payload") or {}
+    provenance = raw.get("provenance") if isinstance(raw.get("provenance"), dict) else {}
     marker_id = anchor.get("marker_id") if isinstance(anchor, dict) else None
     length = anchor.get("length") if isinstance(anchor, dict) else None
+    curation_state = raw.get("curation_state")
+    # Suppress the default so the field doesn't appear on every row.
+    if curation_state == "proposed":
+        curation_state = None
     return AnnotationOut(
         id=raw.get("id"),
         offset=bucket_offset,
@@ -119,6 +124,9 @@ def _coerce_record(raw: dict[str, Any]) -> AnnotationOut | None:
         sense=_coerce_sense(payload.get("sense")),
         translation=_coerce_translation(payload.get("translation")),
         metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None,
+        did=provenance.get("did") if isinstance(provenance.get("did"), str) else None,
+        uri=provenance.get("uri") if isinstance(provenance.get("uri"), str) else None,
+        curation_state=curation_state if isinstance(curation_state, str) else None,
     )
 
 
@@ -604,6 +612,100 @@ def patch_local_rating(
         id=body.id,
         rating=body.rating,
     )
+
+
+class ArchiveDeleteResponse(BaseModel):
+    text_id: str
+    juan_seq: int
+    id: str
+    deleted: bool = True
+
+
+def _is_bsky_native(record: dict[str, Any]) -> bool:
+    """Same heuristic as ``bkk.annotations.delete.is_bsky_native``, inlined
+    to avoid a circular import (``delete`` reuses ``read_raw_records`` from
+    here)."""
+    prov = record.get("provenance")
+    if not isinstance(prov, dict):
+        return False
+    uri = prov.get("uri")
+    cid = prov.get("cid")
+    if not isinstance(uri, str) or not uri.startswith("at://"):
+        return False
+    if isinstance(cid, str) and cid.startswith("synth-"):
+        return False
+    return True
+
+
+@router.delete(
+    "/bundles/{textid}/juan/{seq}/annotations/{ann_id}",
+    response_model=ArchiveDeleteResponse,
+    summary="Archive-only delete of a legacy/synth annotation row",
+)
+def delete_juan_annotation(
+    request: Request,
+    textid: str = PathParam(..., openapi_examples=ex.TEXTID),
+    seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
+    ann_id: str = PathParam(...),
+) -> ArchiveDeleteResponse:
+    """Remove a row from the on-disk archive. Refuses bsky-native records —
+    those go through ``PATCH /annotations/curation-state`` (soft delete) or
+    the ``bkk annotations delete`` CLI (hard delete)."""
+    state: AppState = request.app.state.bkk
+    _, user = _require_user(request)
+
+    path = _ann_path(state, textid, seq)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Annotation file not found")
+
+    records = list(read_raw_records(path))
+    hit_idx = next(
+        (i for i, r in enumerate(records) if r.get("id") == ann_id),
+        None,
+    )
+    if hit_idx is None:
+        raise HTTPException(status_code=404, detail="Annotation row not found")
+    record = records[hit_idx]
+
+    prov = record.get("provenance") if isinstance(record.get("provenance"), dict) else {}
+    record_did = prov.get("did") if isinstance(prov.get("did"), str) else None
+    bluesky_did = user.bluesky.did if user.bluesky is not None else None
+    is_owner = bluesky_did is not None and bluesky_did == record_did
+    if not (user.is_editor or user.is_admin or is_owner):
+        raise HTTPException(
+            status_code=403,
+            detail="Editor role or matching Bluesky DID required",
+        )
+
+    if _is_bsky_native(record):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Bsky-native records must be soft-deleted via "
+                "PATCH /annotations/curation-state (or hard-deleted via the CLI)"
+            ),
+        )
+
+    survivors = records[:hit_idx] + records[hit_idx + 1:]
+    write_records_jsonl(path, survivors, sort=True)
+
+    index_path = state.annotations_index_path
+    if index_path is not None and index_path.exists():
+        try:
+            conn = sqlite3.connect(str(index_path))
+            try:
+                conn.execute(
+                    "DELETE FROM annotation_location "
+                    "WHERE text_id = ? AND juan_seq = ? AND annotation_id = ?",
+                    (textid, seq, ann_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except sqlite3.DatabaseError:
+            pass
+
+    return ArchiveDeleteResponse(text_id=textid, juan_seq=seq, id=ann_id)
 
 
 __all__ = ["router", "get_juan_annotations"]

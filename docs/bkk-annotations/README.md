@@ -106,7 +106,12 @@ diff-friendly commits.
   of truth; the value here is stamped by the harvester after resolving
   the latest judgment from any allowlisted editor DID. Lines written
   before the curation lexicon shipped keep their existing value until
-  an editor re-curates.
+  an editor re-curates. Authors may self-flip their own record to
+  `rejected` (soft delete) or back to `proposed`; `accepted` and
+  `superseded` self-judgments are dropped by the resolver. See the
+  *Deletion* section in [`workflow.md`](workflow.md) for the full
+  removal story (soft delete, archive-only delete, CLI hard delete,
+  Jetstream propagation).
 - **`rating`** — integer `0` / `1` / `2`, also resolved from the latest
   `org.bunkankun.curation.judgment` and stamped by the harvester
   (default `0` when no curation record has been observed).

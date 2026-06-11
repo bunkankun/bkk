@@ -32,7 +32,7 @@ from ..atproto import (
     create_record,
 )
 from ..contributions_feed import _created_at_us
-from ..curation import Judgment
+from ..curation import Judgment, SELF_ALLOWED_STATES
 from ..state import AppState
 from .annotations import read_raw_records
 from .annotations_write import _now_iso, _require_bluesky, _require_user
@@ -304,12 +304,16 @@ def patch_curation_state(
     admin_dids = set(state.config.annotation_admin_dids)
     if (
         body.state is not None
+        and body.state not in SELF_ALLOWED_STATES
         and bluesky.did == target_author_did
         and bluesky.did not in admin_dids
     ):
         raise HTTPException(
             status_code=403,
-            detail="Authors may not change curation state on their own records",
+            detail=(
+                "Authors may only set their own records to "
+                f"{sorted(SELF_ALLOWED_STATES)}"
+            ),
         )
 
     current_state, current_rating = feed.resolver.get(body.uri)
@@ -367,8 +371,10 @@ def patch_curation_state(
     archive_path = _archive_path_for(
         state, kind=kind, text_id=text_id, juan_seq=seq,
     )
-    if archive_path is not None and archive_path.exists():
-        records = list(read_raw_records(archive_path))
+    if archive_path is not None:
+        records = (
+            list(read_raw_records(archive_path)) if archive_path.exists() else []
+        )
         hit_idx = next(
             (i for i, r in enumerate(records)
              if isinstance(r.get("provenance"), dict)
@@ -382,6 +388,26 @@ def patch_curation_state(
             if isinstance(provenance, dict) and not provenance.get("uri"):
                 provenance["uri"] = body.uri
             write_records_jsonl(archive_path, records, sort=(kind == "annotation"))
+        else:
+            # Record arrived via the live feed but hasn't been harvested to
+            # disk yet. Materialize from the cached wire record so the
+            # curation state is durable and surfaces to the CLI deleter.
+            wire = entry.get("_wire")
+            wire_collection = entry.get("_collection")
+            if isinstance(wire, dict) and isinstance(wire_collection, str):
+                from bkk.annotations.harvest import materialize_archive_record
+                archive = materialize_archive_record(
+                    wire=wire, collection=wire_collection,
+                    did=target_author_did, cid=cid, uri=body.uri,
+                    corpus_root=state.corpus_root,
+                )
+                if archive is not None:
+                    archive["curation_state"] = resolved_state
+                    archive["rating"] = resolved_rating
+                    records.append(archive)
+                    write_records_jsonl(
+                        archive_path, records, sort=(kind == "annotation"),
+                    )
 
     feed.set_curation(body.uri, resolved_state, resolved_rating)
 

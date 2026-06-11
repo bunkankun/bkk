@@ -87,12 +87,34 @@ def test_non_allowlisted_did_ignored():
     assert r.get(TARGET_URI) == ("proposed", 0)
 
 
-def test_self_state_change_dropped_rating_kept():
+def test_self_accept_dropped_rating_kept():
     r = _resolver()
     r.apply(_j(did=AUTHOR, rkey="r1", state="accepted", rating=2, created_at_us=10))
     state, rating = r.get(TARGET_URI)
-    assert state == "proposed"  # author's state attempt is filtered
+    assert state == "proposed"  # self-accept is filtered
     assert rating == 2          # rating is kept
+
+
+def test_self_reject_allowed():
+    """Authors may set their own record to ``rejected`` (retraction)."""
+    r = _resolver()
+    r.apply(_j(did=AUTHOR, rkey="r1", state="rejected", rating=0, created_at_us=10))
+    assert r.get(TARGET_URI) == ("rejected", 0)
+
+
+def test_self_withdraw_to_proposed_allowed():
+    """Authors may move their own record back to ``proposed``."""
+    r = _resolver()
+    r.apply(_j(did=AUTHOR, rkey="r1", state="rejected", created_at_us=10))
+    r.apply(_j(did=AUTHOR, rkey="r2", state="proposed", created_at_us=20))
+    assert r.get(TARGET_URI)[0] == "proposed"
+
+
+def test_self_superseded_dropped():
+    """``superseded`` is not in the self-allowed set."""
+    r = _resolver()
+    r.apply(_j(did=AUTHOR, rkey="r1", state="superseded", created_at_us=10))
+    assert r.get(TARGET_URI)[0] == "proposed"
 
 
 def test_admin_can_self_curate():
@@ -109,11 +131,19 @@ def test_self_filtered_state_does_not_override_editor_state():
     r = _resolver()
     # Editor A accepts at T=10.
     r.apply(_j(did=EDITOR_A, rkey="rA", state="accepted", rating=0, created_at_us=10))
-    # Author re-rates later at T=20 (state stripped, rating kept).
-    r.apply(_j(did=AUTHOR, rkey="rAuth", state="rejected", rating=2, created_at_us=20))
+    # Author tries to self-accept later (state stripped, rating kept).
+    r.apply(_j(did=AUTHOR, rkey="rAuth", state="accepted", rating=2, created_at_us=20))
     state, rating = r.get(TARGET_URI)
     assert state == "accepted"   # editor A's state stands
     assert rating == 2           # author's rating wins (latest)
+
+
+def test_self_reject_overrides_earlier_editor_accept():
+    """An author retracting wins over an earlier editor acceptance."""
+    r = _resolver()
+    r.apply(_j(did=EDITOR_A, rkey="rA", state="accepted", created_at_us=10))
+    r.apply(_j(did=AUTHOR, rkey="rAuth", state="rejected", created_at_us=20))
+    assert r.get(TARGET_URI)[0] == "rejected"
 
 
 def test_apply_returns_change_flag():

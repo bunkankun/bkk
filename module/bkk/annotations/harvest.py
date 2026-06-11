@@ -404,6 +404,56 @@ def curation_wire_to_archive(
     }
 
 
+def materialize_archive_record(
+    *,
+    wire: dict[str, Any],
+    collection: str,
+    did: str,
+    cid: str,
+    uri: str | None,
+    corpus_root: Path | None = None,
+) -> dict[str, Any] | None:
+    """Convert a wire record to its archive-row shape with bucket attached.
+
+    Used by the curation PATCH path to materialize a JSONL row when the
+    record arrived via the live feed and has not yet been harvested to disk.
+    Returns ``None`` when the converter rejects the wire (missing required
+    fields) or when bucket attachment fails for a kind that requires it.
+    """
+    if collection in (ANNOTATION_NSID, LEGACY_ANNOTATION_NSID):
+        archive = annotation_wire_to_archive(
+            wire, did=did, cid=cid, uri=uri, nsid=ANNOTATION_NSID,
+        )
+        bucket_required = True
+    elif collection == COMMENT_NSID:
+        archive = comment_wire_to_archive(wire, did=did, cid=cid, uri=uri)
+        bucket_required = False
+    elif collection == TRANSLATION_NSID:
+        archive = translation_wire_to_archive(wire, did=did, cid=cid, uri=uri)
+        bucket_required = True
+    else:
+        return None
+    if archive is None:
+        return None
+    if corpus_root is not None and "anchor" in archive:
+        anchor = archive["anchor"]
+        parsed = parse_marker_id(anchor["marker_id"])
+        if parsed is not None:
+            edition_short, juan_seq = parsed
+            juan_doc = _load_juan_with_markers(
+                corpus_root, archive["text_id"], edition_short, juan_seq,
+            )
+            if juan_doc is not None:
+                pos = compute_bucket_position(
+                    juan_doc, anchor["marker_id"], anchor["offset"],
+                )
+                if pos is not None:
+                    archive["bucket"], archive["bucket_offset"] = pos
+    if bucket_required and "bucket" not in archive:
+        return None
+    return archive
+
+
 # ── Listing / fetching ───────────────────────────────────────────────────
 
 
@@ -672,6 +722,7 @@ __all__ = [
     "comment_wire_to_archive",
     "translation_wire_to_archive",
     "curation_wire_to_archive",
+    "materialize_archive_record",
     "wire_to_archive",
     "compute_bucket_position",
     "juan_seq_from_marker_id",

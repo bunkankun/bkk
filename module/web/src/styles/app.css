@@ -1607,6 +1607,30 @@ button {
   color: var(--t3);
   font-family: var(--fm);
 }
+.ann-action {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  margin-left: 4px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--t3);
+  cursor: pointer;
+}
+.ann-action:hover:not(:disabled) {
+  color: var(--t1);
+}
+.ann-action.ann-delete:hover:not(:disabled) {
+  color: #c33;
+}
+.ann-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ann-rejected {
+  opacity: 0.55;
+}
 .contrib-location {
   background: none;
   border: none;

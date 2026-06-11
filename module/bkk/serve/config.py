@@ -19,8 +19,14 @@ class ServeConfig:
     core_pr_base: str = "master"
     annotations_root: Path | None = None
     annotations_index_path: Path | None = None
+    comments_root: Path | None = None
+    translations_root: Path | None = None
     annotation_dids: tuple[str, ...] = ()
     annotation_admin_dids: tuple[str, ...] = ()
+    # When a Jetstream delete arrives for an annotation / comment / translation,
+    # also remove the row from the on-disk archive. Default on; flip to false
+    # via ``[annotations].archive_on_delete = false`` if Jetstream becomes flaky.
+    archive_on_delete: bool = True
     host: str = "127.0.0.1"
     port: int = 8000
     admin_team: str = "bunkankun/bkk-admin"
@@ -165,6 +171,14 @@ class ServeConfig:
             d for d in rc_admin_dids if isinstance(d, str)
         )
 
+        rc_comments_root = rc.get("comments_root")
+        comments_root = Path(rc_comments_root).resolve() if rc_comments_root else None
+        rc_translations_root = rc.get("translations_root")
+        translations_root = (
+            Path(rc_translations_root).resolve() if rc_translations_root else None
+        )
+        archive_on_delete = bool(rc.get("archive_on_delete", True))
+
         env_translation_search = os.environ.get("BKK_TRANSLATION_SEARCH_PATH")
         rc_translation_search = rc.get("translation_search")
         if env_translation_search:
@@ -299,8 +313,11 @@ class ServeConfig:
             core_pr_base=core_pr_base,
             annotations_root=annotations_root,
             annotations_index_path=annotations_index,
+            comments_root=comments_root,
+            translations_root=translations_root,
             annotation_dids=annotation_dids,
             annotation_admin_dids=annotation_admin_dids,
+            archive_on_delete=archive_on_delete,
             host=host,
             port=port,
             admin_team=admin_team,

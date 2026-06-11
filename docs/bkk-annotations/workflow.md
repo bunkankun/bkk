@@ -259,6 +259,106 @@ Env vars:
   `{items:[], truncated:false}` uniformly. Use this in tests, offline dev,
   and any context where the server should not touch the network.
 
+## Deletion
+
+Contributions can be removed via three paths, picked by who is acting and
+whether the record exists on Bluesky.
+
+### Soft delete (author or editor, bsky-native records)
+
+Default path. The actor flips a record's `curation_state` to `rejected`
+via `PATCH /api/annotations/curation-state` — the same endpoint the
+ChatTab dropdown already drives. The record stays on bsky and in the
+archive, but the index filter at
+[`index/annotations.py`](../../module/bkk/index/annotations.py) hides
+`rejected` rows from the per-juan list, so the row disappears from
+ChatTab, AnnotationsTab, and any other read surface.
+
+**Self-curation rule** ([`serve/curation.py`](../../module/bkk/serve/curation.py)):
+an author may set their own record to `rejected` or back to `proposed`;
+`accepted` and `superseded` on the author's own record are dropped by
+`_filter_self_state` and the matching gate in
+[`routers/contributions.py`](../../module/bkk/serve/routers/contributions.py).
+The constant `SELF_ALLOWED_STATES = {"rejected", "proposed"}` is the
+single source of truth. Admins listed in `[annotations].admin_dids`
+bypass this restriction entirely.
+
+This makes soft-delete the natural author UX: revoke a record by
+rejecting it, restore it by flipping back to `proposed` — no destructive
+operation. The AnnotationsTab `×` / `↺` buttons drive this for records
+the session owns or that the session's GitHub role
+(`bunkankun/bkk-editor` or `bunkankun/bkk-admin`) covers
+([`AnnotationsTab.tsx`](../../module/web/src/components/RightPanel/AnnotationsTab.tsx)).
+
+### Archive-only delete (UI, synth/legacy records)
+
+Synth/legacy records — those with `provenance.did = did:plc:bkk-tls-legacy`
+or `provenance.cid` starting with `synth-` — have no bsky record to
+reject. The reader's `×` button on those rows hits
+`DELETE /api/bundles/{textid}/juan/{seq}/annotations/{id}`
+([`routers/annotations.py`](../../module/bkk/serve/routers/annotations.py)),
+which rewrites the JSONL omitting the row and clears the matching index
+entry. The endpoint refuses bsky-native records (HTTP 400) so the wrong
+button can't be wired to the wrong record.
+
+Authorization: GitHub role (`is_editor` / `is_admin`) **or** matching
+Bluesky DID (`session.bluesky.did == record.provenance.did`). The two
+role systems are parallel: GitHub teams gate editor surface, Bluesky DID
+gates own-record actions.
+
+### Hard delete (CLI)
+
+`bkk annotations delete` removes a record from Bluesky *and* from the
+archive. Operator-only; not exposed in the UI.
+
+```text
+bkk annotations delete \
+  ( --uri at://did/coll/rkey | --cid <cid> | --id <archive-id> ) \
+  [--archive-only | --remote-only] \
+  [--dry-run] \
+  [--handle <handle> --app-password <pw>]   # else BKK_BLUESKY_HANDLE / BKK_BLUESKY_APP_PASSWORD
+```
+
+Order matters: **bsky `com.atproto.repo.deleteRecord` first, then archive
+rewrite**. If the bsky call fails, the archive is left untouched so the
+next harvest can't resurrect a record we thought was gone. Use
+`--archive-only` for synth/legacy rows (no bsky record exists) and
+`--remote-only` when you've already cleaned the archive by hand.
+
+Implementation: [`bkk/annotations/delete.py`](../../module/bkk/annotations/delete.py)
+holds `locate`, `archive_remove`, `archive_remove_by_uri`, and
+`is_bsky_native`; the CLI lives in
+[`bkk/annotations/cli.py`](../../module/bkk/annotations/cli.py)
+alongside `harvest`.
+
+### Jetstream delete propagation
+
+When an author deletes a record from another client (Bluesky web, a
+future mobile UI, the CLI's bsky-only mode), the live feed sees a
+Jetstream `delete` op. The buffer evicts the URI as before, and — when
+`[annotations].archive_on_delete` is true (default) — the same
+`archive_remove_by_uri` helper rewrites the on-disk JSONL so the
+deleted record doesn't linger as a phantom row that the next harvest
+won't refresh (it's already gone from bsky).
+
+Wired in
+[`serve/contributions_feed.py`](../../module/bkk/serve/contributions_feed.py)
+`_handle_commit` → `_archive_delete`. The rewrite runs in a worker
+thread so it doesn't stall the websocket consumer. Flip the flag off
+via `.bkkrc` if Jetstream proves flaky in practice; the live feed will
+still evict its buffer entry either way.
+
+### What is *not* removed
+
+- `superseded` records keep their bsky record and JSONL row by design —
+  the provenance chain (`provenance.supersedes`) is the audit trail
+  ([`harvest.py`](../../module/bkk/annotations/harvest.py)).
+- Curation judgments (`org.bunkankun.curation.judgment`) are not deleted
+  when their target record is — they become harmless dangling records
+  that the resolver simply ignores.
+- The `bkk annotations harvest` dedup logic guarantees that re-harvest
+  after a hard delete is a no-op: no resurrection.
+
 ## Sense UUID compatibility
 
 TLS-seed annotation records may carry `payload.sense.id` as `uuid-<uuid>`,

@@ -6,8 +6,9 @@ editor's PDS. The resolver aggregates harvested records and answers
 (by ``createdAt``) from any DID in the editor allowlist wins, with
 DID lexicographic tie-break for deterministic cross-replica resolution.
 
-Self-curation rule: an editor cannot change the ``state`` on their own
-record (parsed from the target URI's authority); they CAN change
+Self-curation rule: an author may set their own record's ``state`` to
+``rejected`` (retract) or ``proposed`` (withdraw a retraction); they
+cannot self-``accepted`` or self-``superseded``. They CAN always change
 ``rating``. ``admin_dids`` bypass the rule entirely.
 """
 
@@ -19,6 +20,7 @@ from typing import Iterable
 
 DEFAULT_STATE = "proposed"
 DEFAULT_RATING = 0
+SELF_ALLOWED_STATES = frozenset({"rejected", "proposed"})
 
 
 def _target_author(target_uri: str) -> str | None:
@@ -120,7 +122,8 @@ class CurationResolver:
     def _filter_self_state(self, j: Judgment) -> Judgment:
         author = _target_author(j.target_uri)
         if author and j.did == author and j.did not in self._admin_dids:
-            return replace(j, state=None)
+            if j.state not in SELF_ALLOWED_STATES:
+                return replace(j, state=None)
         return j
 
     def _winner_pair(self, target_uri: str) -> tuple[str, int]:
@@ -147,4 +150,5 @@ __all__ = [
     "Judgment",
     "DEFAULT_STATE",
     "DEFAULT_RATING",
+    "SELF_ALLOWED_STATES",
 ]

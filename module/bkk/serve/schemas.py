@@ -474,5 +474,15 @@ class AnnotationOut(BaseModel):
     sense: AnnotationSense | None = None
     translation: AnnotationTranslation | None = None
     metadata: dict[str, Any] | None = None
+    did: str | None = Field(
+        None, description="author DID (lets the UI decide who may delete)",
+    )
+    uri: str | None = Field(
+        None, description="at-URI for bsky-native records; absent for legacy/synth",
+    )
+    curation_state: str | None = Field(
+        None,
+        description="resolved curation state; absent when ``proposed`` (the default)",
+    )
 
     model_config = {"populate_by_name": True}

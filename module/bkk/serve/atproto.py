@@ -147,6 +147,43 @@ def create_record(
     return result, {"access_jwt": new_access, "refresh_jwt": new_refresh}
 
 
+def delete_record(
+    *,
+    service: str,
+    access_jwt: str,
+    refresh_jwt: str,
+    repo: str,
+    collection: str,
+    rkey: str,
+) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    """Delete a record. On expired access token, refresh once and retry.
+
+    Returns ``(response, new_tokens)``. ``new_tokens`` is non-None when the
+    access JWT was refreshed; the caller must persist the new pair.
+    """
+    body = {"repo": repo, "collection": collection, "rkey": rkey}
+    try:
+        result = _xrpc(
+            "POST", service, "com.atproto.repo.deleteRecord",
+            jwt=access_jwt, json_body=body,
+        )
+        return result, None
+    except HTTPException as exc:
+        if not _is_expired(exc):
+            raise
+
+    refreshed = refresh_session(refresh_jwt, service=service)
+    new_access = refreshed.get("accessJwt")
+    new_refresh = refreshed.get("refreshJwt")
+    if not isinstance(new_access, str) or not isinstance(new_refresh, str):
+        raise HTTPException(status_code=502, detail="atproto refresh returned no JWTs")
+    result = _xrpc(
+        "POST", service, "com.atproto.repo.deleteRecord",
+        jwt=new_access, json_body=body,
+    )
+    return result, {"access_jwt": new_access, "refresh_jwt": new_refresh}
+
+
 def get_profiles(dids: list[str], *, batch_size: int = 25) -> dict[str, dict[str, Any]]:
     """Fetch actor profiles from the Bluesky AppView (no auth needed). Returns {did: profile}."""
     out: dict[str, dict[str, Any]] = {}
@@ -189,6 +226,7 @@ __all__ = [
     "create_session",
     "refresh_session",
     "create_record",
+    "delete_record",
     "get_profiles",
     "list_records",
 ]

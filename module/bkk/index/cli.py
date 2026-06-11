@@ -8,6 +8,7 @@ Subcommands::
     python -m bkk.index translations <corpus> [--out PATH]
     python -m bkk.index annotations [annotations_root] [--out PATH]
     python -m bkk.index merge <corpus> [--out PATH] [--prefix KR3a]
+                                       [--section KR6 | --section KR6q]
                                        [--rebuild | --no-build]
     python -m bkk.index core <core_root> [--out PATH]
     python -m bkk.index parallel <bkkx_path> <seed> [--out PATH]
@@ -56,6 +57,10 @@ def build_parser() -> argparse.ArgumentParser:
     pm.add_argument("--prefix", default=None,
                     help="restrict to bundles whose textid starts with PREFIX "
                          "(e.g. KR3a)")
+    pm.add_argument("--section", default=None,
+                    help="restrict to a (sub)section like KR6 or KR6q; "
+                         "filters by textid prefix and writes the output to "
+                         "_<section>.bkkx alongside the full index")
     grp = pm.add_mutually_exclusive_group()
     grp.add_argument("--rebuild", action="store_true",
                      help="rebuild every per-bundle .bkkx, ignoring mtimes")
@@ -218,8 +223,15 @@ def run(argv: list[str] | None = None) -> int:
         if args.corpus is None:
             parser.error("corpus is required (or set global.corpus in .bkkrc)")
     if args.cmd == "merge":
+        if args.section and args.prefix:
+            parser.error("--section and --prefix are mutually exclusive")
+        default_out = Path(idx.get("out") or args.corpus / "_corpus.bkkx")
+        if args.section:
+            args.prefix = args.section
+            if args.out is None:
+                args.out = default_out.parent / f"_{args.section}.bkkx"
         if args.out is None:
-            args.out = Path(idx.get("out") or args.corpus / "_corpus.bkkx")
+            args.out = default_out
     if args.cmd == "translations":
         if args.out is None:
             args.out = args.corpus / "_translations.bkkt"

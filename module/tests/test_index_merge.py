@@ -404,6 +404,40 @@ def test_progress_silent_by_default(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
+def test_cli_merge_section_filters_and_renames_out(tmp_path, monkeypatch):
+    """`--section KR1a` filters by prefix and writes _KR1a.bkkx next to the default."""
+    _write_bundle(tmp_path, "KR1a0001", "needle here")
+    _write_bundle(tmp_path, "KR3a0001", "needle elsewhere")
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    rc = cli_run(["merge", str(tmp_path), "--section", "KR1a"])
+    assert rc == 0
+    out = tmp_path / "_KR1a.bkkx"
+    assert out.is_file()
+    assert not (tmp_path / "_corpus.bkkx").exists()
+    with Index(out) as ix:
+        assert ix.bundles == ["KR1a0001"]
+
+
+def test_cli_merge_section_uses_index_out_directory(tmp_path, monkeypatch):
+    """`--section` places _<section>.bkkx alongside the configured index.out."""
+    _write_bundle(tmp_path, "KR1a0001", "abc")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    rc_out = elsewhere / "merged.bkkx"
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {"index": {"out": rc_out}})
+    rc = cli_run(["merge", str(tmp_path), "--section", "KR1a"])
+    assert rc == 0
+    assert (elsewhere / "_KR1a.bkkx").is_file()
+    assert not rc_out.exists()
+
+
+def test_cli_merge_section_and_prefix_conflict(tmp_path, monkeypatch):
+    _write_bundle(tmp_path, "KR1a0001", "abc")
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    with pytest.raises(SystemExit):
+        cli_run(["merge", str(tmp_path), "--section", "KR1a", "--prefix", "KR1a"])
+
+
 def test_cli_merge_explicit_out_wins(tmp_path, monkeypatch):
     """An explicit --out beats both index.out and the corpus-relative default."""
     _write_bundle(tmp_path, "KR0a0001", "abc")

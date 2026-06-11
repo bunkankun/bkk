@@ -194,6 +194,12 @@ export interface Annotation {
   sense?: AnnotationSense;
   translation?: AnnotationTranslation;
   metadata?: Record<string, unknown>;
+  // author DID — lets the UI decide who may delete or self-reject.
+  did?: string;
+  // at-URI for bsky-native records; absent for legacy/synth.
+  uri?: string;
+  // resolved curation state; absent when the default "proposed".
+  curation_state?: "proposed" | "accepted" | "rejected" | "superseded";
 }
 
 // Annotation write path (Bluesky).
