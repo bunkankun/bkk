@@ -41,6 +41,8 @@ import type {
   Manifest,
   ManifestPart,
   OverlaysResponse,
+  ParallelBucket,
+  ParallelSearchResponse,
   Rating,
   SearchResponse,
   SearchSort,
@@ -580,6 +582,33 @@ export async function searchCorpus(params: {
   if (params.masterOnly) q.set("master_only", "true");
   if (params.maxResults != null) q.set("max_results", String(params.maxResults));
   return fetchJson<SearchResponse>(`${apiBase}/search?${q.toString()}`, {
+    signal: params.signal,
+  });
+}
+
+export async function searchParallel(params: {
+  q: string;
+  bucket?: ParallelBucket;
+  minLength?: number;
+  minOccurrences?: number;
+  maxPostings?: number;
+  context?: number;
+  includeContained?: boolean;
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+}): Promise<ParallelSearchResponse> {
+  const q = new URLSearchParams();
+  q.set("q", params.q);
+  if (params.bucket) q.set("bucket", params.bucket);
+  if (params.minLength != null) q.set("min_length", String(params.minLength));
+  if (params.minOccurrences != null) q.set("min_occurrences", String(params.minOccurrences));
+  if (params.maxPostings != null) q.set("max_postings", String(params.maxPostings));
+  if (params.context != null) q.set("context", String(params.context));
+  if (params.includeContained) q.set("include_contained", "true");
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.offset != null) q.set("offset", String(params.offset));
+  return fetchJson<ParallelSearchResponse>(`${apiBase}/search/parallel?${q.toString()}`, {
     signal: params.signal,
   });
 }

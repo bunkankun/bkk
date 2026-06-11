@@ -552,6 +552,39 @@ export interface TranslationSearchResponse {
   facets: TranslationSearchFacets;
 }
 
+export type ParallelBucket = "front" | "body" | "back" | "all";
+
+export interface ParallelLocation {
+  textid: string;
+  juan_seq: number;
+  bucket: string;
+  bucket_id: number;
+  start: number;
+  end: number;
+  toc_label: string | null;
+  left: string;
+  right: string;
+}
+
+export interface ParallelCluster {
+  cluster_id: string;
+  length: number;
+  occurrence_count: number;
+  text: string;
+  locations: ParallelLocation[];
+}
+
+export interface ParallelSearchResponse {
+  query: string;
+  bucket: ParallelBucket;
+  min_length: number;
+  min_occurrences: number;
+  total: number;
+  offset: number;
+  limit: number;
+  clusters: ParallelCluster[];
+}
+
 // Server identity
 export interface ServerInfo {
   service?: string;

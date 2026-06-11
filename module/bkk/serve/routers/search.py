@@ -10,8 +10,14 @@ from dataclasses import dataclass
 from typing import Iterable, Literal
 
 from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel
 
 from bkk.index.ir import Hit, IndexSummary
+from bkk.index.parallel import (
+    ParallelCluster,
+    ParallelLocation,
+    discover_parallel_passages,
+)
 
 from .. import _examples as ex
 from .. import errors
@@ -1015,4 +1021,103 @@ def search_textids(
             }
             for textid in ids
         ],
+    )
+
+
+class ParallelLocationModel(BaseModel):
+    textid: str
+    juan_seq: int
+    bucket: str
+    bucket_id: int
+    start: int
+    end: int
+    toc_label: str | None
+    left: str
+    right: str
+
+
+class ParallelClusterModel(BaseModel):
+    cluster_id: str
+    length: int
+    occurrence_count: int
+    text: str
+    locations: list[ParallelLocationModel]
+
+
+class ParallelSearchResponse(BaseModel):
+    query: str
+    bucket: str
+    min_length: int
+    min_occurrences: int
+    total: int
+    offset: int
+    limit: int
+    clusters: list[ParallelClusterModel]
+
+
+def _parallel_location_out(loc: ParallelLocation) -> ParallelLocationModel:
+    return ParallelLocationModel(
+        textid=loc.textid,
+        juan_seq=loc.juan_seq,
+        bucket=loc.bucket,
+        bucket_id=loc.bucket_id,
+        start=loc.start,
+        end=loc.end,
+        toc_label=loc.toc_label,
+        left=loc.left,
+        right=loc.right,
+    )
+
+
+def _parallel_cluster_out(cluster: ParallelCluster) -> ParallelClusterModel:
+    return ParallelClusterModel(
+        cluster_id=cluster.cluster_id,
+        length=cluster.length,
+        occurrence_count=cluster.occurrence_count,
+        text=cluster.text,
+        locations=[_parallel_location_out(loc) for loc in cluster.locations],
+    )
+
+
+@router.get(
+    "/search/parallel",
+    response_model=ParallelSearchResponse,
+    summary="Discover repeated passages around a 1-3 character seed",
+)
+def search_parallel(
+    request: Request,
+    q: str = Query(..., min_length=1, max_length=3, description="1-3 character seed"),
+    bucket: Literal["front", "body", "back", "all"] = Query("body"),
+    min_length: int = Query(12, ge=1, le=200),
+    min_occurrences: int = Query(2, ge=2, le=100),
+    max_postings: int = Query(500, ge=2, le=5000),
+    context: int = Query(20, ge=0, le=200),
+    include_contained: bool = Query(False),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> ParallelSearchResponse:
+    state = request.app.state.bkk
+    try:
+        clusters = discover_parallel_passages(
+            state.config.index_path,
+            seed=q,
+            bucket=bucket,
+            min_length=min_length,
+            min_occurrences=min_occurrences,
+            max_postings=max_postings,
+            include_contained=include_contained,
+            context=context,
+        )
+    except ValueError as exc:
+        raise errors.bad_request(str(exc))
+    page = clusters[offset : offset + limit]
+    return ParallelSearchResponse(
+        query=q,
+        bucket=bucket,
+        min_length=min_length,
+        min_occurrences=min_occurrences,
+        total=len(clusters),
+        offset=offset,
+        limit=limit,
+        clusters=[_parallel_cluster_out(c) for c in page],
     )

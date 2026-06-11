@@ -14,6 +14,7 @@ import {
   logout as logoutRequest,
   putWorkspaceFile,
   searchCorpus,
+  searchParallel,
   searchTextids,
   searchTranslationSegments,
 } from "../api/client";
@@ -21,6 +22,8 @@ import type {
   Annotation,
   AnnotationBySenseLocation,
   AuthSession,
+  ParallelBucket,
+  ParallelSearchResponse,
   SearchHit,
   SearchResponse,
   SearchSort,
@@ -51,7 +54,13 @@ export type Activity =
 export type RightTab = "annotations" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect";
 export type OpenMode = "read" | "trans" | "sticky";
-export type SearchTarget = "fulltext" | "dictionary" | "translations";
+export type SearchTarget = "fulltext" | "dictionary" | "translations" | "parallel";
+
+export interface ParallelOptions {
+  bucket: ParallelBucket;
+  minLength: number;
+  minOccurrences: number;
+}
 export type LineMode = "paragraph" | "phrase";
 export type LineBreakDisplay = "off" | "glyph" | "br";
 export type Theme = "current" | "dark" | "light";
@@ -110,6 +119,8 @@ export interface SearchState {
   translationResponse: TranslationSearchResponse | null;
   translationSort: TranslationSort;
   translationFilters: TranslationSearchFilters;
+  parallelResponse: ParallelSearchResponse | null;
+  parallelOptions: ParallelOptions;
 }
 
 export interface SearchHistoryEntry {
@@ -600,6 +611,8 @@ let state: WorkspaceState = {
     translationResponse: null,
     translationSort: "textid",
     translationFilters: { lang: null, category: null, type: null, dateBefore: null, dateAfter: null },
+    parallelResponse: null,
+    parallelOptions: { bucket: "body", minLength: 12, minOccurrences: 2 },
   },
   searchHistory: [],
   textHistory: [],
@@ -776,10 +789,61 @@ async function runTranslationSearch(offset: number): Promise<void> {
   }
 }
 
+async function runParallelSearch(offset: number): Promise<void> {
+  const { query, parallelOptions } = state.search;
+  cancelSearchRequest();
+  const runId = searchRunId;
+  const controller = new AbortController();
+  searchAbort = controller;
+  state = {
+    ...state,
+    search: { ...state.search, status: "loading", error: null },
+    rightTab: "search",
+  };
+  notify();
+  try {
+    const response = await searchParallel({
+      q: query.trim(),
+      bucket: parallelOptions.bucket,
+      minLength: parallelOptions.minLength,
+      minOccurrences: parallelOptions.minOccurrences,
+      limit: 50,
+      offset,
+      signal: controller.signal,
+    });
+    if (runId !== searchRunId) return;
+    searchAbort = null;
+    state = {
+      ...state,
+      search: { ...state.search, status: "ok", error: null, parallelResponse: response },
+    };
+    notify();
+  } catch (e) {
+    if (runId !== searchRunId) return;
+    searchAbort = null;
+    if (e instanceof DOMException && e.name === "AbortError") return;
+    let message = e instanceof Error ? e.message : String(e);
+    if (e instanceof ApiError && e.body && typeof e.body === "object") {
+      const detail = (e.body as { error?: unknown }).error;
+      if (typeof detail === "string" && detail) message = detail;
+    }
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        status: "error",
+        error: message,
+      },
+    };
+    notify();
+  }
+}
+
 async function runSearchInternal(offset: number): Promise<void> {
   const { query, target, sort, filters } = state.search;
   if (!query.trim()) return;
   if (target === "translations") return runTranslationSearch(offset);
+  if (target === "parallel") return runParallelSearch(offset);
   if (target !== "fulltext") return;
   cancelSearchRequest();
   const runId = searchRunId;
@@ -2100,6 +2164,7 @@ export const workspace = {
         error: null,
         response: null,
         translationResponse: null,
+        parallelResponse: null,
       },
     };
     notify();
@@ -2116,6 +2181,17 @@ export const workspace = {
         error: null,
         response: null,
         translationResponse: null,
+        parallelResponse: null,
+      },
+    };
+    notify();
+  },
+  setParallelOption<K extends keyof ParallelOptions>(key: K, value: ParallelOptions[K]) {
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        parallelOptions: { ...state.search.parallelOptions, [key]: value },
       },
     };
     notify();
@@ -2425,6 +2501,7 @@ export const workspace = {
         error: null,
         response: null,
         translationResponse: null,
+        parallelResponse: null,
       },
     };
     notify();

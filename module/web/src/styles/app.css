@@ -1969,6 +1969,16 @@ button {
 .kwic-list {
   padding: 0;
 }
+.parallel-cluster {
+  border-bottom: 1px solid var(--bdr-l);
+  padding-bottom: 6px;
+}
+.parallel-text {
+  padding: 6px 10px;
+  font-family: var(--fcjk, var(--fm));
+  background: var(--surf-2, transparent);
+  border-bottom: 1px solid var(--bdr-l);
+}
 .kwic-summary {
   padding: 8px 10px;
   border-bottom: 1px solid var(--bdr-l);

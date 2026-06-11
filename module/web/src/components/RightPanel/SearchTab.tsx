@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import type {
+  ParallelCluster,
+  ParallelLocation,
+  ParallelSearchResponse,
   SearchFacetValue,
   SearchFacets,
   SearchHit,
@@ -686,6 +689,107 @@ function TranslationResultsView({
   );
 }
 
+function ParallelLocationRow({ loc, seed }: { loc: ParallelLocation; seed: string }) {
+  const onClick = () =>
+    workspace.openContributionLocation({
+      textid: loc.textid,
+      seq: loc.juan_seq,
+      bucket: loc.bucket,
+      masterOffset: loc.start,
+      length: loc.end - loc.start,
+    });
+  return (
+    <button
+      type="button"
+      className="kwic-row"
+      onClick={onClick}
+      title={`${loc.textid} · juan ${loc.juan_seq} · ${loc.bucket} @${loc.start}`}
+    >
+      <div className="kwic-meta">
+        {loc.toc_label ? <span className="kwic-label">{loc.toc_label}</span> : null}
+        <span className={`kwic-textid ${krClass(loc.textid)}`}>{loc.textid}</span>
+        <span className="kwic-juan">juan {loc.juan_seq}</span>
+        {loc.bucket !== "body" ? <span className="kwic-chip">{loc.bucket}</span> : null}
+      </div>
+      <div className="kwic-line">
+        <span className="kwic-left">{loc.left}</span>
+        <mark className="kwic-match">{seed}</mark>
+        <span className="kwic-right">{loc.right}</span>
+      </div>
+    </button>
+  );
+}
+
+function ParallelClusterRow({ cluster, seed }: { cluster: ParallelCluster; seed: string }) {
+  return (
+    <div className="parallel-cluster">
+      <div className="kwic-summary">
+        <span>{cluster.cluster_id}</span>
+        <span className="kwic-sort">· {cluster.length} chars</span>
+        <span className="kwic-sort">· {cluster.occurrence_count} occurrences</span>
+      </div>
+      <div className="parallel-text">{cluster.text}</div>
+      {cluster.locations.map((loc, i) => (
+        <ParallelLocationRow
+          key={`${loc.textid}:${loc.juan_seq}:${loc.bucket_id}:${loc.start}:${i}`}
+          loc={loc}
+          seed={seed}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ParallelResultsView({
+  response,
+  query,
+  status,
+}: {
+  response: ParallelSearchResponse;
+  query: string;
+  status: string;
+}) {
+  const disabled = status === "loading";
+  const start = response.offset + 1;
+  const end = Math.min(response.offset + response.limit, response.total);
+  const hasPrev = response.offset > 0;
+  const hasNext = response.offset + response.limit < response.total;
+  const seed = query.trim();
+  return (
+    <div className="rc kwic-list">
+      <div className="kwic-summary">
+        <span>
+          {start}–{end} of {response.total} clusters for "{seed}"
+        </span>
+        <span className="kwic-sort">· {response.bucket}</span>
+        <span className="kwic-sort">· min {response.min_length} chars</span>
+        <span className="kwic-sort">· ≥{response.min_occurrences}×</span>
+      </div>
+      {response.clusters.map((c) => (
+        <ParallelClusterRow key={c.cluster_id} cluster={c} seed={seed} />
+      ))}
+      {(hasPrev || hasNext) && (
+        <div className="kwic-pager">
+          <button
+            type="button"
+            disabled={!hasPrev || disabled}
+            onClick={() => void workspace.runSearchAt(Math.max(0, response.offset - PAGE_SIZE))}
+          >
+            ← Prev
+          </button>
+          <button
+            type="button"
+            disabled={!hasNext || disabled}
+            onClick={() => void workspace.runSearchAt(response.offset + PAGE_SIZE)}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function refineQuery(extension: string) {
   workspace.setSearchQuery(extension);
   void workspace.runSearch();
@@ -770,6 +874,7 @@ export function SearchTab() {
   const response = useWorkspace((s) => s.search.response);
   const translationResponse = useWorkspace((s) => s.search.translationResponse);
   const translationFilters = useWorkspace((s) => s.search.translationFilters);
+  const parallelResponse = useWorkspace((s) => s.search.parallelResponse);
   const target = useWorkspace((s) => s.search.target);
   const query = useWorkspace((s) => s.search.query);
   const filters = useWorkspace((s) => s.search.filters);
@@ -826,6 +931,16 @@ export function SearchTab() {
         status={status}
       />
     );
+  }
+
+  if (target === "parallel") {
+    if (parallelResponse == null) {
+      return <div className="rc empty">No results.</div>;
+    }
+    if (parallelResponse.total === 0) {
+      return <div className="rc empty">No clusters for "{query}".</div>;
+    }
+    return <ParallelResultsView response={parallelResponse} query={query} status={status} />;
   }
 
   if (response == null) {
