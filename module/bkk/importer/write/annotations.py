@@ -125,6 +125,38 @@ def write_records_jsonl(out_path: Path, records: list[dict], *, sort: bool = Tru
     return out_path
 
 
+ORPHAN_RDL_TEXT_ID = "_rdl_orphans"
+
+
+def write_rdl_orphan_annotations(
+    annotations: list[Annotation],
+    *,
+    annotations_root: Path | None,
+) -> Path | None:
+    """Write UUID-targeted rdl spans to a global orphan archive file.
+
+    These records keep their legacy ``uuid-…`` marker_id verbatim and a
+    ``_unresolved`` bucket — they don't anchor into any existing text
+    bundle. The file is rewritten on every bulk import (rdl.xml is the
+    source of truth).
+    """
+    if annotations_root is None or not annotations:
+        return None
+    out_path = (
+        annotations_root / ORPHAN_RDL_TEXT_ID
+        / f"{ORPHAN_RDL_TEXT_ID}_001.ann.jsonl"
+    )
+    records: list[dict] = []
+    for ann in annotations:
+        record = annotation_to_record(
+            ann, text_id=ORPHAN_RDL_TEXT_ID, edition="tls",
+        )
+        record["bucket"] = "_unresolved"
+        record["bucket_offset"] = 0
+        records.append(record)
+    return write_records_jsonl(out_path, records, sort=True)
+
+
 def write_juan_annotations(
     annotations: list[tuple[Annotation, int, str]],
     *,

@@ -501,7 +501,48 @@ def _run_tls(args) -> int:
                 print(f"error rebuilding manifest for {cid}: {exc}",
                       file=sys.stderr)
                 rc = 1
+
+    # Tail-end pass: emit rdl spans whose targets are legacy uuid-… ids to a
+    # global orphan archive, and print a one-line stats summary. Bulk-only:
+    # the orphan file is a property of rdl.xml, not of any single text.
+    if args.text_id is None:
+        _emit_rdl_orphans_and_stats(args)
+
     return rc
+
+
+def _emit_rdl_orphans_and_stats(args) -> None:
+    rdl_xml = args.in_root / "tls-data" / "notes" / "rdl" / "rdl.xml"
+    if not rdl_xml.exists():
+        return
+    from .read.rdl import (
+        rdl_import_stats, read_rdl_orphan_annotations,
+    )
+    from .write.annotations import write_rdl_orphan_annotations
+
+    annotations_root = getattr(args, "annotations_out", None)
+    if annotations_root is not None:
+        orphans = read_rdl_orphan_annotations(rdl_xml)
+        out = write_rdl_orphan_annotations(
+            orphans, annotations_root=annotations_root,
+        )
+        if out is not None:
+            print(f"wrote {len(orphans)} orphan rdl annotation(s) to {out}",
+                  file=sys.stderr)
+
+    stats = rdl_import_stats(rdl_xml)
+    if stats:
+        print(
+            "rdl summary: "
+            f"total={stats.get('total', 0)} "
+            f"resolved={stats.get('resolved', 0)} "
+            f"orphan={stats.get('orphan', 0)} "
+            f"undefined={stats.get('undefined', 0)} "
+            f"no_target={stats.get('no_target', 0)} "
+            f"no_srcline={stats.get('no_srcline', 0)} "
+            f"bad_marker={stats.get('bad_marker', 0)}",
+            file=sys.stderr,
+        )
 
 
 def _resolve_tls_targets(args) -> list[tuple[str, Path]]:
