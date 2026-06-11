@@ -25,6 +25,7 @@ COLLECTION_TYPES: dict[str, str] = {
     "graphs": "graph",
     "syntactic-functions": "syntactic-function",
     "semantic-features": "semantic-feature",
+    "rhetorical-devices": "rhetorical-device",
     "bibliography": "bibliography",
     "words": "word",
     "senses": "sense",
@@ -36,6 +37,7 @@ COLLECTION_LABELS: dict[str, str] = {
     "graphs": "Graphs",
     "syntactic-functions": "Syntactic functions",
     "semantic-features": "Semantic features",
+    "rhetorical-devices": "Rhetorical devices",
     "bibliography": "Bibliography",
     "words": "Words",
 }
@@ -44,7 +46,7 @@ COLLECTION_LABELS: dict[str, str] = {
 # which are surfaced through the Words two-level view).
 BROWSE_COLLECTIONS: tuple[str, ...] = (
     "concepts", "words", "syntactic-functions",
-    "semantic-features", "graphs", "bibliography",
+    "semantic-features", "rhetorical-devices", "graphs", "bibliography",
 )
 
 class CollectionInfo(BaseModel):

@@ -965,6 +965,75 @@ function SemanticFeatureView({
   );
 }
 
+function RhetoricalDeviceView({
+  data,
+  lookup,
+  navigate,
+  onWikilink,
+}: {
+  data: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  const code = asString(data.code);
+  const translations = data.translations && typeof data.translations === "object"
+    ? (data.translations as Record<string, unknown>)
+    : null;
+  const description = asString(data.description);
+  const notes = asString(data.notes);
+  const location = asString(data.location);
+  const hypernyms = asStringArray(data.hypernyms);
+  const hyponyms = asStringArray(data.hyponyms);
+  const antonyms = asStringArray(data.antonyms);
+  const sources = asRecordArray(data.source_references);
+  return (
+    <>
+      {code && <FieldRow label="Code"><code>{code}</code></FieldRow>}
+      {translations && Object.entries(translations).map(([lang, value]) => {
+        const text = asString(value);
+        if (!text) return null;
+        return <FieldRow key={lang} label={lang}>{text}</FieldRow>;
+      })}
+      {description && (
+        <FieldRow label="Description">
+          <ProseMarkdown text={description} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {notes && (
+        <FieldRow label="Notes">
+          <ProseMarkdown text={notes} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {location && (
+        <FieldRow label="Location">
+          <ProseMarkdown text={location} onWikilink={onWikilink} onCoreNav={navigate} />
+        </FieldRow>
+      )}
+      {hypernyms.length > 0 && (
+        <FieldRow label="Hypernyms">
+          <UuidList uuids={hypernyms} lookup={lookup} navigate={navigate} fallbackCollection="rhetorical-devices" />
+        </FieldRow>
+      )}
+      {hyponyms.length > 0 && (
+        <FieldRow label="Hyponyms">
+          <UuidList uuids={hyponyms} lookup={lookup} navigate={navigate} fallbackCollection="rhetorical-devices" />
+        </FieldRow>
+      )}
+      {antonyms.length > 0 && (
+        <FieldRow label="Antonyms">
+          <UuidList uuids={antonyms} lookup={lookup} navigate={navigate} fallbackCollection="rhetorical-devices" />
+        </FieldRow>
+      )}
+      {sources.length > 0 && (
+        <FieldRow label="Source references">
+          <BibliographyRefList refs={sources} lookup={lookup} navigate={navigate} />
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
 function BibliographyView({ data }: { data: Record<string, unknown> }) {
   const label = asString(data.citation_label);
   const resourceType = asString(data.resource_type);
@@ -1379,6 +1448,8 @@ function renderTypedView(
       return <SyntacticFunctionView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
     case "semantic-feature":
       return <SemanticFeatureView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
+    case "rhetorical-device":
+      return <RhetoricalDeviceView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
     case "bibliography":
       return <BibliographyView data={record.data} />;
     case "graph":
@@ -1393,6 +1464,7 @@ const COLLECTION_TITLES: Record<string, string> = {
   graphs: "Graphs",
   "syntactic-functions": "Syntactic functions",
   "semantic-features": "Semantic features",
+  "rhetorical-devices": "Rhetorical devices",
   bibliography: "Bibliography",
   words: "Words",
   senses: "Senses",

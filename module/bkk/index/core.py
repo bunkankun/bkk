@@ -27,7 +27,7 @@ from .catalog import normalize_search_text
 
 log = logging.getLogger("bkk.index.core")
 
-CORE_SCHEMA_VERSION = 4
+CORE_SCHEMA_VERSION = 5
 
 COLLECTIONS: tuple[tuple[str, str], ...] = (
     # (collection dir name, type) — ordered so derived JOINs are populated
@@ -36,6 +36,7 @@ COLLECTIONS: tuple[tuple[str, str], ...] = (
     ("graphs", "graph"),
     ("syntactic-functions", "syntactic-function"),
     ("semantic-features", "semantic-feature"),
+    ("rhetorical-devices", "rhetorical-device"),
     ("bibliography", "bibliography"),
     ("words", "word"),
     ("senses", "sense"),
@@ -126,6 +127,7 @@ _PROSE_FIELDS: dict[str, tuple[str, ...]] = {
     "sense": ("definition",),
     "syntactic-function": ("description", "notes"),
     "semantic-feature": ("description", "notes"),
+    "rhetorical-device": ("description", "notes", "location"),
 }
 
 COLLECTION_TO_TYPE: dict[str, str] = {coll: t for coll, t in COLLECTIONS}
@@ -401,7 +403,7 @@ def _display_label(
         if standardised:
             return f"{standardised} (standardised)"
         return None
-    if type_name in ("syntactic-function", "semantic-feature"):
+    if type_name in ("syntactic-function", "semantic-feature", "rhetorical-device"):
         return _str_or_none(data.get("code"))
     if type_name == "word":
         form = data.get("form") if isinstance(data.get("form"), dict) else {}
@@ -464,6 +466,12 @@ def _label_rows(
             add(graphs.get(k), k)
     elif type_name in ("syntactic-function", "semantic-feature"):
         add(data.get("code"), "code")
+    elif type_name == "rhetorical-device":
+        add(data.get("code"), "code")
+        translations = data.get("translations")
+        if isinstance(translations, dict):
+            for lang, text in translations.items():
+                add(text, f"translation_{lang}" if lang else "translation")
     elif type_name == "word":
         form = data.get("form") if isinstance(data.get("form"), dict) else {}
         add(form.get("orth"), "orth")
@@ -561,6 +569,16 @@ def _link_rows(
         add_each(data.get("taxonomy_parents"), "syntactic-function", "taxonomy")
     elif type_name == "semantic-feature":
         add_each(data.get("taxonomy_parents"), "semantic-feature", "taxonomy")
+        for ref in data.get("source_references") or []:
+            if isinstance(ref, dict):
+                add(
+                    ref.get("bibliography_uuid"),
+                    "bibliography", "source_reference",
+                )
+    elif type_name == "rhetorical-device":
+        add_each(data.get("hypernyms"), "rhetorical-device", "hypernym")
+        add_each(data.get("hyponyms"), "rhetorical-device", "hyponym")
+        add_each(data.get("antonyms"), "rhetorical-device", "antonym")
         for ref in data.get("source_references") or []:
             if isinstance(ref, dict):
                 add(
