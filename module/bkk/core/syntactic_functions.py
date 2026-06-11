@@ -502,10 +502,24 @@ def _syntactic_function_root(core_root: Path) -> Path:
     return core_root / "syntactic-functions"
 
 
+def _record_accept_codes(record: dict, path: Path) -> tuple[frozenset[str], Diagnostic | None]:
+    raw = record.get("lint_accept")
+    if raw is None:
+        return frozenset(), None
+    if not isinstance(raw, list) or not all(isinstance(c, str) for c in raw):
+        return frozenset(), Diagnostic(
+            "warning",
+            "lint-accept-malformed",
+            "lint_accept must be a list of diagnostic-code strings; ignoring",
+        )
+    return frozenset(raw), None
+
+
 def lint_syntactic_function_records(core_root: Path | str) -> SyntacticFunctionLintReport:
     root = _syntactic_function_root(Path(core_root))
     report = SyntacticFunctionLintReport()
     labels_by_code: dict[str, list[Path]] = {}
+    accept_by_path: dict[Path, frozenset[str]] = {}
     for path in sorted(root.rglob("*.yml")):
         record = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         label = str(record.get("code") or record.get("labels", {}).get("display") or "")
@@ -518,16 +532,18 @@ def lint_syntactic_function_records(core_root: Path | str) -> SyntacticFunctionL
             continue
         report.record_count += 1
         labels_by_code.setdefault(label, []).append(path)
+        accepted, accept_problem = _record_accept_codes(record, path)
+        accept_by_path[path] = accepted
+        if accept_problem is not None:
+            report.diagnostics.append(RecordDiagnostic(path, label, accept_problem))
         display = record.get("labels", {}).get("display")
         if display and display != label:
-            report.diagnostics.append(RecordDiagnostic(
-                path,
-                label,
-                Diagnostic("warning", "display-mismatch", "code and labels.display differ"),
+            _append_diag(report, accepted, path, label, Diagnostic(
+                "warning", "display-mismatch", "code and labels.display differ",
             ))
         result = parse_syntactic_label(label)
         for diagnostic in result.diagnostics:
-            report.diagnostics.append(RecordDiagnostic(path, label, diagnostic))
+            _append_diag(report, accepted, path, label, diagnostic)
 
     report.distinct_label_count = len(labels_by_code)
     for label, paths in labels_by_code.items():
@@ -535,7 +551,9 @@ def lint_syntactic_function_records(core_root: Path | str) -> SyntacticFunctionL
             continue
         first = paths[0]
         for path in paths[1:]:
-            report.diagnostics.append(RecordDiagnostic(
+            _append_diag(
+                report,
+                accept_by_path.get(path, frozenset()),
                 path,
                 label,
                 Diagnostic(
@@ -543,5 +561,17 @@ def lint_syntactic_function_records(core_root: Path | str) -> SyntacticFunctionL
                     "duplicate-code",
                     f"duplicate code also appears at {first}",
                 ),
-            ))
+            )
     return report
+
+
+def _append_diag(
+    report: SyntacticFunctionLintReport,
+    accepted: frozenset[str],
+    path: Path,
+    label: str,
+    diagnostic: Diagnostic,
+) -> None:
+    if diagnostic.severity == "warning" and diagnostic.code in accepted:
+        return
+    report.diagnostics.append(RecordDiagnostic(path, label, diagnostic))

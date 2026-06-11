@@ -11,19 +11,25 @@ from bkk.core.syntactic_functions import (
 from bkk.core_cli.cli import run as core_run
 
 
-def _write_syntactic_function(root: Path, uuid: str, code: str) -> Path:
+def _write_syntactic_function(
+    root: Path,
+    uuid: str,
+    code: str,
+    *,
+    lint_accept: list[str] | None = None,
+) -> Path:
     path = root / "syntactic-functions" / uuid[0] / f"{uuid}.yml"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        yaml.safe_dump({
-            "schema_version": 2,
-            "uuid": uuid,
-            "type": "syntactic-function",
-            "labels": {"display": code, "alternate": []},
-            "code": code,
-        }, sort_keys=False),
-        encoding="utf-8",
-    )
+    record: dict[str, object] = {
+        "schema_version": 2,
+        "uuid": uuid,
+        "type": "syntactic-function",
+        "labels": {"display": code, "alternate": []},
+        "code": code,
+    }
+    if lint_accept is not None:
+        record["lint_accept"] = lint_accept
+    path.write_text(yaml.safe_dump(record, sort_keys=False), encoding="utf-8")
     return path
 
 
@@ -72,6 +78,62 @@ def test_lint_syntactic_function_records_reports_actionable_findings(tmp_path: P
     assert "unclosed-bracket" in codes
     assert "role-alias" in codes
     assert "duplicate-code" in codes
+
+
+def test_lint_accept_suppresses_warnings_per_record(tmp_path: Path):
+    root = tmp_path / "core"
+    _write_syntactic_function(
+        root,
+        "00000000-0000-0000-0000-000000000001",
+        "vt+prep N",
+        lint_accept=["whitespace"],
+    )
+    _write_syntactic_function(
+        root,
+        "11111111-1111-1111-1111-111111111111",
+        "vt+prep N",
+    )
+
+    report = lint_syntactic_function_records(root)
+    by_path: dict[str, list[str]] = {}
+    for item in report.diagnostics:
+        by_path.setdefault(item.path.stem, []).append(item.diagnostic.code)
+
+    assert "whitespace" not in by_path.get("00000000-0000-0000-0000-000000000001", [])
+    assert "whitespace" in by_path.get("11111111-1111-1111-1111-111111111111", [])
+
+
+def test_lint_accept_does_not_silence_errors(tmp_path: Path):
+    root = tmp_path / "core"
+    _write_syntactic_function(
+        root,
+        "00000000-0000-0000-0000-000000000001",
+        "vadN{{PRED}",
+        lint_accept=["unclosed-bracket"],
+    )
+
+    report = lint_syntactic_function_records(root)
+    codes = {item.diagnostic.code for item in report.diagnostics}
+    assert "unclosed-bracket" in codes
+
+
+def test_lint_accept_malformed_emits_warning(tmp_path: Path):
+    root = tmp_path / "core"
+    path = root / "syntactic-functions" / "0" / "00000000-0000-0000-0000-000000000001.yml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        yaml.safe_dump({
+            "uuid": "00000000-0000-0000-0000-000000000001",
+            "type": "syntactic-function",
+            "code": "NPab",
+            "lint_accept": "whitespace",
+        }, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    report = lint_syntactic_function_records(root)
+    codes = {item.diagnostic.code for item in report.diagnostics}
+    assert "lint-accept-malformed" in codes
 
 
 def test_core_cli_lints_syntactic_functions(tmp_path: Path, capsys):

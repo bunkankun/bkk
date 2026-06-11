@@ -1841,7 +1841,7 @@ export const workspace = {
     notify();
     scheduleSessionSave();
   },
-  openCoreRecord(collection: string, uuid: string) {
+  openCoreRecord(collection: string, uuid: string, opts?: { keepActivity?: boolean }) {
     const tabId = `core:${collection}:${uuid}`;
     const tab: CoreRecordTab = {
       id: tabId,
@@ -1856,7 +1856,7 @@ export const workspace = {
       ...state,
       focusedPaneId,
       pane,
-      activity: "core",
+      activity: opts?.keepActivity ? state.activity : "core",
     };
     notify();
     scheduleSessionSave();

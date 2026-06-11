@@ -31,6 +31,7 @@ import type {
   CoreOpenPrRequest,
   CoreOpenPrResponse,
   CoreRecordResponse,
+  SyntacticFunctionLintResponse,
   CoreSuperEntryByOrth,
   CoreSuperEntryExpansion,
   CoreSuperEntryFull,
@@ -626,12 +627,22 @@ export async function getCoreRecord(
   return promise;
 }
 
+type CoreRecordSavedListener = (event: { collection: string; uuid: string }) => void;
+const coreRecordSavedListeners = new Set<CoreRecordSavedListener>();
+
+export function subscribeCoreRecordSaved(listener: CoreRecordSavedListener): () => void {
+  coreRecordSavedListeners.add(listener);
+  return () => {
+    coreRecordSavedListeners.delete(listener);
+  };
+}
+
 export async function patchCoreRecord(
   collection: string,
   uuid: string,
   body: CoreEditRequest,
 ): Promise<CoreEditResponse> {
-  return fetchJson<CoreEditResponse>(
+  const response = await fetchJson<CoreEditResponse>(
     `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}`,
     {
       method: "PATCH",
@@ -639,6 +650,34 @@ export async function patchCoreRecord(
       body: JSON.stringify(body),
     },
   );
+  coreRecordCache.delete(`${collection}/${uuid}`);
+  for (const listener of coreRecordSavedListeners) {
+    listener({ collection, uuid });
+  }
+  return response;
+}
+
+export async function lintSyntacticFunctions(): Promise<SyntacticFunctionLintResponse> {
+  return fetchJson<SyntacticFunctionLintResponse>(
+    `${apiBase}/core/lint/syntactic-functions`,
+  );
+}
+
+export async function acceptSyntacticFunctionWarning(
+  uuid: string,
+  code: string,
+): Promise<CoreEditResponse> {
+  const record = await getCoreRecord("syntactic-functions", uuid);
+  const data = { ...record.data };
+  const existing = Array.isArray(data.lint_accept)
+    ? (data.lint_accept as string[]).filter((c): c is string => typeof c === "string")
+    : [];
+  if (existing.includes(code)) {
+    data.lint_accept = existing;
+  } else {
+    data.lint_accept = [...existing, code];
+  }
+  return patchCoreRecord("syntactic-functions", uuid, { data });
 }
 
 export async function deleteCoreRecord(

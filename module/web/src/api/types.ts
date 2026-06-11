@@ -925,3 +925,27 @@ export interface CoreBacklinksResponse {
   total: number;
   groups: CoreBacklinkGroup[];
 }
+
+export interface CoreLintDiagnostic {
+  severity: "error" | "warning";
+  code: string;
+  message: string;
+  start: number | null;
+  end: number | null;
+}
+
+export interface CoreLintItem {
+  uuid: string;
+  collection: string;
+  path: string;
+  label: string;
+  diagnostic: CoreLintDiagnostic;
+}
+
+export interface SyntacticFunctionLintResponse {
+  record_count: number;
+  distinct_label_count: number;
+  error_count: number;
+  warning_count: number;
+  items: CoreLintItem[];
+}

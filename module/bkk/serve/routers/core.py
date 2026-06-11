@@ -8,11 +8,12 @@ fetch a single typed YAML record.
 from __future__ import annotations
 
 import sqlite3
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from bkk.core.syntactic_functions import lint_syntactic_function_records
 from bkk.index.catalog import normalize_search_text
 from bkk.serialize.yaml_io import load_record
 from bkk.serve.state import AppState
@@ -175,6 +176,30 @@ class CoreRecordResponse(BaseModel):
     links: list[CoreRecordLink] = Field(default_factory=list)
 
 
+class LintDiagnostic(BaseModel):
+    severity: Literal["error", "warning"]
+    code: str
+    message: str
+    start: int | None = None
+    end: int | None = None
+
+
+class LintItem(BaseModel):
+    uuid: str
+    collection: str = "syntactic-functions"
+    path: str
+    label: str
+    diagnostic: LintDiagnostic
+
+
+class SyntacticFunctionLintResponse(BaseModel):
+    record_count: int
+    distinct_label_count: int
+    error_count: int
+    warning_count: int
+    items: list[LintItem]
+
+
 # ---------- helpers ---------------------------------------------------------
 
 
@@ -204,6 +229,55 @@ def _collection_of_type(type_name: str) -> str | None:
         if t == type_name:
             return coll
     return None
+
+
+# ---------- /lint -----------------------------------------------------------
+
+
+@router.get(
+    "/lint/syntactic-functions",
+    response_model=SyntacticFunctionLintResponse,
+    summary="Run the syntactic-function label linter and return all diagnostics",
+)
+def lint_syntactic_functions(request: Request) -> SyntacticFunctionLintResponse:
+    state: AppState = request.app.state.bkk
+    if state.core_root is None:
+        raise HTTPException(
+            status_code=503,
+            detail="core_root not configured; set core.root in .bkkrc",
+        )
+    report = lint_syntactic_function_records(state.core_root)
+    core_root = state.core_root
+    items: list[LintItem] = []
+    for rd in report.diagnostics:
+        try:
+            relpath = str(rd.path.relative_to(core_root))
+        except ValueError:
+            relpath = str(rd.path)
+        items.append(LintItem(
+            uuid=rd.path.stem,
+            path=relpath,
+            label=rd.label,
+            diagnostic=LintDiagnostic(
+                severity=rd.diagnostic.severity,  # type: ignore[arg-type]
+                code=rd.diagnostic.code,
+                message=rd.diagnostic.message,
+                start=rd.diagnostic.start,
+                end=rd.diagnostic.end,
+            ),
+        ))
+    items.sort(key=lambda it: (
+        0 if it.diagnostic.severity == "error" else 1,
+        it.path,
+        it.diagnostic.code,
+    ))
+    return SyntacticFunctionLintResponse(
+        record_count=report.record_count,
+        distinct_label_count=report.distinct_label_count,
+        error_count=len(report.errors),
+        warning_count=len(report.warnings),
+        items=items,
+    )
 
 
 # ---------- /collections ----------------------------------------------------
