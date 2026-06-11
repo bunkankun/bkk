@@ -497,19 +497,16 @@ def parse_syntactic_label(label: str) -> ParseResult:
 
 
 def _syntactic_function_root(core_root: Path) -> Path:
-    records_root = core_root / "records" / "syntactic-functions"
-    if records_root.is_dir():
-        return records_root
     if core_root.name == "syntactic-functions":
         return core_root
-    return records_root
+    return core_root / "syntactic-functions"
 
 
 def lint_syntactic_function_records(core_root: Path | str) -> SyntacticFunctionLintReport:
     root = _syntactic_function_root(Path(core_root))
     report = SyntacticFunctionLintReport()
     labels_by_code: dict[str, list[Path]] = {}
-    for path in sorted(root.rglob("*.yaml")):
+    for path in sorted(root.rglob("*.yml")):
         record = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         label = str(record.get("code") or record.get("labels", {}).get("display") or "")
         if not label:

@@ -39,8 +39,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "lint-syntactic-functions",
         help="parse and lint syntactic-function code labels",
     )
-    l.add_argument("core_root", type=Path,
-                   help="v2 core root, or records/syntactic-functions directly")
+    l.add_argument("core_root", type=Path, nargs="?", default=None,
+                   help="core root, or syntactic-functions directory directly "
+                        "(default: [core].root)")
     l.add_argument("--strict", action="store_true",
                    help="treat warnings as failures")
     l.add_argument("--limit", type=int, default=80,
@@ -114,7 +115,9 @@ def _cmd_sync(args: argparse.Namespace) -> int:
 
 
 def _cmd_lint_syntactic_functions(args: argparse.Namespace) -> int:
-    report = lint_syntactic_function_records(args.core_root.resolve())
+    core_rc = load_rc().get("core", {})
+    core_root = _resolve_core_root(args, core_rc)
+    report = lint_syntactic_function_records(core_root)
     diagnostics = sorted(
         report.diagnostics,
         key=lambda item: (

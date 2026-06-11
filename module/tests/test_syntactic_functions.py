@@ -12,7 +12,7 @@ from bkk.core_cli.cli import run as core_run
 
 
 def _write_syntactic_function(root: Path, uuid: str, code: str) -> Path:
-    path = root / "records" / "syntactic-functions" / uuid[0] / f"{uuid}.yaml"
+    path = root / "syntactic-functions" / uuid[0] / f"{uuid}.yml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         yaml.safe_dump({
