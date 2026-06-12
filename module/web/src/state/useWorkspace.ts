@@ -24,6 +24,7 @@ import type {
   AuthSession,
   ParallelBucket,
   ParallelSearchResponse,
+  ParallelSort,
   SearchHit,
   SearchResponse,
   SearchSort,
@@ -60,6 +61,7 @@ export interface ParallelOptions {
   bucket: ParallelBucket;
   minLength: number;
   minOccurrences: number;
+  sort: ParallelSort;
 }
 export type LineMode = "paragraph" | "phrase";
 export type LineBreakDisplay = "off" | "glyph" | "br";
@@ -612,7 +614,7 @@ let state: WorkspaceState = {
     translationSort: "textid",
     translationFilters: { lang: null, category: null, type: null, dateBefore: null, dateAfter: null },
     parallelResponse: null,
-    parallelOptions: { bucket: "body", minLength: 12, minOccurrences: 2 },
+    parallelOptions: { bucket: "body", minLength: 12, minOccurrences: 2, sort: "frequency" },
   },
   searchHistory: [],
   textHistory: [],
@@ -807,6 +809,7 @@ async function runParallelSearch(offset: number): Promise<void> {
       bucket: parallelOptions.bucket,
       minLength: parallelOptions.minLength,
       minOccurrences: parallelOptions.minOccurrences,
+      sort: parallelOptions.sort,
       limit: 50,
       offset,
       signal: controller.signal,

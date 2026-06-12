@@ -553,6 +553,7 @@ export interface TranslationSearchResponse {
 }
 
 export type ParallelBucket = "front" | "body" | "back" | "all";
+export type ParallelSort = "frequency" | "length";
 
 export interface ParallelLocation {
   textid: string;
@@ -579,6 +580,7 @@ export interface ParallelSearchResponse {
   bucket: ParallelBucket;
   min_length: number;
   min_occurrences: number;
+  sort: ParallelSort;
   total: number;
   offset: number;
   limit: number;

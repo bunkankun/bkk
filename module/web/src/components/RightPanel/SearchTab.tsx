@@ -720,7 +720,11 @@ function ParallelLocationRow({ loc, seed }: { loc: ParallelLocation; seed: strin
   );
 }
 
+const PARALLEL_TEXT_MAX = 200;
+
 function ParallelClusterRow({ cluster, seed }: { cluster: ParallelCluster; seed: string }) {
+  const elided = cluster.text.length > PARALLEL_TEXT_MAX;
+  const shown = elided ? cluster.text.slice(0, PARALLEL_TEXT_MAX) : cluster.text;
   return (
     <div className="parallel-cluster">
       <div className="kwic-summary">
@@ -728,7 +732,10 @@ function ParallelClusterRow({ cluster, seed }: { cluster: ParallelCluster; seed:
         <span className="kwic-sort">· {cluster.length} chars</span>
         <span className="kwic-sort">· {cluster.occurrence_count} occurrences</span>
       </div>
-      <div className="parallel-text">{cluster.text}</div>
+      <div className="parallel-text" title={elided ? cluster.text : undefined}>
+        {shown}
+        {elided ? <span className="kwic-ell">…</span> : null}
+      </div>
       {cluster.locations.map((loc, i) => (
         <ParallelLocationRow
           key={`${loc.textid}:${loc.juan_seq}:${loc.bucket_id}:${loc.start}:${i}`}
@@ -755,6 +762,11 @@ function ParallelResultsView({
   const hasPrev = response.offset > 0;
   const hasNext = response.offset + response.limit < response.total;
   const seed = query.trim();
+  const setSort = (sort: "frequency" | "length") => {
+    if (response.sort === sort) return;
+    workspace.setParallelOption("sort", sort);
+    void workspace.runSearchAt(0);
+  };
   return (
     <div className="rc kwic-list">
       <div className="kwic-summary">
@@ -764,6 +776,24 @@ function ParallelResultsView({
         <span className="kwic-sort">· {response.bucket}</span>
         <span className="kwic-sort">· min {response.min_length} chars</span>
         <span className="kwic-sort">· ≥{response.min_occurrences}×</span>
+        <button
+          type="button"
+          className={`kwic-facet-chip${response.sort === "frequency" ? " on" : ""}`}
+          disabled={disabled}
+          onClick={() => setSort("frequency")}
+          title="Most frequent first"
+        >
+          most frequent
+        </button>
+        <button
+          type="button"
+          className={`kwic-facet-chip${response.sort === "length" ? " on" : ""}`}
+          disabled={disabled}
+          onClick={() => setSort("length")}
+          title="Longest first"
+        >
+          longest
+        </button>
       </div>
       {response.clusters.map((c) => (
         <ParallelClusterRow key={c.cluster_id} cluster={c} seed={seed} />

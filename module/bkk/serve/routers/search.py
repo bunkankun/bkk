@@ -1049,6 +1049,7 @@ class ParallelSearchResponse(BaseModel):
     bucket: str
     min_length: int
     min_occurrences: int
+    sort: str
     total: int
     offset: int
     limit: int
@@ -1093,6 +1094,7 @@ def search_parallel(
     max_postings: int = Query(500, ge=2, le=5000),
     context: int = Query(20, ge=0, le=200),
     include_contained: bool = Query(False),
+    sort: Literal["frequency", "length"] = Query("frequency"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ParallelSearchResponse:
@@ -1110,12 +1112,20 @@ def search_parallel(
         )
     except ValueError as exc:
         raise errors.bad_request(str(exc))
+    if sort == "frequency":
+        # discover_parallel_passages returns length-sorted clusters (needed
+        # for the contained-cluster filter). Re-rank by occurrence count for
+        # the "most frequent first" view; preserve length as the tie-breaker.
+        clusters = sorted(
+            clusters, key=lambda c: (-c.occurrence_count, -c.length, c.cluster_id)
+        )
     page = clusters[offset : offset + limit]
     return ParallelSearchResponse(
         query=q,
         bucket=bucket,
         min_length=min_length,
         min_occurrences=min_occurrences,
+        sort=sort,
         total=len(clusters),
         offset=offset,
         limit=limit,

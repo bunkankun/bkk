@@ -43,6 +43,7 @@ import type {
   OverlaysResponse,
   ParallelBucket,
   ParallelSearchResponse,
+  ParallelSort,
   Rating,
   SearchResponse,
   SearchSort,
@@ -618,6 +619,7 @@ export async function searchParallel(params: {
   maxPostings?: number;
   context?: number;
   includeContained?: boolean;
+  sort?: ParallelSort;
   limit?: number;
   offset?: number;
   signal?: AbortSignal;
@@ -630,6 +632,7 @@ export async function searchParallel(params: {
   if (params.maxPostings != null) q.set("max_postings", String(params.maxPostings));
   if (params.context != null) q.set("context", String(params.context));
   if (params.includeContained) q.set("include_contained", "true");
+  if (params.sort) q.set("sort", params.sort);
   if (params.limit != null) q.set("limit", String(params.limit));
   if (params.offset != null) q.set("offset", String(params.offset));
   return fetchJson<ParallelSearchResponse>(`${apiBase}/search/parallel?${q.toString()}`, {
