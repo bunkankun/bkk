@@ -689,7 +689,7 @@ function TranslationResultsView({
   );
 }
 
-function ParallelLocationRow({ loc, seed }: { loc: ParallelLocation; seed: string }) {
+function ParallelLocationRow({ loc, marker }: { loc: ParallelLocation; marker: string }) {
   const onClick = () =>
     workspace.openContributionLocation({
       textid: loc.textid,
@@ -713,7 +713,7 @@ function ParallelLocationRow({ loc, seed }: { loc: ParallelLocation; seed: strin
       </div>
       <div className="kwic-line">
         <span className="kwic-left">{loc.left}</span>
-        <mark className="kwic-match">{seed}</mark>
+        <mark className="kwic-match">{marker}</mark>
         <span className="kwic-right">{loc.right}</span>
       </div>
     </button>
@@ -722,9 +722,16 @@ function ParallelLocationRow({ loc, seed }: { loc: ParallelLocation; seed: strin
 
 const PARALLEL_TEXT_MAX = 200;
 
-function ParallelClusterRow({ cluster, seed }: { cluster: ParallelCluster; seed: string }) {
+function parallelMarker(text: string): string {
+  const chars = Array.from(text);
+  if (chars.length <= 4) return text;
+  return `${chars.slice(0, 2).join("")}…${chars.slice(-2).join("")}`;
+}
+
+function ParallelClusterRow({ cluster }: { cluster: ParallelCluster }) {
   const elided = cluster.text.length > PARALLEL_TEXT_MAX;
   const shown = elided ? cluster.text.slice(0, PARALLEL_TEXT_MAX) : cluster.text;
+  const marker = parallelMarker(cluster.text);
   return (
     <div className="parallel-cluster">
       <div className="kwic-summary">
@@ -740,7 +747,7 @@ function ParallelClusterRow({ cluster, seed }: { cluster: ParallelCluster; seed:
         <ParallelLocationRow
           key={`${loc.textid}:${loc.juan_seq}:${loc.bucket_id}:${loc.start}:${i}`}
           loc={loc}
-          seed={seed}
+          marker={marker}
         />
       ))}
     </div>
@@ -796,7 +803,7 @@ function ParallelResultsView({
         </button>
       </div>
       {response.clusters.map((c) => (
-        <ParallelClusterRow key={c.cluster_id} cluster={c} seed={seed} />
+        <ParallelClusterRow key={c.cluster_id} cluster={c} />
       ))}
       {(hasPrev || hasNext) && (
         <div className="kwic-pager">

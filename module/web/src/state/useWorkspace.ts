@@ -1645,12 +1645,28 @@ export const workspace = {
         : readMode === "read"
           ? "texts"
           : state.activity;
+    // Switching between read and inspect remounts TextViewer (different parent
+    // tree), losing scroll position. Reuse pendingHighlight to land at the
+    // same offset after the new instance loads the juan.
+    const activeTab = target?.tabs.find((t) => t.id === target.activeTabId);
+    const cp = state.currentPage;
+    const canRestore =
+      (readMode === "read" || readMode === "inspect") &&
+      activeTab != null &&
+      activeTab.type === "text" &&
+      cp != null &&
+      cp.textid === activeTab.textid &&
+      cp.seq === activeTab.seq;
+    const pendingHighlight = canRestore
+      ? { textid: cp.textid, seq: cp.seq, bucket: cp.bucket, offset: cp.offset, length: 1 }
+      : state.pendingHighlight;
     if (!target) {
-      state = { ...state, readMode, activity };
+      state = { ...state, readMode, activity, pendingHighlight };
     } else {
       state = {
         ...state,
         activity,
+        pendingHighlight,
         pane: mapPaneLeaves(state.pane, (leaf) => {
           if (leaf.id !== target.id) return leaf;
           return {

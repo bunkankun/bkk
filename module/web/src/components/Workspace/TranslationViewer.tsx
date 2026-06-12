@@ -141,6 +141,7 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const selectedSegment = useWorkspace((s) => s.selectedSegment);
   const pending = useWorkspace((s) => s.pendingHighlight);
   const [flashOffsets, setFlashOffsets] = useState<{ start: number; end: number } | null>(
@@ -152,9 +153,23 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
     let cancelled = false;
     setAlignment(null);
     setError(null);
+    workspace.setCurrentPage(null);
     if (!translationId) return () => { cancelled = true; };
     getTranslationAlignment(textid, seq, translationId)
-      .then((res) => { if (!cancelled) setAlignment(res); })
+      .then((res) => {
+        if (cancelled) return;
+        setAlignment(res);
+        const first = res.rows[0];
+        if (first) {
+          workspace.setCurrentPage({
+            textid,
+            seq,
+            bucket: "body",
+            markerId: first.source_marker_id,
+            offset: first.source_offset,
+          });
+        }
+      })
       .catch((e) => { if (!cancelled) setError(String(e)); });
     return () => { cancelled = true; };
   }, [textid, seq, translationId]);
@@ -230,6 +245,46 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
     const timer = window.setTimeout(() => setFlashOffsets(null), 15000);
     return () => window.clearTimeout(timer);
   }, [flashOffsets]);
+
+  // Track the topmost visible aligned row and report it as currentPage, so a
+  // mode switch back to Read/Inspect can land at the same source offset.
+  useEffect(() => {
+    const root = scrollRef.current;
+    const container = containerRef.current;
+    if (!root || !container || alignment == null) return;
+    const visible = new Map<Element, { id: string; offset: number }>();
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const el = e.target as HTMLElement;
+          if (e.isIntersecting) {
+            const id = el.dataset.pageId;
+            const off = Number(el.dataset.pageOffset);
+            if (!id || Number.isNaN(off)) continue;
+            visible.set(el, { id, offset: off });
+          } else {
+            visible.delete(el);
+          }
+        }
+        let best: { id: string; offset: number } | null = null;
+        for (const v of visible.values()) {
+          if (best == null || v.offset < best.offset) best = v;
+        }
+        if (best == null) return;
+        workspace.setCurrentPage({
+          textid,
+          seq,
+          bucket: "body",
+          markerId: best.id,
+          offset: best.offset,
+        });
+      },
+      { root, rootMargin: "0px 0px -85% 0px" },
+    );
+    const rows = container.querySelectorAll<HTMLElement>("[data-page-id]");
+    rows.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, [alignment, textid, seq]);
 
   const handleAnnClick = useCallback(
     (
@@ -372,6 +427,7 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
   return (
     <div
       className="ec"
+      ref={scrollRef}
       onMouseUp={handleMouseUp}
       onMouseLeave={() => workspace.setHover(paneId, tabId, null)}
     >
@@ -408,6 +464,8 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
           <div
             className={`trans-row${row.continued ? " continued" : ""}${isActive ? " active" : ""}`}
             key={`${row.source_marker_id}:${row.source_offset}`}
+            data-page-id={row.source_marker_id}
+            data-page-offset={row.source_offset}
             {...(rowIdx === firstTranslatedIdx ? { "data-first-translated": "1" } : {})}
           >
             <div
