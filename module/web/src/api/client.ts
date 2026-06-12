@@ -299,13 +299,31 @@ export async function getJuan(textid: string, seq: number): Promise<Juan> {
   );
 }
 
+const annotationsCache = new Map<string, Promise<Annotation[]>>();
+
+function annotationsKey(textid: string, seq: number): string {
+  return `${textid}_${seq}`;
+}
+
+export function invalidateAnnotationsCache(textid: string, seq: number): void {
+  annotationsCache.delete(annotationsKey(textid, seq));
+}
+
 export async function getAnnotations(
   textid: string,
   seq: number,
 ): Promise<Annotation[]> {
-  return fetchJson<Annotation[]>(
+  const key = annotationsKey(textid, seq);
+  const cached = annotationsCache.get(key);
+  if (cached != null) return cached;
+  const promise = fetchJson<Annotation[]>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/annotations`,
-  );
+  ).catch((err) => {
+    annotationsCache.delete(key);
+    throw err;
+  });
+  annotationsCache.set(key, promise);
+  return promise;
 }
 
 export interface ArchiveDeleteResponse {
@@ -320,10 +338,12 @@ export async function archiveDeleteAnnotation(
   seq: number,
   id: string,
 ): Promise<ArchiveDeleteResponse> {
-  return fetchJson<ArchiveDeleteResponse>(
+  const res = await fetchJson<ArchiveDeleteResponse>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/annotations/${encodeURIComponent(id)}`,
     { method: "DELETE" },
   );
+  invalidateAnnotationsCache(textid, seq);
+  return res;
 }
 
 export async function getBlueskyStatus(): Promise<BlueskyStatus> {
@@ -402,7 +422,7 @@ export async function patchContributionCuration(
   uri: string,
   patch: { state?: CurationState; rating?: Rating },
 ): Promise<CurationStateResponse> {
-  return fetchJson<CurationStateResponse>(
+  const res = await fetchJson<CurationStateResponse>(
     `${apiBase}/annotations/curation-state`,
     {
       method: "PATCH",
@@ -410,6 +430,10 @@ export async function patchContributionCuration(
       body: JSON.stringify({ uri, ...patch }),
     },
   );
+  if (res.juan_seq != null) {
+    invalidateAnnotationsCache(res.text_id, res.juan_seq);
+  }
+  return res;
 }
 
 export interface LocalRatingResponse {

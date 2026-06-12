@@ -1636,7 +1636,12 @@ export const workspace = {
   },
   setReadMode(readMode: ReadMode) {
     const target = activePaneLeaf(state.pane);
-    const activity = readMode === "trans" ? "overlays" : state.activity;
+    const activity: Activity =
+      readMode === "trans"
+        ? "overlays"
+        : readMode === "read"
+          ? "texts"
+          : state.activity;
     if (!target) {
       state = { ...state, readMode, activity };
     } else {
@@ -1808,13 +1813,19 @@ export const workspace = {
     const pane = paneHasPinnedTab(state.pane)
       ? state.pane
       : { kind: "leaf" as const, id: "root", tabs: [], activeTabId: null };
+    // Mirror openJuan: the LeftPanel activity tracks the mode the next tab
+    // will open in, so users opening a text in Trans mode land on the
+    // Translations panel instead of Contents.
+    const presumedReadMode: ReadMode =
+      state.openMode === "sticky" ? state.readMode : state.openMode;
+    const activity: Activity = presumedReadMode === "trans" ? "overlays" : "texts";
     state = {
       ...state,
       activeTextid: textid,
       activeSeq: null,
       selection: null,
       currentPage: null,
-      activity: "texts",
+      activity,
       pane,
     };
     notify();
@@ -1891,6 +1902,7 @@ export const workspace = {
     };
     const pane = paneForOpenTab(tab);
     const focusedPaneId = leafIdForTab(pane, tabId);
+    const activity: Activity = tab.readMode === "trans" ? "overlays" : "texts";
     state = {
       ...state,
       activeTextid: textid,
@@ -1899,7 +1911,7 @@ export const workspace = {
       selection: null,
       currentPage: null,
       pane,
-      activity: "texts",
+      activity,
     };
     rememberTextVisit({ textid, seq, pinned: tab.pinned });
     notify();

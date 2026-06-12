@@ -1,9 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getTranslationAlignment } from "../../api/client";
-import type { TranslationAlignedRow, TranslationAlignmentResponse } from "../../api/types";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  getAnnotations,
+  getBundleTranslations,
+  getTranslationAlignment,
+} from "../../api/client";
+import type {
+  Annotation,
+  TranslationAlignedRow,
+  TranslationAlignmentResponse,
+} from "../../api/types";
 import { krRefToChar } from "../../lib/pua";
 import { hasKrpLocation } from "../../lib/markers";
 import { isResizing, useWorkspace, workspace } from "../../state/useWorkspace";
+import { annTooltip, buildAnnotationIndex, type AnnotationIndex } from "./AnnotationLayer";
 
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
 const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
@@ -49,9 +65,25 @@ interface SourceTextProps {
   row: TranslationAlignedRow;
   paneId: string;
   tabId: string;
+  annIndex: AnnotationIndex;
+  flashOffsets: { start: number; end: number } | null;
+  onAnnClick: (
+    offset: number,
+    endOffset: number,
+    ch: string,
+    row: TranslationAlignedRow,
+    anns: Annotation[],
+  ) => void;
 }
 
-function SourceText({ row, paneId, tabId }: SourceTextProps) {
+function SourceText({
+  row,
+  paneId,
+  tabId,
+  annIndex,
+  flashOffsets,
+  onAnnClick,
+}: SourceTextProps) {
   const chars = decodeKrRefs(row.source_text);
   return (
     <>
@@ -61,16 +93,32 @@ function SourceText({ row, paneId, tabId }: SourceTextProps) {
         if (PUNCT_RE.test(c.ch)) {
           return <span key={i} className="pu">{c.ch}</span>;
         }
+        const anns = annIndex.byOffset.get(absOffset);
+        const has = anns && anns.length > 0;
+        const flashing =
+          flashOffsets != null &&
+          absOffset >= flashOffsets.start &&
+          absOffset < flashOffsets.end;
+        const cls = `${has ? "ch has-ann" : "ch"}${flashing ? " kwic-flash" : ""}`;
+        const title = has ? anns!.map(annTooltip).join(" / ") : undefined;
         return (
           <span
             key={i}
-            className="ch"
+            className={cls}
             data-offset={absOffset}
             data-end-offset={absEndOffset}
             data-bucket="body"
             data-anchor-id={row.source_marker_id}
             data-anchor-row-offset={row.source_offset}
+            title={title}
             onMouseEnter={() => workspace.setHover(paneId, tabId, c.ch)}
+            onClick={(ev) => {
+              if (!has) return;
+              const sel = window.getSelection();
+              if (sel && !sel.isCollapsed) return;
+              onAnnClick(absOffset, absEndOffset, c.ch, row, anns!);
+              ev.stopPropagation();
+            }}
           >
             {c.ch}
           </span>
@@ -90,9 +138,15 @@ interface Props {
 
 export function TranslationViewer({ paneId, tabId, textid, seq, translationId }: Props) {
   const [alignment, setAlignment] = useState<TranslationAlignmentResponse | null>(null);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const selectedSegment = useWorkspace((s) => s.selectedSegment);
+  const pending = useWorkspace((s) => s.pendingHighlight);
+  const [flashOffsets, setFlashOffsets] = useState<{ start: number; end: number } | null>(
+    null,
+  );
+  const lastFlashedRef = useRef<typeof pending>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,12 +159,107 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
     return () => { cancelled = true; };
   }, [textid, seq, translationId]);
 
+  // When opened in Trans mode but nothing is selected, check whether this
+  // text has any translations at all. If none, drop back to Read mode so
+  // the user sees the source text instead of an empty pane.
+  const [noTranslationsAvailable, setNoTranslationsAvailable] = useState(false);
+  useEffect(() => {
+    if (translationId != null) {
+      setNoTranslationsAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    getBundleTranslations(textid)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.translations.length === 0) {
+          setNoTranslationsAvailable(true);
+          workspace.setReadMode("read");
+        }
+      })
+      .catch(() => { /* keep current empty-pane message */ });
+    return () => { cancelled = true; };
+  }, [textid, translationId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAnnotations([]);
+    getAnnotations(textid, seq)
+      .then((a) => { if (!cancelled) setAnnotations(a); })
+      .catch(() => { if (!cancelled) setAnnotations([]); });
+    return () => { cancelled = true; };
+  }, [textid, seq]);
+
+  const annIndex = useMemo(() => buildAnnotationIndex(annotations), [annotations]);
+
   useEffect(() => {
     if (!selectedSegment || !alignment) return;
     if (selectedSegment.textid !== textid || selectedSegment.seq !== seq) return;
     const el = containerRef.current?.querySelector<HTMLElement>(".trans-row.active");
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [selectedSegment, alignment, textid, seq]);
+
+  // Consume pendingHighlight (e.g. annotation-card click) by scrolling the
+  // matching source span into view and flashing it. Mirrors TextViewer.
+  useLayoutEffect(() => {
+    if (
+      pending == null ||
+      pending.textid !== textid ||
+      pending.seq !== seq ||
+      pending.bucket !== "body" ||
+      containerRef.current == null ||
+      alignment == null
+    ) {
+      return;
+    }
+    if (lastFlashedRef.current === pending) return;
+    const start = pending.offset;
+    const end = pending.offset + Math.max(1, pending.length);
+    const target = containerRef.current.querySelector<HTMLElement>(
+      `span[data-bucket="body"][data-offset="${start}"]`,
+    );
+    if (!target) return;
+    lastFlashedRef.current = pending;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    setFlashOffsets({ start, end });
+    workspace.consumeHighlight();
+  }, [pending, textid, seq, alignment]);
+
+  useEffect(() => {
+    if (flashOffsets == null) return;
+    const timer = window.setTimeout(() => setFlashOffsets(null), 15000);
+    return () => window.clearTimeout(timer);
+  }, [flashOffsets]);
+
+  const handleAnnClick = useCallback(
+    (
+      offset: number,
+      endOffset: number,
+      ch: string,
+      row: TranslationAlignedRow,
+      anns: Annotation[],
+    ) => {
+      const anchorId =
+        row.source_marker_id && hasKrpLocation(row.source_marker_id)
+          ? row.source_marker_id
+          : null;
+      workspace.setSelection({
+        textid,
+        seq,
+        bucket: "body",
+        start: offset,
+        end: endOffset,
+        chars: [ch],
+        anchorMarkerId: anchorId,
+        anchorOffset: anchorId ? offset - row.source_offset : offset,
+      });
+      const targetId = anns.find((a) => a.id != null)?.id ?? null;
+      workspace.setSelectedAnnotationId(targetId);
+      workspace.setSearchQuery(ch);
+      workspace.setRightTab("annotations");
+    },
+    [textid, seq],
+  );
 
   const handleMouseUp = useCallback(() => {
     if (isResizing()) return;
@@ -195,6 +344,9 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
   }, [handleMouseUp]);
 
   if (!translationId) {
+    if (noTranslationsAvailable) {
+      return <div className="empty-pane">No translations available — opening in Read mode…</div>;
+    }
     return <div className="empty-pane">Select a translation from Translations.</div>;
   }
   if (error) {
@@ -274,7 +426,14 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
                 {row.resp ? <span className="trans-resp"> · {row.resp}</span> : null}
               </div>
               <div>
-                <SourceText row={row} paneId={paneId} tabId={tabId} />
+                <SourceText
+                  row={row}
+                  paneId={paneId}
+                  tabId={tabId}
+                  annIndex={annIndex}
+                  flashOffsets={flashOffsets}
+                  onAnnClick={handleAnnClick}
+                />
               </div>
             </div>
             <div className="trans-target">

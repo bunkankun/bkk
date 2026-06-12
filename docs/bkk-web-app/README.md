@@ -109,6 +109,7 @@ Persistence strategy:
 - Base URL: `import.meta.env.DEV ? "/api" : ""`. In dev Vite proxies `/api/*` → `127.0.0.1:8000`. In prod the SPA is same-origin as the API.
 - One exported function per backend endpoint. Names follow `getThing` / `postThing` / `patchThing`.
 - Manifest responses (`getManifest`) go through `manifestCache` — repeat calls for the same textid return the cached promise.
+- Annotation responses (`getAnnotations`) go through `annotationsCache` keyed by `${textid}_${seq}`, so the Read pane, the Trans pane, and the AnnotationsTab share one fetch per juan. `archiveDeleteAnnotation` and `patchContributionCuration` invalidate the affected juan automatically; `invalidateAnnotationsCache(textid, seq)` is exported for explicit refreshes.
 - Errors throw `ApiError(status, message, body)`. Components display these inline; there is no global error boundary.
 
 Endpoint groups: server info, auth, admin jobs, catalog, bundles + juan + annotations, full-text search, translation search + alignment, annotation write + Bluesky, CORE (dictionary) read/write/PR, workspace file CRUD. See [api/types.ts](../../module/web/src/api/types.ts) for the response shapes.
@@ -140,7 +141,7 @@ Each file is the entire UI for one activity. Switching activity unmounts the pre
 - [Workspace/WorkspacePane.tsx](../../module/web/src/components/Workspace/WorkspacePane.tsx) — per-leaf container. Tab bar, close/pin buttons, read/trans/inspect mode buttons, dispatches the active tab to the right viewer.
 - [Workspace/TextViewer.tsx](../../module/web/src/components/Workspace/TextViewer.tsx) — the main text rendering. Pulls juan body/front/back, splits into spans, lays in annotation overlays, owns text selection (→ `selection` slice), hover codepoint → CharInfoBar, scroll-spy for current page, and the mouse-coord → `marker_id` + offset mapping that anchors annotations. Line-mode toggle is here.
 - [Workspace/ImagePanel.tsx](../../module/web/src/components/Workspace/ImagePanel.tsx) — scanned page images. Pan/zoom via pointer events. Syncs current page with TextViewer via IntersectionObserver.
-- [Workspace/TranslationViewer.tsx](../../module/web/src/components/Workspace/TranslationViewer.tsx) — parallel source/target alignment table.
+- [Workspace/TranslationViewer.tsx](../../module/web/src/components/Workspace/TranslationViewer.tsx) — parallel source/target alignment table. Mirrors TextViewer's annotation linkage: source spans decorated from the same `annotationsCache`, single-click on an annotated char sets `selectedAnnotationId` and opens the Annotations tab, and `pendingHighlight` scrolls + flashes the matching span (so card↔text navigation works in either direction). When the pane is opened in Trans mode for a text with no translations, it calls `getBundleTranslations` and falls back to Read mode via `setReadMode("read")` instead of leaving an empty pane.
 - [Workspace/CoreRecord.tsx](../../module/web/src/components/Workspace/CoreRecord.tsx) — dictionary entry view. Sense tree, backlinks, concept words, attribution badges.
 - [Workspace/CoreRecordEditor.tsx](../../module/web/src/components/Workspace/CoreRecordEditor.tsx) — edit mode for a core record. Fork → patch → commit → PR via the backend GitHub proxy.
 - [Workspace/AnnotationLayer.tsx](../../module/web/src/components/Workspace/AnnotationLayer.tsx) — pure helper (no JSX): builds the per-juan annotation index TextViewer overlays.
@@ -182,6 +183,8 @@ No CSS modules, no Tailwind. Components add classes directly; style rules live i
 **Auth** — `startGithubLogin()` redirects to `/api/auth/github/start`; the backend completes the OAuth dance and sets a session cookie. On boot, `loadAuthSession()` calls `GET /api/auth/session`. Logout clears the cookie and resets in-memory session-derived slices. Workspace sync (pull `session.json`, push debounced) is triggered by login.
 
 **Search lifecycle** — `runSearch()` aborts any in-flight request via `searchAbort`, fires the new one, and writes status (`idle`/`loading`/`ok`/`error`) into `state.search`. List filters narrow the textid scope via `scopedListTextids()` before the request.
+
+**Read mode ↔ LeftPanel activity** — `setReadMode`, `openJuan`, and `selectBundle` derive the activity from the resolved read mode: `read` → Contents (`texts`), `trans` → Translations (`overlays`), `inspect` leaves activity alone. So opening a text in Trans mode lands on the Translations panel, falling back from Trans to Read also switches the panel back to Contents, and the activity tracks the mode without needing a separate click.
 
 **Dev vs prod** — all backend routes live under `/api` in both setups. `apiBase` is the constant `/api`. Vite proxies `/api/*` straight through to the FastAPI backend in dev ([vite.config.ts](../../module/web/vite.config.ts)); in prod the SPA and API share the same origin.
 
