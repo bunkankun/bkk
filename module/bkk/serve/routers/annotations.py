@@ -244,6 +244,20 @@ class BySenseCountsResponse(BaseModel):
     counts: dict[str, int]
 
 
+class ByRhetoricalDeviceResponse(BaseModel):
+    rhet_dev_uuid: str
+    total: int
+    locations: list[BySenseLocation]
+
+
+class ByRhetoricalDeviceCountsRequest(BaseModel):
+    rhet_dev_uuids: list[str]
+
+
+class ByRhetoricalDeviceCountsResponse(BaseModel):
+    counts: dict[str, int]
+
+
 def _sense_uuid_variants(sense_uuid: str) -> tuple[str, ...]:
     if sense_uuid.startswith("uuid-"):
         bare = sense_uuid[5:]
@@ -425,6 +439,170 @@ def _ann_index_counts(state: AppState, sense_uuids: list[str]) -> dict[str, int]
     return counts
 
 
+def _ann_root_rhet_dev_locations(
+    state: AppState, rhet_dev_uuid: str,
+) -> list[BySenseLocation]:
+    root = state.annotations_root
+    if root is None or not root.is_dir():
+        return []
+    target = _canonical_sense_uuid(rhet_dev_uuid)
+    out: list[BySenseLocation] = []
+    for jsonl_path in sorted(root.glob("*/*.ann.jsonl")):
+        text_id = jsonl_path.parent.name
+        stem = jsonl_path.name.removesuffix(".ann.jsonl")
+        try:
+            seq = int(stem.rsplit("_", 1)[-1])
+        except ValueError:
+            continue
+        for raw in read_raw_records(jsonl_path):
+            if raw.get("curation_state") in {"rejected", "superseded"}:
+                continue
+            payload = raw.get("payload") or {}
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("kind") != "rhetorical-device-attestation":
+                continue
+            raw_id = payload.get("rhet_dev_id")
+            if not isinstance(raw_id, str) or _canonical_sense_uuid(raw_id) != target:
+                continue
+            anchor = raw.get("anchor") if isinstance(raw.get("anchor"), dict) else {}
+            metadata = (
+                payload.get("metadata")
+                if isinstance(payload.get("metadata"), dict)
+                else {}
+            )
+            provenance = raw.get("provenance") if isinstance(raw.get("provenance"), dict) else {}
+            rating_raw = raw.get("rating")
+            note = metadata.get("note") if isinstance(metadata.get("note"), str) else None
+            if note is None and isinstance(payload.get("note"), str):
+                note = payload.get("note")
+            out.append(BySenseLocation(
+                text_id=text_id,
+                seq=seq,
+                marker_id=anchor.get("marker_id") if isinstance(anchor.get("marker_id"), str) else None,
+                offset=raw.get("bucket_offset") if isinstance(raw.get("bucket_offset"), int) else None,
+                bucket=raw.get("bucket") if isinstance(raw.get("bucket"), str) else None,
+                length=anchor.get("length") if isinstance(anchor.get("length"), int) else None,
+                id=raw.get("id") if isinstance(raw.get("id"), str) else None,
+                orth=None,
+                pron=None,
+                note=note,
+                resp=metadata.get("resp") if isinstance(metadata.get("resp"), str) else None,
+                curation_state=raw.get("curation_state") if isinstance(raw.get("curation_state"), str) else None,
+                rating=rating_raw if isinstance(rating_raw, int) and rating_raw in (0, 1, 2) else 0,
+                uri=provenance.get("uri") if isinstance(provenance.get("uri"), str) else None,
+            ))
+    out.sort(key=lambda loc: (loc.text_id, loc.seq, loc.offset if loc.offset is not None else -1, loc.id or ""))
+    return out
+
+
+def _ann_root_rhet_dev_counts(
+    state: AppState, rhet_dev_uuids: list[str],
+) -> dict[str, int]:
+    root = state.annotations_root
+    requested = {_canonical_sense_uuid(u) for u in rhet_dev_uuids}
+    counts = {u: 0 for u in requested}
+    if not requested or root is None or not root.is_dir():
+        return counts
+    for jsonl_path in sorted(root.glob("*/*.ann.jsonl")):
+        for raw in read_raw_records(jsonl_path):
+            if raw.get("curation_state") in {"rejected", "superseded"}:
+                continue
+            payload = raw.get("payload") or {}
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("kind") != "rhetorical-device-attestation":
+                continue
+            raw_id = payload.get("rhet_dev_id")
+            if not isinstance(raw_id, str):
+                continue
+            key = _canonical_sense_uuid(raw_id)
+            if key in counts:
+                counts[key] += 1
+    return counts
+
+
+def _ann_index_rhet_dev_locations(
+    state: AppState, rhet_dev_uuid: str,
+) -> list[BySenseLocation] | None:
+    conn = state.open_annotations_index()
+    if conn is None:
+        return None
+    variants = _sense_uuid_variants(rhet_dev_uuid)
+    placeholders = ",".join("?" * len(variants))
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT text_id, juan_seq, marker_id, bucket_offset, bucket, length,
+                   annotation_id, note, resp, curation_state, rating
+            FROM annotation_location
+            WHERE rhet_dev_uuid IN ({placeholders})
+            ORDER BY text_id, juan_seq, bucket_offset, annotation_id
+            """,
+            variants,
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return None
+    finally:
+        conn.close()
+    return [
+        BySenseLocation(
+            text_id=str(row[0]),
+            seq=int(row[1]),
+            marker_id=row[2],
+            offset=int(row[3]) if row[3] is not None else None,
+            bucket=row[4],
+            length=int(row[5]) if row[5] is not None else None,
+            id=row[6],
+            orth=None,
+            pron=None,
+            note=row[7],
+            resp=row[8],
+            curation_state=row[9],
+            rating=row[10] if isinstance(row[10], int) and row[10] in (0, 1, 2) else 0,
+        )
+        for row in rows
+    ]
+
+
+def _ann_index_rhet_dev_counts(
+    state: AppState, rhet_dev_uuids: list[str],
+) -> dict[str, int] | None:
+    requested = sorted({_canonical_sense_uuid(u) for u in rhet_dev_uuids})
+    counts = {u: 0 for u in requested}
+    if not requested:
+        return counts
+    conn = state.open_annotations_index()
+    if conn is None:
+        return None
+    variants: list[str] = []
+    variant_to_key: dict[str, str] = {}
+    for key in requested:
+        for variant in _sense_uuid_variants(key):
+            variants.append(variant)
+            variant_to_key[variant] = key
+    placeholders = ",".join("?" * len(variants))
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT rhet_dev_uuid, COUNT(*)
+            FROM annotation_location
+            WHERE rhet_dev_uuid IN ({placeholders})
+            GROUP BY rhet_dev_uuid
+            """,
+            variants,
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return None
+    finally:
+        conn.close()
+    for rd_uuid, count in rows:
+        key = variant_to_key.get(str(rd_uuid))
+        if key is not None:
+            counts[key] += int(count)
+    return counts
+
+
 def _enrich_text_context(state: AppState, locs: list[BySenseLocation]) -> list[BySenseLocation]:
     juan_cache: dict[tuple[str, int], tuple[str | None, dict[str, Any] | None]] = {}
     out: list[BySenseLocation] = []
@@ -507,6 +685,42 @@ def annotations_by_sense(
         locs = _ann_root_locations(state, sense_uuid)
     locs = _enrich_text_context(state, locs)
     return BySenseResponse(sense_uuid=sense_uuid, total=len(locs), locations=locs)
+
+
+@router.post(
+    "/annotations/by-rhetorical-devices/counts",
+    response_model=ByRhetoricalDeviceCountsResponse,
+    summary="Count annotation locations for multiple rhetorical-device UUIDs",
+)
+def annotations_by_rhetorical_devices_counts(
+    request: Request,
+    body: ByRhetoricalDeviceCountsRequest,
+) -> ByRhetoricalDeviceCountsResponse:
+    state = request.app.state.bkk
+    counts = _ann_index_rhet_dev_counts(state, body.rhet_dev_uuids)
+    if counts is None:
+        counts = _ann_root_rhet_dev_counts(state, body.rhet_dev_uuids)
+    return ByRhetoricalDeviceCountsResponse(counts=counts)
+
+
+@router.get(
+    "/annotations/by-rhetorical-device/{rhet_dev_uuid}",
+    response_model=ByRhetoricalDeviceResponse,
+    response_model_exclude_none=True,
+    summary="List annotation locations whose payload.rhet_dev_id matches this device",
+)
+def annotations_by_rhetorical_device(
+    request: Request,
+    rhet_dev_uuid: str = PathParam(...),
+) -> ByRhetoricalDeviceResponse:
+    state = request.app.state.bkk
+    locs = _ann_index_rhet_dev_locations(state, rhet_dev_uuid)
+    if locs is None:
+        locs = _ann_root_rhet_dev_locations(state, rhet_dev_uuid)
+    locs = _enrich_text_context(state, locs)
+    return ByRhetoricalDeviceResponse(
+        rhet_dev_uuid=rhet_dev_uuid, total=len(locs), locations=locs,
+    )
 
 
 @router.get(

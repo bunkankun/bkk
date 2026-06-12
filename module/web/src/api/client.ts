@@ -37,6 +37,8 @@ import type {
   CoreSuperEntryFull,
   AnnotationsBySenseResponse,
   AnnotationsBySenseCountsResponse,
+  AnnotationsByRhetoricalDeviceResponse,
+  AnnotationsByRhetoricalDeviceCountsResponse,
   Juan,
   Manifest,
   ManifestPart,
@@ -799,6 +801,27 @@ export async function getAnnotationSenseCounts(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sense_uuids: senseUuids }),
+    },
+  );
+}
+
+export async function getAnnotationsByRhetoricalDevice(
+  rhetDevUuid: string,
+): Promise<AnnotationsByRhetoricalDeviceResponse> {
+  return fetchJson<AnnotationsByRhetoricalDeviceResponse>(
+    `${apiBase}/annotations/by-rhetorical-device/${encodeURIComponent(rhetDevUuid)}`,
+  );
+}
+
+export async function getAnnotationRhetoricalDeviceCounts(
+  rhetDevUuids: string[],
+): Promise<AnnotationsByRhetoricalDeviceCountsResponse> {
+  return fetchJson<AnnotationsByRhetoricalDeviceCountsResponse>(
+    `${apiBase}/annotations/by-rhetorical-devices/counts`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rhet_dev_uuids: rhetDevUuids }),
     },
   );
 }

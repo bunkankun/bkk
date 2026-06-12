@@ -927,6 +927,16 @@ export interface AnnotationsBySenseCountsResponse {
   counts: Record<string, number>;
 }
 
+export interface AnnotationsByRhetoricalDeviceResponse {
+  rhet_dev_uuid: string;
+  total: number;
+  locations: AnnotationBySenseLocation[];
+}
+
+export interface AnnotationsByRhetoricalDeviceCountsResponse {
+  counts: Record<string, number>;
+}
+
 export interface CoreConceptWord {
   uuid: string;
   display_label: string | null;

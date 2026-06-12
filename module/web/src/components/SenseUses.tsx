@@ -1,5 +1,6 @@
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import {
+  getAnnotationsByRhetoricalDevice,
   getAnnotationsBySense,
   patchContributionCuration,
   patchLocalRating,
@@ -170,6 +171,72 @@ export function SenseUsesPanel({ senseUuid }: { senseUuid: string }) {
   }
   if (locations.length === 0) {
     return <div className="empty sense-uses-panel">No uses of this sense.</div>;
+  }
+  return (
+    <ul className="core-target-where-used sense-uses-panel">
+      {locations.map((loc, i) => (
+        <LocationRow
+          key={loc.id ?? `${loc.text_id}:${loc.seq}:${i}`}
+          loc={loc}
+        />
+      ))}
+    </ul>
+  );
+}
+
+export function useRhetoricalDeviceLocations(
+  rhetDevUuid: string,
+  enabled: boolean,
+) {
+  const [status, setStatus] = useState<UsesStatus>("loading");
+  const [locations, setLocations] = useState<AnnotationBySenseLocation[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    setStatus("loading");
+    setError(null);
+    getAnnotationsByRhetoricalDevice(rhetDevUuid)
+      .then((r) => {
+        if (cancelled) return;
+        setLocations(r.locations);
+        setStatus("ok");
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setError(String(e));
+        setStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rhetDevUuid, enabled]);
+
+  return { status, locations, error };
+}
+
+export function RhetoricalDeviceUsesPanel({
+  rhetDevUuid,
+}: {
+  rhetDevUuid: string;
+}) {
+  const { status, locations, error } = useRhetoricalDeviceLocations(
+    rhetDevUuid,
+    true,
+  );
+  if (status === "loading") {
+    return <div className="empty sense-uses-panel">Searching…</div>;
+  }
+  if (status === "error") {
+    return <div className="empty sense-uses-panel">Failed: {error}</div>;
+  }
+  if (locations.length === 0) {
+    return (
+      <div className="empty sense-uses-panel">
+        No attestations of this device.
+      </div>
+    );
   }
   return (
     <ul className="core-target-where-used sense-uses-panel">

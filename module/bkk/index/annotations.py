@@ -18,7 +18,7 @@ from bkk.serialize.uuid import strip_uuid_prefix
 
 log = logging.getLogger("bkk.index.annotations")
 
-ANNOTATION_SCHEMA_VERSION = 3
+ANNOTATION_SCHEMA_VERSION = 4
 REQUIRED_CORE_SCHEMA_VERSION = 4
 
 DDL = """
@@ -28,7 +28,9 @@ CREATE TABLE meta (
 );
 
 CREATE TABLE annotation_location (
-  sense_uuid TEXT NOT NULL,
+  sense_uuid TEXT,
+  rhet_dev_uuid TEXT,
+  rhet_dev TEXT,
   text_id TEXT NOT NULL,
   juan_seq INTEGER NOT NULL,
   bucket TEXT,
@@ -54,6 +56,8 @@ CREATE TABLE annotation_location (
 
 CREATE INDEX idx_annotation_location_sense
   ON annotation_location(sense_uuid, text_id, juan_seq, bucket_offset, annotation_id);
+CREATE INDEX idx_annotation_location_rhet_dev
+  ON annotation_location(rhet_dev_uuid, text_id, juan_seq, bucket_offset, annotation_id);
 CREATE INDEX idx_annotation_location_text
   ON annotation_location(text_id, juan_seq, bucket_offset);
 """
@@ -94,11 +98,11 @@ def build_annotation_index(
         )
         conn.executemany(
             "INSERT INTO annotation_location"
-            "(sense_uuid, text_id, juan_seq, bucket, bucket_offset, length, "
+            "(sense_uuid, rhet_dev_uuid, rhet_dev, text_id, juan_seq, bucket, bucket_offset, length, "
             "marker_id, annotation_id, concept, concept_id, orth, pron, sense_def, "
             "syntactic_function_label, semantic_feature_label, "
             "note, translation_title, translation_text, resp, curation_state, rating, source_hash) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             rows,
         )
         conn.commit()
@@ -217,13 +221,23 @@ def _location_row(
     payload = raw.get("payload")
     if not isinstance(payload, dict):
         return None
+    sense_uuid: str | None = None
     sense = payload.get("sense")
-    if not isinstance(sense, dict):
+    if isinstance(sense, dict):
+        raw_id = sense.get("id")
+        if isinstance(raw_id, str) and raw_id:
+            sense_uuid = strip_uuid_prefix(raw_id)
+    rhet_dev_uuid: str | None = None
+    rhet_dev: str | None = None
+    if payload.get("kind") == "rhetorical-device-attestation":
+        raw_rd_id = payload.get("rhet_dev_id")
+        if isinstance(raw_rd_id, str) and raw_rd_id:
+            rhet_dev_uuid = strip_uuid_prefix(raw_rd_id)
+        raw_rd = payload.get("rhet_dev")
+        if isinstance(raw_rd, str) and raw_rd:
+            rhet_dev = raw_rd
+    if sense_uuid is None and rhet_dev_uuid is None:
         return None
-    sense_uuid = sense.get("id")
-    if not isinstance(sense_uuid, str) or not sense_uuid:
-        return None
-    sense_uuid = strip_uuid_prefix(sense_uuid)
     bucket_offset = raw.get("bucket_offset")
     if not isinstance(bucket_offset, int):
         return None
@@ -245,10 +259,17 @@ def _location_row(
     length = anchor.get("length")
     rating_raw = raw.get("rating")
     rating = rating_raw if isinstance(rating_raw, int) and rating_raw in (0, 1, 2) else 0
-    syn_label, sem_label = sense_labels.get(sense_uuid, (None, None))
+    syn_label, sem_label = (
+        sense_labels.get(sense_uuid, (None, None)) if sense_uuid else (None, None)
+    )
+    sense_def = (
+        sense.get("def") if isinstance(sense, dict) and isinstance(sense.get("def"), str) else None
+    )
     source_hash = hashlib.sha1(raw_line.encode("utf-8")).hexdigest()
     return (
         sense_uuid,
+        rhet_dev_uuid,
+        rhet_dev,
         text_id,
         seq,
         raw.get("bucket") if isinstance(raw.get("bucket"), str) else None,
@@ -260,7 +281,7 @@ def _location_row(
         payload.get("concept_id") if isinstance(payload.get("concept_id"), str) else None,
         form.get("orth") if isinstance(form.get("orth"), str) else None,
         form.get("pron") if isinstance(form.get("pron"), str) else None,
-        sense.get("def") if isinstance(sense.get("def"), str) else None,
+        sense_def,
         syn_label,
         sem_label,
         note,

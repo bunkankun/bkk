@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   deleteCoreRecord,
+  getAnnotationRhetoricalDeviceCounts,
   getAnnotationSenseCounts,
   getCoreBacklinks,
   getCoreConceptWords,
@@ -16,7 +17,7 @@ import type {
   CoreRecordResponse,
 } from "../../api/types";
 import { findTab, useWorkspace, workspace } from "../../state/useWorkspace";
-import { SenseUsesPanel } from "../SenseUses";
+import { RhetoricalDeviceUsesPanel, SenseUsesPanel } from "../SenseUses";
 import { CoreRecordEditor } from "./CoreRecordEditor";
 
 const WIKILINK_SCHEME = "bkk-wikilink:";
@@ -495,6 +496,66 @@ function AttributionsBadge({
   );
 }
 
+type RhetDevCountState =
+  | { status: "loading" }
+  | { status: "ok"; count: number }
+  | { status: "na" };
+
+function useRhetoricalDeviceCount(uuid: string): RhetDevCountState {
+  const [state, setState] = useState<RhetDevCountState>({ status: "loading" });
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: "loading" });
+    getAnnotationRhetoricalDeviceCounts([uuid])
+      .then((r) => {
+        if (cancelled) return;
+        setState({ status: "ok", count: r.counts[uuid] ?? 0 });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: "na" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uuid]);
+  return state;
+}
+
+function RhetoricalDeviceAttestationsBadge({ uuid }: { uuid: string }) {
+  const state = useRhetoricalDeviceCount(uuid);
+  const [expanded, setExpanded] = useState(false);
+  const label =
+    state.status === "loading"
+      ? "… Attestations"
+      : state.status === "na"
+        ? "Attestations n/a"
+        : `${state.count} Attestations`;
+  const count = state.status === "ok" ? state.count : 0;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          display: "inline-block",
+          fontSize: 11,
+          padding: "0 6px",
+          background: "var(--bg-act)",
+          color: count > 0 ? "var(--t1)" : "var(--t3)",
+          border: "1px solid var(--bdr)",
+          borderRadius: 8,
+          cursor: "pointer",
+          lineHeight: "16px",
+        }}
+        title="Toggle attestations of this rhetorical device"
+      >
+        {label}
+      </button>
+      {expanded && <RhetoricalDeviceUsesPanel rhetDevUuid={uuid} />}
+    </>
+  );
+}
+
 function useSenseRecords(senseUuids: string[]) {
   const [records, setRecords] = useState<Map<string, CoreRecordResponse>>(new Map());
   const key = senseUuids.join(",");
@@ -966,11 +1027,13 @@ function SemanticFeatureView({
 }
 
 function RhetoricalDeviceView({
+  uuid,
   data,
   lookup,
   navigate,
   onWikilink,
 }: {
+  uuid: string;
   data: Record<string, unknown>;
   lookup: Lookup;
   navigate: Navigate;
@@ -989,6 +1052,9 @@ function RhetoricalDeviceView({
   const sources = asRecordArray(data.source_references);
   return (
     <>
+      <FieldRow label="Attestations">
+        <RhetoricalDeviceAttestationsBadge uuid={uuid} />
+      </FieldRow>
       {code && <FieldRow label="Code"><code>{code}</code></FieldRow>}
       {translations && Object.entries(translations).map(([lang, value]) => {
         const text = asString(value);
@@ -1449,7 +1515,7 @@ function renderTypedView(
     case "semantic-feature":
       return <SemanticFeatureView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
     case "rhetorical-device":
-      return <RhetoricalDeviceView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
+      return <RhetoricalDeviceView uuid={record.uuid} data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
     case "bibliography":
       return <BibliographyView data={record.data} />;
     case "graph":
