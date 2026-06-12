@@ -603,6 +603,59 @@ def _ann_index_rhet_dev_counts(
     return counts
 
 
+_CONTEXT_PUNCT_CHARS = set(
+    "()/"
+    "，。、；：？！"
+    "「」『』《》〈〉〔〕【】〖〗"
+    "・…—–·"
+)
+
+
+def _collect_punct_injections(
+    text: str, markers: Any,
+) -> list[tuple[int, str]]:
+    """Return sorted ``(offset, content)`` pairs for ``punctuation`` markers
+    that should be inlined into a slice of ``text``. Skips markers whose
+    offset already holds a punctuation char (matches the TextViewer rule)."""
+    if not isinstance(markers, list):
+        return []
+    out: list[tuple[int, str]] = []
+    for m in markers:
+        if not isinstance(m, dict) or m.get("type") != "punctuation":
+            continue
+        off = m.get("offset")
+        content = m.get("content")
+        if not isinstance(off, int) or not isinstance(content, str) or not content:
+            continue
+        if 0 <= off < len(text) and text[off] in _CONTEXT_PUNCT_CHARS:
+            continue
+        out.append((off, content))
+    out.sort(key=lambda p: p[0])
+    return out
+
+
+def _slice_with_punct(
+    text: str, injections: list[tuple[int, str]], seg_start: int, seg_end: int,
+) -> str:
+    """``text[seg_start:seg_end]`` with punctuation markers inlined.
+
+    Matches the TextViewer convention: a marker at offset ``O`` is rendered
+    just before the char at ``O`` and belongs to the segment that contains
+    that char, so it is included when ``seg_start <= O < seg_end``."""
+    parts: list[str] = []
+    cursor = seg_start
+    for off, content in injections:
+        if off < seg_start or off >= seg_end:
+            continue
+        if off > cursor:
+            parts.append(text[cursor:off])
+            cursor = off
+        parts.append(content)
+    if cursor < seg_end:
+        parts.append(text[cursor:seg_end])
+    return "".join(parts)
+
+
 def _enrich_text_context(state: AppState, locs: list[BySenseLocation]) -> list[BySenseLocation]:
     juan_cache: dict[tuple[str, int], tuple[str | None, dict[str, Any] | None]] = {}
     out: list[BySenseLocation] = []
@@ -638,9 +691,14 @@ def _enrich_text_context(state: AppState, locs: list[BySenseLocation]) -> list[B
             if isinstance(text, str) and 0 <= loc.offset < len(text):
                 start = loc.offset
                 end = min(len(text), start + max(1, loc.length or 1))
-                left = text[max(0, start - 7):start]
-                match = text[start:end]
-                right = text[end:min(len(text), end + 7)]
+                injections = _collect_punct_injections(
+                    text, bucket.get("markers") if isinstance(bucket, dict) else None,
+                )
+                left = _slice_with_punct(text, injections, max(0, start - 7), start)
+                match = _slice_with_punct(text, injections, start, end)
+                right = _slice_with_punct(
+                    text, injections, end, min(len(text), end + 7),
+                )
 
         out.append(
             loc.model_copy(update={

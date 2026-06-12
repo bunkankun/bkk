@@ -286,6 +286,31 @@ def test_annotations_by_sense_reads_index(indexed_annotated_client: TestClient):
     assert loc["marker_id"] == "ANN0001_T_001-001a.1"
 
 
+def test_slice_with_punct_inlines_markers():
+    """Punctuation markers from the bucket get inlined into the context slices,
+    matching the TextViewer convention (marker at offset O renders before
+    char O and belongs to the segment containing that char)."""
+    from bkk.serve.routers.annotations import (
+        _collect_punct_injections,
+        _slice_with_punct,
+    )
+
+    text = "甲乙丙丁戊己庚辛壬癸"
+    markers = [
+        {"type": "punctuation", "offset": 5, "content": "，"},
+        {"type": "punctuation", "offset": 6, "content": "。"},
+        {"type": "variant", "offset": 3, "content": "X"},
+    ]
+    injections = _collect_punct_injections(text, markers)
+
+    # Match window is [5, 6); left is [0, 5); right is [6, 10).
+    # Marker at offset 5 attaches to char 5 (match) → leads the match.
+    # Marker at offset 6 attaches to char 6 (right) → leads the right.
+    assert _slice_with_punct(text, injections, 0, 5) == "甲乙丙丁戊"
+    assert _slice_with_punct(text, injections, 5, 6) == "，己"
+    assert _slice_with_punct(text, injections, 6, 10) == "。庚辛壬癸"
+
+
 def test_annotations_by_sense_empty_without_root(corpus: Path):
     config = ServeConfig(corpus_root=corpus, index_path=corpus / "_corpus.bkkx")
     client = TestClient(create_app(config))
