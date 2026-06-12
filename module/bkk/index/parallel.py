@@ -101,7 +101,7 @@ def discover_parallel_passages(
 ) -> list[ParallelCluster]:
     """Return exact repeated master-text passages from ``index_path``.
 
-    ``seed`` narrows discovery to occurrences of a 1-3 character term, then
+    ``seed`` narrows discovery to occurrences of a 1-6 character term, then
     extends around those occurrences. When ``seed`` is omitted, the function
     falls back to a full trigram-anchor scan, which is intended only for small
     indices. ``bucket`` is one of ``"front"``, ``"body"``, ``"back"``, or
@@ -110,8 +110,8 @@ def discover_parallel_passages(
     """
     if seed is not None:
         seed = unicodedata.normalize("NFC", seed)
-        if not 1 <= len(seed) <= 3:
-            raise ValueError("seed must be 1 to 3 characters")
+        if not 1 <= len(seed) <= 6:
+            raise ValueError("seed must be 1 to 6 characters")
     min_allowed = 1 if seed is not None else 3
     if min_length < min_allowed:
         raise ValueError(f"min_length must be at least {min_allowed}")
@@ -241,6 +241,38 @@ def _seed_postings(
             "ORDER BY t.source_id, t.position",
             (seed,),
         ).fetchall()
+
+    if len(seed) > 3:
+        anchor = seed[:3]
+        postings: list[dict[str, int]] = []
+        cache: dict[int, str] = {}
+        for row in conn.execute(
+            "SELECT t.source_id AS bucket_id, t.position "
+            "FROM trigram t JOIN temp.parallel_source s "
+            "ON s.bucket_id = t.source_id "
+            "WHERE t.source_kind = 'bucket' AND t.gram = ? "
+            "ORDER BY t.source_id, t.position",
+            (anchor,),
+        ):
+            bucket_id = row["bucket_id"]
+            pos = row["position"]
+            text = cache.get(bucket_id)
+            if text is None:
+                text_row = conn.execute(
+                    "SELECT text FROM bucket WHERE bucket_id = ?",
+                    (bucket_id,),
+                ).fetchone()
+                text = text_row["text"]
+                cache[bucket_id] = text
+            if text[pos:pos + len(seed)] != seed:
+                continue
+            postings.append({"bucket_id": bucket_id, "position": pos})
+            if len(postings) > max_postings:
+                raise ValueError(
+                    f"seed {seed!r} occurs more than {max_postings} times; "
+                    f"choose a more specific seed or raise --max-postings"
+                )
+        return postings
 
     postings: list[dict[str, int]] = []
     for row in conn.execute(

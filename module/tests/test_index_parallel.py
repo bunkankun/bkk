@@ -212,6 +212,20 @@ def test_parallel_two_character_seed_extends_to_full_passage(tmp_path):
     assert clusters[0].text == shared
 
 
+def test_parallel_six_character_seed_extends_to_full_passage(tmp_path):
+    shared = "ALPHABETA-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"qq{shared}ww")
+    _write_bundle(tmp_path, "KR0a0002", f"ee{shared}rr ALPZZZ noise")
+    _write_bundle(tmp_path, "KR0a0003", "ALPnope filler")
+    out = _merge(tmp_path)
+
+    clusters = discover_parallel_passages(out, seed="ALPHAB", min_length=10)
+
+    assert len(clusters) == 1
+    assert clusters[0].text == shared
+    assert clusters[0].occurrence_count == 2
+
+
 def test_parallel_seed_postings_cap_prevents_blowup(tmp_path):
     _write_bundle(tmp_path, "KR0a0001", "AxxAxxA")
     _write_bundle(tmp_path, "KR0a0002", "AyyAyyA")

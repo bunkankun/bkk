@@ -118,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     pp = sub.add_parser("parallel", help="discover exact repeated passages in a .bkkx index")
     pp.add_argument("index_path", type=Path)
     pp.add_argument("seed", nargs="?", default=None,
-                    help="1-3 character seed term to extend around")
+                    help="1-6 character seed term to extend around")
     pp.add_argument("--out", type=Path, default=None,
                     help="output path (default: stdout)")
     pp.add_argument("--bucket", choices=["front", "body", "back", "all"],
@@ -330,7 +330,7 @@ def run(argv: list[str] | None = None) -> int:
     if args.cmd == "parallel":
         if args.seed is None and not args.full_scan:
             parser.error(
-                "parallel now requires a 1-3 character seed term "
+                "parallel now requires a 1-6 character seed term "
                 "(or pass --full-scan for small indices)"
             )
         if args.seed is not None and args.full_scan:

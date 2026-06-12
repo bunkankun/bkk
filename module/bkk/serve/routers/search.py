@@ -1083,11 +1083,11 @@ def _parallel_cluster_out(cluster: ParallelCluster) -> ParallelClusterModel:
 @router.get(
     "/search/parallel",
     response_model=ParallelSearchResponse,
-    summary="Discover repeated passages around a 1-3 character seed",
+    summary="Discover repeated passages around a 1-6 character seed",
 )
 def search_parallel(
     request: Request,
-    q: str = Query(..., min_length=1, max_length=3, description="1-3 character seed"),
+    q: str = Query(..., min_length=1, max_length=6, description="1-6 character seed"),
     bucket: Literal["front", "body", "back", "all"] = Query("body"),
     min_length: int = Query(12, ge=1, le=200),
     min_occurrences: int = Query(2, ge=2, le=100),

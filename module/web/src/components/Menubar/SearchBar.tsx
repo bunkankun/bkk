@@ -42,7 +42,7 @@ export function SearchBar() {
   const trimmed = query.trim();
   const canSubmit =
     target === "parallel"
-      ? trimmed.length >= 1 && trimmed.length <= 3
+      ? trimmed.length >= 1 && trimmed.length <= 6
       : trimmed.length > 0 && (target === "fulltext" || target === "translations");
 
   const onSubmit = (e: React.FormEvent) => {
