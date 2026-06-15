@@ -39,13 +39,17 @@ BUNDLE_RE = re.compile(r"^KR[0-9a-z]+$")
 
 
 def iter_bundles(root: Path):
-    for child in sorted(root.iterdir()):
+    seen: set[str] = set()
+    for child in sorted(root.rglob("*")):
         if not child.is_dir():
             continue
         if not BUNDLE_RE.match(child.name):
             continue
+        if child.name in seen:
+            continue
         juans = sorted(child.glob(f"{child.name}_*.yaml"))
         if juans:
+            seen.add(child.name)
             yield child.name, juans
 
 

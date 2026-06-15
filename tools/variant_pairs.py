@@ -40,7 +40,7 @@ def load_corpus_counts() -> dict[int, tuple[int, str]]:
         next(f)
         for line in f:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 6:
+            if len(parts) < 3:
                 continue
             cp_hex, char, count = parts[0], parts[1], parts[2]
             cp = int(cp_hex[2:], 16)
