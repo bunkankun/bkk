@@ -1,0 +1,636 @@
+canonical_identifier: bkk:mapping/variant-fold-v1
+valid_for_charset:
+- bkk:charset/cjk-v1
+scope: Folds Unihan kZVariant and kSpoofingVariant pairs whose only variant relationship is Z/Spoofing (no Semantic/Simplified/Traditional overlap).
+entries:
+- id: vf-0001
+  source: {cp: U+34D3, char: 㓓}
+  replacement: {cp: U+6E73, char: 湳}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 3 -> 289
+- id: vf-0002
+  source: {cp: U+34D5, char: 㓕}
+  replacement: {cp: U+6EC5, char: 滅}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 8429 -> 484774
+- id: vf-0003
+  source: {cp: U+34D6, char: 㓖}
+  replacement: {cp: U+6EED, char: 滭}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 28 -> 126
+- id: vf-0004
+  source: {cp: U+34D7, char: 㓗}
+  replacement: {cp: U+6F54, char: 潔}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 4040 -> 64955
+- id: vf-0005
+  source: {cp: U+39B3, char: 㦳}
+  replacement: {cp: U+363D, char: 㘽}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 12 -> 394
+- id: vf-0006
+  source: {cp: U+3ADA, char: 㫚}
+  replacement: {cp: U+66F6, char: 曶}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 44 -> 462
+- id: vf-0007
+  source: {cp: U+3B3A, char: 㬺}
+  replacement: {cp: U+5E50, char: 幐}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 9 -> 252
+- id: vf-0008
+  source: {cp: U+3B51, char: 㭑}
+  replacement: {cp: U+67BA, char: 枺}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 23 -> 26
+- id: vf-0009
+  source: {cp: U+403F, char: 䀿}
+  replacement: {cp: U+6663, char: 晣}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 10 -> 652
+- id: vf-0010
+  source: {cp: U+418B, char: 䆋}
+  replacement: {cp: U+9F9D, char: 龝}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 26 -> 27
+- id: vf-0011
+  source: {cp: U+4420, char: 䐠}
+  replacement: {cp: U+3B3B, char: 㬻}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 11 -> 58
+- id: vf-0012
+  source: {cp: U+4443, char: 䑃}
+  replacement: {cp: U+6726, char: 朦}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 204 -> 4029
+- id: vf-0013
+  source: {cp: U+4620, char: 䘠}
+  replacement: {cp: U+889A, char: 袚}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 14 -> 699
+- id: vf-0014
+  source: {cp: U+46B6, char: 䚶}
+  replacement: {cp: U+8A1E, char: 訞}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 2 -> 272
+- id: vf-0015
+  source: {cp: U+4C45, char: 䱅}
+  replacement: {cp: U+9B87, char: 鮇}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 3 -> 55
+- id: vf-0016
+  source: {cp: U+4C4D, char: 䱍}
+  replacement: {cp: U+4C4E, char: 䱎}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 5 -> 56
+- id: vf-0017
+  source: {cp: U+5002, char: 倂}
+  replacement: {cp: U+4F75, char: 併}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 1954 -> 70200
+- id: vf-0018
+  source: {cp: U+51D0, char: 凐}
+  replacement: {cp: U+6E6E, char: 湮}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 9 -> 9367
+- id: vf-0019
+  source: {cp: U+51D2, char: 凒}
+  replacement: {cp: U+6EB0, char: 溰}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 9 -> 116
+- id: vf-0020
+  source: {cp: U+51D3, char: 凓}
+  replacement: {cp: U+6EA7, char: 溧}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 132 -> 6725
+- id: vf-0021
+  source: {cp: U+51D4, char: 凔}
+  replacement: {cp: U+6EC4, char: 滄}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 120 -> 46805
+- id: vf-0022
+  source: {cp: U+51D7, char: 凗}
+  replacement: {cp: U+6F3C, char: 漼}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 3 -> 842
+- id: vf-0023
+  source: {cp: U+51D8, char: 凘}
+  replacement: {cp: U+6F8C, char: 澌}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 307 -> 2712
+- id: vf-0024
+  source: {cp: U+51D9, char: 凙}
+  replacement: {cp: U+6FA4, char: 澤}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 109 -> 265724
+- id: vf-0025
+  source: {cp: U+51DF, char: 凟}
+  replacement: {cp: U+7006, char: 瀆}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 4275 -> 35346
+- id: vf-0026
+  source: {cp: U+535D, char: 卝}
+  replacement: {cp: U+5344, char: 卄}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 293 -> 1433
+- id: vf-0027
+  source: {cp: U+5434, char: 吴}
+  replacement: {cp: U+5449, char: 呉}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 48086 -> 120006
+- id: vf-0028
+  source: {cp: U+55A6, char: 喦}
+  replacement: {cp: U+5D52, char: 嵒}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 119 -> 3534
+- id: vf-0029
+  source: {cp: U+5861, char: 塡}
+  replacement: {cp: U+586B, char: 填}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 3932 -> 32853
+- id: vf-0030
+  source: {cp: U+58FF, char: 壿}
+  replacement: {cp: U+58AB, char: 墫}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 13 -> 91
+- id: vf-0031
+  source: {cp: U+5968, char: 奨}
+  replacement: {cp: U+596C, char: 奬}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 5824 -> 16175
+- id: vf-0032
+  source: {cp: U+59BA, char: 妺}
+  replacement: {cp: U+59B9, char: 妹}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1614 -> 31122
+- id: vf-0033
+  source: {cp: U+5A2F, char: 娯}
+  replacement: {cp: U+5A1B, char: 娛}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 5725 -> 16115
+- id: vf-0034
+  source: {cp: U+5A31, char: 娱}
+  replacement: {cp: U+5A1B, char: 娛}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 5210 -> 16115
+- id: vf-0035
+  source: {cp: U+5B00, char: 嬀}
+  replacement: {cp: U+5AAF, char: 媯}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 730 -> 4150
+- id: vf-0036
+  source: {cp: U+5E32, char: 帲}
+  replacement: {cp: U+5E21, char: 帡}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 30 -> 1056
+- id: vf-0037
+  source: {cp: U+6236, char: 戶}
+  replacement: {cp: U+6237, char: 户}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 71020 -> 180743
+- id: vf-0038
+  source: {cp: U+6238, char: 戸}
+  replacement: {cp: U+6237, char: 户}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 69433 -> 180743
+- id: vf-0039
+  source: {cp: U+62BA, char: 抺}
+  replacement: {cp: U+62B9, char: 抹}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1232 -> 10468
+- id: vf-0040
+  source: {cp: U+633F, char: 挿}
+  replacement: {cp: U+63D2, char: 插}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 7896 -> 15438
+- id: vf-0041
+  source: {cp: U+63F7, char: 揷}
+  replacement: {cp: U+63D2, char: 插}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 3322 -> 15438
+- id: vf-0042
+  source: {cp: U+63FA, char: 揺}
+  replacement: {cp: U+6416, char: 搖}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 29485 -> 39768
+- id: vf-0043
+  source: {cp: U+6447, char: 摇}
+  replacement: {cp: U+6416, char: 搖}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 13117 -> 39768
+- id: vf-0044
+  source: {cp: U+655A, char: 敚}
+  replacement: {cp: U+6553, char: 敓}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 108 -> 609
+- id: vf-0045
+  source: {cp: U+6629, char: 昩}
+  replacement: {cp: U+6627, char: 昧}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 3215 -> 140582
+- id: vf-0046
+  source: {cp: U+6669, char: 晩}
+  replacement: {cp: U+665A, char: 晚}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 51159 -> 121014
+- id: vf-0047
+  source: {cp: U+676E, char: 杮}
+  replacement: {cp: U+67FF, char: 柿}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 302 -> 7758
+- id: vf-0048
+  source: {cp: U+6A27, char: 樧}
+  replacement: {cp: U+699D, char: 榝}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 29 -> 317
+- id: vf-0049
+  source: {cp: U+6CAC, char: 沬}
+  replacement: {cp: U+6CAB, char: 沫}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 3328 -> 21264
+- id: vf-0050
+  source: {cp: U+6D9A, char: 涚}
+  replacement: {cp: U+6D97, char: 涗}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 341 -> 770
+- id: vf-0051
+  source: {cp: U+6E4C, char: 湌}
+  replacement: {cp: U+98E1, char: 飡}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 197 -> 6358
+- id: vf-0052
+  source: {cp: U+6EA4, char: 溤}
+  replacement: {cp: U+99AE, char: 馮}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 71 -> 69949
+- id: vf-0053
+  source: {cp: U+6F59, char: 潙}
+  replacement: {cp: U+6E88, char: 溈}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 368 -> 13424
+- id: vf-0054
+  source: {cp: U+6F9F, char: 澟}
+  replacement: {cp: U+51DC, char: 凜}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 220 -> 9591
+- id: vf-0055
+  source: {cp: U+6FBF, char: 澿}
+  replacement: {cp: U+51DA, char: 凚}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 18 -> 28
+- id: vf-0056
+  source: {cp: U+6FD3, char: 濓}
+  replacement: {cp: U+6FC2, char: 濂}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 7521 -> 8498
+- id: vf-0057
+  source: {cp: U+734E, char: 獎}
+  replacement: {cp: U+596C, char: 奬}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 3908 -> 16175
+- id: vf-0058
+  source: {cp: U+771C, char: 眜}
+  replacement: {cp: U+771B, char: 眛}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 66 -> 296
+- id: vf-0059
+  source: {cp: U+784F, char: 硏}
+  replacement: {cp: U+7814, char: 研}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 1729 -> 210791
+- id: vf-0060
+  source: {cp: U+7D55, char: 絕}
+  replacement: {cp: U+7D76, char: 絶}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 146534 -> 275978
+- id: vf-0061
+  source: {cp: U+7D5A, char: 絚}
+  replacement: {cp: U+7D59, char: 絙}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 52 -> 1914
+- id: vf-0062
+  source: {cp: U+7DD6, char: 緖}
+  replacement: {cp: U+7DD2, char: 緒}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 468 -> 46126
+- id: vf-0063
+  source: {cp: U+809E, char: 肞}
+  replacement: {cp: U+2E30B, char: 𮌋}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 5 -> 12
+- id: vf-0064
+  source: {cp: U+80A6, char: 肦}
+  replacement: {cp: U+670C, char: 朌}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 18 -> 548
+- id: vf-0065
+  source: {cp: U+80CA, char: 胊}
+  replacement: {cp: U+6710, char: 朐}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 695 -> 3670
+- id: vf-0066
+  source: {cp: U+80D0, char: 胐}
+  replacement: {cp: U+670F, char: 朏}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 167 -> 2817
+- id: vf-0067
+  source: {cp: U+80F6, char: 胶}
+  replacement: {cp: U+3B35, char: 㬵}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 7 -> 7
+- id: vf-0068
+  source: {cp: U+8101, char: 脁}
+  replacement: {cp: U+6713, char: 朓}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 348 -> 5120
+- id: vf-0069
+  source: {cp: U+8127, char: 脧}
+  replacement: {cp: U+6718, char: 朘}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 90 -> 1330
+- id: vf-0070
+  source: {cp: U+8141, char: 腁}
+  replacement: {cp: U+80FC, char: 胼}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 20 -> 1381
+- id: vf-0071
+  source: {cp: U+81A7, char: 膧}
+  replacement: {cp: U+6723, char: 朣}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 35 -> 298
+- id: vf-0072
+  source: {cp: U+8279, char: 艹}
+  replacement: {cp: U+5344, char: 卄}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 244 -> 1433
+- id: vf-0073
+  source: {cp: U+82FF, char: 苿}
+  replacement: {cp: U+8309, char: 茉}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 37 -> 1229
+- id: vf-0074
+  source: {cp: U+853F, char: 蔿}
+  replacement: {cp: U+848D, char: 蒍}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 605 -> 2255
+- id: vf-0075
+  source: {cp: U+8641, char: 虁}
+  replacement: {cp: U+8637, char: 蘷}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 63 -> 338
+- id: vf-0076
+  source: {cp: U+8A7D, char: 詽}
+  replacement: {cp: U+8A2E, char: 訮}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 11 -> 39
+- id: vf-0077
+  source: {cp: U+8AAC, char: 説}
+  replacement: {cp: U+8AAA, char: 說}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 306787 -> 1385711
+- id: vf-0078
+  source: {cp: U+8B20, char: 謠}
+  replacement: {cp: U+8B21, char: 謡}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 7163 -> 12387
+- id: vf-0079
+  source: {cp: U+8B8F, char: 讏}
+  replacement: {cp: U+8B86, char: 讆}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 8 -> 38
+- id: vf-0080
+  source: {cp: U+8D7F, char: 赿}
+  replacement: {cp: U+8D86, char: 趆}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 8 -> 55
+- id: vf-0081
+  source: {cp: U+8F27, char: 輧}
+  replacement: {cp: U+8EFF, char: 軿}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 55 -> 3419
+- id: vf-0082
+  source: {cp: U+9097, char: 邗}
+  replacement: {cp: U+48B4, char: 䢴}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 658 -> 1123
+- id: vf-0083
+  source: {cp: U+90DE, char: 郞}
+  replacement: {cp: U+90CE, char: 郎}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 7138 -> 407486
+- id: vf-0084
+  source: {cp: U+9115, char: 鄕}
+  replacement: {cp: U+90F7, char: 郷}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 9795 -> 30320
+- id: vf-0085
+  source: {cp: U+92ED, char: 鋭}
+  replacement: {cp: U+92B3, char: 銳}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 18173 -> 25003
+- id: vf-0086
+  source: {cp: U+93AD, char: 鎭}
+  replacement: {cp: U+93AE, char: 鎮}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 22367 -> 228687
+- id: vf-0087
+  source: {cp: U+98EE, char: 飮}
+  replacement: {cp: U+98F2, char: 飲}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 4505 -> 505806
+- id: vf-0088
+  source: {cp: U+9ED2, char: 黒}
+  replacement: {cp: U+9ED1, char: 黑}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 69653 -> 187653
+- id: vf-0089
+  source: {cp: U+2011E, char: 𠄞}
+  replacement: {cp: U+4E8C, char: 二}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 14 -> 5104077
+- id: vf-0090
+  source: {cp: U+2011F, char: 𠄟}
+  replacement: {cp: U+4E8C, char: 二}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 2 -> 5104077
+- id: vf-0091
+  source: {cp: U+201F1, char: 𠇱}
+  replacement: {cp: U+4F45, char: 佅}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 146
+- id: vf-0092
+  source: {cp: U+20302, char: 𠌂}
+  replacement: {cp: U+5098, char: 傘}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 3 -> 4917
+- id: vf-0093
+  source: {cp: U+20457, char: 𠑗}
+  replacement: {cp: U+34A8, char: 㒨}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 16
+- id: vf-0094
+  source: {cp: U+2050A, char: 𠔊}
+  replacement: {cp: U+5175, char: 兵}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 873214
+- id: vf-0095
+  source: {cp: U+205E8, char: 𠗨}
+  replacement: {cp: U+6E2B, char: 渫}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 2890
+- id: vf-0096
+  source: {cp: U+2061D, char: 𠘝}
+  replacement: {cp: U+7028, char: 瀨}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 4870
+- id: vf-0097
+  source: {cp: U+20B9F, char: 𠮟}
+  replacement: {cp: U+53F1, char: 叱}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 4 -> 16378
+- id: vf-0098
+  source: {cp: U+20BB7, char: 𠮷}
+  replacement: {cp: U+5409, char: 吉}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 86 -> 331748
+- id: vf-0099
+  source: {cp: U+20F96, char: 𠾖}
+  replacement: {cp: U+5668, char: 器}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 265403
+- id: vf-0100
+  source: {cp: U+2123C, char: 𡈼}
+  replacement: {cp: U+58EC, char: 壬}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 35 -> 122634
+- id: vf-0101
+  source: {cp: U+22049, char: 𢁉}
+  replacement: {cp: U+5DFD, char: 巽}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 2 -> 53323
+- id: vf-0102
+  source: {cp: U+2231B, char: 𢌛}
+  replacement: {cp: U+5EF6, char: 延}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 3 -> 250697
+- id: vf-0103
+  source: {cp: U+225FF, char: 𢗿}
+  replacement: {cp: U+603D, char: 怽}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 3 -> 10
+- id: vf-0104
+  source: {cp: U+230B7, char: 𣂷}
+  replacement: {cp: U+65B3, char: 斳}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 3 -> 107
+- id: vf-0105
+  source: {cp: U+23377, char: 𣍷}
+  replacement: {cp: U+813C, char: 脼}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 21
+- id: vf-0106
+  source: {cp: U+2339F, char: 𣎟}
+  replacement: {cp: U+26805, char: 𦠅}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 2
+- id: vf-0107
+  source: {cp: U+246C9, char: 𤛉}
+  replacement: {cp: U+821D, char: 舝}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 470
+- id: vf-0108
+  source: {cp: U+24968, char: 𤥨}
+  replacement: {cp: U+7422, char: 琢}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 25 -> 14165
+- id: vf-0109
+  source: {cp: U+24A01, char: 𤨁}
+  replacement: {cp: U+7468, char: 瑨}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 5 -> 620
+- id: vf-0110
+  source: {cp: U+24D01, char: 𤴁}
+  replacement: {cp: U+7589, char: 疉}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 3 -> 1977
+- id: vf-0111
+  source: {cp: U+25133, char: 𥄳}
+  replacement: {cp: U+7714, char: 眔}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 18 -> 64
+- id: vf-0112
+  source: {cp: U+25458, char: 𥑘}
+  replacement: {cp: U+781E, char: 砞}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 5
+- id: vf-0113
+  source: {cp: U+2562F, char: 𥘯}
+  replacement: {cp: U+7959, char: 祙}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 7 -> 66
+- id: vf-0114
+  source: {cp: U+2578A, char: 𥞊}
+  replacement: {cp: U+79E3, char: 秣}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 23 -> 8253
+- id: vf-0115
+  source: {cp: U+25874, char: 𥡴}
+  replacement: {cp: U+7A3D, char: 稽}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 11 -> 136260
+- id: vf-0116
+  source: {cp: U+2592E, char: 𥤮}
+  replacement: {cp: U+7A81, char: 突}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 35 -> 75492
+- id: vf-0117
+  source: {cp: U+25C83, char: 𥲃}
+  replacement: {cp: U+7C06, char: 簆}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 40
+- id: vf-0118
+  source: {cp: U+2652E, char: 𦔮}
+  replacement: {cp: U+8034, char: 耴}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 542
+- id: vf-0119
+  source: {cp: U+266B9, char: 𦚹}
+  replacement: {cp: U+266B8, char: 𦚸}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 2
+- id: vf-0120
+  source: {cp: U+26760, char: 𦝠}
+  replacement: {cp: U+23386, char: 𣎆}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 68
+- id: vf-0121
+  source: {cp: U+26900, char: 𦤀}
+  replacement: {cp: U+81ED, char: 臭}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 42 -> 48007
+- id: vf-0122
+  source: {cp: U+26936, char: 𦤶}
+  replacement: {cp: U+81F4, char: 致}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 528089
+- id: vf-0123
+  source: {cp: U+2695D, char: 𦥝}
+  replacement: {cp: U+8200, char: 舀}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 2 -> 501
+- id: vf-0124
+  source: {cp: U+284DC, char: 𨓜}
+  replacement: {cp: U+9038, char: 逸}
+  reason: kZVariant
+  note: Unihan_Variants.txt; corpus counts 96 -> 136814
+- id: vf-0125
+  source: {cp: U+2C09B, char: 𬂛}
+  replacement: {cp: U+5341, char: 十}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 1 -> 4915729
+- id: vf-0126
+  source: {cp: U+2D8C4, char: 𭣄}
+  replacement: {cp: U+652C, char: 攬}
+  reason: kSpoofingVariant
+  note: Unihan_Variants.txt; corpus counts 39 -> 18489
+hash: sha256:b638c47b8d40e3d4e88b77519330d79715e103d1b9af08e7348a6a0f285c2a2f
