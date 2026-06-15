@@ -246,7 +246,7 @@ def test_workspace_bootstrap_retries_transient_ref_409(client, monkeypatch):
     workspace = auth._workspace_for_user(client.app.state.bkk, "token", "alice")
 
     assert workspace == _workspace()
-    assert ref_attempts == 2
+    assert ref_attempts == 3
     assert (
         "POST",
         "/repos/alice/BKK-Workspace/git/refs",

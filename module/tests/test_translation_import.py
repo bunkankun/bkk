@@ -22,8 +22,7 @@ import yaml
 from bkk.importer.cli import run
 
 
-REPO = Path(__file__).resolve().parents[1]
-SAMPLES = REPO / "samples" / "translations"
+SAMPLES = Path(__file__).resolve().parent / "fixtures" / "translations"
 
 
 @pytest.fixture
