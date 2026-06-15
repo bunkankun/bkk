@@ -14,7 +14,7 @@ import yaml
 
 _VALID_SECTIONS = {
     "global", "import", "export", "index", "validate", "serve", "repair",
-    "voice", "recipe", "info", "cbeta", "core", "annotations",
+    "voice", "recipe", "info", "cbeta", "core", "annotations", "chars",
 }
 
 _PATH_KEYS = frozenset(
