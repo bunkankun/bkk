@@ -8,7 +8,6 @@ import {
 import {
   getCoreList,
   getCoreRecord,
-  openCoreRecordPr,
   patchCoreRecord,
 } from "../../api/client";
 import type {
@@ -30,19 +29,12 @@ type Collection =
   | "bibliography"
   | "super-entries";
 
-// Phase 6 edit UI: per-field controls per record type, with sense add /
-// reorder / unlink for words. The pre-Phase-1 raw-YAML textarea is gone;
-// fields the editor does not yet cover are still readable via the "Raw
-// YAML data" disclosure above the form.
-//
-// Save model: the first save on a draft creates a fork branch; the
-// response's branch + parent_sha are reused on subsequent saves so each
-// click stacks one commit. "Open PR" is a follow-up action.
+// Per-field edit controls per record type, with sense add / reorder / unlink
+// for words. Save commits one record (plus any extras for new senses) directly
+// to upstream master; conflict detection is server-side per request.
 //
 // Sense removal is intentionally unlink-only for v1: we drop the UUID
-// from sense_uuids but leave the sense file in place (orphan). Deleting
-// the file would require its blob sha on the fork branch, which we don't
-// have until we read the file back; that round-trip is a follow-up.
+// from sense_uuids but leave the sense file in place (orphan).
 
 type Draft = Record<string, unknown>;
 
@@ -171,6 +163,7 @@ type Resolved = (uuid: string, label: string) => void;
 export interface LabelStore {
   labelFor: LabelFor;
   resolved: Resolved;
+  invalidate: (uuid: string) => void;
 }
 
 export function useLabelStore(initial: Map<string, string>): LabelStore {
@@ -184,7 +177,15 @@ export function useLabelStore(initial: Map<string, string>): LabelStore {
   const resolved = useCallback((uuid: string, label: string) => {
     setLabels((m) => (m[uuid] === label ? m : { ...m, [uuid]: label }));
   }, []);
-  return { labelFor, resolved };
+  const invalidate = useCallback((uuid: string) => {
+    setLabels((m) => {
+      if (!(uuid in m)) return m;
+      const next = { ...m };
+      delete next[uuid];
+      return next;
+    });
+  }, []);
+  return { labelFor, resolved, invalidate };
 }
 
 const chipStyle: React.CSSProperties = {
@@ -1369,15 +1370,9 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
     JSON.parse(JSON.stringify(record.data)) as Draft,
   );
   const [pendingSenses, setPendingSenses] = useState<PendingSense[]>([]);
-  const [branch, setBranch] = useState<string | null>(null);
-  const [parentSha, setParentSha] = useState<string | null>(null);
-  const [savedExtras, setSavedExtras] = useState<Map<string, string>>(new Map());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CoreEditResponse | null>(null);
-  const [prError, setPrError] = useState<string | null>(null);
-  const [prResult, setPrResult] = useState<{ url: string; number: number; existed: boolean } | null>(null);
-  const [openingPr, setOpeningPr] = useState(false);
 
   const set = (key: string, value: unknown) => {
     setDraft((d) => setField(d, key, value));
@@ -1413,7 +1408,6 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
 
       const extra_files: CoreEditExtraFile[] = livePending.map((s) => ({
         path: s.path,
-        parent_sha: savedExtras.get(s.path),
         data: {
           uuid: s.uuid,
           type: "sense",
@@ -1424,39 +1418,16 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
 
       const response = await patchCoreRecord(record.collection, record.uuid, {
         data: draft,
-        branch: branch ?? undefined,
-        parent_sha: parentSha ?? undefined,
         extra_files,
       });
 
-      setBranch(response.branch);
-      setParentSha(response.parent_sha);
-      const nextExtras = new Map(savedExtras);
-      for (const ex of response.extras ?? []) {
-        if (ex.parent_sha) nextExtras.set(ex.path, ex.parent_sha);
-      }
-      setSavedExtras(nextExtras);
       setPendingSenses(livePending);
       setResult(response);
-      onSaved(draft);
+      onSaved(response.data as Draft);
     } catch (e) {
       setError(String(e));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const openPr = async () => {
-    if (!branch) return;
-    setOpeningPr(true);
-    setPrError(null);
-    try {
-      const r = await openCoreRecordPr(record.collection, record.uuid, { branch });
-      setPrResult({ url: r.pr_url, number: r.pr_number, existed: r.already_existed });
-    } catch (e) {
-      setPrError(String(e));
-    } finally {
-      setOpeningPr(false);
     }
   };
 
@@ -1498,39 +1469,20 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
             cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1,
           }}
         >
-          {saving ? "Saving…" : branch ? "Save (new commit)" : "Save to fork"}
+          {saving ? "Saving…" : "Save"}
         </button>
 
-        {branch && (
-          <button
-            type="button"
-            onClick={() => void openPr()}
-            disabled={openingPr}
-            style={{
-              fontSize: 12, padding: "4px 12px",
-              background: "var(--bg-1)", color: "var(--t1)",
-              border: "1px solid var(--bd)", borderRadius: 3,
-              cursor: openingPr ? "default" : "pointer",
-            }}
-          >
-            {openingPr ? "Opening PR…" : "Open PR"}
-          </button>
-        )}
-
         {result && (
-          <a
-            href={result.compare_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ fontSize: 11, color: "var(--link)" }}
-          >
-            view diff
-          </a>
-        )}
-
-        {branch && (
-          <span style={{ fontSize: 11, color: "var(--t3)", marginLeft: "auto" }}>
-            branch: {branch}
+          <span style={{ fontSize: 11, color: "var(--t2)" }}>
+            Saved ·{" "}
+            <a
+              href={result.commit_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--link)" }}
+            >
+              commit {result.commit_sha.slice(0, 7)}
+            </a>
           </span>
         )}
       </div>
@@ -1538,19 +1490,6 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
       {error && (
         <div style={{ marginTop: 8, fontSize: 12, color: "var(--err, #c44)" }}>
           {error}
-        </div>
-      )}
-      {prError && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "var(--err, #c44)" }}>
-          {prError}
-        </div>
-      )}
-      {prResult && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "var(--t2)" }}>
-          {prResult.existed ? "Found existing PR" : "Opened PR"}{" "}
-          <a href={prResult.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--link)" }}>
-            #{prResult.number}
-          </a>
         </div>
       )}
     </div>

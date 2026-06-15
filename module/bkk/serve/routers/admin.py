@@ -161,7 +161,7 @@ def _delayed_sigterm():
     os.kill(os.getpid(), signal.SIGTERM)
 
 
-def _run_core_sync(jobs: JobRegistry, job_id: str, core_root, core_index_path, pr_base):
+def run_core_sync(jobs: JobRegistry, job_id: str, core_root, core_index_path, pr_base):
     jobs.mark_running(job_id)
     try:
         import subprocess
@@ -325,7 +325,7 @@ def post_core_sync(
         )
     job = state.jobs.create(kind="core_sync", target=None)
     background.add_task(
-        _run_core_sync,
+        run_core_sync,
         state.jobs,
         job.id,
         state.core_root,

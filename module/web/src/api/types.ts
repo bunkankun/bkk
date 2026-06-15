@@ -810,13 +810,10 @@ export interface CoreSuperEntryByOrth {
 export interface CoreEditExtraFile {
   path: string;
   data: Record<string, unknown> | null;
-  parent_sha?: string;
 }
 
 export interface CoreEditRequest {
   data: Record<string, unknown>;
-  parent_sha?: string;
-  branch?: string;
   message?: string;
   extra_files?: CoreEditExtraFile[];
 }
@@ -824,45 +821,23 @@ export interface CoreEditRequest {
 export interface CoreEditExtraFileResult {
   path: string;
   commit_sha: string;
-  parent_sha: string | null;
   deleted: boolean;
 }
 
 export interface CoreEditResponse {
-  branch: string;
   commit_sha: string;
-  parent_sha: string;
-  fork_repo: string;
-  compare_url: string;
-  pr_url: string | null;
+  commit_url: string;
   data: Record<string, unknown>;
   extras: CoreEditExtraFileResult[];
 }
 
 export interface CoreDeleteRequest {
-  parent_sha?: string;
-  branch?: string;
   message?: string;
 }
 
 export interface CoreDeleteResponse {
-  branch: string;
   commit_sha: string;
-  fork_repo: string;
-  compare_url: string;
-  pr_url: string | null;
-}
-
-export interface CoreOpenPrRequest {
-  branch: string;
-  title?: string;
-  body?: string;
-}
-
-export interface CoreOpenPrResponse {
-  pr_url: string;
-  pr_number: number;
-  already_existed: boolean;
+  commit_url: string;
 }
 
 export interface CoreFullSense {

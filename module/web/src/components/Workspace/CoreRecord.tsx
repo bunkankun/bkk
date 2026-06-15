@@ -1216,9 +1216,8 @@ export function CoreRecord({
     const tab = findTab(s.pane, paneId, tabId);
     return tab?.type === "core-record" ? tab.history?.length ?? 0 : 0;
   });
-  const authenticated = useWorkspace((s) => s.auth.status === "authenticated");
   const isEditor = useWorkspace((s) => s.auth.session?.user?.is_editor ?? false);
-  const [deleted, setDeleted] = useState<{ compareUrl: string; prUrl: string | null } | null>(null);
+  const [deleted, setDeleted] = useState<{ commitUrl: string; commitSha: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -1338,7 +1337,7 @@ export function CoreRecord({
         <h2 style={{ fontSize: 16, margin: 0, color: "var(--t1)" }}>
           {record.display_label}
         </h2>
-        {authenticated && (
+        {isEditor && (
           <button
             type="button"
             onClick={() => setEditing((v) => !v)}
@@ -1352,7 +1351,7 @@ export function CoreRecord({
               borderRadius: 3,
               cursor: "pointer",
             }}
-            title={editing ? "Hide editor" : "Edit on your fork"}
+            title={editing ? "Hide editor" : "Edit record"}
           >
             {editing ? "Editing" : "Edit"}
           </button>
@@ -1365,12 +1364,12 @@ export function CoreRecord({
               const label = record.display_label || record.uuid;
               if (!window.confirm(
                 `Delete ${record.collection}/${label}? ` +
-                "This commits a deletion to your fork branch.",
+                "This commits a deletion directly to master.",
               )) return;
               setDeleting(true);
               try {
                 const resp = await deleteCoreRecord(record.collection, record.uuid);
-                setDeleted({ compareUrl: resp.compare_url, prUrl: resp.pr_url });
+                setDeleted({ commitUrl: resp.commit_url, commitSha: resp.commit_sha });
               } catch (e) {
                 window.alert(`Delete failed: ${e instanceof Error ? e.message : String(e)}`);
               } finally {
@@ -1378,7 +1377,7 @@ export function CoreRecord({
               }
             }}
             style={{
-              marginLeft: authenticated ? 4 : "auto",
+              marginLeft: 4,
               fontSize: 11,
               padding: "2px 8px",
               background: "var(--bg-1)",
@@ -1387,7 +1386,7 @@ export function CoreRecord({
               borderRadius: 3,
               cursor: deleting || deleted !== null ? "default" : "pointer",
             }}
-            title="Delete this record on your fork"
+            title="Delete this record"
           >
             {deleting ? "…" : "×"}
           </button>
@@ -1405,18 +1404,10 @@ export function CoreRecord({
             color: "var(--t1)",
           }}
         >
-          Deleted on your fork.{" "}
-          <a href={deleted.compareUrl} target="_blank" rel="noreferrer" style={{ color: "var(--link)" }}>
-            View diff
+          Deleted ·{" "}
+          <a href={deleted.commitUrl} target="_blank" rel="noreferrer" style={{ color: "var(--link)" }}>
+            commit {deleted.commitSha.slice(0, 7)}
           </a>
-          {deleted.prUrl && (
-            <>
-              {" · "}
-              <a href={deleted.prUrl} target="_blank" rel="noreferrer" style={{ color: "var(--link)" }}>
-                Open PR
-              </a>
-            </>
-          )}
         </div>
       )}
       <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 12 }}>

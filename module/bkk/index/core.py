@@ -18,6 +18,7 @@ import hashlib
 import logging
 import re
 import sqlite3
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -149,17 +150,7 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
     sense_rows: list[tuple] = []
     counts: dict[str, int] = {}
 
-    # Caches populated as we walk and consulted by later records:
-    #   word_info[word_uuid] = (concept_uuid, n, pinyin)
-    #   word_display[word_uuid] = "orth: CONCEPT"
-    #   sense_position[sense_uuid] = (word_uuid, ord_index)
-    #   syn_code[uuid] / sem_code[uuid] = denormalised `code` for senses pass
-    word_info: dict[str, tuple[str | None, str | None, str | None]] = {}
-    word_display: dict[str, str] = {}
-    sense_position: dict[str, tuple[str, int]] = {}
-    concept_display: dict[str, str] = {}
-    syn_code: dict[str, str] = {}
-    sem_code: dict[str, str] = {}
+    caches = _IndexCaches()
 
     # (src_uuid, src_type, orth) — resolved after the super-entry pass.
     pending_wikilinks: list[tuple[str, str, str]] = []
@@ -187,81 +178,30 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
                 log.warning("%s: missing uuid", yml_path)
                 continue
 
-            display = _display_label(
-                type_name, data,
-                concept_display=concept_display,
-                word_display=word_display,
-                sense_position=sense_position,
-            ) or uuid
             rel_path = yml_path.relative_to(core_root).as_posix()
-            source_file = _source_file(data)
             source_hash = hashlib.sha1(raw_bytes).hexdigest()
-            notes.append((uuid, type_name, coll_dir, rel_path, display, source_file, source_hash))
-            labels.extend(_label_rows(uuid, type_name, data, display))
-            links.extend(_link_rows(uuid, type_name, data))
+            built = _build_record_rows(
+                uuid=uuid,
+                type_name=type_name,
+                coll_dir=coll_dir,
+                rel_path=rel_path,
+                data=data,
+                source_hash=source_hash,
+                caches=caches,
+            )
+            notes.append(built.note)
+            labels.extend(built.labels)
+            links.extend(built.links)
+            if built.sense is not None:
+                sense_rows.append(built.sense)
+            if built.super_entry is not None:
+                super_entry_rows.append(built.super_entry)
+                super_entry_word_rows.extend(built.super_entry_words)
             counts[type_name] = counts.get(type_name, 0) + 1
 
             # Wikilink discovery against prose fields only.
             for orth in _wikilink_orths(type_name, data):
                 pending_wikilinks.append((uuid, type_name, orth))
-
-            if type_name == "concept":
-                concept_display[uuid] = display
-            elif type_name == "syntactic-function":
-                syn_code[uuid] = display
-            elif type_name == "semantic-feature":
-                sem_code[uuid] = display
-            elif type_name == "word":
-                concept_uuid = _strip_uuid_prefix(data.get("concept_uuid"))
-                n = _str_or_none(data.get("n"))
-                pinyin = _word_pinyin(data)
-                word_info[uuid] = (concept_uuid, n, pinyin)
-                word_display[uuid] = display
-                for ord_index, sense_uuid_raw in enumerate(data.get("sense_uuids") or []):
-                    sense_uuid = _strip_uuid_prefix(sense_uuid_raw)
-                    if sense_uuid:
-                        sense_position[sense_uuid] = (uuid, ord_index)
-            elif type_name == "sense":
-                word_uuid = _strip_uuid_prefix(data.get("word_uuid"))
-                pos_value, ord_index = sense_position.get(uuid, (word_uuid, None))
-                syn_labels = _resolve_label_list(
-                    data.get("syntactic_function_uuids"), syn_code,
-                )
-                sem_labels = _resolve_label_list(
-                    data.get("semantic_feature_uuids"), sem_code,
-                )
-                sense_rows.append((
-                    uuid,
-                    word_uuid or pos_value or "",
-                    ord_index,
-                    _str_or_none(data.get("n")),
-                    _str_or_none(data.get("pos")),
-                    _str_or_none(data.get("definition")),
-                    syn_labels,
-                    sem_labels,
-                ))
-            elif type_name == "super-entry":
-                orth = _str_or_none(data.get("orth")) or display
-                word_uuid_list = [
-                    _strip_uuid_prefix(u)
-                    for u in (data.get("word_uuids") or [])
-                ]
-                word_uuid_list = [u for u in word_uuid_list if u]
-                super_entry_rows.append((
-                    uuid, orth, normalize_search_text(orth) or "",
-                    len(word_uuid_list),
-                ))
-                for word_uuid in word_uuid_list:
-                    concept_uuid, n, pinyin = word_info.get(
-                        word_uuid, (None, None, None),
-                    )
-                    concept_label = (
-                        concept_display.get(concept_uuid)
-                        if concept_uuid else None
-                    )
-                    super_entry_word_rows.append((
-                        uuid, word_uuid, concept_label, concept_uuid, n, pinyin,
-                    ))
 
     # Resolve wikilinks against the super-entry orth → uuid map.
     orth_to_super: dict[str, str] = {}
@@ -334,6 +274,368 @@ def build_core_index(core_root: Path | str, out_path: Path | str) -> Path:
 
     log.info("wrote %s; counts=%s", out_path, counts)
     return out_path
+
+
+# ---------- per-record row builders ------------------------------------------
+
+
+@dataclass
+class _IndexCaches:
+    """Cross-record lookups used while deriving display labels and joins.
+
+    Shared by ``build_core_index`` (populated as it walks) and the incremental
+    upsert path (lazily filled by reading parent records from ``core_root``).
+    """
+
+    word_info: dict[str, tuple[str | None, str | None, str | None]] = field(default_factory=dict)
+    word_display: dict[str, str] = field(default_factory=dict)
+    sense_position: dict[str, tuple[str, int]] = field(default_factory=dict)
+    concept_display: dict[str, str] = field(default_factory=dict)
+    syn_code: dict[str, str] = field(default_factory=dict)
+    sem_code: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class _RecordRows:
+    note: tuple
+    labels: list[tuple]
+    links: list[tuple]
+    sense: tuple | None = None
+    super_entry: tuple | None = None
+    super_entry_words: list[tuple] = field(default_factory=list)
+
+
+def _build_record_rows(
+    *,
+    uuid: str,
+    type_name: str,
+    coll_dir: str,
+    rel_path: str,
+    data: dict,
+    source_hash: str,
+    caches: _IndexCaches,
+) -> _RecordRows:
+    """Derive every SQLite row a single record contributes, and update caches.
+
+    Pure of side-effects on the database — only ``caches`` is mutated so later
+    records in the same pass can resolve cross-record references.
+    """
+    display = _display_label(
+        type_name, data,
+        concept_display=caches.concept_display,
+        word_display=caches.word_display,
+        sense_position=caches.sense_position,
+    ) or uuid
+    source_file = _source_file(data)
+    note = (uuid, type_name, coll_dir, rel_path, display, source_file, source_hash)
+    labels = list(_label_rows(uuid, type_name, data, display))
+    links = list(_link_rows(uuid, type_name, data))
+
+    sense_row: tuple | None = None
+    super_entry_row: tuple | None = None
+    super_entry_word_rows: list[tuple] = []
+
+    if type_name == "concept":
+        caches.concept_display[uuid] = display
+    elif type_name == "syntactic-function":
+        caches.syn_code[uuid] = display
+    elif type_name == "semantic-feature":
+        caches.sem_code[uuid] = display
+    elif type_name == "word":
+        concept_uuid = _strip_uuid_prefix(data.get("concept_uuid"))
+        n = _str_or_none(data.get("n"))
+        pinyin = _word_pinyin(data)
+        caches.word_info[uuid] = (concept_uuid, n, pinyin)
+        caches.word_display[uuid] = display
+        for ord_index, sense_uuid_raw in enumerate(data.get("sense_uuids") or []):
+            sense_uuid = _strip_uuid_prefix(sense_uuid_raw)
+            if sense_uuid:
+                caches.sense_position[sense_uuid] = (uuid, ord_index)
+    elif type_name == "sense":
+        word_uuid_field = _strip_uuid_prefix(data.get("word_uuid"))
+        pos_value, ord_index = caches.sense_position.get(
+            uuid, (word_uuid_field, None),
+        )
+        syn_labels = _resolve_label_list(
+            data.get("syntactic_function_uuids"), caches.syn_code,
+        )
+        sem_labels = _resolve_label_list(
+            data.get("semantic_feature_uuids"), caches.sem_code,
+        )
+        sense_row = (
+            uuid,
+            word_uuid_field or pos_value or "",
+            ord_index,
+            _str_or_none(data.get("n")),
+            _str_or_none(data.get("pos")),
+            _str_or_none(data.get("definition")),
+            syn_labels,
+            sem_labels,
+        )
+    elif type_name == "super-entry":
+        orth = _str_or_none(data.get("orth")) or display
+        word_uuid_list = [
+            _strip_uuid_prefix(u)
+            for u in (data.get("word_uuids") or [])
+        ]
+        word_uuid_list = [u for u in word_uuid_list if u]
+        super_entry_row = (
+            uuid, orth, normalize_search_text(orth) or "",
+            len(word_uuid_list),
+        )
+        for word_uuid in word_uuid_list:
+            concept_uuid, n, pinyin = caches.word_info.get(
+                word_uuid, (None, None, None),
+            )
+            concept_label = (
+                caches.concept_display.get(concept_uuid)
+                if concept_uuid else None
+            )
+            super_entry_word_rows.append((
+                uuid, word_uuid, concept_label, concept_uuid, n, pinyin,
+            ))
+
+    return _RecordRows(
+        note=note,
+        labels=labels,
+        links=links,
+        sense=sense_row,
+        super_entry=super_entry_row,
+        super_entry_words=super_entry_word_rows,
+    )
+
+
+# ---------- incremental upsert / delete --------------------------------------
+
+
+def upsert_core_record(
+    index_path: Path | str,
+    core_root: Path | str,
+    rel_path: str,
+) -> None:
+    """Re-derive and replace SQLite rows for one record after it was rewritten.
+
+    The caller must have already written the YAML at ``core_root / rel_path``.
+    Reads the parent records this one references (concept for a word, word
+    for a sense, words+concepts for a super-entry) so denormalised display
+    labels and joins reflect the new state without a full rebuild.
+    """
+    index_path = Path(index_path)
+    core_root = Path(core_root)
+    yml_path = core_root / rel_path
+    if not yml_path.is_file():
+        raise FileNotFoundError(yml_path)
+
+    coll_dir = rel_path.split("/", 1)[0]
+    type_name = COLLECTION_TO_TYPE.get(coll_dir)
+    if type_name is None:
+        raise ValueError(f"{rel_path}: unknown collection {coll_dir!r}")
+
+    raw_bytes = yml_path.read_bytes()
+    data = load_record(yml_path)
+    if not isinstance(data, dict):
+        raise ValueError(f"{rel_path}: record is not a mapping")
+    uuid = _uuid(data, yml_path)
+    if uuid is None:
+        raise ValueError(f"{rel_path}: record has no uuid")
+    source_hash = hashlib.sha1(raw_bytes).hexdigest()
+
+    caches = _IndexCaches()
+    _hydrate_caches_for(type_name, data, core_root, caches)
+
+    rows = _build_record_rows(
+        uuid=uuid,
+        type_name=type_name,
+        coll_dir=coll_dir,
+        rel_path=rel_path,
+        data=data,
+        source_hash=source_hash,
+        caches=caches,
+    )
+
+    conn = sqlite3.connect(str(index_path))
+    try:
+        _delete_record_rows(conn, uuid, type_name)
+        conn.execute(
+            "INSERT INTO notes(uuid, type, collection, path, display_label,"
+            " source_file, source_hash) VALUES (?,?,?,?,?,?,?)",
+            rows.note,
+        )
+        if rows.labels:
+            conn.executemany(
+                "INSERT INTO labels(uuid, label, label_type, label_search)"
+                " VALUES (?,?,?,?)",
+                rows.labels,
+            )
+        if rows.links:
+            conn.executemany(
+                "INSERT INTO links(source_uuid, source_type, target_uuid,"
+                " target_type, relation) VALUES (?,?,?,?,?)",
+                rows.links,
+            )
+        if rows.sense is not None:
+            conn.execute(
+                "INSERT INTO senses(uuid, word_uuid, sense_ord, n, pos,"
+                " def_text, syntactic_function_labels, semantic_feature_labels)"
+                " VALUES (?,?,?,?,?,?,?,?)",
+                rows.sense,
+            )
+        if rows.super_entry is not None:
+            conn.execute(
+                "INSERT INTO super_entries(uuid, orth, orth_search, word_count)"
+                " VALUES (?,?,?,?)",
+                rows.super_entry,
+            )
+        if rows.super_entry_words:
+            conn.executemany(
+                "INSERT INTO super_entry_words(super_entry_uuid, word_uuid,"
+                " concept, concept_uuid, n, pinyin) VALUES (?,?,?,?,?,?)",
+                rows.super_entry_words,
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_core_record(
+    index_path: Path | str,
+    uuid: str,
+    type_name: str,
+) -> None:
+    """Remove every SQLite row tied to ``uuid`` after the YAML was deleted."""
+    conn = sqlite3.connect(str(index_path))
+    try:
+        _delete_record_rows(conn, uuid, type_name)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _delete_record_rows(conn: sqlite3.Connection, uuid: str, type_name: str) -> None:
+    conn.execute("DELETE FROM notes WHERE uuid = ?", (uuid,))
+    conn.execute("DELETE FROM labels WHERE uuid = ?", (uuid,))
+    conn.execute("DELETE FROM links WHERE source_uuid = ?", (uuid,))
+    if type_name == "sense":
+        conn.execute("DELETE FROM senses WHERE uuid = ?", (uuid,))
+    elif type_name == "word":
+        # Word vanishes from any super-entry it was listed under; the
+        # super-entry's own row stays put.
+        conn.execute(
+            "DELETE FROM super_entry_words WHERE word_uuid = ?", (uuid,),
+        )
+    elif type_name == "super-entry":
+        conn.execute("DELETE FROM super_entries WHERE uuid = ?", (uuid,))
+        conn.execute(
+            "DELETE FROM super_entry_words WHERE super_entry_uuid = ?",
+            (uuid,),
+        )
+
+
+def _hydrate_caches_for(
+    type_name: str,
+    data: dict,
+    core_root: Path,
+    caches: _IndexCaches,
+) -> None:
+    """Read just the parent records needed to compute this record's rows."""
+    if type_name == "word":
+        concept_uuid = _strip_uuid_prefix(data.get("concept_uuid"))
+        if concept_uuid:
+            _load_concept_into_cache(core_root, concept_uuid, caches)
+    elif type_name == "sense":
+        word_uuid = _strip_uuid_prefix(data.get("word_uuid"))
+        if word_uuid:
+            _load_word_into_cache(core_root, word_uuid, caches)
+        for raw in data.get("syntactic_function_uuids") or []:
+            sf_uuid = _strip_uuid_prefix(raw)
+            if sf_uuid:
+                _load_taxonomy_code(core_root, "syntactic-functions", sf_uuid, caches.syn_code)
+        for raw in data.get("semantic_feature_uuids") or []:
+            sm_uuid = _strip_uuid_prefix(raw)
+            if sm_uuid:
+                _load_taxonomy_code(core_root, "semantic-features", sm_uuid, caches.sem_code)
+    elif type_name == "super-entry":
+        for raw in data.get("word_uuids") or []:
+            word_uuid = _strip_uuid_prefix(raw)
+            if word_uuid:
+                _load_word_into_cache(core_root, word_uuid, caches)
+
+
+def _shard_path(core_root: Path, coll_dir: str, uuid: str) -> Path:
+    return core_root / coll_dir / uuid[0] / f"{uuid}.yml"
+
+
+def _load_record_by_uuid(core_root: Path, coll_dir: str, uuid: str) -> dict | None:
+    yml_path = _shard_path(core_root, coll_dir, uuid)
+    if not yml_path.is_file():
+        return None
+    try:
+        data = load_record(yml_path)
+    except Exception as exc:
+        log.warning("%s: yaml parse failed during upsert: %s", yml_path, exc)
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _load_concept_into_cache(
+    core_root: Path, concept_uuid: str, caches: _IndexCaches,
+) -> None:
+    if concept_uuid in caches.concept_display:
+        return
+    data = _load_record_by_uuid(core_root, "concepts", concept_uuid)
+    if data is None:
+        return
+    display = _display_label(
+        "concept", data,
+        concept_display=caches.concept_display,
+        word_display=caches.word_display,
+        sense_position=caches.sense_position,
+    )
+    if display:
+        caches.concept_display[concept_uuid] = display
+
+
+def _load_word_into_cache(
+    core_root: Path, word_uuid: str, caches: _IndexCaches,
+) -> None:
+    if word_uuid in caches.word_info:
+        return
+    data = _load_record_by_uuid(core_root, "words", word_uuid)
+    if data is None:
+        return
+    concept_uuid = _strip_uuid_prefix(data.get("concept_uuid"))
+    if concept_uuid:
+        _load_concept_into_cache(core_root, concept_uuid, caches)
+    display = _display_label(
+        "word", data,
+        concept_display=caches.concept_display,
+        word_display=caches.word_display,
+        sense_position=caches.sense_position,
+    )
+    if display:
+        caches.word_display[word_uuid] = display
+    caches.word_info[word_uuid] = (
+        concept_uuid,
+        _str_or_none(data.get("n")),
+        _word_pinyin(data),
+    )
+    for ord_index, sense_uuid_raw in enumerate(data.get("sense_uuids") or []):
+        sense_uuid = _strip_uuid_prefix(sense_uuid_raw)
+        if sense_uuid:
+            caches.sense_position[sense_uuid] = (word_uuid, ord_index)
+
+
+def _load_taxonomy_code(
+    core_root: Path, coll_dir: str, uuid: str, cache: dict[str, str],
+) -> None:
+    if uuid in cache:
+        return
+    data = _load_record_by_uuid(core_root, coll_dir, uuid)
+    if data is None:
+        return
+    code = _str_or_none(data.get("code"))
+    if code:
+        cache[uuid] = code
 
 
 # ---------- traversal & I/O --------------------------------------------------

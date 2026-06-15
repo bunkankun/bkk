@@ -3,6 +3,7 @@ import {
   getContributions,
   patchContributionCuration,
   postComment,
+  subscribeCoreRecordSaved,
   type CurationState,
 } from "../../api/client";
 import type { Contribution, Rating } from "../../api/types";
@@ -403,6 +404,12 @@ export function ChatTab() {
   const labelStore = useLabelStore(new Map());
   const isEditor = useWorkspace((s) => s.auth.session?.user?.is_editor ?? false);
   const hasBluesky = useWorkspace((s) => s.blueskyStatus != null);
+
+  useEffect(() => {
+    return subscribeCoreRecordSaved((event) => {
+      labelStore.invalidate(event.uuid);
+    });
+  }, [labelStore]);
 
   const handleCurationChange = useCallback(
     (uri: string, state: CurationState, rating: Rating) => {

@@ -1,46 +1,53 @@
-"""Inline editing of bkk-core records, backed by the user's GitHub fork.
+"""Direct-to-master editing of bkk-core records.
 
-Two endpoints, both gated by a logged-in GitHub session:
+Editors (gated by GitHub team membership; ``is_editor`` on the session) push
+edits straight to ``upstream@core_pr_base`` via their OAuth token. There is no
+fork, no feature branch, and no PR step — saves become single commits on
+master.
 
-* ``PATCH /core/{collection}/{uuid}`` — write the proposed YAML record
-  (and any ``extra_files`` — e.g. a new sense file when adding a sense to
-  a word) to a feature branch on the user's fork of the upstream
-  bkk-core repo. Idempotent across saves: the client passes back the
-  ``branch`` and ``parent_sha`` the previous response returned, so
-  successive saves stack as commits on the same branch.
+Endpoints:
 
-* ``POST  /core/{collection}/{uuid}/pr`` — opt-in opening of a pull
-  request from that branch against ``upstream:<core.pr_base>``.
+* ``PATCH /core/{collection}/{uuid}`` — commit the proposed YAML (plus any
+  ``extra_files``, e.g. a new sense when adding one to a word) to master.
+* ``DELETE /core/{collection}/{uuid}`` — commit a delete of the record to
+  master.
 
-The read path (``GET /core/{collection}/{uuid}`` in ``core.py``) is
-unchanged and still serves from the local ``core_root`` clone. The write
-path never touches that clone — the maintainer keeps it fresh via
-``POST /admin/core/sync`` or ``bkk core sync``.
+After GitHub accepts the commit the server applies the same change locally so
+reads stay coherent:
+
+1. The YAML is written to ``core_root`` atomically (temp-file + ``os.replace``).
+2. The affected uuid's rows in ``_core.bkki`` are upserted / deleted in place
+   so search, pickers, and lookup-by-uuid reflect the new state immediately.
+3. A background ``run_core_sync`` job fast-forwards the local clone from the
+   remote and rebuilds the index from scratch to catch wikilink resolution
+   and any cross-record denormalisation.
 """
 
 from __future__ import annotations
 
 import base64
 import binascii
-import time
-from datetime import datetime, timezone
+import logging
+import os
+import tempfile
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from bkk.index.core import (
+    delete_core_record as index_delete_core_record,
+    upsert_core_record as index_upsert_core_record,
+)
 from bkk.serialize.yaml_io import dumps_record, loads_record
 
 from ..state import AppState, UserSession
-from .auth import (
-    SESSION_COOKIE,
-    _get_branch_ref,
-    _github_json,
-    _github_status,
-    _repo_exists,
-)
+from .admin import run_core_sync
+from .auth import SESSION_COOKIE, _github_json, _github_status
 from .core import COLLECTION_TYPES, _open, _require_collection
+
+log = logging.getLogger("bkk.serve.core_edit")
 
 router = APIRouter(prefix="/core", tags=["core"])
 
@@ -49,21 +56,15 @@ router = APIRouter(prefix="/core", tags=["core"])
 # lookup.
 LOCKED_RECORD_KEYS = frozenset({"uuid", "type"})
 
-# Max attempts when polling for fork creation. Fork is async on GitHub's
-# side; a freshly-forked repo can 404 for a few seconds.
-FORK_READY_ATTEMPTS = 12
-
 
 class ExtraFile(BaseModel):
     path: str
+    # ``None`` for an extra-file delete; any dict for an upsert.
     data: dict[str, Any] | None = None
-    parent_sha: str | None = None
 
 
 class EditRequest(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
-    parent_sha: str | None = None
-    branch: str | None = None
     message: str | None = None
     extra_files: list[ExtraFile] = Field(default_factory=list)
 
@@ -71,60 +72,33 @@ class EditRequest(BaseModel):
 class ExtraFileResult(BaseModel):
     path: str
     commit_sha: str
-    parent_sha: str | None
     deleted: bool
 
 
 class EditResponse(BaseModel):
-    branch: str
     commit_sha: str
-    parent_sha: str
-    fork_repo: str
-    compare_url: str
-    pr_url: str | None
+    commit_url: str
     data: dict[str, Any]
     extras: list[ExtraFileResult] = Field(default_factory=list)
 
 
 class DeleteRequest(BaseModel):
-    parent_sha: str | None = None
-    branch: str | None = None
     message: str | None = None
 
 
 class DeleteResponse(BaseModel):
-    branch: str
     commit_sha: str
-    fork_repo: str
-    compare_url: str
-    pr_url: str | None
-
-
-class OpenPrRequest(BaseModel):
-    branch: str
-    title: str | None = None
-    body: str | None = None
-
-
-class OpenPrResponse(BaseModel):
-    pr_url: str
-    pr_number: int
-    already_existed: bool
+    commit_url: str
 
 
 # ---------- shared helpers --------------------------------------------------
 
 
-def _session(request: Request) -> UserSession:
+def _editor_session(request: Request) -> UserSession:
     session_id = request.cookies.get(SESSION_COOKIE)
     user_session = request.app.state.bkk.sessions.get(session_id)
     if user_session is None:
         raise HTTPException(status_code=401, detail="Login required")
-    return user_session
-
-
-def _editor_session(request: Request) -> UserSession:
-    user_session = _session(request)
     if not user_session.is_editor:
         raise HTTPException(status_code=403, detail="Editor role required")
     return user_session
@@ -167,136 +141,6 @@ def _content_path(path: str) -> str:
     return quote(path, safe="/")
 
 
-def _is_fork_of(repo: dict[str, Any], upstream: str) -> bool:
-    """True if ``repo`` is a GitHub fork whose parent is ``upstream``."""
-    if not repo.get("fork"):
-        return False
-    parent = repo.get("parent")
-    if not isinstance(parent, dict):
-        return False
-    return parent.get("full_name") == upstream
-
-
-def _fork_branch_ready(
-    token: str, fork: str, branch: str,
-) -> bool:
-    """True once ``branch`` is queryable on the fork.
-
-    A freshly-created fork takes a few seconds before its refs and contents
-    are queryable, even after the repo metadata endpoint starts returning
-    200. Polling the branch ref is a stronger readiness signal than polling
-    the repo itself.
-    """
-    fork_owner, fork_repo = fork.split("/", 1)
-    try:
-        _github_json(
-            "GET",
-            f"/repos/{fork_owner}/{fork_repo}/git/ref/heads/{branch}",
-            token,
-        )
-        return True
-    except HTTPException as exc:
-        status = _github_status(exc)
-        if status in (404, 409):
-            return False
-        raise
-
-
-def _ensure_fork(token: str, login: str, upstream: str, base_branch: str) -> str:
-    """Return ``"<login>/<repo>"`` for the user's fork of ``upstream``.
-
-    Creates the fork on demand and waits for it to become writable.
-    Idempotent — a no-op if the fork already exists and its ``base_branch``
-    is queryable. If a same-named repo exists under ``<login>`` that is
-    *not* a fork of ``upstream``, raises 409 so the user can rename or
-    delete it rather than silently writing to the wrong repo.
-    """
-    upstream_owner, upstream_name = upstream.split("/", 1)
-    fork_full = f"{login}/{upstream_name}"
-
-    existing = _repo_exists(token, login, upstream_name)
-    if existing is not None:
-        if not _is_fork_of(existing, upstream):
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"{fork_full} exists but is not a fork of {upstream}. "
-                    "Rename or delete that repository on GitHub, then retry."
-                ),
-            )
-        if _fork_branch_ready(token, fork_full, base_branch):
-            return fork_full
-        # Fork exists but base branch isn't queryable yet (rare; e.g. the
-        # user just forked from another tool and refs are still replicating).
-        # Fall through to the polling loop below.
-    else:
-        _github_json("POST", f"/repos/{upstream}/forks", token, json={})
-
-    for _ in range(FORK_READY_ATTEMPTS):
-        time.sleep(1)
-        repo = _repo_exists(token, login, upstream_name)
-        if repo is None:
-            continue
-        if not _is_fork_of(repo, upstream):
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"{fork_full} appeared but is not a fork of {upstream}; "
-                    "refusing to write to it."
-                ),
-            )
-        if _fork_branch_ready(token, fork_full, base_branch):
-            return fork_full
-    raise HTTPException(
-        status_code=504,
-        detail=(
-            f"Fork {fork_full} of {upstream} did not become writable in time "
-            f"(base branch {base_branch!r} still not queryable). "
-            "Try the save again in a few seconds."
-        ),
-    )
-
-
-def _ensure_branch(
-    *,
-    token: str,
-    fork: str,
-    branch: str,
-    upstream: str,
-    upstream_branch: str,
-) -> None:
-    """Create ``branch`` on ``fork`` off upstream's HEAD if it doesn't exist."""
-    fork_owner, fork_repo = fork.split("/", 1)
-    try:
-        _get_branch_ref(
-            token=token, owner=fork_owner, repo=fork_repo, branch=branch,
-        )
-        return
-    except HTTPException as exc:
-        if _github_status(exc) != 404:
-            raise
-
-    upstream_owner, upstream_name = upstream.split("/", 1)
-    head = _get_branch_ref(
-        token=token,
-        owner=upstream_owner,
-        repo=upstream_name,
-        branch=upstream_branch,
-    )
-    sha = head.get("object", {}).get("sha")
-    if not isinstance(sha, str):
-        raise HTTPException(
-            status_code=502,
-            detail=f"upstream {upstream}#{upstream_branch} ref has no SHA",
-        )
-    _github_json(
-        "POST",
-        f"/repos/{fork}/git/refs",
-        token,
-        json={"ref": f"refs/heads/{branch}", "sha": sha},
-    )
-
-
 def _fetch_file(token: str, repo: str, path: str, ref: str) -> dict[str, Any] | None:
     """GET a file from the Contents API; None on 404."""
     try:
@@ -332,13 +176,7 @@ def _decode_file(payload: dict[str, Any]) -> str:
 def _validate_record(
     proposed: dict[str, Any], original: dict[str, Any], type_name: str | None
 ) -> dict[str, Any]:
-    """Reject changes to locked keys (``uuid``, ``type``).
-
-    Returns the proposed record as-is (key order preserved by the caller's
-    payload). The Pydantic schema for each type is the per-collection
-    contract; this validator only enforces identity invariants that are
-    universal across all collections.
-    """
+    """Reject changes to locked keys (``uuid``, ``type``)."""
     for key in LOCKED_RECORD_KEYS:
         if key in proposed and proposed[key] != original.get(key):
             raise HTTPException(
@@ -389,14 +227,14 @@ def _validate_extra_path(path: str) -> None:
 def _put_file(
     *,
     token: str,
-    fork: str,
+    repo: str,
     rel_path: str,
     branch: str,
     text: str,
     message: str,
     parent_sha: str | None,
-) -> tuple[str, str]:
-    """PUT one file, returning ``(blob_sha, commit_sha)``."""
+) -> tuple[str, str, str]:
+    """PUT one file, returning ``(blob_sha, commit_sha, commit_url)``."""
     body: dict[str, Any] = {
         "message": message,
         "content": base64.b64encode(text.encode("utf-8")).decode("ascii"),
@@ -407,7 +245,7 @@ def _put_file(
     try:
         result = _github_json(
             "PUT",
-            f"/repos/{fork}/contents/{_content_path(rel_path)}",
+            f"/repos/{repo}/contents/{_content_path(rel_path)}",
             token,
             json=body,
         )
@@ -416,35 +254,29 @@ def _put_file(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    f"core file {rel_path} changed on the fork branch since "
-                    "you last loaded it; reload and re-apply your edits"
+                    f"core file {rel_path} on {repo}@{branch} changed since "
+                    "you loaded it; reload and re-apply your edits"
                 ),
             ) from exc
         raise
 
-    content_result = result.get("content") if isinstance(result, dict) else None
-    new_sha = content_result.get("sha") if isinstance(content_result, dict) else None
-    commit_obj = result.get("commit") if isinstance(result, dict) else None
-    commit_sha = commit_obj.get("sha") if isinstance(commit_obj, dict) else None
-    if not isinstance(new_sha, str) or not isinstance(commit_sha, str):
-        raise HTTPException(status_code=502, detail="GitHub PUT returned unexpected payload")
-    return new_sha, commit_sha
+    return _extract_commit(result, rel_path)
 
 
 def _delete_file(
     *,
     token: str,
-    fork: str,
+    repo: str,
     rel_path: str,
     branch: str,
     message: str,
     parent_sha: str,
-) -> str:
-    """DELETE one file, returning the resulting commit sha."""
+) -> tuple[str, str]:
+    """DELETE one file, returning ``(commit_sha, commit_url)``."""
     try:
         result = _github_json(
             "DELETE",
-            f"/repos/{fork}/contents/{_content_path(rel_path)}",
+            f"/repos/{repo}/contents/{_content_path(rel_path)}",
             token,
             json={"message": message, "branch": branch, "sha": parent_sha},
         )
@@ -453,38 +285,110 @@ def _delete_file(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    f"core file {rel_path} changed on the fork branch since "
-                    "you last loaded it; reload and re-apply your edits"
+                    f"core file {rel_path} on {repo}@{branch} changed since "
+                    "you loaded it; reload and re-apply your edits"
                 ),
             ) from exc
         raise
-    commit_obj = result.get("commit") if isinstance(result, dict) else None
+    _blob_sha, commit_sha, commit_url = _extract_commit(result, rel_path)
+    return commit_sha, commit_url
+
+
+def _extract_commit(result: Any, rel_path: str) -> tuple[str, str, str]:
+    """Pull ``(blob_sha, commit_sha, commit_url)`` from a Contents API response.
+
+    ``blob_sha`` is ``""`` on a delete response (no new blob).
+    """
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=502, detail="GitHub returned unexpected payload")
+    content_result = result.get("content")
+    blob_sha = ""
+    if isinstance(content_result, dict):
+        sha = content_result.get("sha")
+        if isinstance(sha, str):
+            blob_sha = sha
+    commit_obj = result.get("commit")
     commit_sha = commit_obj.get("sha") if isinstance(commit_obj, dict) else None
+    commit_url = commit_obj.get("html_url") if isinstance(commit_obj, dict) else None
     if not isinstance(commit_sha, str):
-        raise HTTPException(status_code=502, detail="GitHub DELETE returned unexpected payload")
-    return commit_sha
+        raise HTTPException(
+            status_code=502,
+            detail=f"GitHub commit for {rel_path} missing sha",
+        )
+    if not isinstance(commit_url, str):
+        commit_url = ""
+    return blob_sha, commit_sha, commit_url
 
 
-def _default_branch_name(collection: str, uuid: str) -> str:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-    return f"bkk-edit/{collection}/{uuid}-{stamp}"
-
-
-def _find_existing_pr(
-    token: str, upstream: str, fork_owner: str, branch: str,
-) -> dict[str, Any] | None:
-    """Return the first open PR whose head matches ``fork_owner:branch``."""
-    head = f"{fork_owner}:{branch}"
-    payload = _github_json(
-        "GET",
-        f"/repos/{upstream}/pulls?state=open&head={quote(head, safe='')}",
-        token,
+def _atomic_write(path: "os.PathLike[str]", text: str) -> None:
+    """Write ``text`` to ``path``, leaving any prior contents intact on failure."""
+    target = os.fspath(path)
+    directory = os.path.dirname(target) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=".tmp-", suffix=".yml", dir=directory,
     )
-    if isinstance(payload, list) and payload:
-        first = payload[0]
-        if isinstance(first, dict):
-            return first
-    return None
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp_path, target)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _local_apply_upsert(state: AppState, rel_path: str, text: str) -> None:
+    """Mirror a successful upstream commit into the local clone + index."""
+    if state.core_root is None or state.core_index_path is None:
+        return
+    abs_path = state.core_root / rel_path
+    try:
+        _atomic_write(abs_path, text)
+    except OSError as exc:
+        log.warning("local write-through failed for %s: %s", rel_path, exc)
+        return
+    try:
+        index_upsert_core_record(state.core_index_path, state.core_root, rel_path)
+    except Exception as exc:  # noqa: BLE001 — best-effort; full sync recovers
+        log.warning("local index upsert failed for %s: %s", rel_path, exc)
+
+
+def _local_apply_delete(
+    state: AppState, rel_path: str, uuid: str, type_name: str,
+) -> None:
+    if state.core_root is None or state.core_index_path is None:
+        return
+    abs_path = state.core_root / rel_path
+    try:
+        abs_path.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        log.warning("local delete failed for %s: %s", rel_path, exc)
+    try:
+        index_delete_core_record(state.core_index_path, uuid, type_name)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("local index delete failed for %s: %s", rel_path, exc)
+
+
+def _schedule_background_sync(
+    state: AppState, background: BackgroundTasks, target: str,
+) -> None:
+    """Fire off a fast-forward + full reindex behind the commit."""
+    if state.core_root is None or state.core_index_path is None:
+        return
+    job = state.jobs.create(kind="core_sync", target=target)
+    background.add_task(
+        run_core_sync,
+        state.jobs,
+        job.id,
+        state.core_root,
+        state.core_index_path,
+        state.config.core_pr_base,
+    )
 
 
 # ---------- endpoints -------------------------------------------------------
@@ -493,12 +397,15 @@ def _find_existing_pr(
 @router.patch(
     "/{collection}/{uuid}",
     response_model=EditResponse,
-    summary="Edit one core record on the user's fork; returns commit metadata",
+    summary="Commit one core record edit directly to upstream master",
 )
 async def edit_record(
-    request: Request, collection: str, uuid: str,
+    request: Request,
+    background: BackgroundTasks,
+    collection: str,
+    uuid: str,
 ) -> EditResponse:
-    user_session = _session(request)
+    user_session = _editor_session(request)
     state: AppState = request.app.state.bkk
     upstream = _require_upstream(state)
     _require_collection(collection)
@@ -534,6 +441,12 @@ async def edit_record(
             status_code=500,
             detail=f"upstream {rel_path} record type does not match index",
         )
+    parent_sha = base_payload.get("sha")
+    if not isinstance(parent_sha, str):
+        raise HTTPException(
+            status_code=502,
+            detail="GitHub file payload has no sha for parent",
+        )
 
     merged = _validate_record(req.data, base_record, type_name)
     new_text = dumps_record(merged)
@@ -541,59 +454,39 @@ async def edit_record(
     for extra in req.extra_files:
         _validate_extra_path(extra.path)
 
-    fork = _ensure_fork(token, user_session.login, upstream, upstream_branch)
-    fork_owner = user_session.login
-
-    branch = req.branch or _default_branch_name(collection, uuid)
-    _ensure_branch(
-        token=token, fork=fork, branch=branch,
-        upstream=upstream, upstream_branch=upstream_branch,
-    )
-
-    if req.parent_sha is not None:
-        parent_sha = req.parent_sha
-    else:
-        head_payload = _fetch_file(token, fork, rel_path, branch)
-        if head_payload is None:
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    f"{rel_path} missing on {fork}@{branch} after branch "
-                    "creation; cannot determine parent sha"
-                ),
-            )
-        parent_sha = head_payload.get("sha")
-        if not isinstance(parent_sha, str):
-            raise HTTPException(
-                status_code=502,
-                detail="GitHub file payload has no sha for parent",
-            )
-
     commit_message = req.message or f"Edit {collection}/{display_label or uuid}"
-    new_sha, commit_sha = _put_file(
-        token=token, fork=fork, rel_path=rel_path, branch=branch,
+    _blob_sha, commit_sha, commit_url = _put_file(
+        token=token, repo=upstream, rel_path=rel_path, branch=upstream_branch,
         text=new_text, message=commit_message, parent_sha=parent_sha,
     )
+    _local_apply_upsert(state, rel_path, new_text)
 
     extras_out: list[ExtraFileResult] = []
     for extra in req.extra_files:
         extra_collection = extra.path.split("/", 1)[0]
         extra_type = COLLECTION_TYPES[extra_collection]
         extra_message = f"{commit_message} ({extra.path})"
+        existing = _fetch_file(token, upstream, extra.path, upstream_branch)
+        existing_sha = existing.get("sha") if isinstance(existing, dict) else None
+        if not isinstance(existing_sha, str):
+            existing_sha = None
+
         if extra.data is None:
-            if extra.parent_sha is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"extra_files delete of {extra.path} requires parent_sha",
-                )
-            extra_commit = _delete_file(
-                token=token, fork=fork, rel_path=extra.path, branch=branch,
-                message=extra_message, parent_sha=extra.parent_sha,
+            if existing_sha is None:
+                # Nothing on master to delete — treat as a no-op rather than an
+                # error so the client doesn't have to track which extras
+                # already vanished.
+                continue
+            extra_commit, _extra_url = _delete_file(
+                token=token, repo=upstream, rel_path=extra.path,
+                branch=upstream_branch, message=extra_message,
+                parent_sha=existing_sha,
             )
             extras_out.append(ExtraFileResult(
-                path=extra.path, commit_sha=extra_commit,
-                parent_sha=None, deleted=True,
+                path=extra.path, commit_sha=extra_commit, deleted=True,
             ))
+            extra_uuid = (extra.path.rsplit("/", 1)[-1]).removesuffix(".yml")
+            _local_apply_delete(state, extra.path, extra_uuid, extra_type)
             continue
 
         proposed_type = extra.data.get("type")
@@ -606,109 +499,38 @@ async def edit_record(
                 ),
             )
         extra_text = dumps_record(extra.data)
-        extra_blob, extra_commit = _put_file(
-            token=token, fork=fork, rel_path=extra.path, branch=branch,
-            text=extra_text, message=extra_message, parent_sha=extra.parent_sha,
+        _extra_blob, extra_commit, _extra_url = _put_file(
+            token=token, repo=upstream, rel_path=extra.path,
+            branch=upstream_branch, text=extra_text,
+            message=extra_message, parent_sha=existing_sha,
         )
         extras_out.append(ExtraFileResult(
-            path=extra.path, commit_sha=extra_commit,
-            parent_sha=extra_blob, deleted=False,
+            path=extra.path, commit_sha=extra_commit, deleted=False,
         ))
+        _local_apply_upsert(state, extra.path, extra_text)
 
-    existing_pr = _find_existing_pr(token, upstream, fork_owner, branch)
-    pr_url = (
-        existing_pr.get("html_url")
-        if isinstance(existing_pr, dict)
-        and isinstance(existing_pr.get("html_url"), str)
-        else None
-    )
+    last_commit_sha = extras_out[-1].commit_sha if extras_out else commit_sha
+    last_commit_url = commit_url
+    _schedule_background_sync(state, background, f"{collection}/{uuid}")
 
-    upstream_owner = upstream.split("/", 1)[0]
-    compare_url = (
-        f"https://github.com/{upstream}/compare/{upstream_branch}..."
-        f"{fork_owner}:{branch}"
-    )
-    if upstream_owner == fork_owner:
-        # Same-owner forks can't be linked via the OWNER:BRANCH syntax.
-        compare_url = f"https://github.com/{upstream}/compare/{upstream_branch}...{branch}"
-
-    last_commit = extras_out[-1].commit_sha if extras_out else commit_sha
     return EditResponse(
-        branch=branch,
-        commit_sha=last_commit,
-        parent_sha=new_sha,
-        fork_repo=fork,
-        compare_url=compare_url,
-        pr_url=pr_url,
+        commit_sha=last_commit_sha,
+        commit_url=last_commit_url,
         data=merged,
         extras=extras_out,
     )
 
 
-@router.post(
-    "/{collection}/{uuid}/pr",
-    response_model=OpenPrResponse,
-    summary="Open (or look up) a PR from the edit branch against upstream",
-)
-async def open_pr(
-    request: Request, collection: str, uuid: str,
-) -> OpenPrResponse:
-    user_session = _session(request)
-    state: AppState = request.app.state.bkk
-    upstream = _require_upstream(state)
-    _require_collection(collection)
-
-    try:
-        payload = await request.json()
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Expected JSON request body") from exc
-    req = OpenPrRequest.model_validate(payload)
-
-    _type_name, _rel_path, display_label = _lookup_record(state, collection, uuid)
-
-    token = user_session.access_token
-    fork_owner = user_session.login
-    head = f"{fork_owner}:{req.branch}"
-    base = state.config.core_pr_base
-
-    title = req.title or f"Edit {collection}/{display_label or uuid}"
-    body = req.body or ""
-
-    try:
-        result = _github_json(
-            "POST",
-            f"/repos/{upstream}/pulls",
-            token,
-            json={"title": title, "head": head, "base": base, "body": body},
-        )
-    except HTTPException as exc:
-        if _github_status(exc) in (422,):
-            existing = _find_existing_pr(token, upstream, fork_owner, req.branch)
-            if existing is not None:
-                pr_url = existing.get("html_url")
-                pr_number = existing.get("number")
-                if isinstance(pr_url, str) and isinstance(pr_number, int):
-                    return OpenPrResponse(
-                        pr_url=pr_url, pr_number=pr_number, already_existed=True,
-                    )
-        raise
-
-    if not isinstance(result, dict):
-        raise HTTPException(status_code=502, detail="GitHub PR create returned no payload")
-    pr_url = result.get("html_url")
-    pr_number = result.get("number")
-    if not isinstance(pr_url, str) or not isinstance(pr_number, int):
-        raise HTTPException(status_code=502, detail="GitHub PR payload missing url/number")
-    return OpenPrResponse(pr_url=pr_url, pr_number=pr_number, already_existed=False)
-
-
 @router.delete(
     "/{collection}/{uuid}",
     response_model=DeleteResponse,
-    summary="Delete one core record on the user's fork branch (editor-only)",
+    summary="Delete one core record on upstream master (editor-only)",
 )
 async def delete_record(
-    request: Request, collection: str, uuid: str,
+    request: Request,
+    background: BackgroundTasks,
+    collection: str,
+    uuid: str,
 ) -> DeleteResponse:
     user_session = _editor_session(request)
     state: AppState = request.app.state.bkk
@@ -722,61 +544,29 @@ async def delete_record(
         raise HTTPException(status_code=400, detail="Expected JSON request body") from exc
     req = DeleteRequest.model_validate(payload)
 
-    _type_name, rel_path, display_label = _lookup_record(state, collection, uuid)
+    type_name, rel_path, display_label = _lookup_record(state, collection, uuid)
 
     token = user_session.access_token
     upstream_branch = state.config.core_pr_base
-    fork = _ensure_fork(token, user_session.login, upstream, upstream_branch)
-    fork_owner = user_session.login
-
-    branch = req.branch or _default_branch_name(collection, uuid)
-    _ensure_branch(
-        token=token, fork=fork, branch=branch,
-        upstream=upstream, upstream_branch=upstream_branch,
-    )
-
-    if req.parent_sha is not None:
-        parent_sha = req.parent_sha
-    else:
-        head_payload = _fetch_file(token, fork, rel_path, branch)
-        if head_payload is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"{rel_path} not found on {fork}@{branch}; nothing to delete",
-            )
-        parent_sha = head_payload.get("sha")
-        if not isinstance(parent_sha, str):
-            raise HTTPException(
-                status_code=502,
-                detail="GitHub file payload has no sha for parent",
-            )
+    base_payload = _fetch_file(token, upstream, rel_path, upstream_branch)
+    if base_payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{rel_path} not found on {upstream}@{upstream_branch}; nothing to delete",
+        )
+    parent_sha = base_payload.get("sha")
+    if not isinstance(parent_sha, str):
+        raise HTTPException(
+            status_code=502,
+            detail="GitHub file payload has no sha for parent",
+        )
 
     commit_message = req.message or f"Delete {collection}/{display_label or uuid}"
-    commit_sha = _delete_file(
-        token=token, fork=fork, rel_path=rel_path, branch=branch,
+    commit_sha, commit_url = _delete_file(
+        token=token, repo=upstream, rel_path=rel_path, branch=upstream_branch,
         message=commit_message, parent_sha=parent_sha,
     )
+    _local_apply_delete(state, rel_path, uuid, type_name)
+    _schedule_background_sync(state, background, f"{collection}/{uuid}")
 
-    existing_pr = _find_existing_pr(token, upstream, fork_owner, branch)
-    pr_url = (
-        existing_pr.get("html_url")
-        if isinstance(existing_pr, dict)
-        and isinstance(existing_pr.get("html_url"), str)
-        else None
-    )
-
-    upstream_owner = upstream.split("/", 1)[0]
-    compare_url = (
-        f"https://github.com/{upstream}/compare/{upstream_branch}..."
-        f"{fork_owner}:{branch}"
-    )
-    if upstream_owner == fork_owner:
-        compare_url = f"https://github.com/{upstream}/compare/{upstream_branch}...{branch}"
-
-    return DeleteResponse(
-        branch=branch,
-        commit_sha=commit_sha,
-        fork_repo=fork,
-        compare_url=compare_url,
-        pr_url=pr_url,
-    )
+    return DeleteResponse(commit_sha=commit_sha, commit_url=commit_url)

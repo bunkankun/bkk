@@ -28,8 +28,6 @@ import type {
   CoreEditRequest,
   CoreEditResponse,
   CoreListResponse,
-  CoreOpenPrRequest,
-  CoreOpenPrResponse,
   CoreRecordResponse,
   SyntacticFunctionLintResponse,
   CoreSuperEntryByOrth,
@@ -685,7 +683,12 @@ export async function getCoreRecord(
   return promise;
 }
 
-type CoreRecordSavedListener = (event: { collection: string; uuid: string }) => void;
+export type CoreRecordSavedKind = "edit" | "delete";
+type CoreRecordSavedListener = (event: {
+  collection: string;
+  uuid: string;
+  kind: CoreRecordSavedKind;
+}) => void;
 const coreRecordSavedListeners = new Set<CoreRecordSavedListener>();
 
 export function subscribeCoreRecordSaved(listener: CoreRecordSavedListener): () => void {
@@ -693,6 +696,17 @@ export function subscribeCoreRecordSaved(listener: CoreRecordSavedListener): () 
   return () => {
     coreRecordSavedListeners.delete(listener);
   };
+}
+
+function notifyCoreRecordSaved(
+  collection: string,
+  uuid: string,
+  kind: CoreRecordSavedKind,
+): void {
+  coreRecordCache.delete(`${collection}/${uuid}`);
+  for (const listener of coreRecordSavedListeners) {
+    listener({ collection, uuid, kind });
+  }
 }
 
 export async function patchCoreRecord(
@@ -708,10 +722,7 @@ export async function patchCoreRecord(
       body: JSON.stringify(body),
     },
   );
-  coreRecordCache.delete(`${collection}/${uuid}`);
-  for (const listener of coreRecordSavedListeners) {
-    listener({ collection, uuid });
-  }
+  notifyCoreRecordSaved(collection, uuid, "edit");
   return response;
 }
 
@@ -743,7 +754,7 @@ export async function deleteCoreRecord(
   uuid: string,
   body: CoreDeleteRequest = {},
 ): Promise<CoreDeleteResponse> {
-  return fetchJson<CoreDeleteResponse>(
+  const response = await fetchJson<CoreDeleteResponse>(
     `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}`,
     {
       method: "DELETE",
@@ -751,21 +762,8 @@ export async function deleteCoreRecord(
       body: JSON.stringify(body),
     },
   );
-}
-
-export async function openCoreRecordPr(
-  collection: string,
-  uuid: string,
-  body: CoreOpenPrRequest,
-): Promise<CoreOpenPrResponse> {
-  return fetchJson<CoreOpenPrResponse>(
-    `${apiBase}/core/${encodeURIComponent(collection)}/${encodeURIComponent(uuid)}/pr`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  );
+  notifyCoreRecordSaved(collection, uuid, "delete");
+  return response;
 }
 
 export async function getCoreSuperEntryByOrth(

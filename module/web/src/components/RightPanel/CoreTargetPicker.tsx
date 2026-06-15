@@ -4,6 +4,7 @@ import {
   getAnnotationSenseCounts,
   getCoreSuperEntryByOrthFull,
   postAnnotation,
+  subscribeCoreRecordSaved,
 } from "../../api/client";
 import type {
   Annotation,
@@ -315,6 +316,14 @@ export function CoreTargetPicker({ selection, edition }: Props) {
   const [error, setError] = useState<string | null>(null);
   const counts = useSenseCounts(words);
   const labelStore = useLabelStore(new Map());
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    return subscribeCoreRecordSaved((event) => {
+      labelStore.invalidate(event.uuid);
+      setRefreshTick((t) => t + 1);
+    });
+  }, [labelStore]);
 
   const query = selection.chars.join("");
   const totalSenseCount = words.reduce((n, w) => n + w.senses.length, 0);
@@ -357,7 +366,7 @@ export function CoreTargetPicker({ selection, edition }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [query]);
+  }, [query, refreshTick]);
 
   if (!query) return null;
 

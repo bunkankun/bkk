@@ -5,6 +5,7 @@ import {
   getManifest,
   getSegmentTranslations,
   patchContributionCuration,
+  subscribeCoreRecordSaved,
 } from "../../api/client";
 import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
@@ -154,6 +155,12 @@ export function AnnotationsTab() {
   const [segError, setSegError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const labelStore = useLabelStore(new Map());
+
+  useEffect(() => {
+    return subscribeCoreRecordSaved((event) => {
+      labelStore.invalidate(event.uuid);
+    });
+  }, [labelStore]);
 
   useEffect(() => {
     if (textid == null || seq == null) {
