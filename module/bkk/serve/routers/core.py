@@ -200,6 +200,19 @@ class SyntacticFunctionLintResponse(BaseModel):
     items: list[LintItem]
 
 
+class SyntacticFunctionUsageItem(BaseModel):
+    uuid: str
+    label: str
+    sense_count: int
+    attestation_count: int
+
+
+class SyntacticFunctionUsageResponse(BaseModel):
+    record_count: int
+    unused_count: int
+    items: list[SyntacticFunctionUsageItem]
+
+
 # ---------- helpers ---------------------------------------------------------
 
 
@@ -276,6 +289,62 @@ def lint_syntactic_functions(request: Request) -> SyntacticFunctionLintResponse:
         distinct_label_count=report.distinct_label_count,
         error_count=len(report.errors),
         warning_count=len(report.warnings),
+        items=items,
+    )
+
+
+# ---------- /syntactic-functions/usage --------------------------------------
+
+
+_USAGE_SQL = """
+SELECT
+  n.uuid,
+  n.display_label,
+  COALESCE(u.sense_count, 0)        AS sense_count,
+  COALESCE(u.attestation_count, 0)  AS attestation_count
+FROM notes n
+LEFT JOIN (
+  SELECT
+    l.target_uuid                   AS uuid,
+    COUNT(*)                        AS sense_count,
+    SUM(CAST(s.n AS INTEGER))       AS attestation_count
+  FROM links l
+  JOIN senses s ON s.uuid = l.source_uuid
+  WHERE l.source_type = 'sense'
+    AND l.target_type = 'syntactic-function'
+    AND l.relation    = 'syntactic_function'
+  GROUP BY l.target_uuid
+) u ON u.uuid = n.uuid
+WHERE n.collection = 'syntactic-functions'
+ORDER BY sense_count, attestation_count, n.display_label
+"""
+
+
+@router.get(
+    "/syntactic-functions/usage",
+    response_model=SyntacticFunctionUsageResponse,
+    summary="Count senses and attestations using each syntactic function",
+)
+def syntactic_function_usage(request: Request) -> SyntacticFunctionUsageResponse:
+    state: AppState = request.app.state.bkk
+    conn = _open(state)
+    try:
+        rows = conn.execute(_USAGE_SQL).fetchall()
+    finally:
+        conn.close()
+    items = [
+        SyntacticFunctionUsageItem(
+            uuid=str(uuid),
+            label=str(label or ""),
+            sense_count=int(sc or 0),
+            attestation_count=int(ac or 0),
+        )
+        for uuid, label, sc, ac in rows
+    ]
+    unused = sum(1 for it in items if it.sense_count == 0)
+    return SyntacticFunctionUsageResponse(
+        record_count=len(items),
+        unused_count=unused,
         items=items,
     )
 

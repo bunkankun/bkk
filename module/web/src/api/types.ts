@@ -969,3 +969,16 @@ export interface SyntacticFunctionLintResponse {
   warning_count: number;
   items: CoreLintItem[];
 }
+
+export interface SyntacticFunctionUsageItem {
+  uuid: string;
+  label: string;
+  sense_count: number;
+  attestation_count: number;
+}
+
+export interface SyntacticFunctionUsageResponse {
+  record_count: number;
+  unused_count: number;
+  items: SyntacticFunctionUsageItem[];
+}

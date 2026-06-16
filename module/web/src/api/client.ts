@@ -30,6 +30,7 @@ import type {
   CoreListResponse,
   CoreRecordResponse,
   SyntacticFunctionLintResponse,
+  SyntacticFunctionUsageResponse,
   CoreSuperEntryByOrth,
   CoreSuperEntryExpansion,
   CoreSuperEntryFull,
@@ -729,6 +730,12 @@ export async function patchCoreRecord(
 export async function lintSyntacticFunctions(): Promise<SyntacticFunctionLintResponse> {
   return fetchJson<SyntacticFunctionLintResponse>(
     `${apiBase}/core/lint/syntactic-functions`,
+  );
+}
+
+export async function getSyntacticFunctionUsage(): Promise<SyntacticFunctionUsageResponse> {
+  return fetchJson<SyntacticFunctionUsageResponse>(
+    `${apiBase}/core/syntactic-functions/usage`,
   );
 }
 
