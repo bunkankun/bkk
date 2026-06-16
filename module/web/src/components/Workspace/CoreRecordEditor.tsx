@@ -1041,6 +1041,7 @@ function SenseUuidsEditor({
 
 function WordForm({
   draft, set, store, pendingSenses, onAddSense, onUpdatePendingDef,
+  onUpdatePendingSyntacticFunction, onUpdatePendingSemanticFeature,
 }: {
   draft: Draft;
   set: (key: string, v: unknown) => void;
@@ -1048,6 +1049,8 @@ function WordForm({
   pendingSenses: PendingSense[];
   onAddSense: () => void;
   onUpdatePendingDef: (uuid: string, def: string) => void;
+  onUpdatePendingSyntacticFunction: (uuid: string, v: string | null) => void;
+  onUpdatePendingSemanticFeature: (uuid: string, v: string | null) => void;
 }) {
   const form = (draft.form && typeof draft.form === "object")
     ? draft.form as Record<string, unknown>
@@ -1119,15 +1122,51 @@ function WordForm({
         {pendingSenses.length > 0 && (
           <div style={{ marginTop: 6, padding: 6, border: "1px dashed var(--bd)", borderRadius: 3 }}>
             <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 4 }}>New senses (saved with this edit)</div>
-            {pendingSenses.map((s) => (
-              <div key={s.uuid} style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 11, color: "var(--t3)" }}>{s.uuid}</div>
-                <ProseInput
-                  value={s.definition}
-                  onChange={(v) => onUpdatePendingDef(s.uuid, v)}
-                />
-              </div>
-            ))}
+            {pendingSenses.map((s) => {
+              const synMissing = !s.syntacticFunctionUuid;
+              const defMissing = !s.definition.trim();
+              const errBorder = "1px solid var(--err, #c44)";
+              return (
+                <div
+                  key={s.uuid}
+                  style={{
+                    marginBottom: 6, padding: 6,
+                    border: "1px solid var(--bd)", borderRadius: 3,
+                    background: "var(--bg-1)",
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 4 }}>{s.uuid}</div>
+                  <FormRow label="Syntactic function *">
+                    <div style={synMissing ? { border: errBorder, borderRadius: 3 } : undefined}>
+                      <RelationPicker
+                        value={s.syntacticFunctionUuid}
+                        collection="syntactic-functions"
+                        store={store}
+                        onChange={(v) => onUpdatePendingSyntacticFunction(s.uuid, v)}
+                        placeholder="Search syntactic functions…"
+                      />
+                    </div>
+                  </FormRow>
+                  <FormRow label="Semantic feature">
+                    <RelationPicker
+                      value={s.semanticFeatureUuid}
+                      collection="semantic-features"
+                      store={store}
+                      onChange={(v) => onUpdatePendingSemanticFeature(s.uuid, v)}
+                      placeholder="Search semantic features…"
+                    />
+                  </FormRow>
+                  <FormRow label="Definition *">
+                    <div style={defMissing ? { border: errBorder, borderRadius: 3 } : undefined}>
+                      <ProseInput
+                        value={s.definition}
+                        onChange={(v) => onUpdatePendingDef(s.uuid, v)}
+                      />
+                    </div>
+                  </FormRow>
+                </div>
+              );
+            })}
           </div>
         )}
         <button
@@ -1362,6 +1401,8 @@ function UnsupportedForm({ type }: { type: string }) {
 interface PendingSense {
   uuid: string;
   path: string;
+  syntacticFunctionUuid: string | null;
+  semanticFeatureUuid: string | null;
   definition: string;
 }
 
@@ -1387,7 +1428,12 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
   const addSense = () => {
     const uuid = newUuid();
     const path = shardPath("senses", uuid);
-    setPendingSenses((p) => [...p, { uuid, path, definition: "" }]);
+    setPendingSenses((p) => [...p, {
+      uuid, path,
+      syntacticFunctionUuid: null,
+      semanticFeatureUuid: null,
+      definition: "",
+    }]);
     setDraft((d) => {
       const current = asStringArray(d.sense_uuids);
       return { ...d, sense_uuids: [...current, uuid] };
@@ -1396,6 +1442,14 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
 
   const updatePendingDef = (uuid: string, definition: string) => {
     setPendingSenses((p) => p.map((s) => s.uuid === uuid ? { ...s, definition } : s));
+  };
+
+  const updatePendingSyntacticFunction = (uuid: string, value: string | null) => {
+    setPendingSenses((p) => p.map((s) => s.uuid === uuid ? { ...s, syntacticFunctionUuid: value } : s));
+  };
+
+  const updatePendingSemanticFeature = (uuid: string, value: string | null) => {
+    setPendingSenses((p) => p.map((s) => s.uuid === uuid ? { ...s, semanticFeatureUuid: value } : s));
   };
 
   const save = async () => {
@@ -1412,7 +1466,11 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
           uuid: s.uuid,
           type: "sense",
           word_uuid: record.uuid,
-          ...(s.definition ? { definition: s.definition } : {}),
+          syntactic_function_uuids: [s.syntacticFunctionUuid],
+          ...(s.semanticFeatureUuid
+            ? { semantic_feature_uuids: [s.semanticFeatureUuid] }
+            : {}),
+          definition: s.definition,
         },
       }));
 
@@ -1431,7 +1489,19 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
     }
   };
 
-  const form = renderForm(record.type, draft, set, store, pendingSenses, addSense, updatePendingDef, record.uuid);
+  const livePendingSenses = pendingSenses.filter(
+    (s) => asStringArray(draft.sense_uuids).includes(s.uuid),
+  );
+  const pendingSensesValid = livePendingSenses.every(
+    (s) => s.syntacticFunctionUuid && s.definition.trim(),
+  );
+
+  const form = renderForm(
+    record.type, draft, set, store,
+    pendingSenses, addSense, updatePendingDef,
+    updatePendingSyntacticFunction, updatePendingSemanticFeature,
+    record.uuid,
+  );
 
   return (
     <div
@@ -1461,16 +1531,23 @@ export function CoreRecordEditor({ record, onClose, onSaved }: Props) {
         <button
           type="button"
           onClick={() => void save()}
-          disabled={saving}
+          disabled={saving || !pendingSensesValid}
           style={{
             fontSize: 12, padding: "4px 12px",
             background: "var(--accent, #2a5)", color: "white",
             border: "1px solid var(--accent, #2a5)", borderRadius: 3,
-            cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1,
+            cursor: (saving || !pendingSensesValid) ? "default" : "pointer",
+            opacity: (saving || !pendingSensesValid) ? 0.7 : 1,
           }}
         >
           {saving ? "Saving…" : "Save"}
         </button>
+
+        {!pendingSensesValid && (
+          <span style={{ fontSize: 11, color: "var(--err, #c44)" }}>
+            Pending senses are missing a syntactic function or definition.
+          </span>
+        )}
 
         {result && (
           <span style={{ fontSize: 11, color: "var(--t2)" }}>
@@ -1504,6 +1581,8 @@ function renderForm(
   pendingSenses: PendingSense[],
   addSense: () => void,
   updatePendingDef: (uuid: string, def: string) => void,
+  updatePendingSyntacticFunction: (uuid: string, v: string | null) => void,
+  updatePendingSemanticFeature: (uuid: string, v: string | null) => void,
   _wordUuid: string,
 ): ReactNode {
   switch (type) {
@@ -1515,6 +1594,8 @@ function renderForm(
           draft={draft} set={set} store={store}
           pendingSenses={pendingSenses} onAddSense={addSense}
           onUpdatePendingDef={updatePendingDef}
+          onUpdatePendingSyntacticFunction={updatePendingSyntacticFunction}
+          onUpdatePendingSemanticFeature={updatePendingSemanticFeature}
         />
       );
     case "sense":

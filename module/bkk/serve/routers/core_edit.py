@@ -30,6 +30,7 @@ import binascii
 import logging
 import os
 import tempfile
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -374,6 +375,76 @@ def _local_apply_delete(
         log.warning("local index delete failed for %s: %s", rel_path, exc)
 
 
+def _unlink_sense_from_word(
+    *,
+    state: AppState,
+    token: str,
+    upstream: str,
+    upstream_branch: str,
+    sense_text: str,
+    sense_uuid: str,
+    commit_message: str,
+) -> None:
+    """Remove ``sense_uuid`` from its parent word's ``sense_uuids``.
+
+    Called before deleting a sense file so the word never ends up holding a
+    dangling reference. No-op if the sense has no ``word_uuid``, the parent
+    word is gone, or the word's array already excludes this sense.
+    """
+    sense_record = loads_record(sense_text)
+    word_uuid_raw = sense_record.get("word_uuid")
+    if not isinstance(word_uuid_raw, str):
+        return
+
+    try:
+        _word_type, word_rel_path, _word_label = _lookup_record(
+            state, "words", word_uuid_raw,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            log.warning(
+                "sense %s references missing word %s; skipping parent unlink",
+                sense_uuid, word_uuid_raw,
+            )
+            return
+        raise
+
+    word_payload = _fetch_file(token, upstream, word_rel_path, upstream_branch)
+    if word_payload is None:
+        log.warning(
+            "parent word %s for sense %s not on upstream; skipping parent unlink",
+            word_rel_path, sense_uuid,
+        )
+        return
+    word_text = _decode_file(word_payload)
+    word_record = loads_record(word_text)
+    sense_uuids = word_record.get("sense_uuids")
+    if not isinstance(sense_uuids, list) or sense_uuid not in sense_uuids:
+        return
+
+    next_sense_uuids = [s for s in sense_uuids if s != sense_uuid]
+    if next_sense_uuids:
+        word_record["sense_uuids"] = next_sense_uuids
+    else:
+        word_record.pop("sense_uuids", None)
+    word_text_new = dumps_record(word_record)
+
+    word_sha = word_payload.get("sha")
+    if not isinstance(word_sha, str):
+        raise HTTPException(
+            status_code=502,
+            detail="GitHub file payload has no sha for parent word",
+        )
+
+    parent_message = f"{commit_message} (unlink from {word_rel_path})"
+    _put_file(
+        token=token, repo=upstream, rel_path=word_rel_path,
+        branch=upstream_branch, text=word_text_new,
+        message=parent_message, parent_sha=word_sha,
+    )
+    _local_apply_upsert(state, word_rel_path, word_text_new)
+
+
 def _schedule_background_sync(
     state: AppState, background: BackgroundTasks, target: str,
 ) -> None:
@@ -498,7 +569,17 @@ async def edit_record(
                     f"match collection {extra_collection!r} (expected {extra_type!r})"
                 ),
             )
-        extra_text = dumps_record(extra.data)
+        extra_data = dict(extra.data)
+        if (
+            extra_collection == "senses"
+            and existing_sha is None
+            and "source" not in extra_data
+        ):
+            extra_data["source"] = {
+                "resp": f"#{user_session.login}",
+                "date": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            }
+        extra_text = dumps_record(extra_data)
         _extra_blob, extra_commit, _extra_url = _put_file(
             token=token, repo=upstream, rel_path=extra.path,
             branch=upstream_branch, text=extra_text,
@@ -562,6 +643,18 @@ async def delete_record(
         )
 
     commit_message = req.message or f"Delete {collection}/{display_label or uuid}"
+
+    if collection == "senses":
+        _unlink_sense_from_word(
+            state=state,
+            token=token,
+            upstream=upstream,
+            upstream_branch=upstream_branch,
+            sense_text=_decode_file(base_payload),
+            sense_uuid=uuid,
+            commit_message=commit_message,
+        )
+
     commit_sha, commit_url = _delete_file(
         token=token, repo=upstream, rel_path=rel_path, branch=upstream_branch,
         message=commit_message, parent_sha=parent_sha,

@@ -443,9 +443,82 @@ def test_edit_record_with_extra_files_creates_new_sense(
     sense_decoded = base64.b64decode(sense_put["content"]).decode("utf-8")
     assert "freshly minted sense" in sense_decoded
 
+    # Server stamps creator + creation timestamp into source.
+    sense_on_wire = loads_record(sense_decoded)
+    assert sense_on_wire["source"]["resp"] == "#alice"
+    import re
+    assert re.match(
+        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00$",
+        sense_on_wire["source"]["date"],
+    ), sense_on_wire["source"]["date"]
+
     # Local write-through landed both files.
     assert (core_root / new_sense_path).is_file()
     assert "a freshly minted sense" in (core_root / new_sense_path).read_text("utf-8")
+
+
+def test_edit_record_keeps_client_supplied_source_on_sense_create(
+    tmp_path, core_root, monkeypatch,
+):
+    """If the client already attached a ``source`` block, the server leaves it
+    alone — useful for imports or scripted edits."""
+    word_uuid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"
+    word_path = f"words/a/{word_uuid}.yml"
+    word_record = {"uuid": word_uuid, "type": "word", "sense_uuids": []}
+    word_text = dumps_record(word_record)
+    (core_root / "words" / "a").mkdir(parents=True)
+    (core_root / word_path).write_text(word_text, encoding="utf-8")
+
+    new_sense_uuid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"
+    new_sense_path = f"senses/b/{new_sense_uuid}.yml"
+    client_source = {"resp": "#bot", "date": "2019-01-01T00:00:00.000+00:00"}
+    new_sense_record = {
+        "uuid": new_sense_uuid,
+        "type": "sense",
+        "word_uuid": word_uuid,
+        "definition": "preserved\n",
+        "source": client_source,
+    }
+
+    client = _make_client(tmp_path, core_root)
+    _login(client, login="alice")
+    _disable_background_sync(monkeypatch)
+    put_calls: list[tuple[str, dict]] = []
+
+    def fake_github_json(method, path, token, **kwargs):
+        if method == "GET" and "/repos/bunkankun/bkk-core/contents/" in path:
+            if word_path in path:
+                return {"type": "file", "sha": "w-sha", "content": _b64(word_text)}
+            if new_sense_path in path:
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=502,
+                    detail={"github_status": 404, "body": "Not Found"},
+                )
+        if method == "PUT":
+            put_calls.append((path, kwargs["json"]))
+            return {
+                "content": {"sha": f"b-{len(put_calls)}"},
+                "commit": {
+                    "sha": f"c-{len(put_calls)}",
+                    "html_url": f"https://example.com/c-{len(put_calls)}",
+                },
+            }
+        raise AssertionError(f"unexpected call: {method} {path}")
+
+    _patch_github(monkeypatch, fake_github_json)
+
+    r = client.patch(
+        f"/core/words/{word_uuid}",
+        json={
+            "data": {**word_record, "sense_uuids": [new_sense_uuid]},
+            "extra_files": [{"path": new_sense_path, "data": new_sense_record}],
+        },
+    )
+    assert r.status_code == 200, r.json()
+    sense_decoded = base64.b64decode(put_calls[1][1]["content"]).decode("utf-8")
+    sense_on_wire = loads_record(sense_decoded)
+    assert sense_on_wire["source"] == client_source
 
 
 def test_edit_record_rejects_extra_files_with_bad_path(tmp_path, core_root, monkeypatch):
@@ -515,6 +588,187 @@ def test_delete_record_commits_delete_to_master(tmp_path, core_root, monkeypatch
     finally:
         conn.close()
     assert row is None
+
+
+def test_delete_sense_unlinks_from_parent_word(tmp_path, core_root, monkeypatch):
+    """Deleting a sense must also remove its uuid from the parent word's
+    ``sense_uuids`` array, otherwise the word holds a dangling reference."""
+    word_uuid = "11111111-1111-1111-1111-111111111111"
+    word_path = f"words/1/{word_uuid}.yml"
+    sense_uuid = "22222222-2222-2222-2222-222222222222"
+    sense_path = f"senses/2/{sense_uuid}.yml"
+    other_sense = "33333333-3333-3333-3333-333333333333"
+
+    word_record = {
+        "uuid": word_uuid,
+        "type": "word",
+        "sense_uuids": [other_sense, sense_uuid],
+    }
+    word_text = dumps_record(word_record)
+    sense_record = {
+        "uuid": sense_uuid,
+        "type": "sense",
+        "word_uuid": word_uuid,
+        "definition": "to be deleted\n",
+    }
+    sense_text = dumps_record(sense_record)
+    (core_root / "words" / "1").mkdir(parents=True)
+    (core_root / word_path).write_text(word_text, encoding="utf-8")
+    (core_root / "senses" / "2").mkdir(parents=True)
+    (core_root / sense_path).write_text(sense_text, encoding="utf-8")
+
+    client = _make_client(tmp_path, core_root)
+    _login(client)
+    _disable_background_sync(monkeypatch)
+
+    put_calls: list[tuple[str, dict]] = []
+    delete_calls: list[tuple[str, dict]] = []
+
+    def fake_github_json(method, path, token, **kwargs):
+        if method == "GET" and "/repos/bunkankun/bkk-core/contents/" in path:
+            if sense_path in path:
+                return {"type": "file", "sha": "sense-sha",
+                        "content": _b64(sense_text)}
+            if word_path in path:
+                return {"type": "file", "sha": "word-sha",
+                        "content": _b64(word_text)}
+        if method == "PUT" and path.startswith("/repos/bunkankun/bkk-core/contents/"):
+            put_calls.append((path, kwargs["json"]))
+            return {
+                "content": {"sha": f"blob-{len(put_calls)}"},
+                "commit": {
+                    "sha": f"put-commit-{len(put_calls)}",
+                    "html_url": f"https://example.com/put-{len(put_calls)}",
+                },
+            }
+        if method == "DELETE":
+            delete_calls.append((path, kwargs["json"]))
+            return {
+                "commit": {
+                    "sha": "delete-commit",
+                    "html_url": "https://example.com/delete-commit",
+                },
+            }
+        raise AssertionError(f"unexpected call: {method} {path}")
+
+    _patch_github(monkeypatch, fake_github_json)
+
+    r = client.request("DELETE", f"/core/senses/{sense_uuid}", json={})
+    assert r.status_code == 200, r.json()
+
+    # Word was updated (PUT) and sense was deleted (DELETE).
+    assert len(put_calls) == 1
+    assert len(delete_calls) == 1
+    word_put_path, word_put = put_calls[0]
+    assert word_put_path.endswith(word_path)
+    assert word_put["sha"] == "word-sha"
+    word_decoded = base64.b64decode(word_put["content"]).decode("utf-8")
+    word_after = loads_record(word_decoded)
+    assert word_after["sense_uuids"] == [other_sense]
+
+    # Parent unlink happens before the sense delete (so a partial failure
+    # leaves an orphan, not a zombie reference).
+    delete_path, _ = delete_calls[0]
+    assert delete_path.endswith(sense_path)
+
+    # Local clone reflects both changes.
+    assert not (core_root / sense_path).exists()
+    word_on_disk = loads_record(
+        (core_root / word_path).read_text("utf-8"),
+    )
+    assert word_on_disk["sense_uuids"] == [other_sense]
+
+
+def test_delete_sense_drops_empty_sense_uuids_key(tmp_path, core_root, monkeypatch):
+    """When the deleted sense was the only one, ``sense_uuids`` is removed
+    entirely rather than left as an empty list."""
+    word_uuid = "44444444-4444-4444-4444-444444444444"
+    word_path = f"words/4/{word_uuid}.yml"
+    sense_uuid = "55555555-5555-5555-5555-555555555555"
+    sense_path = f"senses/5/{sense_uuid}.yml"
+
+    word_record = {
+        "uuid": word_uuid,
+        "type": "word",
+        "sense_uuids": [sense_uuid],
+    }
+    word_text = dumps_record(word_record)
+    sense_record = {
+        "uuid": sense_uuid,
+        "type": "sense",
+        "word_uuid": word_uuid,
+    }
+    sense_text = dumps_record(sense_record)
+    (core_root / "words" / "4").mkdir(parents=True)
+    (core_root / word_path).write_text(word_text, encoding="utf-8")
+    (core_root / "senses" / "5").mkdir(parents=True)
+    (core_root / sense_path).write_text(sense_text, encoding="utf-8")
+
+    client = _make_client(tmp_path, core_root)
+    _login(client)
+    _disable_background_sync(monkeypatch)
+
+    put_calls: list[tuple[str, dict]] = []
+
+    def fake_github_json(method, path, token, **kwargs):
+        if method == "GET" and "/repos/bunkankun/bkk-core/contents/" in path:
+            if sense_path in path:
+                return {"type": "file", "sha": "sense-sha",
+                        "content": _b64(sense_text)}
+            if word_path in path:
+                return {"type": "file", "sha": "word-sha",
+                        "content": _b64(word_text)}
+        if method == "PUT":
+            put_calls.append((path, kwargs["json"]))
+            return {
+                "content": {"sha": "blob"},
+                "commit": {"sha": "put-c", "html_url": "https://example.com/p"},
+            }
+        if method == "DELETE":
+            return {"commit": {"sha": "del", "html_url": "https://example.com/d"}}
+        raise AssertionError(f"unexpected call: {method} {path}")
+
+    _patch_github(monkeypatch, fake_github_json)
+
+    r = client.request("DELETE", f"/core/senses/{sense_uuid}", json={})
+    assert r.status_code == 200, r.json()
+
+    assert len(put_calls) == 1
+    word_decoded = base64.b64decode(put_calls[0][1]["content"]).decode("utf-8")
+    word_after = loads_record(word_decoded)
+    assert "sense_uuids" not in word_after
+
+
+def test_delete_sense_without_word_uuid_skips_unlink(tmp_path, core_root, monkeypatch):
+    """An orphan sense (no ``word_uuid``) just gets deleted — no parent PUT."""
+    sense_uuid = "66666666-6666-6666-6666-666666666666"
+    sense_path = f"senses/6/{sense_uuid}.yml"
+    sense_record = {"uuid": sense_uuid, "type": "sense", "definition": "orphan\n"}
+    sense_text = dumps_record(sense_record)
+    (core_root / "senses" / "6").mkdir(parents=True)
+    (core_root / sense_path).write_text(sense_text, encoding="utf-8")
+
+    client = _make_client(tmp_path, core_root)
+    _login(client)
+    _disable_background_sync(monkeypatch)
+
+    put_calls: list[str] = []
+
+    def fake_github_json(method, path, token, **kwargs):
+        if method == "GET" and sense_path in path:
+            return {"type": "file", "sha": "sense-sha", "content": _b64(sense_text)}
+        if method == "PUT":
+            put_calls.append(path)
+            raise AssertionError("orphan sense must not trigger any PUT")
+        if method == "DELETE":
+            return {"commit": {"sha": "del", "html_url": "https://example.com/d"}}
+        raise AssertionError(f"unexpected call: {method} {path}")
+
+    _patch_github(monkeypatch, fake_github_json)
+
+    r = client.request("DELETE", f"/core/senses/{sense_uuid}", json={})
+    assert r.status_code == 200, r.json()
+    assert put_calls == []
 
 
 def test_delete_record_requires_editor_role(tmp_path, core_root):
