@@ -137,6 +137,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="snippet context around each occurrence (default: 20)")
     pp.add_argument("--include-contained", action="store_true",
                     help="include clusters wholly contained in longer clusters")
+    pp.add_argument("--max-edits", type=int, default=0,
+                    help="allow up to N character edits (sub/ins/del) per "
+                         "occurrence vs. the cluster representative "
+                         "(0-4, default: 0 = exact)")
     pp.add_argument("--full-scan", action="store_true",
                     help="scan all trigram anchors; expensive and intended only for small indices")
     pp.add_argument("--force-full-scan", action="store_true",
@@ -349,6 +353,7 @@ def run(argv: list[str] | None = None) -> int:
             max_postings=args.max_postings,
             include_contained=args.include_contained,
             context=args.context,
+            max_edits=args.max_edits,
         )
         if args.out is None:
             import sys

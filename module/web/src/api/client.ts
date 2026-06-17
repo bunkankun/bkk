@@ -618,6 +618,7 @@ export async function searchParallel(params: {
   minLength?: number;
   minOccurrences?: number;
   maxPostings?: number;
+  maxEdits?: number;
   context?: number;
   includeContained?: boolean;
   sort?: ParallelSort;
@@ -631,6 +632,7 @@ export async function searchParallel(params: {
   if (params.minLength != null) q.set("min_length", String(params.minLength));
   if (params.minOccurrences != null) q.set("min_occurrences", String(params.minOccurrences));
   if (params.maxPostings != null) q.set("max_postings", String(params.maxPostings));
+  if (params.maxEdits != null) q.set("max_edits", String(params.maxEdits));
   if (params.context != null) q.set("context", String(params.context));
   if (params.includeContained) q.set("include_contained", "true");
   if (params.sort) q.set("sort", params.sort);

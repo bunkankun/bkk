@@ -1034,6 +1034,7 @@ class ParallelLocationModel(BaseModel):
     toc_label: str | None
     left: str
     right: str
+    edit_distance: int = 0
 
 
 class ParallelClusterModel(BaseModel):
@@ -1042,6 +1043,7 @@ class ParallelClusterModel(BaseModel):
     occurrence_count: int
     text: str
     locations: list[ParallelLocationModel]
+    representative_edits: int = 0
 
 
 class ParallelSearchResponse(BaseModel):
@@ -1049,6 +1051,7 @@ class ParallelSearchResponse(BaseModel):
     bucket: str
     min_length: int
     min_occurrences: int
+    max_edits: int
     sort: str
     total: int
     offset: int
@@ -1067,6 +1070,7 @@ def _parallel_location_out(loc: ParallelLocation) -> ParallelLocationModel:
         toc_label=loc.toc_label,
         left=loc.left,
         right=loc.right,
+        edit_distance=loc.edit_distance,
     )
 
 
@@ -1077,6 +1081,7 @@ def _parallel_cluster_out(cluster: ParallelCluster) -> ParallelClusterModel:
         occurrence_count=cluster.occurrence_count,
         text=cluster.text,
         locations=[_parallel_location_out(loc) for loc in cluster.locations],
+        representative_edits=cluster.representative_edits,
     )
 
 
@@ -1092,6 +1097,7 @@ def search_parallel(
     min_length: int = Query(12, ge=1, le=200),
     min_occurrences: int = Query(2, ge=2, le=100),
     max_postings: int = Query(500, ge=2, le=5000),
+    max_edits: int = Query(0, ge=0, le=4),
     context: int = Query(20, ge=0, le=200),
     include_contained: bool = Query(False),
     sort: Literal["frequency", "length"] = Query("frequency"),
@@ -1109,6 +1115,7 @@ def search_parallel(
             max_postings=max_postings,
             include_contained=include_contained,
             context=context,
+            max_edits=max_edits,
         )
     except ValueError as exc:
         raise errors.bad_request(str(exc))
@@ -1125,6 +1132,7 @@ def search_parallel(
         bucket=bucket,
         min_length=min_length,
         min_occurrences=min_occurrences,
+        max_edits=max_edits,
         sort=sort,
         total=len(clusters),
         offset=offset,

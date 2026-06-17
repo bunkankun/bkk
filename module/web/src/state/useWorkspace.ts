@@ -61,6 +61,7 @@ export interface ParallelOptions {
   bucket: ParallelBucket;
   minLength: number;
   minOccurrences: number;
+  maxEdits: number;
   sort: ParallelSort;
 }
 export type LineMode = "paragraph" | "phrase";
@@ -614,7 +615,7 @@ let state: WorkspaceState = {
     translationSort: "textid",
     translationFilters: { lang: null, category: null, type: null, dateBefore: null, dateAfter: null },
     parallelResponse: null,
-    parallelOptions: { bucket: "body", minLength: 12, minOccurrences: 2, sort: "frequency" },
+    parallelOptions: { bucket: "body", minLength: 12, minOccurrences: 2, maxEdits: 0, sort: "frequency" },
   },
   searchHistory: [],
   textHistory: [],
@@ -809,6 +810,7 @@ async function runParallelSearch(offset: number): Promise<void> {
       bucket: parallelOptions.bucket,
       minLength: parallelOptions.minLength,
       minOccurrences: parallelOptions.minOccurrences,
+      maxEdits: parallelOptions.maxEdits,
       sort: parallelOptions.sort,
       limit: 50,
       offset,

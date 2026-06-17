@@ -710,6 +710,11 @@ function ParallelLocationRow({ loc, marker }: { loc: ParallelLocation; marker: s
         <span className={`kwic-textid ${krClass(loc.textid)}`}>{loc.textid}</span>
         <span className="kwic-juan">juan {loc.juan_seq}</span>
         {loc.bucket !== "body" ? <span className="kwic-chip">{loc.bucket}</span> : null}
+        {loc.edit_distance > 0 ? (
+          <span className="kwic-chip" title="Edit distance from cluster representative">
+            Δ{loc.edit_distance}
+          </span>
+        ) : null}
       </div>
       <div className="kwic-line">
         <span className="kwic-left">{loc.left}</span>
@@ -738,6 +743,11 @@ function ParallelClusterRow({ cluster }: { cluster: ParallelCluster }) {
         <span>{cluster.cluster_id}</span>
         <span className="kwic-sort">· {cluster.length} chars</span>
         <span className="kwic-sort">· {cluster.occurrence_count} occurrences</span>
+        {cluster.representative_edits > 0 ? (
+          <span className="kwic-sort" title="Max edit distance among occurrences in this cluster">
+            · ≤Δ{cluster.representative_edits}
+          </span>
+        ) : null}
       </div>
       <div className="parallel-text" title={elided ? cluster.text : undefined}>
         {shown}
@@ -783,6 +793,11 @@ function ParallelResultsView({
         <span className="kwic-sort">· {response.bucket}</span>
         <span className="kwic-sort">· min {response.min_length} chars</span>
         <span className="kwic-sort">· ≥{response.min_occurrences}×</span>
+        {response.max_edits > 0 ? (
+          <span className="kwic-sort" title="Maximum edits per occurrence vs. the cluster representative">
+            · Δ≤{response.max_edits}
+          </span>
+        ) : null}
         <button
           type="button"
           className={`kwic-facet-chip${response.sort === "frequency" ? " on" : ""}`}

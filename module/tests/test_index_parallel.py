@@ -362,3 +362,116 @@ def test_parallel_full_scan_disabled_for_corpus_index(tmp_path):
         cli_run(["parallel", str(out), "--full-scan"])
 
     assert exc.value.code == 2
+
+
+def test_parallel_fuzzy_finds_substitution(tmp_path):
+    # Two passages differ by one character on the right of the seed.
+    _write_bundle(tmp_path, "KR0a0001", "qqABCDEFGKEY1234X678ww")
+    _write_bundle(tmp_path, "KR0a0002", "rrABCDEFGKEY1234Y678ee")
+    out = _merge(tmp_path)
+
+    exact = discover_parallel_passages(out, seed="KEY", min_length=16)
+    fuzzy = discover_parallel_passages(
+        out, seed="KEY", min_length=16, max_edits=1,
+    )
+
+    assert exact == []
+    assert len(fuzzy) == 1
+    c = fuzzy[0]
+    assert c.length == 18
+    assert c.occurrence_count == 2
+    assert c.representative_edits == 1
+    assert {loc.edit_distance for loc in c.locations} == {0, 1}
+
+
+def test_parallel_fuzzy_finds_deletion(tmp_path):
+    # Bundle 2 drops the '4' after KEY; right-side spans now differ in length.
+    _write_bundle(tmp_path, "KR0a0001", "qqABCDEFGKEY1234567ww")
+    _write_bundle(tmp_path, "KR0a0002", "rrABCDEFGKEY123567ee")
+    out = _merge(tmp_path)
+
+    clusters = discover_parallel_passages(
+        out, seed="KEY", min_length=15, max_edits=1,
+    )
+
+    assert len(clusters) == 1
+    c = clusters[0]
+    assert c.occurrence_count == 2
+    assert c.representative_edits == 1
+    starts = {loc.textid: (loc.start, loc.end) for loc in c.locations}
+    span_1 = starts["KR0a0001"][1] - starts["KR0a0001"][0]
+    span_2 = starts["KR0a0002"][1] - starts["KR0a0002"][0]
+    assert {span_1, span_2} == {17, 16}
+    longer_text = "ABCDEFGKEY1234567"
+    assert c.text == longer_text
+
+
+def test_parallel_fuzzy_max_edits_budget(tmp_path):
+    # Three substitutions: two on the left of the seed (C->x, G->y) and one
+    # on the right (K->z). With budget 2 no split covers the full passage at
+    # min_length=18; budget 3 does.
+    _write_bundle(tmp_path, "KR0a0001", "aaABCDEFGHKEYIJKLMNOPbb")
+    _write_bundle(tmp_path, "KR0a0002", "ccABxDEFyHKEYIJzLMNOPdd")
+    out = _merge(tmp_path)
+
+    too_tight = discover_parallel_passages(
+        out, seed="KEY", min_length=18, max_edits=2,
+    )
+    enough = discover_parallel_passages(
+        out, seed="KEY", min_length=18, max_edits=3,
+    )
+
+    assert too_tight == []
+    assert len(enough) == 1
+    assert enough[0].length == 19
+    assert enough[0].representative_edits == 3
+
+
+def test_parallel_fuzzy_representative_is_longest(tmp_path):
+    # Three occurrences: bundle 1 is the longest (representative); bundles 2-3
+    # are each one substitution away.
+    _write_bundle(tmp_path, "KR0a0001", "aaABCDEFGKEYHIJKLMNOPbb")
+    _write_bundle(tmp_path, "KR0a0002", "ccABCDEFGKEYHIJxLMNOPdd")
+    _write_bundle(tmp_path, "KR0a0003", "eeABCDEFGKEYHyJKLMNOPff")
+    out = _merge(tmp_path)
+
+    clusters = discover_parallel_passages(
+        out, seed="KEY", min_length=18, max_edits=1,
+    )
+
+    assert len(clusters) == 1
+    c = clusters[0]
+    assert c.text == "ABCDEFGKEYHIJKLMNOP"
+    assert c.occurrence_count == 3
+    by_textid = {loc.textid: loc.edit_distance for loc in c.locations}
+    assert by_textid == {"KR0a0001": 0, "KR0a0002": 1, "KR0a0003": 1}
+
+
+def test_parallel_fuzzy_cli_emits_edit_distance(tmp_path):
+    _write_bundle(tmp_path, "KR0a0001", "qqABCDEFGKEY1234X678ww")
+    _write_bundle(tmp_path, "KR0a0002", "rrABCDEFGKEY1234Y678ee")
+    out = _merge(tmp_path)
+    report = tmp_path / "fuzzy.jsonl"
+
+    rc = cli_run([
+        "parallel",
+        str(out),
+        "KEY",
+        "--out", str(report),
+        "--min-length", "16",
+        "--max-edits", "1",
+    ])
+
+    assert rc == 0
+    rows = [json.loads(line) for line in report.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["representative_edits"] == 1
+    assert {loc["edit_distance"] for loc in rows[0]["locations"]} == {0, 1}
+
+
+def test_parallel_fuzzy_rejects_max_edits_out_of_range(tmp_path):
+    _write_bundle(tmp_path, "KR0a0001", "abcdef")
+    out = _merge(tmp_path)
+
+    with pytest.raises(ValueError):
+        discover_parallel_passages(out, seed="abc", max_edits=5)

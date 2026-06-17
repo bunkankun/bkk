@@ -135,6 +135,22 @@ export function SearchBar() {
             title="Minimum occurrences"
             style={{ width: "4em" }}
           />
+          <input
+            type="number"
+            className="mb-select"
+            min={0}
+            max={4}
+            value={parallelOptions.maxEdits}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n) && n >= 0 && n <= 4) {
+                workspace.setParallelOption("maxEdits", n);
+              }
+            }}
+            aria-label="Maximum edit distance"
+            title="Maximum edits (sub/ins/del) per occurrence vs. the cluster representative; 0 = exact"
+            style={{ width: "4em" }}
+          />
         </>
       ) : (
         <select

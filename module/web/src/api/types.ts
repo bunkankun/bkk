@@ -565,6 +565,7 @@ export interface ParallelLocation {
   toc_label: string | null;
   left: string;
   right: string;
+  edit_distance: number;
 }
 
 export interface ParallelCluster {
@@ -573,6 +574,7 @@ export interface ParallelCluster {
   occurrence_count: number;
   text: string;
   locations: ParallelLocation[];
+  representative_edits: number;
 }
 
 export interface ParallelSearchResponse {
@@ -580,6 +582,7 @@ export interface ParallelSearchResponse {
   bucket: ParallelBucket;
   min_length: number;
   min_occurrences: number;
+  max_edits: number;
   sort: ParallelSort;
   total: number;
   offset: number;
