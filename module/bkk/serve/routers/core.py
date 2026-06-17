@@ -31,6 +31,7 @@ COLLECTION_TYPES: dict[str, str] = {
     "words": "word",
     "senses": "sense",
     "super-entries": "super-entry",
+    "tax-chars": "tax-char",
 }
 
 COLLECTION_LABELS: dict[str, str] = {
@@ -41,12 +42,13 @@ COLLECTION_LABELS: dict[str, str] = {
     "rhetorical-devices": "Rhetorical devices",
     "bibliography": "Bibliography",
     "words": "Words",
+    "tax-chars": "Character taxonomy",
 }
 
 # Collections the CORE activity exposes for browsing (excludes super-entries,
 # which are surfaced through the Words two-level view).
 BROWSE_COLLECTIONS: tuple[str, ...] = (
-    "concepts", "words", "syntactic-functions",
+    "concepts", "words", "tax-chars", "syntactic-functions",
     "semantic-features", "rhetorical-devices", "graphs", "bibliography",
 )
 
@@ -135,6 +137,24 @@ class ConceptWord(BaseModel):
 class ConceptWordsResponse(BaseModel):
     concept_uuid: str
     words: list[ConceptWord]
+
+
+class SenseUnderCharRow(BaseModel):
+    uuid: str
+    word_uuid: str
+    super_entry_uuid: str | None
+    super_entry_orth: str | None
+    def_text: str | None
+    pos: str | None
+    n: str | None
+    syntactic_function_labels: str | None
+    semantic_feature_labels: str | None
+
+
+class SensesUnderCharResponse(BaseModel):
+    concept_uuid: str
+    orth: str
+    senses: list[SenseUnderCharRow]
 
 
 class BacklinkItem(BaseModel):
@@ -685,6 +705,47 @@ def concept_words(request: Request, uuid: str) -> ConceptWordsResponse:
         for (u, label, se_uuid, se_orth, n) in rows
     ]
     return ConceptWordsResponse(concept_uuid=uuid, words=words)
+
+
+# ---------- /concepts/{uuid}/senses?orth= -----------------------------------
+
+
+@router.get(
+    "/concepts/{uuid}/senses",
+    response_model=SensesUnderCharResponse,
+    summary="Senses defined under a given super-entry orth and attached to this concept",
+)
+def concept_senses_under_orth(
+    request: Request,
+    uuid: str,
+    orth: str = Query(..., description="super-entry orth (a single character) to filter by"),
+) -> SensesUnderCharResponse:
+    state: AppState = request.app.state.bkk
+    conn = _open(state)
+    try:
+        rows = conn.execute(
+            "SELECT s.uuid, s.word_uuid, se.uuid AS super_entry_uuid, se.orth, "
+            "       s.def_text, s.pos, s.n, "
+            "       s.syntactic_function_labels, s.semantic_feature_labels "
+            "FROM senses s "
+            "JOIN super_entry_words sew ON sew.word_uuid = s.word_uuid "
+            "JOIN super_entries se      ON se.uuid       = sew.super_entry_uuid "
+            "WHERE sew.concept_uuid = ? AND se.orth = ? "
+            "ORDER BY se.orth, s.uuid",
+            (uuid, orth),
+        ).fetchall()
+    finally:
+        conn.close()
+    senses = [
+        SenseUnderCharRow(
+            uuid=u, word_uuid=w_uuid,
+            super_entry_uuid=se_uuid, super_entry_orth=se_orth,
+            def_text=dfn, pos=pos, n=n,
+            syntactic_function_labels=syn, semantic_feature_labels=sem,
+        )
+        for (u, w_uuid, se_uuid, se_orth, dfn, pos, n, syn, sem) in rows
+    ]
+    return SensesUnderCharResponse(concept_uuid=uuid, orth=orth, senses=senses)
 
 
 # ---------- /{collection}/{uuid}/backlinks ----------------------------------

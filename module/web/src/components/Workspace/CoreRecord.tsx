@@ -6,6 +6,7 @@ import {
   getAnnotationRhetoricalDeviceCounts,
   getAnnotationSenseCounts,
   getCoreBacklinks,
+  getCoreConceptSensesUnderChar,
   getCoreConceptWords,
   getCoreRecord,
   getCoreSuperEntryByOrth,
@@ -1100,6 +1101,242 @@ function RhetoricalDeviceView({
   );
 }
 
+// ---------- tax-char view ---------------------------------------------------
+
+interface TaxCharSenseNode {
+  gloss: string | null;
+  concept_uuid: string | null;
+  concept_label: string | null;
+  children: TaxCharSenseNode[];
+}
+
+function asTaxCharSenseNode(v: unknown): TaxCharSenseNode | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  return {
+    gloss: asString(o.gloss),
+    concept_uuid: asString(o.concept_uuid),
+    concept_label: asString(o.concept_label),
+    children: asRecordArray(o.children)
+      .map(asTaxCharSenseNode)
+      .filter((n): n is TaxCharSenseNode => n !== null),
+  };
+}
+
+function SensesUnderCharBadge({
+  conceptUuid,
+  orth,
+  navigate,
+  onWikilink,
+}: {
+  conceptUuid: string;
+  orth: string;
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  const [senseUuids, setSenseUuids] = useState<string[] | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getCoreConceptSensesUnderChar(conceptUuid, orth)
+      .then((r) => {
+        if (!cancelled) setSenseUuids(r.senses.map((s) => s.uuid));
+      })
+      .catch(() => {
+        if (!cancelled) setSenseUuids([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conceptUuid, orth]);
+  const attestations = useSenseCounts(senseUuids ?? []);
+  if (senseUuids == null || senseUuids.length === 0) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          display: "inline-block",
+          fontSize: 11,
+          padding: "0 6px",
+          marginLeft: 6,
+          background: "var(--bg-act)",
+          color: "var(--t1)",
+          border: "1px solid var(--bdr)",
+          borderRadius: 8,
+          cursor: "pointer",
+          lineHeight: "16px",
+        }}
+        title={`Senses of ${orth} attached to this concept`}
+      >
+        ({senseUuids.length})
+      </button>
+      {expanded && (
+        <div
+          style={{
+            marginTop: 4,
+            marginLeft: 12,
+            paddingLeft: 8,
+            borderLeft: "2px solid var(--bdr)",
+          }}
+        >
+          <WordSensesList
+            senseUuids={senseUuids}
+            counts={attestations.counts}
+            countsStatus={attestations.status}
+            navigate={navigate}
+            onWikilink={onWikilink}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+function TaxCharSenseTree({
+  nodes,
+  orth,
+  lookup,
+  navigate,
+  onWikilink,
+}: {
+  nodes: TaxCharSenseNode[];
+  orth: string | null;
+  lookup: Lookup;
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  if (nodes.length === 0) return null;
+  return (
+    <ul style={{ margin: 0, paddingLeft: 18 }}>
+      {nodes.map((node, i) => (
+        <li key={i} style={{ marginBottom: 2 }}>
+          {node.gloss && <span>{node.gloss}</span>}
+          {node.gloss && (node.concept_uuid || node.concept_label) && (
+            <span style={{ color: "var(--t3)" }}> → </span>
+          )}
+          {node.concept_uuid
+            ? recordLink(node.concept_uuid, lookup, navigate, "concepts")
+            : node.concept_label && <span>{node.concept_label}</span>}
+          {node.concept_uuid && orth && (
+            <SensesUnderCharBadge
+              conceptUuid={node.concept_uuid}
+              orth={orth}
+              navigate={navigate}
+              onWikilink={onWikilink}
+            />
+          )}
+          {node.children.length > 0 && (
+            <TaxCharSenseTree
+              nodes={node.children}
+              orth={orth}
+              lookup={lookup}
+              navigate={navigate}
+              onWikilink={onWikilink}
+            />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function TaxCharView({
+  data,
+  lookup,
+  navigate,
+  onWikilink,
+}: {
+  data: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+  onWikilink: (orth: string) => void;
+}) {
+  const heads = asStringArray(data.heads);
+  const primaryHead = heads[0] ?? null;
+  const pronunciations = asRecordArray(data.pronunciations);
+  const unattributed = asRecordArray(data.unattributed_senses)
+    .map(asTaxCharSenseNode)
+    .filter((n): n is TaxCharSenseNode => n !== null);
+  return (
+    <>
+      {heads.length > 0 && (
+        <FieldRow label="Heads">
+          {heads.map((h, i) => (
+            <span key={i} style={{ marginRight: 8 }}>
+              <code>{h}</code>
+            </span>
+          ))}
+        </FieldRow>
+      )}
+      {pronunciations.map((p, i) => {
+        const reading = asString(p.reading);
+        const oc = asString(p.old_chinese);
+        const mc = asString(p.middle_chinese);
+        const fanqie = asString(p.fanqie);
+        const tone = asString(p.tone);
+        const guangyun = asString(p.guangyun);
+        const raw = asString(p.raw);
+        const senses = asRecordArray(p.senses)
+          .map(asTaxCharSenseNode)
+          .filter((n): n is TaxCharSenseNode => n !== null);
+        const header = reading
+          ? [
+              reading,
+              oc || mc ? `(OC: ${oc ?? "—"}, MC: ${mc ?? "—"})` : null,
+              fanqie,
+              tone,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : "(unparsed)";
+        return (
+          <FieldRow key={i} label={i === 0 ? "Pronunciations" : ""}>
+            <div style={{ marginBottom: 4 }}>
+              <strong>{header}</strong>
+            </div>
+            {guangyun && (
+              <div style={{ marginLeft: 8, color: "var(--t2)" }}>
+                <span style={{ color: "var(--t3)" }}>Guangyun: </span>
+                {guangyun}
+              </div>
+            )}
+            {raw && !reading && (
+              <div style={{ marginLeft: 8, color: "var(--t2)" }}>
+                <span style={{ color: "var(--t3)" }}>raw: </span>
+                {raw}
+              </div>
+            )}
+            {senses.length > 0 && (
+              <div style={{ marginTop: 4 }}>
+                <TaxCharSenseTree
+                  nodes={senses}
+                  orth={primaryHead}
+                  lookup={lookup}
+                  navigate={navigate}
+                  onWikilink={onWikilink}
+                />
+              </div>
+            )}
+          </FieldRow>
+        );
+      })}
+      {unattributed.length > 0 && (
+        <FieldRow label="Other senses">
+          <TaxCharSenseTree
+            nodes={unattributed}
+            orth={primaryHead}
+            lookup={lookup}
+            navigate={navigate}
+            onWikilink={onWikilink}
+          />
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
 function BibliographyView({ data }: { data: Record<string, unknown> }) {
   const label = asString(data.citation_label);
   const resourceType = asString(data.resource_type);
@@ -1511,6 +1748,8 @@ function renderTypedView(
       return <BibliographyView data={record.data} />;
     case "graph":
       return <GraphView data={record.data} />;
+    case "tax-char":
+      return <TaxCharView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
     default:
       return <FallbackView data={record.data} />;
   }
@@ -1526,6 +1765,7 @@ const COLLECTION_TITLES: Record<string, string> = {
   words: "Words",
   senses: "Senses",
   "super-entries": "Super-entries",
+  "tax-chars": "Character taxonomy",
 };
 
 function BacklinksSection({

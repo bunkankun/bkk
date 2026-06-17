@@ -42,6 +42,7 @@ COLLECTIONS: tuple[tuple[str, str], ...] = (
     ("words", "word"),
     ("senses", "sense"),
     ("super-entries", "super-entry"),
+    ("tax-chars", "tax-char"),
 )
 
 DDL = """
@@ -728,6 +729,11 @@ def _display_label(
         if parent_label:
             return parent_label
         return _str_or_none(data.get("definition"))
+    if type_name == "tax-char":
+        heads = data.get("heads")
+        if isinstance(heads, list) and heads:
+            return _str_or_none(heads[0])
+        return None
     return None
 
 
@@ -784,6 +790,12 @@ def _label_rows(
                 add(f.get("orth"), "form_orth")
     elif type_name == "sense":
         add(data.get("definition"), "definition")
+    elif type_name == "tax-char":
+        for head in data.get("heads") or []:
+            add(head, "head")
+        for pron in data.get("pronunciations") or []:
+            if isinstance(pron, dict):
+                add(pron.get("reading"), "reading")
 
     # Dedupe (uuid, label, label_type) — preserve order of first occurrence.
     seen: set[tuple[str, str, str]] = set()
@@ -877,6 +889,19 @@ def _link_rows(
                     ref.get("bibliography_uuid"),
                     "bibliography", "source_reference",
                 )
+    elif type_name == "tax-char":
+        def _walk(senses: Any) -> None:
+            if not isinstance(senses, list):
+                return
+            for s in senses:
+                if not isinstance(s, dict):
+                    continue
+                add(s.get("concept_uuid"), "concept", "sense")
+                _walk(s.get("children"))
+        for pron in data.get("pronunciations") or []:
+            if isinstance(pron, dict):
+                _walk(pron.get("senses"))
+        _walk(data.get("unattributed_senses"))
     elif type_name == "rhetorical-device":
         add_each(data.get("hypernyms"), "rhetorical-device", "hypernym")
         add_each(data.get("hyponyms"), "rhetorical-device", "hyponym")

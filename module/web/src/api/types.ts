@@ -928,6 +928,24 @@ export interface CoreConceptWordsResponse {
   words: CoreConceptWord[];
 }
 
+export interface CoreSenseUnderCharRow {
+  uuid: string;
+  word_uuid: string;
+  super_entry_uuid: string | null;
+  super_entry_orth: string | null;
+  def_text: string | null;
+  pos: string | null;
+  n: string | null;
+  syntactic_function_labels: string | null;
+  semantic_feature_labels: string | null;
+}
+
+export interface CoreSensesUnderCharResponse {
+  concept_uuid: string;
+  orth: string;
+  senses: CoreSenseUnderCharRow[];
+}
+
 export interface CoreBacklinkItem {
   uuid: string;
   type: string;

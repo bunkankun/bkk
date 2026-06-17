@@ -23,6 +23,7 @@ import type {
   CoreBacklinksResponse,
   CoreCollectionsResponse,
   CoreConceptWordsResponse,
+  CoreSensesUnderCharResponse,
   CoreDeleteRequest,
   CoreDeleteResponse,
   CoreEditRequest,
@@ -838,6 +839,15 @@ export async function getCoreConceptWords(
 ): Promise<CoreConceptWordsResponse> {
   return fetchJson<CoreConceptWordsResponse>(
     `${apiBase}/core/concepts/${encodeURIComponent(uuid)}/words`,
+  );
+}
+
+export async function getCoreConceptSensesUnderChar(
+  conceptUuid: string,
+  orth: string,
+): Promise<CoreSensesUnderCharResponse> {
+  return fetchJson<CoreSensesUnderCharResponse>(
+    `${apiBase}/core/concepts/${encodeURIComponent(conceptUuid)}/senses?orth=${encodeURIComponent(orth)}`,
   );
 }
 
