@@ -1,4 +1,15 @@
-"""Command-line entry point: ``python -m bkk.validator <bundle-dir>``."""
+"""Command-line entry point: ``python -m bkk.validator <bundle-dir>``.
+
+Sub-verbs:
+
+- ``bkk validate bundle <dir> [flags]`` — full bundle validation (the
+  legacy default).
+- ``bkk validate chars (--text-id ID | --in DIR) [flags]`` — read-only
+  character-set conformance check.
+
+``bkk validate <dir>`` (no sub-verb) still works and is routed to the
+``bundle`` handler for back-compat.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +24,41 @@ from .marker_ids import (
 )
 
 
+_SUBVERBS = {
+    "bundle": "validate a bundle directory (legacy default)",
+    "chars":  "check bundle text against the canonical character set",
+}
+
+
+def _print_overview() -> None:
+    print("usage: bkk validate <sub-verb> [args...]\n")
+    print("sub-verbs:")
+    width = max(len(name) for name in _SUBVERBS)
+    for name, descr in _SUBVERBS.items():
+        print(f"  {name:<{width}}  {descr}")
+    print(
+        "\nRun `bkk validate <sub-verb> --help` for sub-verb options.\n"
+        "Back-compat: `bkk validate <bundle-dir>` (no sub-verb) routes to "
+        "`bundle`."
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv and argv[0] in ("-h", "--help"):
+        _print_overview()
+        return 0
+    if argv and argv[0] in _SUBVERBS:
+        verb, rest = argv[0], argv[1:]
+        if verb == "chars":
+            from .chars_check import run as run_chars
+            return run_chars(rest)
+        return _run_bundle(rest)
+    return _run_bundle(argv)
+
+
+def _run_bundle(argv: list[str]) -> int:
     from bkk.config import load_rc
     rc = load_rc()
     g = rc.get("global", {})
