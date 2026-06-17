@@ -355,3 +355,35 @@ class WordBundle:
     forms: list[WordForm] = field(default_factory=list)
     entries: list[WordEntry] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
+
+
+# ---------- Tax-chars (TLS taxchar.xml) -----------------------------------
+
+
+@dataclass
+class TaxCharSense:
+    gloss: str
+    concept_uuid: str | None = None
+    concept_label: str | None = None
+    children: list["TaxCharSense"] = field(default_factory=list)
+
+
+@dataclass
+class TaxCharPronunciation:
+    reading: str | None = None
+    old_chinese: str | None = None
+    middle_chinese: str | None = None
+    fanqie: str | None = None
+    tone: str | None = None
+    guangyun: str | None = None
+    raw: str | None = None
+    senses: list[TaxCharSense] = field(default_factory=list)
+
+
+@dataclass
+class TaxCharBundle:
+    uuid: str
+    heads: list[str] = field(default_factory=list)
+    pronunciations: list[TaxCharPronunciation] = field(default_factory=list)
+    unattributed_senses: list[TaxCharSense] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)

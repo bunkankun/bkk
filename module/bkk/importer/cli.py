@@ -249,10 +249,10 @@ def _find_tls_texts(in_root: Path, text_id: str) -> list[Path]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk.importer")
-    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation", "core", "concepts", "bibliography", "graphs", "syntactic-functions", "semantic-features", "rhetorical-devices", "words"], default=None,
-                   help="source format: tls, krp, cbeta, translation, core, concepts, bibliography, graphs, syntactic-functions, semantic-features, rhetorical-devices, or words "
+    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation", "core", "concepts", "bibliography", "graphs", "syntactic-functions", "semantic-features", "rhetorical-devices", "tax-chars", "words"], default=None,
+                   help="source format: tls, krp, cbeta, translation, core, concepts, bibliography, graphs, syntactic-functions, semantic-features, rhetorical-devices, tax-chars, or words "
                         "(required; or set import.format in .bkkrc). "
-                        "'core' runs all seven bkk-core sub-importers against a single tls-data root, "
+                        "'core' runs all bkk-core sub-importers against a single tls-data root, "
                         "resolving the conventional subdir for each.")
     p.add_argument("--recipe", type=Path, default=None,
                    help="recipe YAML pinning per-text knobs (krp); when given, "
@@ -419,6 +419,8 @@ def run(argv: list[str] | None = None) -> int:
         return _run_semantic_features(args)
     if args.format == "rhetorical-devices":
         return _run_rhetorical_devices(args)
+    if args.format == "tax-chars":
+        return _run_tax_chars(args)
     if args.format == "words":
         return _run_words(args)
     print(f"error: unknown format {args.format!r}", file=sys.stderr)
@@ -1748,6 +1750,7 @@ _CORE_SUBPATHS: list[tuple[str, str]] = [
     ("syntactic-functions", "core/syntactic-functions.xml"),
     ("semantic-features", "core/semantic-features.xml"),
     ("rhetorical-devices", "core/rhetorical-devices.xml"),
+    ("tax-chars", "core/taxchar.xml"),
     ("words", "words"),
 ]
 
@@ -1782,6 +1785,7 @@ def _run_core(args) -> int:
         "syntactic-functions": _run_syntactic_functions,
         "semantic-features": _run_semantic_features,
         "rhetorical-devices": _run_rhetorical_devices,
+        "tax-chars": _run_tax_chars,
         "words": _run_words,
     }
 
@@ -2187,6 +2191,72 @@ def _import_one_semantic_features_file(args, xml_path: Path) -> int:
             continue
         written_path = write_semantic_feature(record, args.out_root)
         print(f"wrote semantic-feature {record.code} under {written_path}")
+        written += 1
+    return written
+
+
+def _run_tax_chars(args) -> int:
+    """Dispatch the tax-char import path."""
+    if args.in_root is None or args.out_root is None:
+        print(
+            "error: --in and --out are required for --format tax-chars",
+            file=sys.stderr,
+        )
+        return 2
+
+    paths = _collect_xml_paths(args.in_root)
+    if not paths:
+        print("error: no tax-char XML files found to import", file=sys.stderr)
+        return 2
+
+    if len(paths) > 1 and not args.yes:
+        if not _confirm_bulk([(p.stem, p) for p in paths]):
+            print("aborted.", file=sys.stderr)
+            return 1
+
+    rc = 0
+    written = 0
+    for xml_path in paths:
+        try:
+            written += _import_one_tax_chars_file(args, xml_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"error importing {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+
+    if args.sample is not None:
+        _emit_divergence(args.sample, args.out_root, args.out_root)
+
+    print(
+        f"wrote {written} tax-char note(s) under "
+        f"{args.out_root / 'tax-chars'}"
+    )
+    return rc
+
+
+def _import_one_tax_chars_file(args, xml_path: Path) -> int:
+    """Read one TEI file and write every contained taxchar note."""
+    from .read.tax_char import read_tax_chars
+    from .write.tax_char import tax_char_note_path, write_tax_char
+
+    records = read_tax_chars(xml_path)
+    text_filter = (args.text_id or "").strip() or None
+    if text_filter:
+        records = [
+            record for record in records
+            if record.uuid == text_filter
+            or f"uuid-{record.uuid}" == text_filter
+            or text_filter in record.heads
+        ]
+
+    written = 0
+    for record in records:
+        out_path = tax_char_note_path(args.out_root, record.uuid)
+        label = record.heads[0] if record.heads else record.uuid
+        if _on_exists_skip(args) and out_path.exists():
+            _report_skipped(out_path, kind="tax-char", label=label)
+            continue
+        written_path = write_tax_char(record, args.out_root)
+        print(f"wrote tax-char {label} under {written_path}")
         written += 1
     return written
 
