@@ -108,7 +108,7 @@ def test_load_context_default_refs_dir():
     assert 0x5434 in ctx.excluded
     assert 0x5434 in ctx.mapping_entries
     entry = ctx.mapping_entries[0x5434]
-    assert entry.replacement_cp == 0x5449
+    assert entry.replacement_cp == 0x5433
     assert entry.entry_id.startswith("vf-")
     assert ctx.mappings[entry.mapping_index].canonical_identifier == (
         "bkk:mapping/variant-fold-v1"
