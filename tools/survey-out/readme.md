@@ -11,3 +11,7 @@ Characters should not occur in the var and reg column.  Such cases should be fla
 The result is in 
 `v2r-ge065.tsv`
 now also augmented with pairs from twjp-vardb
+
+Finally,  reviewed and manually resolved:
+
+啟, 眾, 缽, 說, 贗

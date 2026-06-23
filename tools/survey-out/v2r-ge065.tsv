@@ -206,8 +206,8 @@ U+5C7F	屿	U+5DBC	嶼	src=GB2013	30	9430		0.9968
 U+5C81	岁	U+6B72	歲	src=GB2013,Var-to-Rep	14	288426		1.0000
 U+3836	㠶	U+5E06	帆	src=GB2013,Var-to-Rep	5699	23333		0.8037
 U+98BF	颿	U+5E06	帆	src=GB2013,Var-to-Rep	1304	23333		0.9471
-U+5EFB	廻	U+8FF4,U+56DE	迴回	reg-also-variant-elsewhere:迴; multi-target (2); src=GB2013,Var-to-Rep	29004	315240	迴:101978|回:213262	0.9157
-U+9025	逥	U+8FF4,U+56DE	迴回	reg-also-variant-elsewhere:迴; multi-target (2); src=GB2013,Var-to-Rep	1783	315240	迴:101978|回:213262	0.9944
+U+5EFB	廻	U+56DE	回	reg-also-variant-elsewhere:迴; src=GB2013,Var-to-Rep	29004	315240	迴:101978|回:213262	0.9157
+U+9025	逥	U+56DE	回	reg-also-variant-elsewhere:迴; src=GB2013,Var-to-Rep	1783	315240	迴:101978|回:213262	0.9944
 U+5C82	岂	U+8C48	豈	src=GB2013	11	558334		1.0000
 U+5219	则	U+5247	則	src=GB2013	651	3661275		0.9998
 U+521A	刚	U+525B	剛	src=GB2013	41	254634		0.9998
@@ -463,7 +463,8 @@ U+70D6	烖	U+707E,U+707D	灾災	reg-also-variant-elsewhere:灾; multi-target (2)
 U+83D1	菑	U+707E,U+707D	灾災	reg-also-variant-elsewhere:灾; multi-target (2); src=GB2013,Var-to-Rep	9201	128145	灾:17328|災:110817	0.9330
 U+8BC1	证	U+8B49	證	src=GB2013	5	448827		1.0000
 U+542F	启	U+5553	啓	reg-also-variant-elsewhere:啓; src=GB2013	85	76142		0.9989
-U+5518	唘	U+5553,U+555F	啓啟	reg-also-variant-elsewhere:啓; multi-target (2); src=GB2013,Var-to-Rep	2194	171447	啓:76142|啟:95305	0.9874
+U+5518	唘	U+5553	啓	reg-also-variant-elsewhere:啓; multi-target (2); src=GB2013,Var-to-Rep	2194	171447	啓:76142|啟:95305	0.9874
+U+555F	啟	U+5553	啓	manually resolved
 U+8BC4	评	U+8A55	評	src=GB2013	2	35428		0.9999
 U+8865	补	U+88DC	補	src=GB2013	4	414164		1.0000
 U+79A9	禩	U+7940	祀	src=GB2013,Var-to-Rep	2312	232308		0.9901
@@ -2116,7 +2117,8 @@ U+94B0	钰	U+923A	鈺	src=GB2013	0	1392		1.0000
 U+94B2	钲	U+9266	鉦	src=GB2013	0	4572		1.0000
 U+94B4	钴	U+9237	鈷	src=GB2013	1	600		0.9983
 U+94B5	钵	U+9262	鉢	reg-also-variant-elsewhere:鉢; src=GB2013	0	61860		1.0000
-U+76CB	盋	U+9262,U+7F3D	鉢缽	reg-also-variant-elsewhere:鉢; multi-target (2); src=GB2013,Var-to-Rep	366	68890	鉢:61860|缽:7030	0.9947
+U+76CB	盋	U+9262	鉢	manually resolved
+U+7F3D	缽	U+9262	鉢	manually resolved
 U+94B9	钹	U+9238	鈸	src=GB2013	0	1091		1.0000
 U+94BA	钺	U+925E	鉞	reg-also-variant-elsewhere:鉞; src=GB2013	6	19567		0.9997
 U+94BD	钽	U+926D	鉭	src=GB2013	0	1		1.0000
@@ -2687,6 +2689,7 @@ U+826A	艪	U+6AD3	櫓	src=GB2013,Var-to-Rep	49	6696		0.9927
 U+7F47	罇	U+6A3D	樽	src=GB2013,Var-to-Rep	8317	25887		0.7568
 U+6A7C	橼	U+6ADE	櫞	src=GB2013	0	805		1.0000
 U+8D5D	赝	U+8D0B	贋	reg-also-variant-elsewhere:贋; src=GB2013	0	1149		1.0000
+U+8D17	贗	U+8D0B	贋	manually resolved
 U+98D9	飙	U+98C6	飆	reg-also-variant-elsewhere:飆; src=GB2013	1	1163		0.9991
 U+873A	蜺	U+9713	霓	src=GB2013,Var-to-Rep	3770	11661		0.7557
 U+933E	錾	U+93E8	鏨	src=GB2013	0	298		1.0000
@@ -3294,7 +3297,7 @@ U+28EEA	𨻪	U+9675	陵	src=Var-to-Rep	0	393229		1.0000
 U+8864	衤	U+8863	衣	src=Var-to-Rep	2	572613		1.0000
 U+41AB	䆫	U+7A97	窗	src=Var-to-Rep	2722	25122		0.9022
 U+24360	𤍠	U+71B1	熱	src=Var-to-Rep	508	904469		0.9994
-U+5050	偐	U+8D17	贗	src=Var-to-Rep	3	1038		0.9971
+U+5050	偐	U+8D0B	贋	manually resolved
 U+20503	𠔃	U+516E	兮	src=Var-to-Rep	1240	316467		0.9961
 U+489C	䢜	U+6B78	歸	src=Var-to-Rep	17	1092019		1.0000
 U+8803	蠃	U+87BA	螺	src=Var-to-Rep	2452	18733		0.8843
@@ -3567,7 +3570,8 @@ U+6231	戱	U+6232	戲	src=Var-to-Rep	4555	83299		0.9482
 U+2A502	𪔂	U+9F0E	鼎	src=Var-to-Rep	91	125720		0.9993
 U+3C93	㲓	U+7D68	絨	src=Var-to-Rep	3	2264		0.9987
 U+2009D	𠂝	U+773E	眾	src=Var-to-Rep	5	712691		1.0000
-U+2C454	𬑔	U+773E	眾	src=Var-to-Rep	2	712691		1.0000
+U+2C454	𬑔	U+8846	衆	manually resolved
+U+773E	眾	U+8846	衆	manually resolved
 U+2EC5C	𮱜	U+5B63	季	src=Var-to-Rep	0	183101		1.0000
 U+3400	㐀	U+4E18	丘	src=Var-to-Rep	117	387467		0.9997
 U+510E	儎	U+8F09	載	src=Var-to-Rep	1	358157		1.0000
@@ -4743,3 +4747,20 @@ U+9D0E	鴎	U+9DD7	鷗	src=twjp-vardb,tw	30	20210		0.9985
 U+9E78	鹸	U+9E7C	鹼	src=twjp-vardb,tw		815		
 U+9EBA	麺	U+9EB5	麵	src=twjp-vardb,tw	911	24646		0.9644
 U+9EC4	黄	U+9EC3	黃	src=twjp-vardb,tw	658562	729691		0.5256
+U+58F1	壱	U+4E00	一	src=twjp-vardb,shinji,chain-resolved (xml said →壹)	11	8243652		1.0000
+U+6319	挙	U+8209	舉	src=twjp-vardb,shinji,chain-resolved (xml said →擧)	52	676187		0.9999
+U+9D8F	鶏	U+96DE	雞	src=twjp-vardb,shinji,chain-resolved (xml said →鷄)	16	134358		0.9999
+U+9271	鉱	U+7926	礦	src=twjp-vardb,shinji,chain-resolved (xml said →鑛)		6161		
+U+658E	斎	U+9F4A	齊	src=twjp-vardb,shinji,chain-resolved (xml said →齋)	107	627494		0.9998
+U+6E0B	渋	U+6F80	澀	src=twjp-vardb,shinji,chain-resolved (xml said →澁)	1	63920		1.0000
+U+5B22	嬢	U+5A18	娘	src=twjp-vardb,shinji,chain-resolved (xml said →孃)	69	13644		0.9950
+U+8217	舗	U+92EA	鋪	src=twjp-vardb,shinji,chain-resolved (xml said →舖)	629	31932		0.9807
+U+4F89	侉	U+8A87	誇	src=twjp-vardb,tw,reversed	144	23251		0.9938
+U+7522	產	U+7523	産	src=twjp-vardb,tw,reversed	99062	82382		0.4540
+U+763A	瘺	U+763B	瘻	src=twjp-vardb,tw,reversed	43	6859		0.9938
+U+7D55	絕	U+7D76	絶	src=twjp-vardb,tw,reversed	146534	275978		0.6532
+U+7DA0	綠	U+7DD1	緑	src=twjp-vardb,tw,reversed	64223	82161		0.5613
+U+92B3	銳	U+92ED	鋭	src=twjp-vardb,tw,reversed	25003	18173		0.4209
+U+9304	錄	U+9332	録	src=twjp-vardb,tw,reversed	174020	173947		0.4999
+U+95B1	閱	U+95B2	閲	src=twjp-vardb,tw,reversed	42430	34502		0.4485
+U+9839	頹	U+983D	頽	src=twjp-vardb,tw,reversed	6888	14297		0.6749
