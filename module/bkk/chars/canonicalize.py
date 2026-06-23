@@ -107,6 +107,51 @@ def canonicalize_text(
     return "".join(out), markers
 
 
+def canonicalize_text_lenient(
+    text: str,
+    ctx: CanonicalizationContext,
+) -> tuple[str, list[dict[str, Any]], list[UnmappedCodepointError]]:
+    """Like :func:`canonicalize_text`, but never raises on unmapped codepoints.
+
+    Each unmapped codepoint is appended to the returned ``unmapped`` list
+    (with its offset) and left in place in the output text. Mappable
+    codepoints are still substituted and reported via ``markers`` exactly
+    as in the strict variant. Used by ``bkk chars canonicalize`` when the
+    caller wants a full survey of unmapped codepoints instead of aborting
+    on the first occurrence.
+    """
+    if not text:
+        return text, [], []
+
+    out: list[str] = []
+    markers: list[dict[str, Any]] = []
+    unmapped: list[UnmappedCodepointError] = []
+
+    for offset, ch in enumerate(text):
+        cp = ord(ch)
+        entry = ctx.mapping_entries.get(cp)
+        if entry is not None:
+            replacement = chr(entry.replacement_cp)
+            if len(replacement) != 1:
+                raise RuntimeError(
+                    f"mapping entry {entry.entry_id!r} is not 1:1 "
+                    f"(replacement length {len(replacement)}); v1 of "
+                    f"bkk chars canonicalize only supports 1:1 substitutions"
+                )
+            out.append(replacement)
+            markers.append(_build_substitution_marker(offset, cp, entry, ctx))
+            continue
+
+        if ctx.in_inclusion_block(cp) and cp not in ctx.excluded:
+            out.append(ch)
+            continue
+
+        unmapped.append(UnmappedCodepointError(cp, offset))
+        out.append(ch)
+
+    return "".join(out), markers, unmapped
+
+
 def canonicalize_query(text: str, ctx: CanonicalizationContext) -> str:
     """Step-5 substitution for search queries.
 

@@ -52,6 +52,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", dest="dry_run", action="store_true",
         help="report what would be substituted without modifying files",
     )
+    pc.add_argument(
+        "--log-file", dest="log_file", type=Path, default=None,
+        help="append errors and warnings to this file (default: "
+             "chars-canonicalize.log in the current directory)",
+    )
+    pc.add_argument(
+        "--abort-on-error", dest="abort_on_error", action="store_true",
+        help="restore legacy behaviour: abort a bundle on the first "
+             "unmapped codepoint instead of surveying the whole bundle",
+    )
     return p
 
 
@@ -86,11 +96,17 @@ def run(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    log_file = args.log_file
+    if log_file is None:
+        log_file = Path("chars-canonicalize.log")
+
     return run_canonicalize(
         Path(out_root),
         ctx=ctx,
         text_ids=args.text_ids,
         dry_run=args.dry_run,
+        log_file=log_file,
+        abort_on_error=args.abort_on_error,
     )
 
 

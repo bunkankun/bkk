@@ -9,10 +9,11 @@ reference-asset declarations.
 from __future__ import annotations
 
 import copy
+import datetime
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 import yaml
 
@@ -21,8 +22,33 @@ from bkk.importer.write.yaml_writer import dump, marker_to_flow
 from bkk.index.merge import discover_bundles, find_bundle
 from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 
-from .canonicalize import UnmappedCodepointError, canonicalize_text
+from .canonicalize import (
+    UnmappedCodepointError,
+    canonicalize_text,
+    canonicalize_text_lenient,
+)
 from .refs import CanonicalizationContext
+
+
+def _ts() -> str:
+    return datetime.datetime.now().isoformat(timespec="seconds")
+
+
+def _log(log_fh: TextIO | None, level: str, msg: str) -> None:
+    if log_fh is None:
+        return
+    log_fh.write(f"[{_ts()}] {level} {msg}\n")
+    log_fh.flush()
+
+
+def _emit_error(log_fh: TextIO | None, msg: str) -> None:
+    print(msg, file=sys.stderr)
+    _log(log_fh, "ERROR", msg)
+
+
+def _emit_warning(log_fh: TextIO | None, msg: str) -> None:
+    print(msg, file=sys.stderr)
+    _log(log_fh, "WARN", msg)
 
 
 _JUAN_RE = re.compile(
@@ -37,56 +63,110 @@ def run_canonicalize(
     ctx: CanonicalizationContext,
     text_ids: list[str] | None = None,
     dry_run: bool = False,
+    log_file: Path | None = None,
+    abort_on_error: bool = False,
 ) -> int:
-    """Process every master bundle under ``out_root``. Returns an exit code."""
-    out_root = Path(out_root).expanduser().resolve()
-    if not out_root.is_dir():
-        print(f"error: corpus root not found: {out_root}", file=sys.stderr)
-        return 2
+    """Process every master bundle under ``out_root``. Returns an exit code.
 
-    bundle_dirs = _select_bundles(out_root, text_ids)
-    if not bundle_dirs:
-        print(f"no bundles found under {out_root}", file=sys.stderr)
-        return 1
-
-    total_subs = 0
-    total_juans = 0
-    failed: list[str] = []
-    rewrote_bundles = 0
-
-    for bundle_dir in bundle_dirs:
-        text_id = bundle_dir.name
-        rel = bundle_dir.relative_to(out_root)
-        print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
-        try:
-            stats = _process_bundle(bundle_dir, text_id, ctx=ctx, dry_run=dry_run)
-        except (RuntimeError, ValueError, FileNotFoundError) as exc:
-            print(f"  error: {exc}", file=sys.stderr)
-            failed.append(text_id)
-            continue
-        total_subs += stats["substitutions"]
-        total_juans += stats["juans"]
-        if stats["substitutions"] or stats["manifest_changed"]:
-            rewrote_bundles += 1
-        for line in stats["lines"]:
-            print(line)
-
-    verb = "would substitute" if dry_run else "substituted"
-    print(
-        f"{verb} {total_subs} codepoint(s) across {total_juans} juan file(s) "
-        f"in {rewrote_bundles}/{len(bundle_dirs)} bundle(s)"
-    )
-    if failed:
-        print(
-            f"skipped {len(failed)} bundle(s) due to errors: "
-            f"{', '.join(failed)}",
-            file=sys.stderr,
+    When ``abort_on_error`` is False (the default) the canonicalizer scans
+    each bundle to completion, logging every unmapped codepoint occurrence
+    (with juan/bucket/offset/codepoint) to ``log_file`` and to stderr; any
+    bundle with at least one unmapped codepoint is treated as failed
+    (writes skipped). With ``abort_on_error=True`` the legacy behaviour is
+    restored: the first unmapped codepoint in a bundle aborts that bundle.
+    """
+    log_fh: TextIO | None = None
+    if log_file is not None:
+        log_path = Path(log_file).expanduser().resolve()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_fh = log_path.open("a", encoding="utf-8")
+        log_fh.write(
+            f"=== [{_ts()}] bkk chars canonicalize "
+            f"out_root={out_root} dry_run={dry_run} "
+            f"abort_on_error={abort_on_error} "
+            f"text_ids={text_ids or 'ALL'} ===\n"
         )
-        return 1
-    return 0
+        log_fh.flush()
+
+    try:
+        out_root = Path(out_root).expanduser().resolve()
+        if not out_root.is_dir():
+            _emit_error(log_fh, f"error: corpus root not found: {out_root}")
+            return 2
+
+        bundle_dirs = _select_bundles(out_root, text_ids, log_fh=log_fh)
+        if not bundle_dirs:
+            _emit_error(log_fh, f"no bundles found under {out_root}")
+            return 1
+
+        total_subs = 0
+        total_juans = 0
+        total_unmapped = 0
+        failed: list[str] = []
+        unmapped_bundles: list[str] = []
+        rewrote_bundles = 0
+
+        for bundle_dir in bundle_dirs:
+            text_id = bundle_dir.name
+            rel = bundle_dir.relative_to(out_root)
+            print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
+            try:
+                stats = _process_bundle(
+                    bundle_dir, text_id,
+                    ctx=ctx, dry_run=dry_run,
+                    log_fh=log_fh, abort_on_error=abort_on_error,
+                )
+            except (RuntimeError, ValueError, FileNotFoundError) as exc:
+                _emit_error(log_fh, f"[{text_id}] error: {exc}")
+                failed.append(text_id)
+                continue
+            total_subs += stats["substitutions"]
+            total_juans += stats["juans"]
+            bundle_unmapped = stats.get("unmapped", 0)
+            if bundle_unmapped:
+                total_unmapped += bundle_unmapped
+                unmapped_bundles.append(text_id)
+                _emit_warning(
+                    log_fh,
+                    f"[{text_id}] {bundle_unmapped} unmapped codepoint "
+                    f"occurrence(s); writes skipped",
+                )
+            elif stats["substitutions"] or stats["manifest_changed"]:
+                rewrote_bundles += 1
+            for line in stats["lines"]:
+                print(line)
+
+        verb = "would substitute" if dry_run else "substituted"
+        print(
+            f"{verb} {total_subs} codepoint(s) across {total_juans} juan file(s) "
+            f"in {rewrote_bundles}/{len(bundle_dirs)} bundle(s)"
+        )
+        if total_unmapped:
+            print(
+                f"{total_unmapped} unmapped codepoint occurrence(s) across "
+                f"{len(unmapped_bundles)} bundle(s); writes skipped for those bundles",
+                file=sys.stderr,
+            )
+        if failed:
+            _emit_error(
+                log_fh,
+                f"skipped {len(failed)} bundle(s) due to errors: "
+                f"{', '.join(failed)}",
+            )
+        if failed or unmapped_bundles:
+            return 1
+        return 0
+    finally:
+        if log_fh is not None:
+            log_fh.close()
 
 
-def _select_bundles(out_root: Path, text_ids: list[str] | None) -> list[Path]:
+def _select_bundles(
+    out_root: Path,
+    text_ids: list[str] | None,
+    *,
+    log_fh: TextIO | None = None,
+) -> list[Path]:
     """Discover bundle dirs under ``out_root``.
 
     Resolves both the flat (``<corpus>/<id>/``) and sectioned
@@ -100,7 +180,10 @@ def _select_bundles(out_root: Path, text_ids: list[str] | None) -> list[Path]:
         for tid in text_ids:
             bundle = find_bundle(out_root, tid)
             if bundle is None:
-                print(f"error: bundle dir not found for {tid!r} under {out_root}", file=sys.stderr)
+                _emit_error(
+                    log_fh,
+                    f"error: bundle dir not found for {tid!r} under {out_root}",
+                )
                 return []
             out.append(bundle)
         return out
@@ -113,6 +196,8 @@ def _process_bundle(
     *,
     ctx: CanonicalizationContext,
     dry_run: bool,
+    log_fh: TextIO | None = None,
+    abort_on_error: bool = False,
 ) -> dict[str, Any]:
     manifest_path = bundle_dir / f"{text_id}.manifest.yaml"
     if not manifest_path.exists():
@@ -127,6 +212,7 @@ def _process_bundle(
 
     lines: list[str] = []
     total_subs = 0
+    total_unmapped = 0
     pending_juans: list[tuple[Path, dict, str]] = []  # (path, juan_data, new_hash)
     used_mapping_indices: set[int] = set()
 
@@ -137,6 +223,7 @@ def _process_bundle(
         data = hydrate_juan_markers(data, load_marker_asset(bundle_dir, manifest, seq))
 
         juan_subs = 0
+        juan_unmapped = 0
         for bucket_name in _BUCKETS:
             bucket = data.get(bucket_name)
             if not isinstance(bucket, dict):
@@ -144,12 +231,26 @@ def _process_bundle(
             text = bucket.get("text") or ""
             if not text:
                 continue
-            try:
-                new_text, new_markers = canonicalize_text(text, ctx)
-            except UnmappedCodepointError as exc:
-                raise RuntimeError(
-                    f"{juan_path.name} [{bucket_name}]: {exc}"
-                ) from exc
+            if abort_on_error:
+                try:
+                    new_text, new_markers = canonicalize_text(text, ctx)
+                except UnmappedCodepointError as exc:
+                    raise RuntimeError(
+                        f"{juan_path.name} [{bucket_name}]: {exc}"
+                    ) from exc
+                bucket_unmapped: list[UnmappedCodepointError] = []
+            else:
+                new_text, new_markers, bucket_unmapped = canonicalize_text_lenient(
+                    text, ctx,
+                )
+            for u in bucket_unmapped:
+                ch = chr(u.codepoint)
+                _emit_warning(
+                    log_fh,
+                    f"[{text_id}] {juan_path.name} [{bucket_name}] "
+                    f"offset {u.offset}: unmapped U+{u.codepoint:04X} {ch!r}",
+                )
+            juan_unmapped += len(bucket_unmapped)
             if not new_markers:
                 continue
             for m in new_markers:
@@ -165,12 +266,18 @@ def _process_bundle(
             indexed.sort(key=lambda p: (p[1].get("offset", 0), p[0]))
             bucket["markers"] = [marker_to_flow(dict(m)) for _, m in indexed]
 
-        if juan_subs == 0:
+        total_unmapped += juan_unmapped
+        if juan_subs == 0 and juan_unmapped == 0:
             lines.append(f"  juan {seq:03d}: no substitutions")
             continue
-
+        if juan_unmapped:
+            lines.append(
+                f"  juan {seq:03d}: {juan_subs} substitution(s), "
+                f"{juan_unmapped} unmapped"
+            )
+        else:
+            lines.append(f"  juan {seq:03d}: {juan_subs} substitution(s)")
         total_subs += juan_subs
-        lines.append(f"  juan {seq:03d}: {juan_subs} substitution(s)")
         new_hash = _juan_self_hash(data)
         data["hash"] = new_hash
         pending_juans.append((juan_path, data, new_hash))
@@ -183,10 +290,13 @@ def _process_bundle(
         },
     )
 
-    if dry_run:
+    skip_writes = dry_run or total_unmapped > 0
+
+    if skip_writes:
         return {
             "juans": len(juan_entries),
             "substitutions": total_subs,
+            "unmapped": total_unmapped,
             "manifest_changed": manifest_changed,
             "lines": lines,
         }
@@ -207,6 +317,7 @@ def _process_bundle(
     return {
         "juans": len(juan_entries),
         "substitutions": total_subs,
+        "unmapped": total_unmapped,
         "manifest_changed": manifest_changed,
         "lines": lines,
     }
