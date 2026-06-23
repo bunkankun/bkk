@@ -1116,6 +1116,7 @@ def search_parallel(
             include_contained=include_contained,
             context=context,
             max_edits=max_edits,
+            canon_ctx=state.canon_ctx,
         )
     except ValueError as exc:
         raise errors.bad_request(str(exc))

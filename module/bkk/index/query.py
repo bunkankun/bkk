@@ -10,6 +10,9 @@ from pathlib import Path
 
 from collections import Counter
 
+from bkk.chars.canonicalize import canonicalize_query
+from bkk.chars.refs import CanonicalizationContext
+
 from .ir import Hit, IndexSummary, VariantOverlay
 from .schema import SCHEMA_VERSION
 from .witness import Segment, witness_to_master_span
@@ -21,8 +24,14 @@ _SQLITE_VAR_LIMIT = 500  # SQLite default ?-binding cap is 999; keep margin.
 class Index:
     """Read-only handle on a ``.bkkx`` file."""
 
-    def __init__(self, path: Path | str):
+    def __init__(
+        self,
+        path: Path | str,
+        *,
+        canon_ctx: CanonicalizationContext | None = None,
+    ):
         self._conn = sqlite3.connect(str(path))
+        self._canon = canon_ctx
         self._conn.row_factory = sqlite3.Row
         meta = dict(self._conn.execute("SELECT key, value FROM meta").fetchall())
         version = int(meta.get("schema_version", "0") or "0")
@@ -46,6 +55,19 @@ class Index:
             ]
         except sqlite3.OperationalError:
             self.bundles = [self.textid] if self.textid else []
+
+    def _prepare_query(self, query: str) -> str:
+        """NFC-normalize then (if a canon ctx is set) apply step-5 substitution.
+
+        The indexed corpus is built from canonicalized bundles, so any
+        non-canonical codepoint in a raw query must be folded to its
+        canonical form before trigram lookup, mirroring what the importer
+        did at write time.
+        """
+        query = unicodedata.normalize("NFC", query)
+        if self._canon is not None:
+            query = canonicalize_query(query, self._canon)
+        return query
 
     def close(self) -> None:
         self._conn.close()
@@ -83,7 +105,7 @@ class Index:
         by :meth:`candidates_and_total`) to avoid re-running the
         candidate scan when the caller already paid for it.
         """
-        query = unicodedata.normalize("NFC", query)
+        query = self._prepare_query(query)
         if not query:
             return
         if candidates is None:
@@ -106,7 +128,7 @@ class Index:
         :meth:`_verify_and_emit`). The dict is suitable to pass back into
         :meth:`search` or :meth:`summarise` to avoid a second scan.
         """
-        query = unicodedata.normalize("NFC", query)
+        query = self._prepare_query(query)
         if not query:
             return {}, 0
         cand = self._candidate_positions(query)
@@ -132,7 +154,7 @@ class Index:
         which can be passed in via ``candidates`` when the caller has
         already computed it (e.g. through :meth:`candidates_and_total`).
         """
-        query = unicodedata.normalize("NFC", query)
+        query = self._prepare_query(query)
         if not query:
             return IndexSummary(total=0)
         if candidates is None:

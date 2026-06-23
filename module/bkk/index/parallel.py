@@ -13,6 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
+from bkk.chars.canonicalize import canonicalize_query
+from bkk.chars.refs import CanonicalizationContext
+
 
 @dataclass(frozen=True)
 class ParallelLocation:
@@ -101,6 +104,7 @@ def discover_parallel_passages(
     include_contained: bool = False,
     context: int = 20,
     max_edits: int = 0,
+    canon_ctx: CanonicalizationContext | None = None,
 ) -> list[ParallelCluster]:
     """Return repeated master-text passages from ``index_path``.
 
@@ -115,6 +119,8 @@ def discover_parallel_passages(
     """
     if seed is not None:
         seed = unicodedata.normalize("NFC", seed)
+        if canon_ctx is not None:
+            seed = canonicalize_query(seed, canon_ctx)
         if not 1 <= len(seed) <= 6:
             raise ValueError("seed must be 1 to 6 characters")
     min_allowed = 1 if seed is not None else 3

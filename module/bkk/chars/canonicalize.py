@@ -105,3 +105,32 @@ def canonicalize_text(
         raise UnmappedCodepointError(cp, offset)
 
     return "".join(out), markers
+
+
+def canonicalize_query(text: str, ctx: CanonicalizationContext) -> str:
+    """Step-5 substitution for search queries.
+
+    Differs from :func:`canonicalize_text` in two ways: unmapped codepoints
+    pass through unchanged (rather than raising) so a user-typed character
+    outside the canonical set yields zero hits instead of a server error,
+    and no substitution markers are produced. Assumes the caller has
+    already NFC-normalized ``text``; mapping keys are NFC code points.
+    """
+    if not text:
+        return text
+
+    out: list[str] = []
+    for ch in text:
+        entry = ctx.mapping_entries.get(ord(ch))
+        if entry is not None:
+            replacement = chr(entry.replacement_cp)
+            if len(replacement) != 1:
+                raise RuntimeError(
+                    f"mapping entry {entry.entry_id!r} is not 1:1 "
+                    f"(replacement length {len(replacement)}); v1 of "
+                    f"bkk chars canonicalize only supports 1:1 substitutions"
+                )
+            out.append(replacement)
+        else:
+            out.append(ch)
+    return "".join(out)

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 
+from bkk.chars.refs import CanonicalizationContext, load_context
 from bkk.index import Index, merge_bundles
 from bkk.index.merge import find_bundle
 
@@ -223,6 +224,9 @@ class AppState:
     jobs: JobRegistry = field(default_factory=JobRegistry, repr=False)
     sessions: SessionRegistry = field(default_factory=SessionRegistry, repr=False)
     contributions: "ContributionFeed | None" = field(default=None, repr=False)
+    _canon_ctx: CanonicalizationContext | None = field(default=None, repr=False)
+    _canon_ctx_loaded: bool = field(default=False, repr=False)
+    _canon_ctx_error: str | None = field(default=None, repr=False)
 
     @property
     def corpus_root(self) -> Path:
@@ -300,7 +304,7 @@ class AppState:
         path = self.ensure_index()
         if path is None:
             return None
-        return Index(path)
+        return Index(path, canon_ctx=self.canon_ctx)
 
     def bundle_index_path(self, textid: str) -> Path | None:
         """Return ``<bundle_dir>/<textid>.bkkx`` if present, else ``None``."""
@@ -313,7 +317,25 @@ class AppState:
     def open_bundle_index(self, textid: str) -> Index | None:
         """Open the per-bundle ``.bkkx``, or ``None`` if missing."""
         path = self.bundle_index_path(textid)
-        return Index(path) if path is not None else None
+        return Index(path, canon_ctx=self.canon_ctx) if path is not None else None
+
+    @property
+    def canon_ctx(self) -> CanonicalizationContext | None:
+        """Lazily load the canonical-character-set context for query folding.
+
+        Returns ``None`` (logged once) if the refs dir is unavailable, so
+        search degrades to NFC-only matching rather than failing.
+        """
+        if self._canon_ctx_loaded:
+            return self._canon_ctx
+        self._canon_ctx_loaded = True
+        try:
+            self._canon_ctx = load_context()
+        except (FileNotFoundError, RuntimeError) as exc:
+            self._canon_ctx_error = f"{type(exc).__name__}: {exc}"
+            log.warning("canonicalization context unavailable: %s", self._canon_ctx_error)
+            self._canon_ctx = None
+        return self._canon_ctx
 
     def open_catalog(self) -> sqlite3.Connection | None:
         """Open a read-only handle on the catalog index, or ``None`` if absent."""
