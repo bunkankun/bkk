@@ -7,3 +7,7 @@ Additional variant mappings comes from `/home/chris/Dropbox/projects/bkk/tools/s
 var_cp	var_char	reg_cp	reg_char	remarks
 
 Characters should not occur in the var and reg column.  Such cases should be flagged in remarks.
+
+The result is in 
+`v2r-ge065.tsv`
+now also augmented with pairs from twjp-vardb

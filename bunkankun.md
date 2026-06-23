@@ -235,6 +235,10 @@ A substitution marker may carry optional fields including **id**, **note**, **wi
 
 The reason enumeration is intended to be stable: new categorical reasons that generalize beyond a single project should accumulate in this list rather than be hidden inside the `extension` slot.
 
+The first version of the replacement list has landed, derived from 
+- Jung, Y., and J. Lee. 2025. “A Variant Character Dataset for Historical Narratives of Middle and Late Imperial China | Journal of Open Humanities Data.” Journal of Open Humanities Data 11 (May), May: 33. doi:https://doi.org/10.5334/johd.325.
+- 通用规范汉字表 (GB2013), appendix 1
+
 #### Voices
 
 A **voice** marker records that a slice of the canonical text stream belongs to a named textual layer. It is the mechanism by which interleaved threads — a root text and its commentaries, for example — are disentangled so that a consumer can extract any one layer, present several in parallel, or reproduce the interleaved source as published.
@@ -590,7 +594,7 @@ The query API itself — operators, composition — is deferred. The starting fo
 
 #### Out of scope
 
-Authoring — producing bundles from source materials, computing canonical hashes, assembling manifests — is a separate tooling concern and is not part of bunkanlib. The write-side workflow will be discussed and specified in its own pass.
+Authoring — producing bundles from source materials, computing canonical hashes, assembling manifests — is a separate tooling concern and is currently not yet implemented as part of bkk. The write-side workflow will be discussed and specified in its own pass.
 
 ## Clients
 
