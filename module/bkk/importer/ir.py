@@ -282,6 +282,50 @@ class RhetoricalDeviceBundle:
     metadata: dict = field(default_factory=dict)
 
 
+# ---------- Word relations -----------------------------------------------
+
+
+@dataclass
+class WordRelationAttestation:
+    text_title: str | None = None
+    line_uuid: str | None = None
+    line_id: str | None = None
+    textline: str | None = None
+    offset: int | None = None
+    range: int | None = None
+
+
+@dataclass
+class WordRelationItem:
+    position: str                       # "left-word" or "right-word"
+    word_uuid: str | None = None
+    text: str | None = None
+    concept: str | None = None
+    concept_uuid: str | None = None
+    attestation: WordRelationAttestation | None = None
+
+
+@dataclass
+class WordRelationSourceRef:
+    bibliography_uuid: str | None = None
+    title: str | None = None
+    scope: str | None = None
+    scope_unit: str | None = None
+
+
+@dataclass
+class WordRelationBundle:
+    uuid: str
+    group_uuid: str
+    rel_type: str
+    rel_type_uuid: str
+    rel_label: str | None = None
+    left: WordRelationItem | None = None
+    right: WordRelationItem | None = None
+    source_references: list[WordRelationSourceRef] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
+
+
 # ---------- Words ---------------------------------------------------------
 
 

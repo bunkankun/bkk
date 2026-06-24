@@ -75,7 +75,7 @@ function LeftPanel() {
     : activity === "edit"
       ? "Editing Tasks"
     : activity === "core"
-      ? "CORE"
+      ? "TLS"
     : activity === "catalog"
       ? "Catalog"
       : "Contents";

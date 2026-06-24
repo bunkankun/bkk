@@ -43,6 +43,7 @@ COLLECTIONS: tuple[tuple[str, str], ...] = (
     ("senses", "sense"),
     ("super-entries", "super-entry"),
     ("tax-chars", "tax-char"),
+    ("word-relations", "word-relation"),
 )
 
 DDL = """
@@ -560,6 +561,12 @@ def _hydrate_caches_for(
             word_uuid = _strip_uuid_prefix(raw)
             if word_uuid:
                 _load_word_into_cache(core_root, word_uuid, caches)
+    elif type_name == "word-relation":
+        for side in ("left", "right"):
+            item = data.get(side) if isinstance(data.get(side), dict) else {}
+            word_uuid = _strip_uuid_prefix(item.get("word_uuid"))
+            if word_uuid:
+                _load_word_into_cache(core_root, word_uuid, caches)
 
 
 def _shard_path(core_root: Path, coll_dir: str, uuid: str) -> Path:
@@ -734,6 +741,26 @@ def _display_label(
         if isinstance(heads, list) and heads:
             return _str_or_none(heads[0])
         return None
+    if type_name == "word-relation":
+        rel_type = _str_or_none(data.get("rel_type"))
+        left = data.get("left") if isinstance(data.get("left"), dict) else {}
+        right = data.get("right") if isinstance(data.get("right"), dict) else {}
+        left_uuid = _strip_uuid_prefix(left.get("word_uuid"))
+        right_uuid = _strip_uuid_prefix(right.get("word_uuid"))
+        left_orth = (
+            (word_display.get(left_uuid) if left_uuid else None)
+            or _str_or_none(left.get("text"))
+        )
+        right_orth = (
+            (word_display.get(right_uuid) if right_uuid else None)
+            or _str_or_none(right.get("text"))
+        )
+        if rel_type and left_orth and right_orth:
+            return f"{rel_type}: {left_orth} ↔ {right_orth}"
+        rel_label = _str_or_none(data.get("rel_label"))
+        if rel_label:
+            return rel_label
+        return rel_type
     return None
 
 
@@ -796,6 +823,13 @@ def _label_rows(
         for pron in data.get("pronunciations") or []:
             if isinstance(pron, dict):
                 add(pron.get("reading"), "reading")
+    elif type_name == "word-relation":
+        add(data.get("rel_type"), "rel_type")
+        add(data.get("rel_label"), "rel_label")
+        left = data.get("left") if isinstance(data.get("left"), dict) else {}
+        right = data.get("right") if isinstance(data.get("right"), dict) else {}
+        add(left.get("text"), "left_text")
+        add(right.get("text"), "right_text")
 
     # Dedupe (uuid, label, label_type) — preserve order of first occurrence.
     seen: set[tuple[str, str, str]] = set()
@@ -864,6 +898,7 @@ def _link_rows(
             if isinstance(bib, dict):
                 add(bib.get("bibliography_uuid"), "bibliography", "bibliography")
         add_each(data.get("sense_uuids"), "sense", "sense")
+        add_each(data.get("word_relations"), "word-relation", "word_relation")
     elif type_name == "sense":
         add(data.get("word_uuid"), "word", "word")
         add_each(
@@ -906,6 +941,17 @@ def _link_rows(
         add_each(data.get("hypernyms"), "rhetorical-device", "hypernym")
         add_each(data.get("hyponyms"), "rhetorical-device", "hyponym")
         add_each(data.get("antonyms"), "rhetorical-device", "antonym")
+        for ref in data.get("source_references") or []:
+            if isinstance(ref, dict):
+                add(
+                    ref.get("bibliography_uuid"),
+                    "bibliography", "source_reference",
+                )
+    elif type_name == "word-relation":
+        for side, relation_prefix in (("left", "left"), ("right", "right")):
+            item = data.get(side) if isinstance(data.get(side), dict) else {}
+            add(item.get("word_uuid"), "word", f"{relation_prefix}_word")
+            add(item.get("concept_uuid"), "concept", f"{relation_prefix}_concept")
         for ref in data.get("source_references") or []:
             if isinstance(ref, dict):
                 add(

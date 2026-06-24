@@ -26,6 +26,7 @@ core/
   senses/
   super-entries/
   syntactic-functions/
+  word-relations/
   words/
 ```
 
@@ -71,6 +72,7 @@ type: <record type>
 - `super-entry`
 - `syntactic-function`
 - `word`
+- `word-relation`
 
 ### Relations
 
@@ -453,6 +455,71 @@ Index hints:
 - Group by `super_entry_uuid` (word family) and `concept_uuid`.
 - Index `definition` as searchable lexical text.
 
+### Word relations
+
+Path: `word-relations/<hex>/<uuid>.yml` · Type: `word-relation`
+
+Parsed from `<div type="word-rel-ref">` records in
+`core/word-relations.xml`. Each record names one binary semantic relation
+(antonym, converse, hypernym, …) between two word entries. Some refs are
+abstract type-level pairs (two word UUIDs, no textual locus); others are
+attestations carrying the source-text title, line UUID, line id, textline,
+offset, and range. Sibling refs that share a parent `<word-rel>` carry the
+same `group_uuid` so the UI can re-cluster attestations under their
+abstract pair.
+
+```yaml
+uuid: 417a6c62-c1c9-441e-9aa2-e0addaac81d3
+type: word-relation
+group_uuid: 07e7c251-10dc-5baa-b41d-c4a5a5cf2dc4
+rel_type: Conv
+rel_type_uuid: a49c5878-7e4e-46ac-817e-87ca64e150c6
+rel_label: converse (與 - 受)
+left:
+  word_uuid: a1a7c269-70b0-4055-b4fa-df9f30e1c6dd
+  text: 乞
+  concept: BEG
+  concept_uuid: 87c1fbcd-a34c-47c5-b855-01de94c5d74c
+  attestation:                 # only on attested refs
+    text_title: 孟子
+    line_uuid: bee23927-358d-4624-b47c-722ed3e5aa8b
+    line_id: KR1h0001_tls_001-64a.16
+    textline: 必使仰足以事父母
+    offset: 6
+    range: 1
+right:
+  word_uuid: 7f71f0e6-36b5-4a51-b10e-17b21462e025
+  text: 與予
+  concept: GIVE
+  concept_uuid: ed1aeb49-abff-4167-a18e-60c0f2202d63
+source_references:
+- bibliography_uuid: 7bc81713-191b-46bd-9b25-89a9fc359a86
+  title: 左傳詞彙研究
+source:
+  source_file: word-relations.xml
+```
+
+Notes:
+
+- `rel_type` is the short relation-type label from the parent
+  `<word-rel-type>`'s `<head>` (`Conv`, `Ant`, `Synon`, `Assoc`, …).
+- `rel_label` is the prose label from the `<word-rels>` container (often
+  a translation/gloss like `converse (與 - 受)`).
+- `group_uuid` is the parent `<word-rel>`'s `xml:id` when present; else
+  a deterministic UUIDv5 derived from the sorted pair of word UUIDs and
+  the `rel_type_uuid`; else the first child ref's UUID.
+- Each participating word YAML gains a top-level `word_relations:` list
+  pointing back at the relation UUIDs it appears in (rebuilt on every
+  import so deletions in source XML propagate).
+
+Index hints:
+
+- Display: render `rel_type` + the two `left.text` / `right.text` plus
+  JOIN-resolved word labels.
+- Treat `left.word_uuid` / `right.word_uuid` as typed outgoing links.
+- Group records by `group_uuid` to fold attestations under the abstract
+  pair.
+
 ### Senses
 
 Path: `senses/<hex>/<uuid>.yml` · Type: `sense`
@@ -515,6 +582,7 @@ It dispatches to each sub-importer with the conventional source path:
 | `syntactic-functions` | `core/syntactic-functions.xml`    |
 | `semantic-features`   | `core/semantic-features.xml`      |
 | `rhetorical-devices`  | `core/rhetorical-devices.xml`     |
+| `word-relations`      | `core/word-relations.xml`         |
 
 Individual sub-formats still work for incremental re-imports:
 
@@ -526,7 +594,12 @@ bkk import syntactic-functions --in <tls-data>/core/syntactic-functions.xml --ou
 bkk import semantic-features   --in <tls-data>/core/semantic-features.xml   --out module/output/core --yes
 bkk import rhetorical-devices  --in <tls-data>/core/rhetorical-devices.xml  --out module/output/core --yes
 bkk import words               --in <tls-data>/words                        --out module/output/core --yes
+bkk import word-relations      --in <tls-data>/core/word-relations.xml      --out module/output/core --yes
 ```
+
+`word-relations` must run **after** `words` because it rewrites the
+participating word YAMLs to add their `word_relations:` back-reference
+list.
 
 `--text-id` filtering by sub-format:
 
@@ -535,6 +608,7 @@ bkk import words               --in <tls-data>/words                        --ou
   code.
 - words: super-entry UUID, source filename stem, orthograph, word-entry
   UUID, or concept name.
+- word-relations: word-rel-ref UUID, parent group UUID.
 
 `--on-exists skip` leaves existing `.yml` files unchanged.
 
@@ -599,9 +673,12 @@ Walk the bare-UUID relation lists per record type:
   `source_references[].bibliography_uuid`.
 - `super-entry`: `word_uuids`, `forms[].graph_uuids`.
 - `word`: `super_entry_uuid`, `concept_uuid`, `form.graph_uuids`,
-  `bibliography[].bibliography_uuid`, `sense_uuids`.
+  `bibliography[].bibliography_uuid`, `sense_uuids`, `word_relations`.
 - `sense`: `word_uuid`, `syntactic_function_uuids`,
   `semantic_feature_uuids`.
+- `word-relation`: `left.word_uuid`, `right.word_uuid`,
+  `left.concept_uuid`, `right.concept_uuid`, `rel_type_uuid`,
+  `group_uuid`, `source_references[].bibliography_uuid`.
 
 Wikilinks (`[[X]]`) in prose fields are resolved against the super-entry
 orth map at index time.
@@ -610,8 +687,9 @@ orth map at index time.
 
 - Collection names are the plural directory names: `concepts`,
   `graphs`, `rhetorical-devices`, `syntactic-functions`,
-  `semantic-features`, `senses`, `super-entries`, `words`.
+  `semantic-features`, `senses`, `super-entries`, `words`,
+  `word-relations`.
 - `type` values are singular except `super-entry`: `concept`, `graph`,
   `rhetorical-device`, `syntactic-function`, `semantic-feature`,
-  `sense`, `word`.
+  `sense`, `word`, `word-relation`.
 - `bibliography` is both the collection and type name.

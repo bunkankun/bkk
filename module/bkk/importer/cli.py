@@ -249,8 +249,8 @@ def _find_tls_texts(in_root: Path, text_id: str) -> list[Path]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk.importer")
-    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation", "core", "concepts", "bibliography", "graphs", "syntactic-functions", "semantic-features", "rhetorical-devices", "tax-chars", "words"], default=None,
-                   help="source format: tls, krp, cbeta, translation, core, concepts, bibliography, graphs, syntactic-functions, semantic-features, rhetorical-devices, tax-chars, or words "
+    p.add_argument("--format", choices=["tls", "krp", "cbeta", "translation", "core", "concepts", "bibliography", "graphs", "syntactic-functions", "semantic-features", "rhetorical-devices", "tax-chars", "words", "word-relations"], default=None,
+                   help="source format: tls, krp, cbeta, translation, core, concepts, bibliography, graphs, syntactic-functions, semantic-features, rhetorical-devices, tax-chars, words, or word-relations "
                         "(required; or set import.format in .bkkrc). "
                         "'core' runs all bkk-core sub-importers against a single tls-data root, "
                         "resolving the conventional subdir for each.")
@@ -373,7 +373,7 @@ def run(argv: list[str] | None = None) -> int:
         "core",
         "concepts", "bibliography", "graphs",
         "syntactic-functions", "semantic-features", "rhetorical-devices",
-        "words",
+        "words", "word-relations",
     ):
         arg_list = ["--format", arg_list[0], *arg_list[1:]]
     args = parser.parse_args(arg_list)
@@ -423,6 +423,8 @@ def run(argv: list[str] | None = None) -> int:
         return _run_tax_chars(args)
     if args.format == "words":
         return _run_words(args)
+    if args.format == "word-relations":
+        return _run_word_relations(args)
     print(f"error: unknown format {args.format!r}", file=sys.stderr)
     return 2
 
@@ -1752,6 +1754,7 @@ _CORE_SUBPATHS: list[tuple[str, str]] = [
     ("rhetorical-devices", "core/rhetorical-devices.xml"),
     ("tax-chars", "core/taxchar.xml"),
     ("words", "words"),
+    ("word-relations", "core/word-relations.xml"),
 ]
 
 
@@ -1787,6 +1790,7 @@ def _run_core(args) -> int:
         "rhetorical-devices": _run_rhetorical_devices,
         "tax-chars": _run_tax_chars,
         "words": _run_words,
+        "word-relations": _run_word_relations,
     }
 
     rc = 0
@@ -2437,6 +2441,103 @@ def _import_one_word(args, xml_path: Path) -> bool:
         f"{len(written)} note(s)"
     )
     return True
+
+
+def _run_word_relations(args) -> int:
+    """Dispatch the word-relations import path.
+
+    Reads one ``word-relations.xml`` and writes one YAML per ``<word-rel-ref>``
+    under ``<out>/word-relations/<hex>/<uuid>.yml``, then rebuilds the
+    ``word_relations:`` back-reference list on every word YAML that
+    participates in a relation. Words that were touched in a previous run
+    but no longer participate have their back-ref cleared so the field
+    reflects the *current* XML input.
+    """
+    if args.in_root is None or args.out_root is None:
+        print(
+            "error: --in and --out are required for --format word-relations",
+            file=sys.stderr,
+        )
+        return 2
+
+    from .read.word_relation import read_word_relations
+    from .write.word_relation import (
+        discover_stale_word_backrefs,
+        patch_word_backrefs,
+        word_relation_note_path,
+        write_word_relation,
+    )
+
+    paths = _resolve_word_relation_sources(args)
+    if not paths:
+        print("error: no word-relations XML files found to import",
+              file=sys.stderr)
+        return 2
+
+    rc = 0
+    written = 0
+    by_word_uuid: dict[str, list[str]] = {}
+
+    for xml_path in paths:
+        try:
+            records = read_word_relations(xml_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"error reading {xml_path.name}: {exc}", file=sys.stderr)
+            rc = 1
+            continue
+
+        text_filter = (args.text_id or "").strip() or None
+        if text_filter:
+            records = [
+                r for r in records
+                if r.uuid == text_filter
+                or f"uuid-{r.uuid}" == text_filter
+                or r.group_uuid == text_filter
+            ]
+
+        for record in records:
+            out_path = word_relation_note_path(args.out_root, record.uuid)
+            if _on_exists_skip(args) and out_path.exists():
+                _report_skipped(
+                    out_path, kind="word-relation", label=record.uuid,
+                )
+            else:
+                try:
+                    write_word_relation(record, args.out_root)
+                    written += 1
+                except Exception as exc:  # noqa: BLE001
+                    print(
+                        f"error writing word-relation {record.uuid}: {exc}",
+                        file=sys.stderr,
+                    )
+                    rc = 1
+                    continue
+            for item in (record.left, record.right):
+                if item is None or not item.word_uuid:
+                    continue
+                by_word_uuid.setdefault(item.word_uuid, []).append(record.uuid)
+
+    stale = discover_stale_word_backrefs(args.out_root, set(by_word_uuid))
+    for word_uuid in stale:
+        by_word_uuid[word_uuid] = []
+
+    patched = patch_word_backrefs(args.out_root, by_word_uuid)
+
+    print(
+        f"wrote {written} word-relation note(s) under "
+        f"{args.out_root / 'word-relations'}; "
+        f"patched word_relations on {patched} word YAML(s)"
+    )
+    return rc
+
+
+def _resolve_word_relation_sources(args) -> list[Path]:
+    """Return the list of word-relations XML files to read.
+
+    Like rhetorical/syntactic/semantic features, all records live in a
+    single file, so ``--text-id`` is applied after parsing.
+    """
+    return _collect_xml_paths(args.in_root)
 
 
 def _emit_divergence(sample: Path, ours_root: Path, out_root: Path) -> None:
