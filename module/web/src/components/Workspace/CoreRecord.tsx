@@ -10,6 +10,7 @@ import {
   getCoreConceptWords,
   getCoreRecord,
   getCoreSuperEntryByOrth,
+  getCoreWordRelationJumpTarget,
 } from "../../api/client";
 import type {
   CoreBacklinksResponse,
@@ -757,6 +758,7 @@ function WordView({
   const definition = asString(data.definition);
   const bibliography = asRecordArray(data.bibliography);
   const senseUuids = asStringArray(data.sense_uuids);
+  const wordRelations = asStringArray(data.word_relations);
   const attestations = useSenseCounts(senseUuids);
   return (
     <>
@@ -801,6 +803,11 @@ function WordView({
             navigate={navigate}
             onWikilink={onWikilink}
           />
+        </FieldRow>
+      )}
+      {wordRelations.length > 0 && (
+        <FieldRow label="Word relations">
+          <UuidList uuids={wordRelations} lookup={lookup} navigate={navigate} fallbackCollection="word-relations" />
         </FieldRow>
       )}
     </>
@@ -1095,6 +1102,174 @@ function RhetoricalDeviceView({
       {sources.length > 0 && (
         <FieldRow label="Source references">
           <BibliographyRefList refs={sources} lookup={lookup} navigate={navigate} />
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
+function jumpToAttestation(
+  markerId: string,
+  offset: number | null,
+  range: number | null,
+): void {
+  getCoreWordRelationJumpTarget(markerId, offset ?? 0, Math.max(1, range ?? 1))
+    .then((target) => {
+      workspace.openTextLocation({
+        textid: target.text_id,
+        seq: target.seq,
+        bucket: target.bucket,
+        offset: target.offset,
+        length: target.length,
+      });
+    })
+    .catch((e) => {
+      window.alert(`Could not resolve marker ${markerId}: ${e instanceof Error ? e.message : String(e)}`);
+    });
+}
+
+function WordRelationItemCard({
+  side,
+  item,
+  lookup,
+  navigate,
+}: {
+  side: "Left" | "Right";
+  item: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+}) {
+  const text = asString(item.text);
+  const wordUuid = asString(item.word_uuid);
+  const conceptUuid = asString(item.concept_uuid);
+  const concept = asString(item.concept);
+  const attestation = (item.attestation && typeof item.attestation === "object")
+    ? (item.attestation as Record<string, unknown>)
+    : null;
+  const lineId = attestation ? asString(attestation.line_id) : null;
+  const offsetVal =
+    attestation && typeof attestation.offset === "number"
+      ? (attestation.offset as number)
+      : null;
+  const rangeVal =
+    attestation && typeof attestation.range === "number"
+      ? (attestation.range as number)
+      : null;
+  return (
+    <div
+      style={{
+        border: "1px solid var(--bdr)",
+        borderRadius: 4,
+        padding: 8,
+        flex: 1,
+        minWidth: 0,
+      }}
+    >
+      <div style={{ fontSize: 11, color: "var(--t3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>
+        {side}
+      </div>
+      {text && <div style={{ fontSize: 18, marginBottom: 4 }}>{text}</div>}
+      {wordUuid && (
+        <div style={{ fontSize: 12 }}>
+          <span style={{ color: "var(--t3)" }}>word: </span>
+          {recordLink(wordUuid, lookup, navigate, "words")}
+        </div>
+      )}
+      {conceptUuid && (
+        <div style={{ fontSize: 12 }}>
+          <span style={{ color: "var(--t3)" }}>concept: </span>
+          {recordLink(conceptUuid, lookup, navigate, "concepts")}
+          {concept && (
+            <span style={{ color: "var(--t3)" }}> ({concept})</span>
+          )}
+        </div>
+      )}
+      {attestation && (
+        <div
+          style={{
+            marginTop: 6,
+            paddingTop: 6,
+            borderTop: "1px dashed var(--bdr)",
+            fontSize: 12,
+          }}
+        >
+          {asString(attestation.text_title) && (
+            <div>
+              <span style={{ color: "var(--t3)" }}>text: </span>
+              {asString(attestation.text_title)}
+            </div>
+          )}
+          {lineId && (
+            <div>
+              <span style={{ color: "var(--t3)" }}>line: </span>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  jumpToAttestation(lineId, offsetVal, rangeVal);
+                }}
+                style={{ color: "var(--link)" }}
+                title="Jump to this location in the text"
+              >
+                <code>{lineId}</code>
+              </a>
+            </div>
+          )}
+          {asString(attestation.textline) && (
+            <div style={{ marginTop: 2 }}>{asString(attestation.textline)}</div>
+          )}
+          {(attestation.offset != null || attestation.range != null) && (
+            <div style={{ color: "var(--t3)" }}>
+              offset={String(attestation.offset ?? "-")}, range={String(attestation.range ?? "-")}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WordRelationView({
+  data,
+  lookup,
+  navigate,
+}: {
+  data: Record<string, unknown>;
+  lookup: Lookup;
+  navigate: Navigate;
+}) {
+  const relType = asString(data.rel_type);
+  const relLabel = asString(data.rel_label);
+  const groupUuid = asString(data.group_uuid);
+  const left = (data.left && typeof data.left === "object")
+    ? (data.left as Record<string, unknown>) : null;
+  const right = (data.right && typeof data.right === "object")
+    ? (data.right as Record<string, unknown>) : null;
+  const sources = asRecordArray(data.source_references);
+  return (
+    <>
+      {relType && <FieldRow label="Relation"><code>{relType}</code></FieldRow>}
+      {relLabel && <FieldRow label="Label">{relLabel}</FieldRow>}
+      {(left || right) && (
+        <FieldRow label="Pair">
+          <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+            {left && (
+              <WordRelationItemCard side="Left" item={left} lookup={lookup} navigate={navigate} />
+            )}
+            {right && (
+              <WordRelationItemCard side="Right" item={right} lookup={lookup} navigate={navigate} />
+            )}
+          </div>
+        </FieldRow>
+      )}
+      {sources.length > 0 && (
+        <FieldRow label="Source references">
+          <BibliographyRefList refs={sources} lookup={lookup} navigate={navigate} />
+        </FieldRow>
+      )}
+      {groupUuid && (
+        <FieldRow label="Group">
+          <code style={{ color: "var(--t3)" }}>{groupUuid}</code>
         </FieldRow>
       )}
     </>
@@ -1750,6 +1925,8 @@ function renderTypedView(
       return <GraphView data={record.data} />;
     case "tax-char":
       return <TaxCharView data={record.data} lookup={lookup} navigate={navigate} onWikilink={onWikilink} />;
+    case "word-relation":
+      return <WordRelationView data={record.data} lookup={lookup} navigate={navigate} />;
     default:
       return <FallbackView data={record.data} />;
   }
@@ -1766,6 +1943,7 @@ const COLLECTION_TITLES: Record<string, string> = {
   senses: "Senses",
   "super-entries": "Super-entries",
   "tax-chars": "Character taxonomy",
+  "word-relations": "Word relations",
 };
 
 function BacklinksSection({

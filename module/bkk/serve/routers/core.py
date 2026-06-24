@@ -32,6 +32,7 @@ COLLECTION_TYPES: dict[str, str] = {
     "senses": "sense",
     "super-entries": "super-entry",
     "tax-chars": "tax-char",
+    "word-relations": "word-relation",
 }
 
 COLLECTION_LABELS: dict[str, str] = {
@@ -43,13 +44,15 @@ COLLECTION_LABELS: dict[str, str] = {
     "bibliography": "Bibliography",
     "words": "Words",
     "tax-chars": "Character taxonomy",
+    "word-relations": "Word relations",
 }
 
 # Collections the CORE activity exposes for browsing (excludes super-entries,
 # which are surfaced through the Words two-level view).
 BROWSE_COLLECTIONS: tuple[str, ...] = (
     "concepts", "words", "tax-chars", "syntactic-functions",
-    "semantic-features", "rhetorical-devices", "graphs", "bibliography",
+    "semantic-features", "rhetorical-devices", "word-relations",
+    "graphs", "bibliography",
 )
 
 class CollectionInfo(BaseModel):
@@ -82,6 +85,23 @@ class CoreListResponse(BaseModel):
     limit: int
     matches: list[CoreMatch] = Field(default_factory=list)
     super_entries: list[SuperEntryMatch] = Field(default_factory=list)
+
+
+class WordRelationRelType(BaseModel):
+    rel_type: str
+    count: int
+
+
+class WordRelationRelTypesResponse(BaseModel):
+    rel_types: list[WordRelationRelType]
+
+
+class JumpTargetResponse(BaseModel):
+    text_id: str
+    seq: int
+    bucket: str
+    offset: int
+    length: int
 
 
 class SuperEntryWord(BaseModel):
@@ -410,6 +430,10 @@ def list_collection(
     request: Request,
     collection: str,
     q: str | None = Query(default=None, description="label substring filter"),
+    rel_type: str | None = Query(
+        default=None,
+        description="restrict word-relations to a single rel_type category",
+    ),
     limit: int = Query(default=200, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
 ) -> CoreListResponse:
@@ -424,7 +448,7 @@ def list_collection(
     try:
         if collection == "words":
             return _list_super_entries(conn, q, limit, offset)
-        return _list_notes(conn, collection, q, limit, offset)
+        return _list_notes(conn, collection, q, limit, offset, rel_type=rel_type)
     finally:
         conn.close()
 
@@ -435,22 +459,39 @@ def _list_notes(
     q: str | None,
     limit: int,
     offset: int,
+    *,
+    rel_type: str | None = None,
 ) -> CoreListResponse:
     q = q.strip() if q else None
+    rel_type = rel_type.strip() if rel_type else None
+
+    if rel_type and collection == "word-relations":
+        rel_clause = (
+            " AND EXISTS (SELECT 1 FROM labels rt WHERE rt.uuid = n.uuid "
+            "AND rt.label_type = 'rel_type' AND rt.label = ?) "
+        )
+        rel_params: tuple = (rel_type,)
+    else:
+        # Always include a separating space so concatenation with the
+        # following clause (ORDER BY / GROUP BY / ...) doesn't collapse tokens.
+        rel_clause = " "
+        rel_params = ()
+
     if q and any(ch.isupper() for ch in q):
         # Uppercase in the query → case-sensitive starts-with match on the
         # main display label only. Lets the user pin a search like "ABLE"
         # without dragging in records that mention it as an alt label.
         glob = f"{q}*"
         total = conn.execute(
-            "SELECT COUNT(*) FROM notes WHERE collection = ? AND display_label GLOB ?",
-            (collection, glob),
+            "SELECT COUNT(*) FROM notes n "
+            "WHERE n.collection = ? AND n.display_label GLOB ?" + rel_clause,
+            (collection, glob, *rel_params),
         ).fetchone()[0]
         rows = conn.execute(
-            "SELECT uuid, type, display_label FROM notes "
-            "WHERE collection = ? AND display_label GLOB ? "
-            "ORDER BY display_label LIMIT ? OFFSET ?",
-            (collection, glob, limit, offset),
+            "SELECT n.uuid, n.type, n.display_label FROM notes n "
+            "WHERE n.collection = ? AND n.display_label GLOB ?" + rel_clause +
+            "ORDER BY n.display_label LIMIT ? OFFSET ?",
+            (collection, glob, *rel_params, limit, offset),
         ).fetchall()
     elif q:
         norm = normalize_search_text(q)
@@ -458,30 +499,31 @@ def _list_notes(
         total = conn.execute(
             "SELECT COUNT(*) FROM ("
             "SELECT n.uuid FROM notes n JOIN labels l ON l.uuid = n.uuid "
-            "WHERE n.collection = ? AND l.label_search LIKE ? GROUP BY n.uuid"
+            "WHERE n.collection = ? AND l.label_search LIKE ?" + rel_clause +
+            "GROUP BY n.uuid"
             ")",
-            (collection, like),
+            (collection, like, *rel_params),
         ).fetchone()[0]
         rows = conn.execute(
             "SELECT n.uuid, n.type, n.display_label FROM notes n "
             "JOIN labels l ON l.uuid = n.uuid "
-            "WHERE n.collection = ? AND l.label_search LIKE ? "
+            "WHERE n.collection = ? AND l.label_search LIKE ?" + rel_clause +
             "GROUP BY n.uuid "
             "ORDER BY n.display_label COLLATE NOCASE "
             "LIMIT ? OFFSET ?",
-            (collection, like, limit, offset),
+            (collection, like, *rel_params, limit, offset),
         ).fetchall()
     else:
         total = conn.execute(
-            "SELECT COUNT(*) FROM notes WHERE collection = ?",
-            (collection,),
+            "SELECT COUNT(*) FROM notes n WHERE n.collection = ?" + rel_clause,
+            (collection, *rel_params),
         ).fetchone()[0]
         rows = conn.execute(
-            "SELECT uuid, type, display_label FROM notes "
-            "WHERE collection = ? "
-            "ORDER BY display_label COLLATE NOCASE "
+            "SELECT n.uuid, n.type, n.display_label FROM notes n "
+            "WHERE n.collection = ?" + rel_clause +
+            "ORDER BY n.display_label COLLATE NOCASE "
             "LIMIT ? OFFSET ?",
-            (collection, limit, offset),
+            (collection, *rel_params, limit, offset),
         ).fetchall()
 
     matches: list[CoreMatch] = []
@@ -746,6 +788,102 @@ def concept_senses_under_orth(
         for (u, w_uuid, se_uuid, se_orth, dfn, pos, n, syn, sem) in rows
     ]
     return SensesUnderCharResponse(concept_uuid=uuid, orth=orth, senses=senses)
+
+
+# ---------- /word-relations/rel-types ---------------------------------------
+
+
+@router.get(
+    "/word-relations/rel-types",
+    response_model=WordRelationRelTypesResponse,
+    summary="List rel_type categories for word-relations, with counts",
+)
+def word_relation_rel_types(request: Request) -> WordRelationRelTypesResponse:
+    state: AppState = request.app.state.bkk
+    conn = _open(state)
+    try:
+        rows = conn.execute(
+            "SELECT l.label, COUNT(DISTINCT l.uuid) "
+            "FROM labels l JOIN notes n ON n.uuid = l.uuid "
+            "WHERE n.collection = 'word-relations' "
+            "  AND l.label_type = 'rel_type' "
+            "GROUP BY l.label "
+            "ORDER BY l.label COLLATE NOCASE"
+        ).fetchall()
+    finally:
+        conn.close()
+    items = [
+        WordRelationRelType(rel_type=str(label), count=int(count))
+        for label, count in rows
+    ]
+    return WordRelationRelTypesResponse(rel_types=items)
+
+
+# ---------- /word-relations/jump-target -------------------------------------
+
+
+@router.get(
+    "/word-relations/jump-target",
+    response_model=JumpTargetResponse,
+    summary="Resolve a marker id (+ local offset) to a text bucket location",
+)
+def word_relation_jump_target(
+    request: Request,
+    marker_id: str = Query(..., description="TLS-style marker id (the line_id of an attestation)"),
+    offset: int = Query(0, ge=0, description="local offset within the marker"),
+    length: int = Query(1, ge=1, description="highlight length"),
+) -> JumpTargetResponse:
+    from bkk.annotations.harvest import parse_marker_id
+    from bkk.serve import selection
+
+    parsed = parse_marker_id(marker_id)
+    if parsed is None:
+        raise HTTPException(
+            status_code=400, detail=f"unparseable marker_id: {marker_id!r}",
+        )
+    edition, seq = parsed
+    text_id = marker_id.split(f"_{edition}_", 1)[0]
+    if not text_id:
+        raise HTTPException(
+            status_code=400, detail=f"cannot derive text_id from {marker_id!r}",
+        )
+
+    state: AppState = request.app.state.bkk
+    if state.corpus_root is None:
+        raise HTTPException(status_code=503, detail="corpus_root not configured")
+    try:
+        _, juan = selection.load_juan(state.corpus_root, text_id, seq)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"cannot load juan {text_id}_{seq}: {exc}",
+        )
+
+    found: tuple[str, int] | None = None
+    for bucket_name in ("body", "front", "back"):
+        node = juan.get(bucket_name)
+        if not isinstance(node, dict):
+            continue
+        for marker in node.get("markers") or ():
+            if not isinstance(marker, dict):
+                continue
+            if marker.get("id") == marker_id:
+                moff = marker.get("offset")
+                if isinstance(moff, int):
+                    found = (bucket_name, moff)
+                    break
+        if found is not None:
+            break
+    if found is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"marker {marker_id!r} not found in juan {text_id}_{seq}",
+        )
+    bucket_name, marker_off = found
+    return JumpTargetResponse(
+        text_id=text_id, seq=seq, bucket=bucket_name,
+        offset=marker_off + offset, length=length,
+    )
 
 
 # ---------- /{collection}/{uuid}/backlinks ----------------------------------

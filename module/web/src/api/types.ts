@@ -787,6 +787,23 @@ export interface CoreSuperEntryExpansion {
   words: CoreSuperEntryWord[];
 }
 
+export interface CoreWordRelationRelType {
+  rel_type: string;
+  count: number;
+}
+
+export interface CoreWordRelationRelTypesResponse {
+  rel_types: CoreWordRelationRelType[];
+}
+
+export interface CoreJumpTargetResponse {
+  text_id: string;
+  seq: number;
+  bucket: string;
+  offset: number;
+  length: number;
+}
+
 export interface CoreRecordLink {
   target_uuid: string;
   target_type: string | null;

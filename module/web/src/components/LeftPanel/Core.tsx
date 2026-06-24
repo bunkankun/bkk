@@ -3,12 +3,14 @@ import {
   getCoreCollections,
   getCoreList,
   getCoreSuperEntry,
+  getCoreWordRelationRelTypes,
 } from "../../api/client";
 import type {
   CoreCollectionInfo,
   CoreMatch,
   CoreSuperEntryExpansion,
   CoreSuperEntryMatch,
+  CoreWordRelationRelType,
 } from "../../api/types";
 import { workspace } from "../../state/useWorkspace";
 
@@ -36,6 +38,8 @@ export function Core() {
   const [debouncedFilter, setDebouncedFilter] = useState("");
   const [list, setList] = useState<ListState>({ status: "idle" });
   const [expansions, setExpansions] = useState<Record<string, ExpandState>>({});
+  const [relTypes, setRelTypes] = useState<CoreWordRelationRelType[] | null>(null);
+  const [relType, setRelType] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +75,13 @@ export function Core() {
     // Bibliography is shown as a hierarchical list grouped by the first
     // letter of citation_label — fetch enough to cover the whole collection.
     const limit = active === "bibliography" ? 2000 : 200;
-    getCoreList(active, { q: debouncedFilter || undefined, limit })
+    const relTypeParam =
+      active === "word-relations" && relType ? relType : undefined;
+    getCoreList(active, {
+      q: debouncedFilter || undefined,
+      rel_type: relTypeParam,
+      limit,
+    })
       .then((r) => {
         if (cancelled) return;
         setList({
@@ -87,7 +97,23 @@ export function Core() {
     return () => {
       cancelled = true;
     };
-  }, [active, debouncedFilter]);
+  }, [active, debouncedFilter, relType]);
+
+  useEffect(() => {
+    if (active !== "word-relations") return;
+    if (relTypes != null) return;
+    let cancelled = false;
+    getCoreWordRelationRelTypes()
+      .then((r) => {
+        if (!cancelled) setRelTypes(r.rel_types);
+      })
+      .catch(() => {
+        if (!cancelled) setRelTypes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, relTypes]);
 
   const toggleSuperEntry = useCallback((uuid: string) => {
     setExpansions((prev) => {
@@ -142,6 +168,7 @@ export function Core() {
             onChange={(e) => {
               setActive(e.target.value);
               setFilter("");
+              setRelType("");
             }}
             style={{
               width: "100%",
@@ -161,6 +188,32 @@ export function Core() {
             ))}
           </select>
         </div>
+        {active === "word-relations" && (
+          <div style={{ padding: "0 8px 6px" }}>
+            <select
+              value={relType}
+              onChange={(e) => setRelType(e.target.value)}
+              disabled={relTypes == null}
+              style={{
+                width: "100%",
+                padding: "4px 6px",
+                fontSize: 12,
+                background: "var(--bg-1)",
+                color: "var(--t1)",
+                border: "1px solid var(--bd)",
+                borderRadius: 3,
+              }}
+              aria-label="Word relation category"
+            >
+              <option value="">All categories</option>
+              {(relTypes ?? []).map((r) => (
+                <option key={r.rel_type} value={r.rel_type}>
+                  {r.rel_type} ({r.count})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="cat-filter">
         <input
           type="text"

@@ -40,6 +40,7 @@ import {
   parseTextList,
   serializeTextList,
 } from "../lib/textLists";
+import { planOpenTextLocation } from "./openLocationPlan";
 
 export type Activity =
   | "texts"
@@ -2633,15 +2634,103 @@ export const workspace = {
   },
   openAnnotationLocation(loc: AnnotationBySenseLocation) {
     if (loc.offset == null || loc.bucket == null) return;
-    const tabId = `${loc.text_id}:${loc.seq}`;
+    workspace.openTextLocation({
+      textid: loc.text_id,
+      seq: loc.seq,
+      bucket: loc.bucket,
+      offset: loc.offset,
+      length: loc.length ?? 1,
+    });
+  },
+  openTextLocation(args: {
+    textid: string;
+    seq: number;
+    bucket: string;
+    offset: number;
+    length: number;
+  }) {
+    const tabId = `${args.textid}:${args.seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
     const sourceText = isTextTab(sourceTab) ? sourceTab : null;
+    const highlight = {
+      textid: args.textid,
+      seq: args.seq,
+      bucket: args.bucket,
+      offset: args.offset,
+      length: Math.max(1, args.length),
+    };
+    // Avoid splitting the workspace: prefer reusing an existing tab for the
+    // target juan, then fall back to replacing a non-pinned text tab
+    // elsewhere in the tree. See planOpenTextLocation for the decision rules.
+    const plan = planOpenTextLocation(state.pane, target?.id ?? null, tabId);
+    if (plan.kind === "focus") {
+      const nextPane = mapPaneLeaves(state.pane, (leaf) =>
+        leaf.id === plan.leafId ? { ...leaf, activeTabId: tabId } : leaf,
+      );
+      const focusedLeaf = paneLeaves(nextPane).find((l) => l.id === plan.leafId);
+      const focusedTab = focusedLeaf?.tabs.find((t) => t.id === tabId) ?? null;
+      const focusedText = isTextTab(focusedTab) ? focusedTab : null;
+      state = {
+        ...state,
+        activeTextid: args.textid,
+        activeSeq: args.seq,
+        focusedPaneId: plan.leafId,
+        selection: null,
+        currentPage: null,
+        pane: nextPane,
+        activity: "texts",
+        pendingHighlight: highlight,
+      };
+      rememberTextVisit({
+        textid: args.textid, seq: args.seq,
+        pinned: focusedText?.pinned === true,
+      });
+      notify();
+      scheduleSessionSave();
+      return;
+    }
+    if (plan.kind === "replace") {
+      const newTab: TextTab = {
+        id: tabId,
+        type: "text",
+        textid: args.textid,
+        seq: args.seq,
+        pinned: false,
+        readMode: state.openMode === "sticky"
+          ? plan.existing.readMode ?? state.readMode
+          : state.openMode,
+        lineMode: plan.existing.lineMode ?? state.readPrefs.lineMode,
+      };
+      const nextPane = mapPaneLeaves(state.pane, (leaf) => {
+        if (leaf.id !== plan.leafId) return leaf;
+        return {
+          ...leaf,
+          tabs: leaf.tabs.map((t) => (t.id === plan.oldTabId ? newTab : t)),
+          activeTabId: newTab.id,
+        };
+      });
+      state = {
+        ...state,
+        activeTextid: args.textid,
+        activeSeq: args.seq,
+        focusedPaneId: plan.leafId,
+        selection: null,
+        currentPage: null,
+        pane: nextPane,
+        activity: "texts",
+        pendingHighlight: highlight,
+      };
+      rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
+      notify();
+      scheduleSessionSave();
+      return;
+    }
     const tab: TextTab = {
       id: tabId,
       type: "text",
-      textid: loc.text_id,
-      seq: loc.seq,
+      textid: args.textid,
+      seq: args.seq,
       pinned: false,
       readMode: state.openMode === "sticky"
         ? (sourceText?.pinned ? state.readMode : sourceText?.readMode ?? state.readMode)
@@ -2654,22 +2743,16 @@ export const workspace = {
     const focusedPaneId = leafIdForTab(pane, tabId);
     state = {
       ...state,
-      activeTextid: loc.text_id,
-      activeSeq: loc.seq,
+      activeTextid: args.textid,
+      activeSeq: args.seq,
       focusedPaneId,
       selection: null,
       currentPage: null,
       pane,
       activity: "texts",
-      pendingHighlight: {
-        textid: loc.text_id,
-        seq: loc.seq,
-        bucket: loc.bucket,
-        offset: loc.offset,
-        length: Math.max(1, loc.length ?? 1),
-      },
+      pendingHighlight: highlight,
     };
-    rememberTextVisit({ textid: loc.text_id, seq: loc.seq, pinned: tab.pinned === true });
+    rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
     notify();
     scheduleSessionSave();
   },

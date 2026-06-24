@@ -32,9 +32,11 @@ import type {
   CoreRecordResponse,
   SyntacticFunctionLintResponse,
   SyntacticFunctionUsageResponse,
+  CoreJumpTargetResponse,
   CoreSuperEntryByOrth,
   CoreSuperEntryExpansion,
   CoreSuperEntryFull,
+  CoreWordRelationRelTypesResponse,
   AnnotationsBySenseResponse,
   AnnotationsBySenseCountsResponse,
   AnnotationsByRhetoricalDeviceResponse,
@@ -650,15 +652,37 @@ export async function getCoreCollections(): Promise<CoreCollectionsResponse> {
 
 export async function getCoreList(
   collection: string,
-  params?: { q?: string; limit?: number; offset?: number },
+  params?: { q?: string; rel_type?: string; limit?: number; offset?: number },
 ): Promise<CoreListResponse> {
   const q = new URLSearchParams();
   if (params?.q) q.set("q", params.q);
+  if (params?.rel_type) q.set("rel_type", params.rel_type);
   if (params?.limit != null) q.set("limit", String(params.limit));
   if (params?.offset != null) q.set("offset", String(params.offset));
   const qs = q.toString();
   return fetchJson<CoreListResponse>(
     `${apiBase}/core/${encodeURIComponent(collection)}${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function getCoreWordRelationRelTypes(): Promise<CoreWordRelationRelTypesResponse> {
+  return fetchJson<CoreWordRelationRelTypesResponse>(
+    `${apiBase}/core/word-relations/rel-types`,
+  );
+}
+
+export async function getCoreWordRelationJumpTarget(
+  marker_id: string,
+  offset: number,
+  length: number,
+): Promise<CoreJumpTargetResponse> {
+  const q = new URLSearchParams({
+    marker_id,
+    offset: String(offset),
+    length: String(length),
+  });
+  return fetchJson<CoreJumpTargetResponse>(
+    `${apiBase}/core/word-relations/jump-target?${q.toString()}`,
   );
 }
 
