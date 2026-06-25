@@ -304,8 +304,8 @@ export interface WorkspaceState {
     status: "idle" | "loading" | "saving" | "error";
     error: string | null;
   };
-  // Bluesky connection status (handle + did); null when disconnected.
-  blueskyStatus: { handle: string; did: string } | null;
+  // Bluesky connection status (handle + did + optional avatar); null when disconnected.
+  blueskyStatus: { handle: string; did: string; avatar_url?: string | null } | null;
   // Optimistic annotations keyed by `${textid}_${seq}` — survive the
   // refetch round-trip until the harvester picks them up.
   localAnnotations: Record<string, Annotation[]>;
@@ -1776,7 +1776,9 @@ export const workspace = {
     state = { ...state, coreTarget: target };
     notify();
   },
-  setBlueskyStatus(blueskyStatus: { handle: string; did: string } | null) {
+  setBlueskyStatus(
+    blueskyStatus: { handle: string; did: string; avatar_url?: string | null } | null,
+  ) {
     state = { ...state, blueskyStatus };
     notify();
   },

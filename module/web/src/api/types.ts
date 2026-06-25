@@ -206,6 +206,7 @@ export interface Annotation {
 export interface BlueskyStatus {
   handle: string | null;
   did: string | null;
+  avatar_url?: string | null;
 }
 
 export interface BlueskyLoginRequest {

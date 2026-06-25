@@ -109,6 +109,7 @@ class BlueskySession:
     access_jwt: str
     refresh_jwt: str
     service_endpoint: str
+    avatar_url: str | None = None
     created_at: float = field(default_factory=time.time)
 
 

@@ -20,7 +20,11 @@ export function BlueskyLogin() {
       .then((s) => {
         if (cancelled) return;
         if (s.handle && s.did) {
-          workspace.setBlueskyStatus({ handle: s.handle, did: s.did });
+          workspace.setBlueskyStatus({
+            handle: s.handle,
+            did: s.did,
+            avatar_url: s.avatar_url ?? null,
+          });
         } else {
           workspace.setBlueskyStatus(null);
         }
@@ -50,7 +54,11 @@ export function BlueskyLogin() {
     try {
       const s = await postBlueskyLogin({ handle, app_password: password });
       if (s.handle && s.did) {
-        workspace.setBlueskyStatus({ handle: s.handle, did: s.did });
+        workspace.setBlueskyStatus({
+          handle: s.handle,
+          did: s.did,
+          avatar_url: s.avatar_url ?? null,
+        });
       }
       setPassword("");
       closeDialog();
@@ -73,14 +81,23 @@ export function BlueskyLogin() {
   return (
     <>
       {status ? (
-        <div className="mb-bsky" title="Bluesky">
+        <div className="mb-bsky mb-user" title={`Bluesky: ${status.handle}`}>
+          {status.avatar_url ? (
+            <img className="mb-avatar" src={status.avatar_url} alt="" />
+          ) : (
+            <span className="mb-avatar-fallback">
+              {status.handle.slice(0, 1).toUpperCase()}
+            </span>
+          )}
           <button
             type="button"
             className="mb-user-name"
             onClick={onDisconnect}
             title="Click here to disconnect Bluesky"
           >
-            {status.handle}
+            {status.handle.endsWith(".bsky.social")
+              ? status.handle.slice(0, -".bsky.social".length)
+              : status.handle}
           </button>
         </div>
       ) : (

@@ -27,6 +27,7 @@ from ..atproto import (
     TRANSLATION_NSID,
     create_record,
     create_session,
+    get_profiles,
 )
 from ..state import AppState, BlueskySession, UserSession
 from .auth import SESSION_COOKIE
@@ -64,6 +65,7 @@ class BlueskyLoginRequest(BaseModel):
 class BlueskyStatus(BaseModel):
     handle: str | None = None
     did: str | None = None
+    avatar_url: str | None = None
 
 
 @router.get(
@@ -75,7 +77,11 @@ def get_bluesky_session(request: Request) -> BlueskyStatus:
     _, user = _require_user(request)
     if user.bluesky is None:
         return BlueskyStatus()
-    return BlueskyStatus(handle=user.bluesky.handle, did=user.bluesky.did)
+    return BlueskyStatus(
+        handle=user.bluesky.handle,
+        did=user.bluesky.did,
+        avatar_url=user.bluesky.avatar_url,
+    )
 
 
 @router.post(
@@ -92,16 +98,26 @@ def post_bluesky_session(request: Request, body: BlueskyLoginRequest) -> Bluesky
     refresh_jwt = result.get("refreshJwt")
     if not isinstance(did, str) or not isinstance(access_jwt, str) or not isinstance(refresh_jwt, str):
         raise HTTPException(status_code=502, detail="atproto createSession returned an unexpected payload")
+    avatar_url: str | None = None
+    try:
+        profile = get_profiles([did]).get(did)
+        if profile is not None:
+            avatar = profile.get("avatar")
+            if isinstance(avatar, str):
+                avatar_url = avatar
+    except HTTPException:
+        pass
     bluesky = BlueskySession(
         did=did,
         handle=handle,
         access_jwt=access_jwt,
         refresh_jwt=refresh_jwt,
         service_endpoint=DEFAULT_PDS,
+        avatar_url=avatar_url,
     )
     if not _state(request).sessions.attach_bluesky(session_id, bluesky):
         raise HTTPException(status_code=401, detail="Session expired")
-    return BlueskyStatus(handle=handle, did=did)
+    return BlueskyStatus(handle=handle, did=did, avatar_url=avatar_url)
 
 
 @router.delete(
