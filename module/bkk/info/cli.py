@@ -16,6 +16,7 @@ With ``--bundles`` (or ``--prefix``), a fourth per-bundle table is appended.
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import sqlite3
 import sys
@@ -25,6 +26,10 @@ from pathlib import Path
 import yaml
 
 from bkk.config import load_rc, rc_files
+from bkk.exporter.read_bundle import read_bundle
+from bkk.importer.charset import is_allowed_body_char
+from bkk.importer.classify import bucket_sections
+from bkk.importer.pua import summarise_pua_codepoints
 from bkk.index.catalog import CATALOG_SCHEMA_VERSION
 from bkk.index.merge import discover_bundles, is_stale
 from bkk.index.schema import SCHEMA_VERSION
@@ -54,6 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--prefix", default=None,
                    help="restrict per-bundle table to textids starting with "
                         "PREFIX (implies --bundles)")
+    p.add_argument("--text-id", default=None, dest="text_id",
+                   help="show a focused per-text dossier (suppresses other "
+                        "blocks)")
     p.add_argument("--json", action="store_true", dest="json_out",
                    help="emit JSON instead of text")
     return p
@@ -67,8 +75,11 @@ def collect_info_report(
     rc: dict | None = None,
     want_bundles: bool = False,
     prefix: str | None = None,
+    text_id: str | None = None,
 ) -> dict:
     """Build the info report dict. Shared by the CLI and the ``/admin/info`` endpoint."""
+    if text_id is not None:
+        return {"text": _collect_text(text_id, corpus, catalog_path)}
     report = {
         "corpus": _collect_corpus(corpus, prefix=None),
         "index": _collect_index(index_path, corpus),
@@ -113,14 +124,19 @@ def run(argv: list[str] | None = None) -> int:
         )
 
     want_bundles = args.bundles or args.prefix is not None
-    report = collect_info_report(
-        corpus=corpus,
-        index_path=index_path,
-        catalog_path=catalog_path,
-        rc=rc,
-        want_bundles=want_bundles,
-        prefix=args.prefix,
-    )
+    try:
+        report = collect_info_report(
+            corpus=corpus,
+            index_path=index_path,
+            catalog_path=catalog_path,
+            rc=rc,
+            want_bundles=want_bundles,
+            prefix=args.prefix,
+            text_id=args.text_id,
+        )
+    except LookupError as exc:
+        print(f"bkk info: {exc}", file=sys.stderr)
+        return 1
 
     if args.json_out:
         print(json.dumps(report, indent=2, default=str))
@@ -346,7 +362,127 @@ def _collect_bundles(corpus: Path, index_path: Path,
     return [per[k] for k in sorted(per)]
 
 
+def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
+    """Build a per-text dossier: metadata, dates, edition list, juan/char stats,
+    PUA usage, marker inventory, manifest mtime.
+
+    Raises ``LookupError`` if the bundle is not found in ``corpus``.
+    """
+    if not corpus.is_dir():
+        raise LookupError(f"corpus directory not found: {corpus}")
+    matches = [b for b in discover_bundles(corpus) if b.name == text_id]
+    if not matches:
+        raise LookupError(f"text id not found in corpus: {text_id}")
+    bundle_dir = matches[0]
+    manifest_path = bundle_dir / f"{text_id}.manifest.yaml"
+    if not manifest_path.is_file():
+        raise LookupError(f"manifest missing: {manifest_path}")
+
+    manifest_data = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    manifest_metadata = manifest_data.get("metadata") or {}
+    editions = [
+        {
+            "short": e.get("short", "") if isinstance(e, dict) else str(e),
+            "label": e.get("label", "") if isinstance(e, dict) else "",
+        }
+        for e in (manifest_data.get("editions") or [])
+    ]
+    mtime = manifest_path.stat().st_mtime
+    manifest_date = _dt.datetime.fromtimestamp(
+        mtime, tz=_dt.timezone.utc,
+    ).isoformat(timespec="seconds")
+
+    catalog_fields = _read_catalog_row(catalog_path, text_id)
+
+    bundle = read_bundle(bundle_dir)
+
+    chars: dict[str, dict[str, int]] = {
+        "front": {"total": 0, "unique": 0},
+        "body": {"total": 0, "unique": 0},
+        "back": {"total": 0, "unique": 0},
+    }
+    unique_by_bucket: dict[str, set[str]] = {"front": set(), "body": set(), "back": set()}
+    markers_by_type: Counter[str] = Counter()
+    all_texts: list[str] = []
+
+    for juan in bundle.juans:
+        front, body, back = bucket_sections(juan.sections)
+        for bucket_name, secs in (("front", front), ("body", body), ("back", back)):
+            for sec in secs:
+                filtered = [ch for ch in sec.text if is_allowed_body_char(ch)]
+                chars[bucket_name]["total"] += len(filtered)
+                unique_by_bucket[bucket_name].update(filtered)
+                all_texts.append(sec.text)
+                for marker in sec.markers:
+                    markers_by_type[marker.type] += 1
+    for bucket_name, uniq in unique_by_bucket.items():
+        chars[bucket_name]["unique"] = len(uniq)
+    chars["total"] = sum(chars[b]["total"] for b in ("front", "body", "back"))
+
+    pua_summary = summarise_pua_codepoints(text_id, all_texts) or {
+        "total_unique": 0, "total_occurrences": 0,
+    }
+
+    out: dict = {
+        "textid": text_id,
+        "path": str(bundle_dir),
+        "manifestDate": manifest_date,
+        "title": catalog_fields.get("title") or manifest_metadata.get("title"),
+        "titlePinyin": catalog_fields.get("titlePinyin"),
+        "titleEnglish": catalog_fields.get("titleEnglish"),
+        "notBefore": catalog_fields.get("notBefore"),
+        "notAfter": catalog_fields.get("notAfter"),
+        "indexYear": catalog_fields.get("indexYear"),
+        "editions": editions,
+        "juanCount": len(bundle.juans),
+        "chars": chars,
+        "puaChars": {
+            "total_unique": pua_summary["total_unique"],
+            "total_occurrences": pua_summary["total_occurrences"],
+        },
+        "markersByType": dict(sorted(markers_by_type.items())),
+    }
+    if not catalog_fields:
+        out["catalogPresent"] = False
+    return out
+
+
+def _read_catalog_row(catalog_path: Path, text_id: str) -> dict:
+    if not catalog_path.exists():
+        return {}
+    try:
+        conn = sqlite3.connect(f"file:{catalog_path}?mode=ro", uri=True)
+    except sqlite3.DatabaseError:
+        return {}
+    try:
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                "SELECT title, title_pinyin, title_english, "
+                "not_before, not_after, index_date "
+                "FROM catalog_bundle WHERE textid = ?",
+                (text_id,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return {}
+    finally:
+        conn.close()
+    if row is None:
+        return {}
+    return {
+        "title": row["title"],
+        "titlePinyin": row["title_pinyin"],
+        "titleEnglish": row["title_english"],
+        "notBefore": row["not_before"],
+        "notAfter": row["not_after"],
+        "indexYear": row["index_date"],
+    }
+
+
 def _render_text(report: dict) -> None:
+    if "text" in report and len(report) == 1:
+        _render_text_block(report["text"])
+        return
     c = report["corpus"]
     print("corpus")
     print(f"  path:     {c['path']}")
@@ -461,6 +597,75 @@ def _render_text(report: dict) -> None:
     print("  " + sep.join("-" * widths[i] for i in range(len(headers))))
     for r in rows:
         print("  " + sep.join(r[i].ljust(widths[i]) for i in range(len(r))))
+
+
+def _render_text_block(t: dict) -> None:
+    print(f"text  {t['textid']}")
+    print(f"  path:           {t['path']}")
+    print(f"  manifest date:  {t['manifestDate']}")
+
+    def _show(label: str, value: object) -> None:
+        if value is None or value == "":
+            print(f"  {label:<14}  —")
+        else:
+            print(f"  {label:<14}  {value}")
+
+    _show("title:", t.get("title"))
+    _show("title (py):", t.get("titlePinyin"))
+    _show("title (en):", t.get("titleEnglish"))
+
+    nb = t.get("notBefore")
+    na = t.get("notAfter")
+    iy = t.get("indexYear")
+    if nb is None and na is None and iy is None:
+        print("  dates:          —")
+    else:
+        print(
+            f"  dates:          notBefore={nb if nb is not None else '—'}  "
+            f"notAfter={na if na is not None else '—'}  "
+            f"indexYear={iy if iy is not None else '—'}"
+        )
+
+    eds = t.get("editions") or []
+    if eds:
+        labels = ", ".join(
+            f"{e['short']}" + (f" ({e['label']})" if e.get("label") else "")
+            for e in eds
+        )
+        print(f"  editions:       {labels}")
+    else:
+        print("  editions:       —")
+
+    print(f"  juans:          {t['juanCount']}")
+
+    chars = t["chars"]
+    print(f"  chars (total):  {chars['total']:,}")
+    print("  chars by bucket:")
+    width = max(len(b) for b in ("front", "body", "back"))
+    for bucket_name in ("front", "body", "back"):
+        c = chars[bucket_name]
+        print(
+            f"    {bucket_name:<{width}}  total={c['total']:>10,}  "
+            f"unique={c['unique']:>6,}"
+        )
+
+    pua = t["puaChars"]
+    print(
+        f"  PUA chars:      {pua['total_occurrences']:,} occurrences, "
+        f"{pua['total_unique']:,} unique"
+    )
+
+    markers = t.get("markersByType") or {}
+    if not markers:
+        print("  markers:        —")
+    else:
+        print("  markers by type:")
+        m_width = max(len(k) for k in markers)
+        for k, n in markers.items():
+            print(f"    {k:<{m_width}}  {n:>8,}")
+
+    if t.get("catalogPresent") is False:
+        print("  (no catalog row found — title/dates fall back to manifest)")
 
 
 def main() -> None:
