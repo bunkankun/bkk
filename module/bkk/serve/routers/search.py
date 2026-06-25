@@ -1035,6 +1035,10 @@ class ParallelLocationModel(BaseModel):
     left: str
     right: str
     edit_distance: int = 0
+    # Occurrence text and run-length-encoded diff vs. cluster representative;
+    # both empty for exact matches (edit_distance == 0).
+    text: str = ""
+    diff: list[list] = []
 
 
 class ParallelClusterModel(BaseModel):
@@ -1071,6 +1075,8 @@ def _parallel_location_out(loc: ParallelLocation) -> ParallelLocationModel:
         left=loc.left,
         right=loc.right,
         edit_distance=loc.edit_distance,
+        text=loc.text,
+        diff=[list(op) for op in loc.diff],
     )
 
 

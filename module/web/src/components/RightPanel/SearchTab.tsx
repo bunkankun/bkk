@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type {
   ParallelCluster,
   ParallelLocation,
@@ -725,6 +725,129 @@ function ParallelLocationRow({ loc, marker }: { loc: ParallelLocation; marker: s
   );
 }
 
+// Aggregate diff sites across all occurrences in a cluster, keyed by their
+// position in the cluster representative.
+type SiteMap = {
+  subs: Map<number, Map<string, number>>;  // rep pos -> variant occ char -> count
+  dels: Map<number, number>;                // rep pos -> count of occs that dropped this char
+  ins: Map<number, Map<string, number>>;    // "inserted before rep pos i" -> char -> count
+  hasAny: boolean;
+};
+
+function buildClusterSites(locations: ParallelLocation[]): SiteMap {
+  const subs = new Map<number, Map<string, number>>();
+  const dels = new Map<number, number>();
+  const ins = new Map<number, Map<string, number>>();
+  let hasAny = false;
+  for (const loc of locations) {
+    if (!loc.diff || loc.diff.length === 0) continue;
+    let i = 0;
+    for (const op of loc.diff) {
+      if (op[0] === "=") {
+        i += op[1] as number;
+      } else if (op[0] === "s") {
+        hasAny = true;
+        const variant = op[2] as string;
+        let m = subs.get(i);
+        if (!m) { m = new Map(); subs.set(i, m); }
+        m.set(variant, (m.get(variant) ?? 0) + 1);
+        i += 1;
+      } else if (op[0] === "d") {
+        hasAny = true;
+        dels.set(i, (dels.get(i) ?? 0) + 1);
+        i += 1;
+      } else if (op[0] === "i") {
+        hasAny = true;
+        const variant = op[1] as string;
+        let m = ins.get(i);
+        if (!m) { m = new Map(); ins.set(i, m); }
+        m.set(variant, (m.get(variant) ?? 0) + 1);
+      }
+    }
+  }
+  return { subs, dels, ins, hasAny };
+}
+
+function fmtVariantList(variants: Map<string, number>): string {
+  return Array.from(variants.entries())
+    .map(([v, n]) => (n > 1 ? `${v} (${n}×)` : v))
+    .join(", ");
+}
+
+function InsPip({ variants }: { variants: Map<string, number> }) {
+  const entries = Array.from(variants.entries());
+  const onlyChar = entries.length === 1 ? entries[0][0] : null;
+  const label = fmtVariantList(variants);
+  return (
+    <mark className="diff-ins" title={`inserted: ${label}`}>
+      {onlyChar ?? "+"}
+    </mark>
+  );
+}
+
+function seedHits(text: string, seed: string): boolean[] {
+  const hits = new Array<boolean>(text.length).fill(false);
+  if (!seed) return hits;
+  let i = 0;
+  while (i <= text.length - seed.length) {
+    const at = text.indexOf(seed, i);
+    if (at < 0) break;
+    for (let k = at; k < at + seed.length; k++) hits[k] = true;
+    i = at + seed.length;
+  }
+  return hits;
+}
+
+// Render the cluster representative with the search seed highlighted in
+// kwic-match yellow and aggregated variation marks inline at each diff site.
+// The header wraps, so we render the full passage; only diff sites get marks.
+// (The seed anchor matches exactly across all occurrences, so seed positions
+// never coincide with a diff site.)
+function renderClusterRep(text: string, sites: SiteMap, seed: string): ReactNode[] {
+  const seedAt = seedHits(text, seed);
+  const nodes: ReactNode[] = [];
+  const pushIns = (p: number) => {
+    const m = sites.ins.get(p);
+    if (m) nodes.push(<InsPip key={`ins:${p}`} variants={m} />);
+  };
+  pushIns(0);
+
+  // Walk text. Emit consecutive seed-matched chars as a single <mark>.
+  let i = 0;
+  while (i < text.length) {
+    if (seedAt[i]) {
+      const start = i;
+      while (i < text.length && seedAt[i]) i += 1;
+      nodes.push(
+        <mark key={`s:${start}`} className="kwic-match">{text.slice(start, i)}</mark>
+      );
+      pushIns(i);
+      continue;
+    }
+    const ch = text[i];
+    const sub = sites.subs.get(i);
+    const del = sites.dels.get(i);
+    if (sub && del) {
+      const title = `→ ${fmtVariantList(sub)}; dropped in ${del}`;
+      nodes.push(
+        <mark key={`c:${i}`} className="diff-sub diff-del" title={title}>{ch}</mark>
+      );
+    } else if (sub) {
+      nodes.push(
+        <mark key={`c:${i}`} className="diff-sub" title={`→ ${fmtVariantList(sub)}`}>{ch}</mark>
+      );
+    } else if (del) {
+      const title = `dropped in ${del} occurrence${del > 1 ? "s" : ""}`;
+      nodes.push(<mark key={`c:${i}`} className="diff-del" title={title}>{ch}</mark>);
+    } else {
+      nodes.push(<span key={`c:${i}`}>{ch}</span>);
+    }
+    i += 1;
+    pushIns(i);
+  }
+  return nodes;
+}
+
 const PARALLEL_TEXT_MAX = 200;
 
 function parallelMarker(text: string): string {
@@ -733,10 +856,26 @@ function parallelMarker(text: string): string {
   return `${chars.slice(0, 2).join("")}…${chars.slice(-2).join("")}`;
 }
 
-function ParallelClusterRow({ cluster }: { cluster: ParallelCluster }) {
-  const elided = cluster.text.length > PARALLEL_TEXT_MAX;
-  const shown = elided ? cluster.text.slice(0, PARALLEL_TEXT_MAX) : cluster.text;
+function ParallelClusterRow({ cluster, seed }: { cluster: ParallelCluster; seed: string }) {
+  const sites = buildClusterSites(cluster.locations);
   const marker = parallelMarker(cluster.text);
+  const truncated = !sites.hasAny && cluster.text.length > PARALLEL_TEXT_MAX;
+  const headerText = truncated ? cluster.text.slice(0, PARALLEL_TEXT_MAX) : cluster.text;
+  const header = (
+    <div
+      className="parallel-text"
+      title={
+        truncated
+          ? cluster.text
+          : sites.hasAny
+            ? cluster.text
+            : undefined
+      }
+    >
+      {renderClusterRep(headerText, sites, seed)}
+      {truncated ? <span className="kwic-ell">…</span> : null}
+    </div>
+  );
   return (
     <div className="parallel-cluster">
       <div className="kwic-summary">
@@ -749,10 +888,7 @@ function ParallelClusterRow({ cluster }: { cluster: ParallelCluster }) {
           </span>
         ) : null}
       </div>
-      <div className="parallel-text" title={elided ? cluster.text : undefined}>
-        {shown}
-        {elided ? <span className="kwic-ell">…</span> : null}
-      </div>
+      {header}
       {cluster.locations.map((loc, i) => (
         <ParallelLocationRow
           key={`${loc.textid}:${loc.juan_seq}:${loc.bucket_id}:${loc.start}:${i}`}
@@ -818,7 +954,7 @@ function ParallelResultsView({
         </button>
       </div>
       {response.clusters.map((c) => (
-        <ParallelClusterRow key={c.cluster_id} cluster={c} />
+        <ParallelClusterRow key={c.cluster_id} cluster={c} seed={seed} />
       ))}
       {(hasPrev || hasNext) && (
         <div className="kwic-pager">

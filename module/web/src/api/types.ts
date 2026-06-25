@@ -556,6 +556,17 @@ export interface TranslationSearchResponse {
 export type ParallelBucket = "front" | "body" | "back" | "all";
 export type ParallelSort = "frequency" | "length";
 
+// One diff operation against the cluster representative.
+//   ["=", n]              n consecutive matching characters
+//   ["s", rep_ch, occ_ch] substitution
+//   ["i", occ_ch]         insertion (occurrence only)
+//   ["d", rep_ch]         deletion (representative only)
+export type DiffOp =
+  | ["=", number]
+  | ["s", string, string]
+  | ["i", string]
+  | ["d", string];
+
 export interface ParallelLocation {
   textid: string;
   juan_seq: number;
@@ -567,6 +578,8 @@ export interface ParallelLocation {
   left: string;
   right: string;
   edit_distance: number;
+  text?: string;
+  diff?: DiffOp[];
 }
 
 export interface ParallelCluster {

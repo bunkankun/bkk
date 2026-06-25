@@ -2414,6 +2414,25 @@ button {
   background: var(--amb-d);
   color: var(--amb);
 }
+.kwic-match .diff-sub,
+.kwic-match .diff-ins,
+.kwic-match .diff-del {
+  padding: 0;
+  background: transparent;
+}
+.kwic-match .diff-sub {
+  color: var(--blu);
+  text-decoration: underline;
+}
+.kwic-match .diff-ins {
+  color: var(--blu);
+  font-weight: 700;
+}
+.kwic-match .diff-del {
+  color: var(--muted);
+  text-decoration: line-through;
+  font-weight: 400;
+}
 .kwic-fold {
   display: inline-block;
   margin: 0 2px;

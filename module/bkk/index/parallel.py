@@ -9,12 +9,20 @@ import sqlite3
 import unicodedata
 from collections import OrderedDict
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TextIO
 
 from bkk.chars.canonicalize import canonicalize_query
 from bkk.chars.refs import CanonicalizationContext
+
+
+# A single diff op vs. the cluster representative. Shapes:
+#   ("=", n)              — n consecutive matching characters
+#   ("s", rep_ch, occ_ch) — substitution
+#   ("i", occ_ch)         — character present in the occurrence only
+#   ("d", rep_ch)         — character present in the representative only
+DiffOp = tuple
 
 
 @dataclass(frozen=True)
@@ -31,6 +39,12 @@ class ParallelLocation:
     left: str
     right: str
     edit_distance: int = 0
+    # Occurrence's actual substring; empty when it matches the cluster
+    # representative exactly (``edit_distance == 0``).
+    text: str = ""
+    # Run-length-encoded alignment ops vs. the cluster representative; empty
+    # for exact occurrences.
+    diff: tuple[DiffOp, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -676,23 +690,25 @@ def _clusters_from_spans_fuzzy(
         groups.setdefault(find(n), []).append(n)
 
     drift_cap = 2 * max_edits
-    raw_clusters: list[tuple[str, int, list[tuple[tuple[int, int, int], int]], int]] = []
+    KeptEntry = tuple[tuple[int, int, int], int, str, tuple[DiffOp, ...]]
+    raw_clusters: list[tuple[str, int, list[KeptEntry], int]] = []
     for members in groups.values():
         if len(members) < min_occurrences:
             continue
         rep = max(members, key=lambda m: (m[2] - m[1], -m[0], -m[1]))
         rep_text = cache.get(rep[0]).text[rep[1]:rep[2]]
-        kept: list[tuple[tuple[int, int, int], int]] = []
+        kept: list[KeptEntry] = []
         max_d = 0
         for m in members:
             if m == rep:
-                kept.append((m, 0))
+                kept.append((m, 0, "", ()))
                 continue
             info = cache.get(m[0])
             mt = info.text[m[1]:m[2]]
             d = _bounded_edit_distance(rep_text, mt, drift_cap)
             if d <= drift_cap:
-                kept.append((m, d))
+                ops = _align_ops(rep_text, mt) if d > 0 else ()
+                kept.append((m, d, mt, ops))
                 if d > max_d:
                     max_d = d
         if len(kept) < min_occurrences:
@@ -700,7 +716,7 @@ def _clusters_from_spans_fuzzy(
         raw_clusters.append((rep_text, len(rep_text), kept, max_d))
 
     raw_clusters.sort(
-        key=lambda c: (-c[1], c[3], c[0], min(m for m, _ in c[2])),
+        key=lambda c: (-c[1], c[3], c[0], min(entry[0] for entry in c[2])),
     )
 
     if not include_contained:
@@ -708,10 +724,13 @@ def _clusters_from_spans_fuzzy(
 
     clusters: list[ParallelCluster] = []
     for idx, (text, length, kept, max_d) in enumerate(raw_clusters, 1):
-        kept_sorted = sorted(kept, key=lambda kv: kv[0])
+        kept_sorted = sorted(kept, key=lambda entry: entry[0])
         locations = tuple(
-            _make_location(conn, cache, m[0], m[1], m[2], context, edit_distance=d)
-            for m, d in kept_sorted
+            _make_location(
+                conn, cache, m[0], m[1], m[2], context,
+                edit_distance=d, text=mt, diff=ops,
+            )
+            for m, d, mt, ops in kept_sorted
         )
         clusters.append(
             ParallelCluster(
@@ -727,17 +746,17 @@ def _clusters_from_spans_fuzzy(
 
 
 def _remove_contained_clusters_fuzzy(
-    clusters: list[tuple[str, int, list[tuple[tuple[int, int, int], int]], int]],
+    clusters: list,
     min_occurrences: int,
-) -> list[tuple[str, int, list[tuple[tuple[int, int, int], int]], int]]:
-    kept: list[tuple[str, int, list[tuple[tuple[int, int, int], int]], int]] = []
+) -> list:
+    kept: list = []
     for text, length, members, max_d in clusters:
         contained = False
-        spans = {m for m, _ in members}
+        spans = {entry[0] for entry in members}
         for _k_text, k_length, k_members, _k_d in kept:
             if k_length < length:
                 continue
-            k_spans = {m for m, _ in k_members}
+            k_spans = {entry[0] for entry in k_members}
             contained_count = sum(
                 1 for span in spans if _span_contained_in_any(span, k_spans)
             )
@@ -747,6 +766,74 @@ def _remove_contained_clusters_fuzzy(
         if not contained:
             kept.append((text, length, members, max_d))
     return kept
+
+
+def _align_ops(rep: str, occ: str) -> tuple[DiffOp, ...]:
+    """Levenshtein alignment of ``rep`` against ``occ``, run-length encoded.
+
+    Strings here are short (at most a few dozen characters from a parallel
+    span), so the full ``O(n*m)`` DP is fine — this is called once per
+    occurrence after fuzzy clustering, not in the seed-extension hot loop.
+    """
+    n, m = len(rep), len(occ)
+    if n == 0 and m == 0:
+        return ()
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        dp[i][0] = i
+    for j in range(1, m + 1):
+        dp[0][j] = j
+    for i in range(1, n + 1):
+        row = dp[i]
+        prev = dp[i - 1]
+        ri = rep[i - 1]
+        for j in range(1, m + 1):
+            cost = 0 if ri == occ[j - 1] else 1
+            v = prev[j - 1] + cost
+            d = prev[j] + 1
+            if d < v:
+                v = d
+            d = row[j - 1] + 1
+            if d < v:
+                v = d
+            row[j] = v
+
+    raw: list[DiffOp] = []
+    i, j = n, m
+    while i > 0 or j > 0:
+        if (
+            i > 0
+            and j > 0
+            and rep[i - 1] == occ[j - 1]
+            and dp[i][j] == dp[i - 1][j - 1]
+        ):
+            raw.append(("=", rep[i - 1]))
+            i -= 1
+            j -= 1
+        elif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1:
+            raw.append(("s", rep[i - 1], occ[j - 1]))
+            i -= 1
+            j -= 1
+        elif i > 0 and dp[i][j] == dp[i - 1][j] + 1:
+            raw.append(("d", rep[i - 1]))
+            i -= 1
+        else:
+            raw.append(("i", occ[j - 1]))
+            j -= 1
+
+    ops: list[DiffOp] = []
+    run = 0
+    for op in reversed(raw):
+        if op[0] == "=":
+            run += 1
+        else:
+            if run:
+                ops.append(("=", run))
+                run = 0
+            ops.append(op)
+    if run:
+        ops.append(("=", run))
+    return tuple(ops)
 
 
 def _bounded_edit_distance(s1: str, s2: str, cap: int) -> int:
@@ -821,6 +908,8 @@ def _make_location(
     end: int,
     context: int,
     edit_distance: int = 0,
+    text: str = "",
+    diff: tuple[DiffOp, ...] = (),
 ) -> ParallelLocation:
     info = cache.get(bucket_id)
     return ParallelLocation(
@@ -834,6 +923,8 @@ def _make_location(
         left=info.text[max(0, start - context):start],
         right=info.text[end:end + context],
         edit_distance=edit_distance,
+        text=text,
+        diff=diff,
     )
 
 

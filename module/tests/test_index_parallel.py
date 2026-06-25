@@ -469,6 +469,60 @@ def test_parallel_fuzzy_cli_emits_edit_distance(tmp_path):
     assert {loc["edit_distance"] for loc in rows[0]["locations"]} == {0, 1}
 
 
+def _apply_diff(rep_text: str, diff) -> str:
+    """Reconstruct an occurrence by applying ``diff`` ops to the cluster's
+    representative text."""
+    out: list[str] = []
+    i = 0
+    for op in diff:
+        tag = op[0]
+        if tag == "=":
+            n = op[1]
+            out.append(rep_text[i:i + n])
+            i += n
+        elif tag == "s":
+            assert rep_text[i] == op[1]
+            out.append(op[2])
+            i += 1
+        elif tag == "i":
+            out.append(op[1])
+        elif tag == "d":
+            assert rep_text[i] == op[1]
+            i += 1
+        else:
+            raise AssertionError(f"unknown op: {op!r}")
+    assert i == len(rep_text)
+    return "".join(out)
+
+
+def test_parallel_fuzzy_locations_carry_text_and_diff(tmp_path):
+    _write_bundle(tmp_path, "KR0a0001", "qqABCDEFGKEY1234X678ww")
+    _write_bundle(tmp_path, "KR0a0002", "rrABCDEFGKEY1234Y678ee")
+    _write_bundle(tmp_path, "KR0a0003", "ssABCDEFGKEY134Y678oo")  # one deletion + one sub
+    out = _merge(tmp_path)
+
+    clusters = discover_parallel_passages(
+        out, seed="KEY", min_length=16, max_edits=2,
+    )
+
+    assert len(clusters) == 1
+    c = clusters[0]
+    by_textid = {loc.textid: loc for loc in c.locations}
+    for textid, loc in by_textid.items():
+        if loc.edit_distance == 0:
+            # Exact occurrence: text & diff intentionally empty.
+            assert loc.text == ""
+            assert loc.diff == ()
+        else:
+            assert loc.text, f"{textid} should carry its own text"
+            assert loc.diff, f"{textid} should carry an alignment"
+            # Number of non-equal ops equals the edit distance.
+            non_eq = sum(1 for op in loc.diff if op[0] != "=")
+            assert non_eq == loc.edit_distance
+            # Diff applied to the cluster representative reproduces loc.text.
+            assert _apply_diff(c.text, loc.diff) == loc.text
+
+
 def test_parallel_fuzzy_rejects_max_edits_out_of_range(tmp_path):
     _write_bundle(tmp_path, "KR0a0001", "abcdef")
     out = _merge(tmp_path)
