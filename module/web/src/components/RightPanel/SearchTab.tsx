@@ -859,19 +859,16 @@ function parallelMarker(text: string): string {
 function ParallelClusterRow({ cluster, seed }: { cluster: ParallelCluster; seed: string }) {
   const sites = buildClusterSites(cluster.locations);
   const marker = parallelMarker(cluster.text);
-  const truncated = !sites.hasAny && cluster.text.length > PARALLEL_TEXT_MAX;
-  const headerText = truncated ? cluster.text.slice(0, PARALLEL_TEXT_MAX) : cluster.text;
+  // Keep the 200-char cap, but extend it just enough to include every diff
+  // site so fuzzy variants stay visible even on long passages.
+  let cutoff = PARALLEL_TEXT_MAX;
+  sites.subs.forEach((_, p) => { if (p + 1 > cutoff) cutoff = p + 1; });
+  sites.dels.forEach((_, p) => { if (p + 1 > cutoff) cutoff = p + 1; });
+  sites.ins.forEach((_, p) => { if (p > cutoff) cutoff = p; });
+  const truncated = cluster.text.length > cutoff;
+  const headerText = truncated ? cluster.text.slice(0, cutoff) : cluster.text;
   const header = (
-    <div
-      className="parallel-text"
-      title={
-        truncated
-          ? cluster.text
-          : sites.hasAny
-            ? cluster.text
-            : undefined
-      }
-    >
+    <div className="parallel-text" title={truncated ? cluster.text : undefined}>
       {renderClusterRep(headerText, sites, seed)}
       {truncated ? <span className="kwic-ell">…</span> : null}
     </div>
