@@ -52,7 +52,7 @@ def _git_ls_branch(repo: Path, branch: str) -> list[str]:
 # ---------- imglist + imginfo ----------------------------------------------
 
 
-_JUAN_FILE_RE = re.compile(r"^([A-Z]+\d+[a-z]?\d+)_(\d{3})\.txt$")
+_JUAN_FILE_RE = re.compile(r"^([A-Z]+\d+[a-z]?\d+)_(\d{3,})\.txt$")
 
 
 def _list_juan_files(repo: Path, branch: str, text_id: str) -> list[tuple[int, str]]:
