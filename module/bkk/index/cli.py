@@ -15,6 +15,9 @@ Subcommands::
                                                 [--format jsonl|tsv]
     python -m bkk.index parallel-scan <bkkx_path> [--out PATH]
                                                      [--work-dir DIR]
+    python -m bkk.index duplications <bkkx_path> [--out PATH]
+                                                 [--min-length N]
+                                                 [--min-pair-chars N]
     python -m bkk.index search <bkkx_path> <query> [--context N]
                                                    [--witness LABEL]...
                                                    [--textid ID]
@@ -177,6 +180,37 @@ def build_parser() -> argparse.ArgumentParser:
                      help="include clusters wholly contained in longer clusters")
     pps.add_argument("--quiet", action="store_true",
                      help="suppress progress logging")
+
+    pd = sub.add_parser(
+        "duplications",
+        help="rank juan-pairs by long duplicated spans (aggregates parallel-scan)",
+    )
+    pd.add_argument("index_path", type=Path)
+    pd.add_argument("--out", type=Path, default=None,
+                    help="output path (default: stdout)")
+    pd.add_argument("--work-dir", type=Path, default=None,
+                    help="directory for temporary partition/work files "
+                         "(default: next to the index)")
+    pd.add_argument("--bucket", choices=["front", "body", "back", "all"],
+                    default="body",
+                    help="bucket kind to scan (default: body)")
+    pd.add_argument("--min-length", type=int, default=200,
+                    help="minimum repeated passage length in characters (default: 200)")
+    pd.add_argument("--anchor-length", type=int, default=12,
+                    help="fingerprint length in characters (default: 12)")
+    pd.add_argument("--min-occurrences", type=int, default=2,
+                    help="minimum locations per cluster (default: 2)")
+    pd.add_argument("--max-anchor-occurrences", type=int, default=200,
+                    help="skip an anchor hash above this occurrence count (default: 200)")
+    pd.add_argument("--partitions", type=int, default=256,
+                    help="number of hash partitions (default: 256)")
+    pd.add_argument("--min-pair-chars", type=int, default=100,
+                    help="drop juan-pairs whose smaller side has fewer "
+                         "duplicated characters than this (default: 100)")
+    pd.add_argument("--format", choices=["tsv", "jsonl"], default="tsv",
+                    help="report format (default: tsv)")
+    pd.add_argument("--quiet", action="store_true",
+                    help="suppress progress logging")
 
     pck = sub.add_parser(
         "check",
@@ -381,6 +415,27 @@ def run(argv: list[str] | None = None) -> int:
             write_parallel_report(clusters, sys.stdout, format=args.format)
         else:
             write_parallel_report(clusters, args.out, format=args.format)
+            print(f"wrote {args.out}")
+        return 0
+    if args.cmd == "duplications":
+        import sys
+        from .duplications import find_duplicated_juan, write_duplications_report
+        rows = find_duplicated_juan(
+            args.index_path,
+            bucket=args.bucket,
+            min_length=args.min_length,
+            anchor_length=args.anchor_length,
+            min_occurrences=args.min_occurrences,
+            max_anchor_occurrences=args.max_anchor_occurrences,
+            partitions=args.partitions,
+            work_dir=args.work_dir,
+            min_pair_chars=args.min_pair_chars,
+            progress=None if args.quiet else sys.stderr,
+        )
+        if args.out is None:
+            write_duplications_report(rows, sys.stdout, format=args.format)
+        else:
+            write_duplications_report(rows, args.out, format=args.format)
             print(f"wrote {args.out}")
         return 0
     if args.cmd == "check":
