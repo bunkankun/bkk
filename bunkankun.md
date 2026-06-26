@@ -20,7 +20,7 @@ These are digital artifacts that try to emulate as faithful as possible the text
 
 ### Interpretative editions
 
-Editorial judgements are interpretations that manifests itself as emendations to the received text. The purpose here is not to produce a faithful copy, but a better text, at least in the eye of the editor. We mark them with shorthand codes that contain only lowercase letters, such as `master`.  The 'master' edition plays a special role here, because that is the only one that has to be present for all texts, since it serves as the default entry point for the text and in the default view other editions might be seen through the filter of differences to this edition.  
+Editorial judgements are interpretations that manifest itself as emendations to the received text. The purpose here is not to produce a faithful copy, but a better text, at least in the eye of the editor. We mark them with shorthand codes that contain only lowercase letters, such as `master`.  The 'master' edition plays a special role here, because that is the only one that has to be present for all texts, since it serves as the default entry point for the text and in the default view other editions might be seen through the filter of differences to this edition.  
 
 ## Shape of the data: The BKK Bundle
 
@@ -36,7 +36,7 @@ The archival format is mainly for text data of premodern Chinese. Texts used to 
 
 A **juan** file has a `front`, a `body`, and a `back`; only the body must be non-empty, the others are optional and need not be present if empty. Additional metadata fields are available. The text elements of the body and back may be subdivided where appropriate. A typical front contains an opening line that locates the juan in a larger collection, the title of the text, the sequential number of the juan, and an attribution naming persons and roles with respect to the body. The back contains a closing line. The placement of prefaces, postfaces, colophons, and similar paratextual material is open: such material may go into the body or be separated out into front or back, at the discretion of the project applying the format.
 
-The body has one text element that holds the canonical character content of the whole juan. Space characters, punctuation, line breaks, and similar content are not present in this stream — they are extracted into the juan's logical **marker collection**. A marker has at minimum a **type** and an **offset**; further fields are optional and typically include **id**, **content**, and additional structured information appropriate to the marker's type. The set of marker types is open; a small core vocabulary is defined separately.
+The body has one text element that holds the canonical character content of the whole juan. Space characters, punctuation, line breaks, and similar content are **not** present in this stream — they are extracted into the juan's logical **marker collection**. A marker has at minimum a **type** and an **offset**; further fields are optional and typically include **id**, **content**, and additional structured information appropriate to the marker's type. The set of marker types is open; a small core vocabulary is defined separately.
 
 Markers may be stored in two physical locations. A bucket may carry an inline `markers` list for structural markers that are useful when inspecting the juan by itself. Most markers may instead be stored in a per-juan marker asset under the bundle's `assets/` directory and pinned from the manifest. Consumers treat inline markers and marker-asset markers as one logical collection, sorted by offset. This keeps juan files compact while preserving the same text-addressing model.
 
@@ -542,11 +542,11 @@ The middleware accepts canonical identifiers and resolves them through configure
 
 Beyond resolving individual identifiers, the middleware also fulfils **recipes**. A client constructs a recipe describing the composition it needs and submits it to the middleware; the middleware walks each pin, resolves and verifies each pinned asset, applies any selection, and returns the assembled set. This is the standard way for a client to obtain a multi-component composition from the project's repositories. The recipe a client submits as a request and the recipe a teacher publishes as a reading list share the same format; what differs is their lifecycle, not their shape.
 
-### bunkanlib
+### BKK
 
-`bunkanlib` is the reference implementation of the middleware. The first form is a **Python library** that clients import in-process; wire-protocol shapes (local daemon, remote service) are deferred and may be added later as the project's needs become clearer.
+`bkk` is the reference implementation of the middleware. The first form is a **Python library** that clients import in-process; wire-protocol shapes (local daemon, remote service) are deferred and may be added later as the project's needs become clearer.
 
-A guiding principle: bunkanlib is **thin**. Its job is to fetch and verify; the bundle (or the assembled set, for a recipe) is then handed to the client, which is expected to interpret, slice, format, and render it. The library does not aim to be a one-stop reading stack.
+A guiding principle: bkk is **thin**. Its job is to fetch and verify; the bundle (or the assembled set, for a recipe) is then handed to the client, which is expected to interpret, slice, format, and render it. The library does not aim to be a one-stop reading stack.
 
 #### Resolvers
 
@@ -608,7 +608,7 @@ A translation must be readable on its own. A reader who picks up only the transl
 
 ### Archival format
 
-The archival format is **Markdown with a YAML header**. The header carries the manifest-style metadata that ties the translation to its source and identifies it as an addressable bundle. The body is the translation's prose, in the order a reader is meant to read it, with source-segment alignment recorded inline via Pandoc-style attribute spans.
+The archival format for translations is **Markdown with a YAML header**. The header carries the manifest-style metadata that ties the translation to its source and identifies it as an addressable bundle. The body is the translation's prose, in the order a reader is meant to read it, with source-segment alignment recorded inline via Pandoc-style attribute spans.
 
 #### YAML header
 
