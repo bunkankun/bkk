@@ -33,6 +33,7 @@ from bkk.importer.pua import summarise_pua_codepoints
 from bkk.index.catalog import CATALOG_SCHEMA_VERSION
 from bkk.index.merge import discover_bundles, is_stale
 from bkk.index.schema import SCHEMA_VERSION
+from bkk.marker_assets import effective_markers_for_bucket, load_marker_asset
 
 _INDEX_TABLES = (
     "bundle", "juan", "bucket", "witness", "variant", "voice_range",
@@ -427,10 +428,10 @@ def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
                 all_texts.append(sec.text)
                 for marker in sec.markers:
                     markers_by_type[marker.type] += 1
-                    if marker.type == "page-break":
-                        parts = marker.id.split("_", 2)
-                        if len(parts) >= 2 and parts[1]:
-                            images_by_edition[parts[1]] += 1
+
+    _count_images_by_edition(
+        bundle_dir, manifest_path, manifest_data, images_by_edition,
+    )
     for bucket_name, uniq in unique_by_bucket.items():
         chars[bucket_name]["unique"] = len(uniq)
     chars["total"] = sum(chars[b]["total"] for b in ("front", "body", "back"))
@@ -464,6 +465,47 @@ def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
     if not catalog_fields:
         out["catalogPresent"] = False
     return out
+
+
+def _count_images_by_edition(
+    bundle_dir: Path,
+    manifest_path: Path,
+    manifest_data: dict,
+    counter: Counter,
+) -> None:
+    """Count page-break markers carrying a non-empty ``image`` field, grouped
+    by edition (parsed from the marker id's second underscore-separated part).
+
+    Reads raw juan + marker-asset yaml directly because ``read_bundle`` drops
+    marker extras during bucket splitting, so the image fields would otherwise
+    be unavailable.
+    """
+    parts = manifest_data.get("assets", {}).get("parts") or []
+    for entry in parts:
+        if not isinstance(entry, dict):
+            continue
+        filename = entry.get("filename")
+        seq = entry.get("seq")
+        if not isinstance(filename, str) or not isinstance(seq, int):
+            continue
+        juan_path = bundle_dir / filename
+        if not juan_path.is_file():
+            continue
+        try:
+            juan = yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        marker_asset = load_marker_asset(manifest_path.parent, manifest_data, seq)
+        for bucket_name in ("front", "body", "back"):
+            for m in effective_markers_for_bucket(juan, bucket_name, marker_asset):
+                if m.get("type") != "page-break":
+                    continue
+                if not m.get("image"):
+                    continue
+                mid = m.get("id") or ""
+                ed_parts = mid.split("_", 2)
+                if len(ed_parts) >= 2 and ed_parts[1]:
+                    counter[ed_parts[1]] += 1
 
 
 def _read_catalog_row(catalog_path: Path, text_id: str) -> dict:
