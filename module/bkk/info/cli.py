@@ -153,6 +153,25 @@ def run(argv: list[str] | None = None) -> int:
         print(f"bkk info: {exc}", file=sys.stderr)
         return 1
 
+    if args.fix_editions:
+        undeclared = report["text"].get("undeclaredEditions") or []
+        bundle_dir = Path(report["text"]["path"])
+        added = _fix_editions(bundle_dir, args.text_id, undeclared)
+        if added:
+            print(
+                f"added {len(added)} edition(s) to manifest: {', '.join(added)}",
+                file=sys.stderr,
+            )
+            # Re-collect so downstream rendering reflects the patched manifest.
+            report = collect_info_report(
+                corpus=corpus, index_path=index_path,
+                catalog_path=catalog_path, rc=rc,
+                want_bundles=want_bundles, prefix=args.prefix,
+                text_id=args.text_id,
+            )
+        else:
+            print("no undeclared editions to add", file=sys.stderr)
+
     if args.json_out:
         print(json.dumps(report, indent=2, default=str))
     else:
@@ -173,17 +192,6 @@ def run(argv: list[str] | None = None) -> int:
         readme_path.write_text(_render_text_markdown(report["text"]), encoding="utf-8")
         print(f"wrote {readme_path}", file=sys.stderr)
 
-    if args.fix_editions:
-        undeclared = report["text"].get("undeclaredEditions") or []
-        bundle_dir = Path(report["text"]["path"])
-        added = _fix_editions(bundle_dir, args.text_id, undeclared)
-        if added:
-            print(
-                f"added {len(added)} edition(s) to manifest: {', '.join(added)}",
-                file=sys.stderr,
-            )
-        else:
-            print("no undeclared editions to add", file=sys.stderr)
     return 0
 
 
@@ -864,14 +872,24 @@ def _render_text_markdown(t: dict) -> str:
     if not eds:
         lines.append("_None._")
     else:
-        lines.append("| Short | Label | Images | Declared |")
-        lines.append("|---|---|---:|:---:|")
-        for e in eds:
-            declared = "yes" if e.get("declared", True) else "**no**"
-            lines.append(
-                f"| {e['short']} | {_val(e.get('label'))} | "
-                f"{e.get('imageCount', 0):,} | {declared} |"
-            )
+        show_declared = any(not e.get("declared", True) for e in eds)
+        if show_declared:
+            lines.append("| Short | Label | Images | Declared |")
+            lines.append("|---|---|---:|:---:|")
+            for e in eds:
+                declared = "yes" if e.get("declared", True) else "**no**"
+                lines.append(
+                    f"| {e['short']} | {_val(e.get('label'))} | "
+                    f"{e.get('imageCount', 0):,} | {declared} |"
+                )
+        else:
+            lines.append("| Short | Label | Images |")
+            lines.append("|---|---|---:|")
+            for e in eds:
+                lines.append(
+                    f"| {e['short']} | {_val(e.get('label'))} | "
+                    f"{e.get('imageCount', 0):,} |"
+                )
 
     if t.get("catalogPresent") is False:
         lines.append("")
