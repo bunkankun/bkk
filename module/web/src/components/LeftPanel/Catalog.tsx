@@ -11,6 +11,14 @@ import { workspace, useWorkspace } from "../../state/useWorkspace";
 import { listPathFromName } from "../../lib/textLists";
 import { krClass } from "../../lib/krClass";
 
+function matchAltIds(match: CatalogMatch): string[] {
+  const raw = match.metadata?.alt_id;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter((v) => v.length > 0);
+}
+
 type SubLoadState =
   | { status: "idle" }
   | { status: "loading" }
@@ -481,6 +489,9 @@ function CatalogBundleRow({
         <div className="list-sub">
           <span className={krClass(match.textid)}>{match.textid}</span>
           {match.edition_short ? ` · ${match.edition_short}` : ""}
+          {matchAltIds(match).length > 0 ? (
+            <span className="cat-alt-ids"> {matchAltIds(match).join(" ")}</span>
+          ) : null}
         </div>
       </div>
       <button

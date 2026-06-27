@@ -436,6 +436,17 @@ def _browse_catalog_index(
             f"ORDER BY {rank_sql}, index_date, textid LIMIT ? OFFSET ?",
             [*where_params, *rank_params, limit, offset],
         ).fetchall()
+        alt_ids_by_textid: dict[str, list[str]] = {}
+        if rows:
+            textids = [row["textid"] for row in rows]
+            placeholders = ",".join("?" for _ in textids)
+            for tid, value in conn.execute(
+                "SELECT textid, value FROM catalog_identifier "
+                f"WHERE kind = 'alt_id' AND textid IN ({placeholders}) "
+                "ORDER BY textid, rowid",
+                textids,
+            ):
+                alt_ids_by_textid.setdefault(tid, []).append(value)
     except sqlite3.DatabaseError:
         return None
     finally:
@@ -457,6 +468,7 @@ def _browse_catalog_index(
             "dzt_date": row["dzt_date"],
             "index_date": row["index_date"],
             "index_date_source": row["index_date_source"],
+            "alt_id": alt_ids_by_textid.get(row["textid"]) or None,
         }
         matches.append(
             CatalogMatchOut(

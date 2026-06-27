@@ -357,6 +357,17 @@ function catalogString(match: CatalogMatch | null, key: string): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function manifestAltIds(manifest: Manifest | null): string[] {
+  const identifiers = (manifest?.metadata as { identifiers?: unknown } | undefined)
+    ?.identifiers;
+  if (!identifiers || typeof identifiers !== "object") return [];
+  const raw = (identifiers as { alt_id?: unknown }).alt_id;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter((v) => v.length > 0);
+}
+
 interface Props {
   paneId: string;
   tabId: string;
@@ -785,6 +796,7 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
   const titleEnglish = catalogString(catalogMatch, "title_english");
   const editionShort = manifest?.metadata?.edition?.short ?? null;
   const bunkankunUrl = textidToBunkankunUrl(textid);
+  const altIds = manifestAltIds(manifest);
 
   return (
     <div
@@ -804,6 +816,9 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
             {textid}
           </a>
           {editionShort ? ` · ${editionShort}` : ""} · 卷 {seq}
+          {altIds.length > 0 ? (
+            <span className="tv-alt-ids"> {altIds.join(" ")}</span>
+          ) : null}
         </h2>
       </div>
       <div
