@@ -27,9 +27,20 @@ class JuanRef:
     bucket_id: int
 
 
+REPORT_VERSION = 2
+
+
 @dataclass(frozen=True)
 class JuanPairDuplication:
-    """One (juan_a, juan_b) row. For intra-juan rows, ``a == b``."""
+    """One (juan_a, juan_b) row. For intra-juan rows, ``a == b``.
+
+    ``longest_a`` / ``longest_b`` are the ``(start, end)`` offsets of the
+    longest single cluster on each side. ``spans_a`` / ``spans_b`` are the
+    merged non-overlapping spans covering all duplicated character ranges on
+    each side. For intra-juan rows, ``spans_a == spans_b`` (same bucket) but
+    ``longest_a`` and ``longest_b`` are the two distinct copies of the
+    longest cluster within that bucket.
+    """
 
     a: JuanRef
     b: JuanRef
@@ -38,6 +49,10 @@ class JuanPairDuplication:
     juan_length_a: int
     juan_length_b: int
     longest_span: int
+    longest_a: tuple[int, int]
+    longest_b: tuple[int, int]
+    spans_a: tuple[tuple[int, int], ...]
+    spans_b: tuple[tuple[int, int], ...]
     cluster_count: int
 
     @property
@@ -95,7 +110,11 @@ def _aggregate_pairs(clusters: list[ParallelCluster]) -> list[JuanPairDuplicatio
     intervals: dict[tuple[int, int], dict[int, list[tuple[int, int]]]] = defaultdict(
         lambda: defaultdict(list),
     )
-    longest: dict[tuple[int, int], int] = defaultdict(int)
+    longest_len: dict[tuple[int, int], int] = defaultdict(int)
+    # pair_key -> ((a_start, a_end), (b_start, b_end)) for the longest cluster.
+    longest_offsets: dict[
+        tuple[int, int], tuple[tuple[int, int], tuple[int, int]]
+    ] = {}
     clusters_per_pair: dict[tuple[int, int], int] = defaultdict(int)
     refs: dict[int, JuanRef] = {}
 
@@ -108,11 +127,19 @@ def _aggregate_pairs(clusters: list[ParallelCluster]) -> list[JuanPairDuplicatio
             for j in range(i + 1, len(locs)):
                 lj = locs[j]
                 refs.setdefault(lj.bucket_id, _ref_from_location(lj))
-                key = _pair_key(li.bucket_id, lj.bucket_id)
-                intervals[key][li.bucket_id].append((li.start, li.end))
-                intervals[key][lj.bucket_id].append((lj.start, lj.end))
-                if cluster.length > longest[key]:
-                    longest[key] = cluster.length
+                if li.bucket_id <= lj.bucket_id:
+                    a_loc, b_loc = li, lj
+                else:
+                    a_loc, b_loc = lj, li
+                key = (a_loc.bucket_id, b_loc.bucket_id)
+                intervals[key][a_loc.bucket_id].append((a_loc.start, a_loc.end))
+                intervals[key][b_loc.bucket_id].append((b_loc.start, b_loc.end))
+                if cluster.length > longest_len[key]:
+                    longest_len[key] = cluster.length
+                    longest_offsets[key] = (
+                        (a_loc.start, a_loc.end),
+                        (b_loc.start, b_loc.end),
+                    )
                 seen_pairs.add(key)
         for key in seen_pairs:
             clusters_per_pair[key] += 1
@@ -122,11 +149,14 @@ def _aggregate_pairs(clusters: list[ParallelCluster]) -> list[JuanPairDuplicatio
         a_id, b_id = key
         a_ref = refs[a_id]
         b_ref = refs[b_id]
-        chars_a = _merged_length(side_intervals[a_id])
+        spans_a = _merge_spans(side_intervals[a_id])
         if a_id == b_id:
-            chars_b = chars_a
+            spans_b = spans_a
         else:
-            chars_b = _merged_length(side_intervals[b_id])
+            spans_b = _merge_spans(side_intervals[b_id])
+        chars_a = sum(e - s for s, e in spans_a)
+        chars_b = sum(e - s for s, e in spans_b)
+        la, lb = longest_offsets[key]
         rows.append(JuanPairDuplication(
             a=a_ref,
             b=b_ref,
@@ -134,14 +164,14 @@ def _aggregate_pairs(clusters: list[ParallelCluster]) -> list[JuanPairDuplicatio
             chars_b=chars_b,
             juan_length_a=0,
             juan_length_b=0,
-            longest_span=longest[key],
+            longest_span=longest_len[key],
+            longest_a=la,
+            longest_b=lb,
+            spans_a=spans_a,
+            spans_b=spans_b,
             cluster_count=clusters_per_pair[key],
         ))
     return rows
-
-
-def _pair_key(a_id: int, b_id: int) -> tuple[int, int]:
-    return (a_id, b_id) if a_id <= b_id else (b_id, a_id)
 
 
 def _ref_from_location(loc: ParallelLocation) -> JuanRef:
@@ -153,21 +183,26 @@ def _ref_from_location(loc: ParallelLocation) -> JuanRef:
     )
 
 
-def _merged_length(spans: list[tuple[int, int]]) -> int:
+def _merge_spans(spans: list[tuple[int, int]]) -> tuple[tuple[int, int], ...]:
+    """Sort and merge overlapping/touching half-open intervals."""
     if not spans:
-        return 0
+        return ()
     spans = sorted(spans)
-    total = 0
+    out: list[tuple[int, int]] = []
     cur_start, cur_end = spans[0]
     for start, end in spans[1:]:
         if start <= cur_end:
             if end > cur_end:
                 cur_end = end
         else:
-            total += cur_end - cur_start
+            out.append((cur_start, cur_end))
             cur_start, cur_end = start, end
-    total += cur_end - cur_start
-    return total
+    out.append((cur_start, cur_end))
+    return tuple(out)
+
+
+def _merged_length(spans: list[tuple[int, int]]) -> int:
+    return sum(e - s for s, e in _merge_spans(spans))
 
 
 def _attach_juan_lengths(
@@ -196,6 +231,10 @@ def _attach_juan_lengths(
             juan_length_a=lengths.get(r.a.bucket_id, 0),
             juan_length_b=lengths.get(r.b.bucket_id, 0),
             longest_span=r.longest_span,
+            longest_a=r.longest_a,
+            longest_b=r.longest_b,
+            spans_a=r.spans_a,
+            spans_b=r.spans_b,
             cluster_count=r.cluster_count,
         )
     return rows
@@ -217,6 +256,21 @@ def write_duplications_report(
         _write(rows, f, format=format)
 
 
+TSV_HEADER: tuple[str, ...] = (
+    "textid_a", "juan_seq_a", "bucket_a",
+    "textid_b", "juan_seq_b", "bucket_b",
+    "chars_a", "chars_b",
+    "juan_length_a", "juan_length_b",
+    "coverage_a", "coverage_b",
+    "longest_span", "cluster_count",
+    "intra_juan",
+    "longest_a_start", "longest_a_end",
+    "longest_b_start", "longest_b_end",
+    "spans_a_json", "spans_b_json",
+    "action", "action_actor", "action_at",
+)
+
+
 def _write(
     rows: list[JuanPairDuplication],
     out: TextIO,
@@ -227,26 +281,28 @@ def _write(
         for r in rows:
             out.write(json.dumps(_row_to_dict(r), ensure_ascii=False) + "\n")
         return
+    out.write(f"# bkk-duplications version={REPORT_VERSION}\n")
     writer = csv.writer(out, delimiter="\t", lineterminator="\n")
-    writer.writerow([
-        "textid_a", "juan_seq_a", "bucket_a",
-        "textid_b", "juan_seq_b", "bucket_b",
-        "chars_a", "chars_b",
-        "juan_length_a", "juan_length_b",
-        "coverage_a", "coverage_b",
-        "longest_span", "cluster_count",
-        "intra_juan",
-    ])
+    writer.writerow(TSV_HEADER)
     for r in rows:
-        writer.writerow([
-            r.a.textid, r.a.juan_seq, r.a.bucket,
-            r.b.textid, r.b.juan_seq, r.b.bucket,
-            r.chars_a, r.chars_b,
-            r.juan_length_a, r.juan_length_b,
-            f"{r.coverage_a:.4f}", f"{r.coverage_b:.4f}",
-            r.longest_span, r.cluster_count,
-            "1" if r.a.bucket_id == r.b.bucket_id else "0",
-        ])
+        writer.writerow(_row_to_tsv(r))
+
+
+def _row_to_tsv(r: JuanPairDuplication) -> list[str | int]:
+    return [
+        r.a.textid, r.a.juan_seq, r.a.bucket,
+        r.b.textid, r.b.juan_seq, r.b.bucket,
+        r.chars_a, r.chars_b,
+        r.juan_length_a, r.juan_length_b,
+        f"{r.coverage_a:.4f}", f"{r.coverage_b:.4f}",
+        r.longest_span, r.cluster_count,
+        "1" if r.a.bucket_id == r.b.bucket_id else "0",
+        r.longest_a[0], r.longest_a[1],
+        r.longest_b[0], r.longest_b[1],
+        json.dumps([list(s) for s in r.spans_a], separators=(",", ":")),
+        json.dumps([list(s) for s in r.spans_b], separators=(",", ":")),
+        "", "", "",  # action, action_actor, action_at
+    ]
 
 
 def _row_to_dict(r: JuanPairDuplication) -> dict:
@@ -270,4 +326,128 @@ def _row_to_dict(r: JuanPairDuplication) -> dict:
         "longest_span": r.longest_span,
         "cluster_count": r.cluster_count,
         "intra_juan": r.a.bucket_id == r.b.bucket_id,
+        "longest_a": list(r.longest_a),
+        "longest_b": list(r.longest_b),
+        "spans_a": [list(s) for s in r.spans_a],
+        "spans_b": [list(s) for s in r.spans_b],
     }
+
+
+# ---- reading / mutating an existing report --------------------------------
+
+class ReportFormatError(ValueError):
+    """Raised when dups.tsv has the wrong version or schema."""
+
+
+def read_duplications_report(path: Path | str) -> list[dict]:
+    """Read a v2 TSV report and return one dict per row (action fields included).
+
+    Row ``id`` is 1-based, matching the row's position in the file (excluding
+    the version comment and the header). IDs are stable across in-place
+    rewrites that preserve row order (which :func:`update_action` does).
+    """
+    rows: list[dict] = []
+    with Path(path).open("r", encoding="utf-8", newline="") as f:
+        first = f.readline()
+        if not first.startswith("# bkk-duplications version="):
+            raise ReportFormatError(
+                f"{path}: missing version comment; rewrite with current bkk "
+                f"(expected '# bkk-duplications version={REPORT_VERSION}')"
+            )
+        version = first.rstrip("\n").split("=", 1)[1].strip()
+        if version != str(REPORT_VERSION):
+            raise ReportFormatError(
+                f"{path}: report version {version}, expected {REPORT_VERSION}"
+            )
+        reader = csv.reader(f, delimiter="\t")
+        header = next(reader, None)
+        if header is None or tuple(header) != TSV_HEADER:
+            raise ReportFormatError(f"{path}: header mismatch")
+        for idx, raw in enumerate(reader, start=1):
+            if len(raw) != len(TSV_HEADER):
+                raise ReportFormatError(
+                    f"{path}: row {idx} has {len(raw)} fields, expected "
+                    f"{len(TSV_HEADER)}"
+                )
+            rows.append(_parse_row(idx, raw))
+    return rows
+
+
+def _parse_row(row_id: int, raw: list[str]) -> dict:
+    f = dict(zip(TSV_HEADER, raw, strict=True))
+    return {
+        "id": row_id,
+        "textid_a": f["textid_a"],
+        "juan_seq_a": int(f["juan_seq_a"]),
+        "bucket_a": f["bucket_a"],
+        "textid_b": f["textid_b"],
+        "juan_seq_b": int(f["juan_seq_b"]),
+        "bucket_b": f["bucket_b"],
+        "chars_a": int(f["chars_a"]),
+        "chars_b": int(f["chars_b"]),
+        "juan_length_a": int(f["juan_length_a"]),
+        "juan_length_b": int(f["juan_length_b"]),
+        "coverage_a": float(f["coverage_a"]),
+        "coverage_b": float(f["coverage_b"]),
+        "longest_span": int(f["longest_span"]),
+        "cluster_count": int(f["cluster_count"]),
+        "intra_juan": f["intra_juan"] == "1",
+        "longest_a": (int(f["longest_a_start"]), int(f["longest_a_end"])),
+        "longest_b": (int(f["longest_b_start"]), int(f["longest_b_end"])),
+        "spans_a": [tuple(s) for s in json.loads(f["spans_a_json"] or "[]")],
+        "spans_b": [tuple(s) for s in json.loads(f["spans_b_json"] or "[]")],
+        "action": f["action"] or None,
+        "action_actor": f["action_actor"] or None,
+        "action_at": f["action_at"] or None,
+    }
+
+
+VALID_ACTIONS: frozenset[str] = frozenset({
+    "keep",
+    "delete_a_juan", "delete_b_juan",
+    "delete_a_span", "delete_b_span",
+    "delete_span",
+})
+
+
+def update_action(
+    path: Path | str,
+    row_id: int,
+    action: str,
+    actor: str,
+    at: str,
+) -> None:
+    """Atomically rewrite ``row_id``'s action/actor/at columns in place.
+
+    Reads all rows, mutates the target, writes to a sibling temp file, then
+    ``os.replace``s it. Caller is responsible for holding any cross-process
+    lock (e.g. ``fcntl.flock``) around the call.
+    """
+    if action not in VALID_ACTIONS:
+        raise ValueError(f"invalid action {action!r}; valid: {sorted(VALID_ACTIONS)}")
+    path = Path(path)
+    with path.open("r", encoding="utf-8", newline="") as f:
+        first = f.readline()
+        if not first.startswith("# bkk-duplications version="):
+            raise ReportFormatError(
+                f"{path}: missing version comment; refusing to rewrite"
+            )
+        reader = csv.reader(f, delimiter="\t")
+        header = next(reader, None)
+        if header is None or tuple(header) != TSV_HEADER:
+            raise ReportFormatError(f"{path}: header mismatch")
+        rows = list(reader)
+    if not 1 <= row_id <= len(rows):
+        raise ValueError(f"row_id {row_id} out of range [1, {len(rows)}]")
+    target = rows[row_id - 1]
+    target[TSV_HEADER.index("action")] = action
+    target[TSV_HEADER.index("action_actor")] = actor
+    target[TSV_HEADER.index("action_at")] = at
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="") as f:
+        f.write(first if first.endswith("\n") else first + "\n")
+        writer = csv.writer(f, delimiter="\t", lineterminator="\n")
+        writer.writerow(TSV_HEADER)
+        writer.writerows(rows)
+    import os
+    os.replace(tmp, path)
