@@ -17,12 +17,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
-import io
 import json
 import sqlite3
 import sys
 from collections import Counter
-from contextlib import redirect_stdout
 from pathlib import Path
 
 import yaml
@@ -152,11 +150,8 @@ def run(argv: list[str] | None = None) -> int:
         _render_text(report)
 
     if args.readme:
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            _render_text(report)
         readme_path = Path(report["text"]["path"]) / "Readme.md"
-        readme_path.write_text(buf.getvalue(), encoding="utf-8")
+        readme_path.write_text(_render_text_markdown(report["text"]), encoding="utf-8")
         print(f"wrote {readme_path}", file=sys.stderr)
     return 0
 
@@ -419,6 +414,7 @@ def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
     }
     unique_by_bucket: dict[str, set[str]] = {"front": set(), "body": set(), "back": set()}
     markers_by_type: Counter[str] = Counter()
+    images_by_edition: Counter[str] = Counter()
     all_texts: list[str] = []
 
     for juan in bundle.juans:
@@ -431,6 +427,10 @@ def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
                 all_texts.append(sec.text)
                 for marker in sec.markers:
                     markers_by_type[marker.type] += 1
+                    if marker.type == "page-break":
+                        parts = marker.id.split("_", 2)
+                        if len(parts) >= 2 and parts[1]:
+                            images_by_edition[parts[1]] += 1
     for bucket_name, uniq in unique_by_bucket.items():
         chars[bucket_name]["unique"] = len(uniq)
     chars["total"] = sum(chars[b]["total"] for b in ("front", "body", "back"))
@@ -449,7 +449,10 @@ def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
         "notBefore": catalog_fields.get("notBefore"),
         "notAfter": catalog_fields.get("notAfter"),
         "indexYear": catalog_fields.get("indexYear"),
-        "editions": editions,
+        "editions": [
+            {**e, "imageCount": images_by_edition.get(e["short"], 0)}
+            for e in editions
+        ],
         "juanCount": len(bundle.juans),
         "chars": chars,
         "puaChars": {
@@ -682,6 +685,86 @@ def _render_text_block(t: dict) -> None:
 
     if t.get("catalogPresent") is False:
         print("  (no catalog row found — title/dates fall back to manifest)")
+
+
+def _render_text_markdown(t: dict) -> str:
+    lines: list[str] = []
+    title = t.get("title") or t["textid"]
+    lines.append(f"# {t['textid']} — {title}" if title != t["textid"] else f"# {t['textid']}")
+    lines.append("")
+
+    def _val(v: object) -> str:
+        return "—" if v is None or v == "" else str(v)
+
+    lines.append("## Identification")
+    lines.append("")
+    lines.append(f"- **Manifest date:** {t['manifestDate']}")
+    lines.append(f"- **Title:** {_val(t.get('title'))}")
+    lines.append(f"- **Title (pinyin):** {_val(t.get('titlePinyin'))}")
+    lines.append(f"- **Title (English):** {_val(t.get('titleEnglish'))}")
+
+    nb, na, iy = t.get("notBefore"), t.get("notAfter"), t.get("indexYear")
+    if nb is None and na is None and iy is None:
+        lines.append("- **Dates:** —")
+    else:
+        lines.append(
+            f"- **Dates:** notBefore={_val(nb)}, notAfter={_val(na)}, "
+            f"indexYear={_val(iy)}"
+        )
+    lines.append(f"- **Juans:** {t['juanCount']}")
+
+    eds = t.get("editions") or []
+    lines.append("")
+    lines.append("## Editions")
+    lines.append("")
+    if not eds:
+        lines.append("_None._")
+    else:
+        lines.append("| Short | Label | Images |")
+        lines.append("|---|---|---:|")
+        for e in eds:
+            lines.append(
+                f"| {e['short']} | {_val(e.get('label'))} | "
+                f"{e.get('imageCount', 0):,} |"
+            )
+
+    if t.get("catalogPresent") is False:
+        lines.append("")
+        lines.append("> No catalog row found — title/dates fall back to manifest.")
+
+    chars = t["chars"]
+    lines.append("")
+    lines.append("## Characters")
+    lines.append("")
+    lines.append(f"Total: **{chars['total']:,}**")
+    lines.append("")
+    lines.append("| Bucket | Total | Unique |")
+    lines.append("|---|---:|---:|")
+    for bucket_name in ("front", "body", "back"):
+        c = chars[bucket_name]
+        lines.append(f"| {bucket_name} | {c['total']:,} | {c['unique']:,} |")
+
+    pua = t["puaChars"]
+    lines.append("")
+    lines.append(
+        f"PUA: **{pua['total_occurrences']:,}** occurrences, "
+        f"**{pua['total_unique']:,}** unique."
+    )
+
+    markers = t.get("markersByType") or {}
+    lines.append("")
+    lines.append("## Markers")
+    lines.append("")
+    if not markers:
+        lines.append("_None._")
+    else:
+        lines.append("| Type | Count |")
+        lines.append("|---|---:|")
+        for k, n in markers.items():
+            lines.append(f"| {k} | {n:,} |")
+
+    lines.append("")
+    return "\n".join(lines)
 
 
 def main() -> None:
