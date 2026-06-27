@@ -33,6 +33,8 @@ from bkk.importer.pua import summarise_pua_codepoints
 from bkk.index.catalog import CATALOG_SCHEMA_VERSION
 from bkk.index.merge import discover_bundles, is_stale
 from bkk.index.schema import SCHEMA_VERSION
+from bkk.importer.hashing import manifest_hash
+from bkk.importer.write.yaml_writer import dump as dump_bkk_yaml, marker_to_flow
 from bkk.marker_assets import effective_markers_for_bucket, load_marker_asset
 
 _INDEX_TABLES = (
@@ -65,6 +67,10 @@ def build_parser() -> argparse.ArgumentParser:
                         "blocks)")
     p.add_argument("--readme", action="store_true",
                    help="write the dossier to <bundle>/Readme.md "
+                        "(requires --text-id)")
+    p.add_argument("--fix-editions", action="store_true", dest="fix_editions",
+                   help="append editions referenced by page-break markers but "
+                        "missing from the manifest's editions list "
                         "(requires --text-id)")
     p.add_argument("--json", action="store_true", dest="json_out",
                    help="emit JSON instead of text")
@@ -107,6 +113,8 @@ def run(argv: list[str] | None = None) -> int:
 
     if args.readme and args.text_id is None:
         parser.error("--readme requires --text-id")
+    if args.fix_editions and args.text_id is None:
+        parser.error("--fix-editions requires --text-id")
 
     corpus = args.corpus or info_rc.get("corpus") or g.get("corpus")
     if corpus is None:
@@ -150,10 +158,32 @@ def run(argv: list[str] | None = None) -> int:
     else:
         _render_text(report)
 
+    if "text" in report:
+        undeclared = report["text"].get("undeclaredEditions") or []
+        if undeclared:
+            print(
+                f"warning: {len(undeclared)} edition(s) referenced by page-break "
+                f"markers but missing from manifest editions list: "
+                f"{', '.join(undeclared)}",
+                file=sys.stderr,
+            )
+
     if args.readme:
         readme_path = Path(report["text"]["path"]) / "Readme.md"
         readme_path.write_text(_render_text_markdown(report["text"]), encoding="utf-8")
         print(f"wrote {readme_path}", file=sys.stderr)
+
+    if args.fix_editions:
+        undeclared = report["text"].get("undeclaredEditions") or []
+        bundle_dir = Path(report["text"]["path"])
+        added = _fix_editions(bundle_dir, args.text_id, undeclared)
+        if added:
+            print(
+                f"added {len(added)} edition(s) to manifest: {', '.join(added)}",
+                file=sys.stderr,
+            )
+        else:
+            print("no undeclared editions to add", file=sys.stderr)
     return 0
 
 
@@ -416,6 +446,7 @@ def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
     unique_by_bucket: dict[str, set[str]] = {"front": set(), "body": set(), "back": set()}
     markers_by_type: Counter[str] = Counter()
     images_by_edition: Counter[str] = Counter()
+    editions_in_markers: set[str] = set()
     all_texts: list[str] = []
 
     for juan in bundle.juans:
@@ -430,7 +461,8 @@ def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
                     markers_by_type[marker.type] += 1
 
     _count_images_by_edition(
-        bundle_dir, manifest_path, manifest_data, images_by_edition,
+        bundle_dir, manifest_path, manifest_data,
+        images_by_edition, editions_in_markers,
     )
     for bucket_name, uniq in unique_by_bucket.items():
         chars[bucket_name]["unique"] = len(uniq)
@@ -450,10 +482,10 @@ def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
         "notBefore": catalog_fields.get("notBefore"),
         "notAfter": catalog_fields.get("notAfter"),
         "indexYear": catalog_fields.get("indexYear"),
-        "editions": [
-            {**e, "imageCount": images_by_edition.get(e["short"], 0)}
-            for e in editions
-        ],
+        "editions": _merge_editions(editions, editions_in_markers, images_by_edition),
+        "undeclaredEditions": sorted(
+            editions_in_markers - {e["short"] for e in editions}
+        ),
         "juanCount": len(bundle.juans),
         "chars": chars,
         "puaChars": {
@@ -467,18 +499,87 @@ def _collect_text(text_id: str, corpus: Path, catalog_path: Path) -> dict:
     return out
 
 
+def _merge_editions(
+    declared: list[dict],
+    seen: set[str],
+    images: Counter,
+) -> list[dict]:
+    out: list[dict] = [
+        {**e, "imageCount": images.get(e["short"], 0), "declared": True}
+        for e in declared
+    ]
+    declared_shorts = {e["short"] for e in declared}
+    for short in sorted(seen - declared_shorts):
+        out.append({
+            "short": short, "label": "",
+            "imageCount": images.get(short, 0), "declared": False,
+        })
+    return out
+
+
+def _fix_editions(
+    bundle_dir: Path,
+    text_id: str,
+    undeclared: list[str],
+) -> list[str]:
+    """Append undeclared edition shorts to the manifest's editions list.
+
+    Returns the shorts that were added. Re-emits the manifest with the BKK
+    yaml dumper (stable formatting) and recomputes the manifest hash.
+    """
+    if not undeclared:
+        return []
+    manifest_path = bundle_dir / f"{text_id}.manifest.yaml"
+    if not manifest_path.is_file():
+        raise LookupError(f"manifest missing: {manifest_path}")
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    eds = manifest.get("editions") or []
+    existing = {e.get("short") for e in eds if isinstance(e, dict)}
+    added: list[str] = []
+    for short in undeclared:
+        if short in existing:
+            continue
+        eds.append({"short": short})
+        added.append(short)
+    if not added:
+        return []
+    manifest["editions"] = eds
+    _normalize_for_write(manifest)
+    manifest["hash"] = manifest_hash(manifest)
+    manifest_path.write_text(dump_bkk_yaml(manifest), encoding="utf-8")
+    return added
+
+
+def _normalize_for_write(manifest: dict) -> None:
+    """Wrap leaf-list entries in flow style so the round-trip is byte-stable.
+
+    Mirrors the on-disk BKK manifest style: ``assets.parts`` and
+    ``assets.markers`` use flow-style mappings per entry; everything else
+    stays in the default block style.
+    """
+    assets = manifest.get("assets") or {}
+    for key in ("parts", "markers"):
+        lst = assets.get(key)
+        if isinstance(lst, list):
+            assets[key] = [
+                marker_to_flow(e) if isinstance(e, dict) else e
+                for e in lst
+            ]
+
+
 def _count_images_by_edition(
     bundle_dir: Path,
     manifest_path: Path,
     manifest_data: dict,
     counter: Counter,
+    editions_seen: set[str],
 ) -> None:
-    """Count page-break markers carrying a non-empty ``image`` field, grouped
-    by edition (parsed from the marker id's second underscore-separated part).
+    """Walk raw page-break markers and (a) count those carrying a non-empty
+    ``image`` field per edition, and (b) record every edition short id that
+    appears in a page-break marker id, regardless of image field.
 
-    Reads raw juan + marker-asset yaml directly because ``read_bundle`` drops
-    marker extras during bucket splitting, so the image fields would otherwise
-    be unavailable.
+    Reads juan + marker-asset yaml directly because ``read_bundle`` drops
+    marker extras during bucket splitting.
     """
     parts = manifest_data.get("assets", {}).get("parts") or []
     for entry in parts:
@@ -500,12 +601,13 @@ def _count_images_by_edition(
             for m in effective_markers_for_bucket(juan, bucket_name, marker_asset):
                 if m.get("type") != "page-break":
                     continue
-                if not m.get("image"):
-                    continue
                 mid = m.get("id") or ""
                 ed_parts = mid.split("_", 2)
                 if len(ed_parts) >= 2 and ed_parts[1]:
-                    counter[ed_parts[1]] += 1
+                    edition = ed_parts[1]
+                    editions_seen.add(edition)
+                    if m.get("image"):
+                        counter[edition] += 1
 
 
 def _read_catalog_row(catalog_path: Path, text_id: str) -> dict:
@@ -762,12 +864,13 @@ def _render_text_markdown(t: dict) -> str:
     if not eds:
         lines.append("_None._")
     else:
-        lines.append("| Short | Label | Images |")
-        lines.append("|---|---|---:|")
+        lines.append("| Short | Label | Images | Declared |")
+        lines.append("|---|---|---:|:---:|")
         for e in eds:
+            declared = "yes" if e.get("declared", True) else "**no**"
             lines.append(
                 f"| {e['short']} | {_val(e.get('label'))} | "
-                f"{e.get('imageCount', 0):,} |"
+                f"{e.get('imageCount', 0):,} | {declared} |"
             )
 
     if t.get("catalogPresent") is False:
