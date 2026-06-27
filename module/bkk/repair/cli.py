@@ -55,6 +55,48 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true",
         help="report the migration without writing juans, marker assets, or manifests",
     )
+
+    pi = sub.add_parser(
+        "ids-from-krp-titles",
+        help="populate metadata.identifiers.alt_id on master manifests "
+             "from catalog/krp-titles.txt for the bundles in --section",
+    )
+    pi.add_argument(
+        "--section", action="append", default=None, required=True,
+        help="KRP prefix (e.g. KR5, KR6, KR5a); repeatable. A bundle is "
+             "in scope iff its text-id starts with one of these prefixes.",
+    )
+    pi.add_argument(
+        "--titles", dest="titles_path", type=Path, default=None,
+        help="path to krp-titles.txt (default: <repo-root>/catalog/krp-titles.txt)",
+    )
+    pi.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help="bundle output root (overrides repair.out / import.out / global.corpus)",
+    )
+    pi.add_argument(
+        "--dry-run", action="store_true",
+        help="report planned changes without writing manifests",
+    )
+
+    pr = sub.add_parser(
+        "remove-ids",
+        help="strip every key under metadata.identifiers on master "
+             "manifests except 'alt_id'",
+    )
+    pr.add_argument(
+        "--section", action="append", default=None, required=True,
+        help="KRP prefix (e.g. KR5, KR6, KR5a); repeatable. A bundle is "
+             "in scope iff its text-id starts with one of these prefixes.",
+    )
+    pr.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help="bundle output root (overrides repair.out / import.out / global.corpus)",
+    )
+    pr.add_argument(
+        "--dry-run", action="store_true",
+        help="report planned changes without writing manifests",
+    )
     return p
 
 
@@ -79,6 +121,19 @@ def run(argv: list[str] | None = None) -> int:
         return _run_manifest(args.bundle, out_root)
     if args.op == "externalize-markers":
         return _run_externalize_markers(args.bundle, out_root, dry_run=args.dry_run)
+    if args.op == "ids-from-krp-titles":
+        return _run_ids_from_krp_titles(
+            sections=args.section,
+            titles_path=args.titles_path,
+            out_root=out_root,
+            dry_run=args.dry_run,
+        )
+    if args.op == "remove-ids":
+        return _run_remove_ids(
+            sections=args.section,
+            out_root=out_root,
+            dry_run=args.dry_run,
+        )
     return 2
 
 
@@ -142,6 +197,145 @@ def _run_externalize_markers(
         )
         for line in scope["lines"]:
             print(f"  {line}")
+    return 0
+
+
+def _iter_bundles_in_sections(out_root: Path, prefixes: tuple[str, ...]):
+    """Yield bundle directories under ``out_root`` whose text-id starts
+    with one of ``prefixes``. Handles both the flat layout
+    (``<out>/<text_id>/``) and the ``--by-section`` layout
+    (``<out>/<section>/<text_id>/``)."""
+    for child in sorted(out_root.iterdir()):
+        if not child.is_dir():
+            continue
+        # Flat: child is a text-id directory.
+        if (child / f"{child.name}.manifest.yaml").is_file():
+            if child.name.startswith(prefixes):
+                yield child
+            continue
+        # By-section: descend if the section dir itself is in scope, or if
+        # any requested prefix could land inside it (e.g. --section KR5a
+        # under <out>/KR5a/).
+        if not any(
+            child.name.startswith(pfx) or pfx.startswith(child.name)
+            for pfx in prefixes
+        ):
+            continue
+        for sub in sorted(child.iterdir()):
+            if not sub.is_dir():
+                continue
+            if not sub.name.startswith(prefixes):
+                continue
+            if (sub / f"{sub.name}.manifest.yaml").is_file():
+                yield sub
+
+
+def _default_titles_path() -> Path:
+    """Resolve ``catalog/krp-titles.txt`` next to the repo root.
+
+    The module lives at ``module/bkk/repair/cli.py``; the catalog sits at
+    ``catalog/krp-titles.txt`` two levels above ``module/``.
+    """
+    return Path(__file__).resolve().parents[3] / "catalog" / "krp-titles.txt"
+
+
+def _run_ids_from_krp_titles(
+    *,
+    sections: list[str],
+    titles_path: Path | None,
+    out_root: Path | None,
+    dry_run: bool,
+) -> int:
+    if out_root is None:
+        print(
+            "error: bundle root not given (--out) and not configured in "
+            ".bkkrc (repair.out / import.out / global.corpus)",
+            file=sys.stderr,
+        )
+        return 2
+    out_root = Path(out_root).expanduser().resolve()
+    if not out_root.is_dir():
+        print(f"error: bundle root is not a directory: {out_root}", file=sys.stderr)
+        return 2
+
+    titles_path = (titles_path or _default_titles_path()).expanduser().resolve()
+    if not titles_path.is_file():
+        print(f"error: krp-titles file not found: {titles_path}", file=sys.stderr)
+        return 2
+
+    from .krp_titles import parse_alt_ids
+    from .identifiers import apply_alt_ids
+
+    catalog = parse_alt_ids(titles_path)
+
+    prefixes = tuple(sections)
+    bundles = sorted(_iter_bundles_in_sections(out_root, prefixes))
+
+    n_changed = 0
+    n_unchanged = 0
+    n_no_catalog = 0
+    for bundle_dir in bundles:
+        alts = catalog.get(bundle_dir.name)
+        if not alts:
+            n_no_catalog += 1
+            continue
+        result = apply_alt_ids(bundle_dir, alts, dry_run=dry_run)
+        verb = "would set" if dry_run else "set"
+        if result["changed"]:
+            n_changed += 1
+            before = result["before"] or "(none)"
+            print(f"{verb} {bundle_dir.name}.alt_id: {before} -> {result['after']}")
+        else:
+            n_unchanged += 1
+
+    prefix = "dry-run: " if dry_run else ""
+    print(
+        f"{prefix}{n_changed} changed, {n_unchanged} unchanged, "
+        f"{n_no_catalog} not in catalog "
+        f"(scanned {len(bundles)} bundles in sections {list(sections)})"
+    )
+    return 0
+
+
+def _run_remove_ids(
+    *,
+    sections: list[str],
+    out_root: Path | None,
+    dry_run: bool,
+) -> int:
+    if out_root is None:
+        print(
+            "error: bundle root not given (--out) and not configured in "
+            ".bkkrc (repair.out / import.out / global.corpus)",
+            file=sys.stderr,
+        )
+        return 2
+    out_root = Path(out_root).expanduser().resolve()
+    if not out_root.is_dir():
+        print(f"error: bundle root is not a directory: {out_root}", file=sys.stderr)
+        return 2
+
+    from .identifiers import purge_non_alt_ids
+
+    prefixes = tuple(sections)
+    bundles = sorted(_iter_bundles_in_sections(out_root, prefixes))
+
+    n_changed = 0
+    n_unchanged = 0
+    for bundle_dir in bundles:
+        result = purge_non_alt_ids(bundle_dir, dry_run=dry_run)
+        verb = "would drop" if dry_run else "dropped"
+        if result["changed"]:
+            n_changed += 1
+            print(f"{verb} {bundle_dir.name}: {result['removed']}")
+        else:
+            n_unchanged += 1
+
+    prefix = "dry-run: " if dry_run else ""
+    print(
+        f"{prefix}{n_changed} changed, {n_unchanged} unchanged "
+        f"(scanned {len(bundles)} bundles in sections {list(sections)})"
+    )
     return 0
 
 
