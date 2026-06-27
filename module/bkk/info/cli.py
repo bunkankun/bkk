@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import io
 import json
 import sqlite3
 import sys
 from collections import Counter
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import yaml
@@ -62,6 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--text-id", default=None, dest="text_id",
                    help="show a focused per-text dossier (suppresses other "
                         "blocks)")
+    p.add_argument("--readme", action="store_true",
+                   help="write the dossier to <bundle>/Readme.md "
+                        "(requires --text-id)")
     p.add_argument("--json", action="store_true", dest="json_out",
                    help="emit JSON instead of text")
     return p
@@ -100,6 +105,9 @@ def run(argv: list[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.readme and args.text_id is None:
+        parser.error("--readme requires --text-id")
 
     corpus = args.corpus or info_rc.get("corpus") or g.get("corpus")
     if corpus is None:
@@ -142,6 +150,14 @@ def run(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2, default=str))
     else:
         _render_text(report)
+
+    if args.readme:
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            _render_text(report)
+        readme_path = Path(report["text"]["path"]) / "Readme.md"
+        readme_path.write_text(buf.getvalue(), encoding="utf-8")
+        print(f"wrote {readme_path}", file=sys.stderr)
     return 0
 
 
