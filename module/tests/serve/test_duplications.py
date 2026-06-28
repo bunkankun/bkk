@@ -273,3 +273,57 @@ def test_action_records_decision_in_tsv(dup_corpus):
     assert rows[0]["action"] == "keep"
     assert rows[0]["action_actor"] == "alice"
     assert rows[0]["action_at"]  # ISO timestamp set
+
+
+def test_action_delete_b_juan_excises_bundle_b(dup_corpus):
+    corpus, report = dup_corpus
+    client = _client(corpus, report=report)
+    rows_before = read_duplications_report(report)
+    target_b = rows_before[0]["textid_b"]
+
+    r = client.post(
+        "/admin/duplications/1/action",
+        json={"action": "delete_b_juan", "confirm": True},
+    )
+    assert r.status_code == 202
+    body = client.get(f"/admin/jobs/{r.json()['id']}").json()
+    assert body["status"] == "success", body
+    assert body["result"]["deletion_executed"] is True
+    assert body["result"]["rebuilt_bundles"] == [target_b]
+
+    juan_path = corpus / target_b / f"{target_b}_001.yaml"
+    assert not juan_path.exists(), "deleted juan file should be gone"
+    # Per-bundle .bkkx refreshed.
+    assert (corpus / target_b / f"{target_b}.bkkx").exists()
+    rows_after = read_duplications_report(report)
+    assert rows_after[0]["action"] == "delete_b_juan"
+
+
+def test_action_delete_a_span_keeps_bundle_a(dup_corpus):
+    corpus, report = dup_corpus
+    client = _client(corpus, report=report)
+    rows_before = read_duplications_report(report)
+    target_a = rows_before[0]["textid_a"]
+    bucket_a = rows_before[0]["bucket_a"]
+    juan_seq = rows_before[0]["juan_seq_a"]
+
+    # Read original bucket length to assert shrinkage.
+    juan_path = corpus / target_a / f"{target_a}_001.yaml"
+    original = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+    original_len = len(original[bucket_a]["text"])
+
+    r = client.post(
+        "/admin/duplications/1/action",
+        json={"action": "delete_a_span", "confirm": True},
+    )
+    assert r.status_code == 202
+    body = client.get(f"/admin/jobs/{r.json()['id']}").json()
+    assert body["status"] == "success", body
+    op = body["result"]["operations"][0]
+    assert op["text_id"] == target_a
+    assert op["juan_seq"] == juan_seq
+    assert op["deleted_chars"] >= 400
+    assert op["new_bucket_length"] < original_len
+
+    updated = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+    assert len(updated[bucket_a]["text"]) == op["new_bucket_length"]

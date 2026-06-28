@@ -1,11 +1,10 @@
 """Admin duplications editor: list, inspect, and act on rows in dups.tsv.
 
 The TSV report is the source of truth — actions are recorded by rewriting
-the row's ``action`` / ``action_actor`` / ``action_at`` columns in place. The
-bundle mutation that an action implies (delete a juan, excise duplicated
-spans) runs as a background task; for now the task body stops at the report
-rewrite and leaves the bundle untouched. The deletion phase lands in §4 of
-the plan.
+the row's ``action`` / ``action_actor`` / ``action_at`` columns in place,
+then the corresponding bundle mutation runs (delete a juan/bucket, excise
+duplicated spans) and the affected bundles' per-bundle ``.bkkx`` files
+are rebuilt.
 
 Auth mirrors ``admin.py``: every endpoint requires an authenticated GitHub
 session whose user is in the admin team.
@@ -15,6 +14,7 @@ from __future__ import annotations
 
 import fcntl
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import (
@@ -29,6 +29,8 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 
+from bkk.edit.sections import EditError, delete_juan_bucket, delete_spans
+from bkk.index import build_index
 from bkk.index.duplications import (
     VALID_ACTIONS,
     ReportFormatError,
@@ -219,32 +221,111 @@ def _validate_action(row: dict, action: str) -> None:
         )
 
 
+def _bundle_dir(state: AppState, textid: str) -> Path:
+    rec = state.cache.lookup(textid)
+    if rec is None:
+        raise EditError(f"bundle {textid!r} not found in corpus")
+    return rec.bundle_dir
+
+
+def _execute_deletion(
+    state: AppState, row: dict, action: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Apply the deletion implied by ``action`` to the bundle(s).
+
+    Returns ``(operations, rebuilt_bundles)`` where ``operations`` is the
+    list of per-bundle mutation results and ``rebuilt_bundles`` lists the
+    text-ids whose per-bundle ``.bkkx`` was refreshed.
+    """
+    if action == "keep":
+        return [], []
+
+    ops: list[dict[str, Any]] = []
+    touched: set[str] = set()
+
+    if action == "delete_a_juan":
+        dir_a = _bundle_dir(state, row["textid_a"])
+        ops.append(delete_juan_bucket(
+            dir_a, row["textid_a"], row["juan_seq_a"], row["bucket_a"],
+        ))
+        touched.add(row["textid_a"])
+    elif action == "delete_b_juan":
+        dir_b = _bundle_dir(state, row["textid_b"])
+        ops.append(delete_juan_bucket(
+            dir_b, row["textid_b"], row["juan_seq_b"], row["bucket_b"],
+        ))
+        touched.add(row["textid_b"])
+    elif action == "delete_a_span":
+        dir_a = _bundle_dir(state, row["textid_a"])
+        ops.append(delete_spans(
+            dir_a, row["textid_a"], row["juan_seq_a"], row["bucket_a"],
+            list(row["spans_a"]),
+        ))
+        touched.add(row["textid_a"])
+    elif action == "delete_b_span":
+        dir_b = _bundle_dir(state, row["textid_b"])
+        ops.append(delete_spans(
+            dir_b, row["textid_b"], row["juan_seq_b"], row["bucket_b"],
+            list(row["spans_b"]),
+        ))
+        touched.add(row["textid_b"])
+    elif action == "delete_span":
+        # Intra-juan: longest_a is the first occurrence to keep, longest_b
+        # is the duplicate to drop. The full spans_a list contains both
+        # copies; deleting only longest_b preserves the first.
+        dir_a = _bundle_dir(state, row["textid_a"])
+        ops.append(delete_spans(
+            dir_a, row["textid_a"], row["juan_seq_a"], row["bucket_a"],
+            [tuple(row["longest_b"])],
+        ))
+        touched.add(row["textid_a"])
+    else:  # pragma: no cover — _validate_action already gated this
+        raise EditError(f"unsupported action {action!r}")
+
+    rebuilt: list[str] = []
+    for textid in sorted(touched):
+        bundle_dir = _bundle_dir(state, textid)
+        build_index(bundle_dir)
+        rebuilt.append(textid)
+    return ops, rebuilt
+
+
 def _run_action(
     jobs: JobRegistry,
     job_id: str,
-    report_path,
+    state: AppState,
+    report_path: Path,
     row_id: int,
     action: str,
     actor: str,
     at: str,
 ) -> None:
-    """Record the decision in dups.tsv under an exclusive file lock.
+    """Record the decision, mutate the bundle(s), and rebuild their indexes.
 
-    Bundle mutation (deletion of juan or spans) is added in §4 of the plan.
+    The TSV rewrite is taken under an exclusive ``fcntl.flock`` so concurrent
+    admin actions on different rows serialize. The bundle mutation happens
+    after the rewrite — if it fails the TSV still reflects the decision so
+    the admin can rerun ``bkk index duplications`` to surface the inconsistency.
     """
     jobs.mark_running(job_id)
     try:
+        rows = read_duplications_report(report_path)
+        if row_id > len(rows):
+            raise EditError(f"row {row_id} not in report")
+        row = rows[row_id - 1]
         with open(report_path, "r+", encoding="utf-8") as lock_f:
             fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
             try:
                 update_action(report_path, row_id, action, actor=actor, at=at)
             finally:
                 fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+        ops, rebuilt = _execute_deletion(state, row, action)
         jobs.mark_done(job_id, {
             "row_id": row_id,
             "action": action,
-            "deletion_executed": False,
-            "note": "report updated; bundle mutation lands in §4",
+            "deletion_executed": action != "keep",
+            "operations": ops,
+            "rebuilt_bundles": rebuilt,
         })
     except Exception as exc:
         jobs.mark_error(job_id, exc)
@@ -283,7 +364,7 @@ def post_action(
     job: Job = state.jobs.create(kind="duplications_action", target=f"row:{row_id}")
     background.add_task(
         _run_action,
-        state.jobs, job.id, state.duplications_report_path,
+        state.jobs, job.id, state, state.duplications_report_path,
         row_id, action, actor, at,
     )
     return JSONResponse(status_code=202, content=job.to_dict())
