@@ -864,6 +864,12 @@ def _render_text_markdown(t: dict) -> str:
             f"indexYear={_val(iy)}"
         )
     lines.append(f"- **Juans:** {t['juanCount']}")
+    tid = t["textid"]
+    lines.append(
+        f"- **More information:** "
+        f'<a href="https://ask.bunkankun.org/{tid[:3]}/{tid[:4]}/{tid}" '
+        f'target="ask-bkk">{tid}</a>'
+    )
 
     eds = t.get("editions") or []
     lines.append("")

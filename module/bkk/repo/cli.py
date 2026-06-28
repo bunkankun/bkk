@@ -100,6 +100,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_push = sub.add_parser("push", help="push to origin")
     _scope(p_push)
 
+    p_update = sub.add_parser(
+        "update",
+        help="commit local changes (if any) and push to origin",
+    )
+    _scope(p_update)
+    p_update.add_argument(
+        "-m", "--message", default=None,
+        help="commit message (default: 'Update <textid>')",
+    )
+
     p_pull = sub.add_parser("pull", help="pull --ff-only from origin")
     _scope(p_pull)
 
@@ -333,6 +343,47 @@ def _action_publish(
     return "ok"
 
 
+def _action_update(
+    bundle_dir: Path, message: str | None, dry_run: bool,
+) -> str:
+    textid = bundle_dir.name
+    if not _is_repo(bundle_dir):
+        return "skipped (not a repo)"
+    r = _run(["git", "status", "--porcelain"], cwd=bundle_dir)
+    if r.returncode != 0:
+        return f"error: git status: {_first_err_line(r)}"
+    dirty = bool(r.stdout.strip())
+
+    rev = _run(["git", "rev-list", "--count", "@{u}..HEAD"], cwd=bundle_dir)
+    ahead = (
+        int(rev.stdout.strip())
+        if rev.returncode == 0 and rev.stdout.strip().isdigit() else 0
+    )
+    if not dirty and ahead == 0:
+        return "skipped (no changes)"
+
+    if dry_run:
+        steps = (["commit"] if dirty else []) + ["push"]
+        return "plan: " + " + ".join(steps)
+
+    parts: list[str] = []
+    if dirty:
+        msg = message or f"Update {textid}"
+        for cmd in (["git", "add", "-A"], ["git", "commit", "-m", msg]):
+            r = _run(cmd, cwd=bundle_dir)
+            if r.returncode != 0:
+                return f"error: {' '.join(cmd[:2])}: {_first_err_line(r)}"
+        sha = _run(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=bundle_dir,
+        ).stdout.strip()
+        parts.append(f"committed {sha}")
+    r = _run(["git", "push"], cwd=bundle_dir)
+    if r.returncode != 0:
+        return f"error: git push: {_first_err_line(r)}"
+    parts.append("pushed")
+    return " + ".join(parts)
+
+
 def _action_push(bundle_dir: Path, dry_run: bool) -> str:
     if not _is_repo(bundle_dir):
         return "skipped (not a repo)"
@@ -411,6 +462,8 @@ def run(argv: list[str] | None = None) -> int:
             )
         elif args.action == "push":
             result = _action_push(b, args.dry_run)
+        elif args.action == "update":
+            result = _action_update(b, args.message, args.dry_run)
         elif args.action == "pull":
             result = _action_pull(b, args.dry_run)
         elif args.action == "status":
