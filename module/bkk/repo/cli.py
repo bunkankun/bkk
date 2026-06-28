@@ -4,7 +4,8 @@ Each bundle dir (``<corpus>/<section>/<textid8>/``) becomes a standalone git
 repo. Source files (``*.bkkx`` SQLite index, ``*.source.yaml`` cache) are
 gitignored; manifest + juan YAMLs are tracked.
 
-Actions: ``init``, ``clone``, ``commit``, ``push``, ``pull``, ``status``.
+Actions: ``init``, ``clone``, ``commit``, ``push``, ``pull``, ``status``,
+``diff`` (compare local corpus to org, optionally sync the gap).
 
 Scope: a positional ``<prefix>`` (textid8/4/3, e.g. ``KR1a0001``, ``KR1a``)
 or ``--all``. The prefix is forwarded to
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -34,6 +36,8 @@ _GITIGNORE = """\
 *.bkkx-journal
 *.source.yaml
 """
+
+_TEXTID8_RE = re.compile(r"^[A-Z][A-Za-z0-9]{7}$")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -116,6 +120,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="summarize per-bundle git status")
     _scope(p_status)
+
+    p_diff = sub.add_parser(
+        "diff",
+        help=(
+            "compare local corpus to <org> repos; "
+            "list differences and optionally sync the gap"
+        ),
+    )
+    p_diff.add_argument("prefix", nargs="?")
+    p_diff.add_argument("--all", action="store_true", dest="all_flag")
+    p_diff.add_argument("--dry-run", action="store_true")
+    p_diff.add_argument(
+        "--upload-missing", action="store_true",
+        help="init/publish each local-only bundle to <org>",
+    )
+    p_diff.add_argument(
+        "--download-missing", action="store_true",
+        help="clone each remote-only repo into the corpus",
+    )
 
     return p
 
@@ -256,6 +279,36 @@ def _action_init(
     return "ok"
 
 
+def _list_remote_bundles(org: str, prefix: str | None) -> list[str]:
+    """Return sorted textid8-shaped repo names in ``org``, optionally
+    filtered by ``prefix``."""
+    r = _run(
+        ["gh", "repo", "list", org, "--limit", "20000", "--json", "name"],
+    )
+    if r.returncode != 0:
+        sys.exit(f"gh repo list {org} failed: {r.stderr.strip() or r.stdout.strip()}")
+    names = [item["name"] for item in json.loads(r.stdout or "[]")]
+    names = [n for n in names if _TEXTID8_RE.match(n)]
+    if prefix:
+        names = [n for n in names if n.startswith(prefix)]
+    names.sort()
+    return names
+
+
+def _clone_one(name: str, corpus: Path, org: str, dry_run: bool) -> str:
+    section = name[:4]
+    target = corpus / section / name
+    if target.exists():
+        return "skipped (exists)"
+    if dry_run:
+        return f"plan: gh repo clone {org}/{name} {target}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    cr = _run(["gh", "repo", "clone", f"{org}/{name}", str(target)])
+    if cr.returncode != 0:
+        return f"error: {_first_err_line(cr)}"
+    return "ok"
+
+
 def _action_clone(
     corpus: Path,
     prefix: str | None,
@@ -278,22 +331,15 @@ def _action_clone(
 
     ok = skipped = errors = 0
     for name in names:
-        section = name[:4]
-        target = corpus / section / name
-        if target.exists():
-            print(f"{name}  skipped (exists)")
-            skipped += 1
-            continue
-        if dry_run:
-            print(f"{name}  plan: gh repo clone {org}/{name} {target}")
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        cr = _run(["gh", "repo", "clone", f"{org}/{name}", str(target)])
-        if cr.returncode != 0:
-            print(f"{name}  error: {_first_err_line(cr)}")
+        result = _clone_one(name, corpus, org, dry_run)
+        print(f"{name}  {result}")
+        if result.startswith("error"):
             errors += 1
+        elif result.startswith("skipped"):
+            skipped += 1
+        elif result.startswith("plan"):
+            pass
         else:
-            print(f"{name}  ok")
             ok += 1
     print(f"\n{ok} ok, {skipped} skipped, {errors} errors", file=sys.stderr)
     return 1 if errors else 0
@@ -434,6 +480,97 @@ def _action_status(bundle_dir: Path) -> str:
     return base
 
 
+def _action_diff(
+    corpus: Path,
+    prefix: str | None,
+    all_flag: bool,
+    *,
+    rc: dict,
+    org: str,
+    visibility: str,
+    default_branch: str,
+    create_delay_s: float,
+    upload: bool,
+    download: bool,
+    dry_run: bool,
+) -> int:
+    if not all_flag and not prefix:
+        sys.exit("bkk repo diff: provide a textid prefix or --all")
+
+    local_paths = discover_bundles(corpus, prefix=prefix)
+    local = {p.name: p for p in local_paths}
+    remote = set(_list_remote_bundles(org, prefix))
+
+    local_only = sorted(set(local) - remote)
+    remote_only = sorted(remote - set(local))
+    in_sync = len(set(local) & remote)
+
+    print(f"local-only ({len(local_only)}):")
+    for name in local_only:
+        print(f"  {name}")
+    print(f"\nremote-only ({len(remote_only)}):")
+    for name in remote_only:
+        print(f"  {name}")
+    print(
+        f"\n{len(local_only)} local-only, "
+        f"{len(remote_only)} remote-only, {in_sync} in sync",
+        file=sys.stderr,
+    )
+
+    if not upload and not download:
+        return 0 if not (local_only or remote_only) else 1
+
+    ok = skipped = errors = partial = 0
+
+    if upload and local_only:
+        print("\nuploading local-only bundles…", file=sys.stderr)
+        for name in local_only:
+            bundle_dir = local[name]
+            if _is_repo(bundle_dir):
+                result = _action_publish(
+                    bundle_dir, org=org, visibility=visibility,
+                    create_delay_s=create_delay_s, dry_run=dry_run,
+                )
+            else:
+                result = _action_init(
+                    bundle_dir, corpus=corpus, rc=rc,
+                    github=True, org=org, visibility=visibility,
+                    default_branch=default_branch,
+                    create_delay_s=create_delay_s, dry_run=dry_run,
+                )
+            print(f"{name}  {result}")
+            if result.startswith("error"):
+                errors += 1
+            elif result.startswith("partial"):
+                partial += 1
+            elif result.startswith("skipped") or result.startswith("not a repo"):
+                skipped += 1
+            elif result.startswith("plan"):
+                pass
+            else:
+                ok += 1
+
+    if download and remote_only:
+        print("\ndownloading remote-only repos…", file=sys.stderr)
+        for name in remote_only:
+            result = _clone_one(name, corpus, org, dry_run)
+            print(f"{name}  {result}")
+            if result.startswith("error"):
+                errors += 1
+            elif result.startswith("skipped"):
+                skipped += 1
+            elif result.startswith("plan"):
+                pass
+            else:
+                ok += 1
+
+    print(
+        f"\n{ok} ok, {partial} partial, {skipped} skipped, {errors} errors",
+        file=sys.stderr,
+    )
+    return 1 if errors else 0
+
+
 def run(argv: list[str] | None = None) -> int:
     rc = load_rc()
     parser = build_parser()
@@ -448,6 +585,16 @@ def run(argv: list[str] | None = None) -> int:
 
     if args.action == "clone":
         return _action_clone(corpus, args.prefix, args.all_flag, org, args.dry_run)
+
+    if args.action == "diff":
+        return _action_diff(
+            corpus, args.prefix, args.all_flag,
+            rc=rc, org=org, visibility=visibility,
+            default_branch=default_branch,
+            create_delay_s=create_delay_s,
+            upload=args.upload_missing, download=args.download_missing,
+            dry_run=args.dry_run,
+        )
 
     bundles = _resolve_bundles(corpus, args.prefix, args.all_flag)
     if not bundles:
