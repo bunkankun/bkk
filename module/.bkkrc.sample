@@ -8,7 +8,7 @@
 # Precedence (lowest → highest): .bkkrc < env vars < CLI flags
 #
 # Supported sections: global, import, cbeta, export, index, validate, serve,
-# repair, voice, recipe, info, annotations, core, chars, duplications.
+# repair, voice, recipe, info, annotations, core, chars, duplications, repo.
 # Unknown section names cause bkk to exit with an error.
 #
 # Path values are resolved relative to the file that defines them.
@@ -224,3 +224,17 @@ core:
 #                                  # without it the PATCH endpoint returns 503
 #   pr_base: master                # upstream branch that edit PRs target
 #                                  # (also the branch `bkk core sync` ff-merges)
+
+# ── Bundle git repos ───────────────────────────────────────────────────────
+# `bkk repo` manages each bundle dir as its own git repo and (optionally)
+# mirrors it to a GitHub org. Source files (the .bkkx index and
+# .source.yaml cache) are gitignored; manifest + juan YAMLs are tracked.
+# Corpus is resolved from repo.corpus → info.corpus → global.corpus.
+repo:
+#   corpus: /data/bkk/corpus       # override global.corpus for `bkk repo`
+#   github_org: bkkbooks           # GitHub org for `bkk repo init --github`
+#                                  # and `bkk repo clone`. Default: bkkbooks.
+#   visibility: public             # gh repo create visibility:
+#                                  # public | private | internal. Default: public.
+#   default_branch: main           # branch used for `git init -b ...`.
+#                                  # Default: main.

@@ -38,6 +38,34 @@ def _keep(body: str) -> bool:
     return True
 
 
+def default_titles_path() -> Path:
+    """Default location of ``catalog/krp-titles.txt`` two levels above ``module/``."""
+    return Path(__file__).resolve().parents[3] / "catalog" / "krp-titles.txt"
+
+
+def parse_titles(titles_path: Path) -> dict[str, str]:
+    """Return ``{text_id: tail}`` where ``tail`` is the text following the
+    ``@``-prefixed alt-id tokens — typically ``<title>-<dynasty>-<author>``.
+    Entries with no trailing text are omitted."""
+    out: dict[str, str] = {}
+    with Path(titles_path).open(encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line:
+                continue
+            tokens = line.split()
+            text_id = tokens[0]
+            if not _TEXT_ID_RE.match(text_id):
+                continue
+            i = 1
+            while i < len(tokens) and tokens[i].startswith("@"):
+                i += 1
+            tail = " ".join(tokens[i:]).strip()
+            if tail:
+                out[text_id] = tail
+    return out
+
+
 def parse_alt_ids(titles_path: Path) -> dict[str, list[str]]:
     """Return ``{text_id: [alt_id, ...]}`` for every text line in
     ``titles_path``. Text-ids without any surviving alt id are omitted."""

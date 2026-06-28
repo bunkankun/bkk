@@ -91,6 +91,11 @@ def _load_chars() -> SubCommand:
     return run
 
 
+def _load_repo() -> SubCommand:
+    from bkk.repo.cli import run
+    return run
+
+
 SUBCOMMANDS: dict[str, tuple[Callable[[], SubCommand], str]] = {
     "import":   (_load_importer,  "import an external source (TLS, KRP) into a BKK bundle"),
     "export":   (_load_exporter,  "export bundles via a recipe to TEI/etc."),
@@ -104,6 +109,7 @@ SUBCOMMANDS: dict[str, tuple[Callable[[], SubCommand], str]] = {
     "annotations": (_load_annotations, "harvest Bluesky annotation records into the archive"),
     "core":     (_load_core,      "maintain the bkk-core knowledge layer (sync, …)"),
     "chars":    (_load_chars,     "canonicalize text against the BKK character set"),
+    "repo":     (_load_repo,      "manage text bundles as git repositories"),
 }
 
 # Aliases so familiar verbs work too.

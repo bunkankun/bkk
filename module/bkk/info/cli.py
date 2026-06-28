@@ -930,6 +930,29 @@ def _render_text_markdown(t: dict) -> str:
     return "\n".join(lines)
 
 
+def write_readme(
+    text_id: str,
+    corpus: Path,
+    catalog_path: Path,
+    *,
+    fix_editions: bool = True,
+) -> tuple[Path, str | None]:
+    """Generate ``<bundle>/Readme.md`` for ``text_id``; return (path, title).
+
+    Mirrors ``bkk info --text-id ID --readme --fix-editions``: optionally
+    appends undeclared editions to the manifest, then writes the dossier.
+    """
+    text = _collect_text(text_id, corpus, catalog_path)
+    if fix_editions:
+        undeclared = text.get("undeclaredEditions") or []
+        bundle_dir = Path(text["path"])
+        if _fix_editions(bundle_dir, text_id, undeclared):
+            text = _collect_text(text_id, corpus, catalog_path)
+    readme_path = Path(text["path"]) / "Readme.md"
+    readme_path.write_text(_render_text_markdown(text), encoding="utf-8")
+    return readme_path, text.get("title")
+
+
 def main() -> None:
     raise SystemExit(run())
 
