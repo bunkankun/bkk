@@ -20,6 +20,9 @@ import type {
   CatalogResponse,
   CategoriesResponse,
   ContributionsResponse,
+  DuplicationAction,
+  DuplicationDetailResponse,
+  DuplicationListResponse,
   CoreBacklinksResponse,
   CoreCollectionsResponse,
   CoreConceptWordsResponse,
@@ -184,6 +187,49 @@ export async function postAdminUpdate(): Promise<AdminJob> {
 
 export async function postAdminRestart(): Promise<{ status: string }> {
   return fetchJson<{ status: string }>(`${apiBase}/admin/restart`, { method: "POST" });
+}
+
+// ---------- admin: duplications ----------
+
+export async function getDuplications(params: {
+  limit?: number;
+  offset?: number;
+  filter?: "all" | "pending" | "done";
+}): Promise<DuplicationListResponse> {
+  const q = new URLSearchParams();
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.offset != null) q.set("offset", String(params.offset));
+  if (params.filter) q.set("filter", params.filter);
+  const qs = q.toString();
+  return fetchJson<DuplicationListResponse>(
+    `${apiBase}/admin/duplications${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function getDuplication(
+  rowId: number,
+  opts: { window?: number } = {},
+): Promise<DuplicationDetailResponse> {
+  const q = new URLSearchParams();
+  if (opts.window != null) q.set("window", String(opts.window));
+  const qs = q.toString();
+  return fetchJson<DuplicationDetailResponse>(
+    `${apiBase}/admin/duplications/${rowId}${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function postDuplicationAction(
+  rowId: number,
+  action: DuplicationAction,
+): Promise<AdminJob> {
+  return fetchJson<AdminJob>(
+    `${apiBase}/admin/duplications/${rowId}/action`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action, confirm: true }),
+    },
+  );
 }
 
 function workspacePath(path: string): string {

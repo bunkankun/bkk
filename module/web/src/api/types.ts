@@ -740,6 +740,74 @@ export interface AdminInfoConfig {
   sections: Record<string, Record<string, string>>;
 }
 
+// Duplications editor (admin)
+export interface DuplicationRowSummary {
+  id: number;
+  textid_a: string;
+  juan_seq_a: number;
+  bucket_a: string;
+  textid_b: string;
+  juan_seq_b: number;
+  bucket_b: string;
+  chars_a: number;
+  chars_b: number;
+  juan_length_a: number;
+  juan_length_b: number;
+  coverage_a: number;
+  coverage_b: number;
+  longest_span: number;
+  cluster_count: number;
+  intra_juan: boolean;
+  action: string | null;
+  action_actor: string | null;
+  action_at: string | null;
+}
+
+export interface DuplicationRowFull extends DuplicationRowSummary {
+  longest_a: [number, number];
+  longest_b: [number, number];
+  spans_a: [number, number][];
+  spans_b: [number, number][];
+}
+
+export interface DuplicationListResponse {
+  total: number;
+  offset: number;
+  limit: number;
+  returned: number;
+  rows: DuplicationRowSummary[];
+}
+
+export interface DuplicationSnippet {
+  offset: number;
+  end: number;
+  text: string;
+  markers: JuanMarker[];
+}
+
+export interface DuplicationSide {
+  textid: string;
+  juan_seq: number;
+  bucket: string;
+  bucket_length: number;
+  longest: [number, number];
+  head: DuplicationSnippet;
+  tail: DuplicationSnippet;
+}
+
+export interface DuplicationDetailResponse {
+  row: DuplicationRowFull;
+  sides: { a: DuplicationSide; b: DuplicationSide };
+}
+
+export type DuplicationAction =
+  | "keep"
+  | "delete_a_juan"
+  | "delete_b_juan"
+  | "delete_a_span"
+  | "delete_b_span"
+  | "delete_span";
+
 export interface AdminInfoResponse {
   server_version: string;
   corpus: AdminInfoCorpus;

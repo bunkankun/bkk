@@ -289,12 +289,10 @@ def test_action_delete_b_juan_excises_bundle_b(dup_corpus):
     body = client.get(f"/admin/jobs/{r.json()['id']}").json()
     assert body["status"] == "success", body
     assert body["result"]["deletion_executed"] is True
-    assert body["result"]["rebuilt_bundles"] == [target_b]
+    assert body["result"]["touched_bundles"] == [target_b]
 
     juan_path = corpus / target_b / f"{target_b}_001.yaml"
     assert not juan_path.exists(), "deleted juan file should be gone"
-    # Per-bundle .bkkx refreshed.
-    assert (corpus / target_b / f"{target_b}.bkkx").exists()
     rows_after = read_duplications_report(report)
     assert rows_after[0]["action"] == "delete_b_juan"
 

@@ -227,7 +227,14 @@ export interface CoreRecordTab {
   history?: Array<{ collection: string; uuid: string }>;
 }
 
-export type PaneTab = TextTab | CoreRecordTab;
+export interface DuplicationTab {
+  id: string;
+  type: "duplication";
+  rowId: number;
+  pinned?: boolean;
+}
+
+export type PaneTab = TextTab | CoreRecordTab | DuplicationTab;
 
 export interface PaneLeaf {
   kind: "leaf";
@@ -1957,6 +1964,24 @@ export const workspace = {
       focusedPaneId,
       pane,
       activity: opts?.keepActivity ? state.activity : "core",
+    };
+    notify();
+    scheduleSessionSave();
+  },
+  openDuplication(rowId: number) {
+    const tabId = `dup:${rowId}`;
+    const tab: DuplicationTab = {
+      id: tabId,
+      type: "duplication",
+      rowId,
+      pinned: false,
+    };
+    const pane = paneForOpenTab(tab);
+    const focusedPaneId = leafIdForTab(pane, tabId);
+    state = {
+      ...state,
+      focusedPaneId,
+      pane,
     };
     notify();
     scheduleSessionSave();

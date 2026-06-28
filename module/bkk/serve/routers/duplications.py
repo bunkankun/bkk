@@ -30,7 +30,6 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 
 from bkk.edit.sections import EditError, delete_juan_bucket, delete_spans
-from bkk.index import build_index
 from bkk.index.duplications import (
     VALID_ACTIONS,
     ReportFormatError,
@@ -134,7 +133,7 @@ def _context_payload(
     longest: tuple[int, int], window: int,
 ) -> dict[str, Any]:
     """Return head/tail snippets around ``longest`` for one side."""
-    rec = state.cache.lookup(textid)
+    rec = state.lookup_bundle(textid)
     if rec is None:
         raise errors.bundle_not_found(textid)
     juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, textid, juan_seq)
@@ -222,7 +221,7 @@ def _validate_action(row: dict, action: str) -> None:
 
 
 def _bundle_dir(state: AppState, textid: str) -> Path:
-    rec = state.cache.lookup(textid)
+    rec = state.lookup_bundle(textid)
     if rec is None:
         raise EditError(f"bundle {textid!r} not found in corpus")
     return rec.bundle_dir
@@ -233,9 +232,11 @@ def _execute_deletion(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Apply the deletion implied by ``action`` to the bundle(s).
 
-    Returns ``(operations, rebuilt_bundles)`` where ``operations`` is the
-    list of per-bundle mutation results and ``rebuilt_bundles`` lists the
-    text-ids whose per-bundle ``.bkkx`` was refreshed.
+    Returns ``(operations, touched_bundles)`` where ``operations`` is the
+    list of per-bundle mutation results and ``touched_bundles`` lists the
+    text-ids whose source files were mutated. The per-bundle ``.bkkx``
+    indexes are left stale on purpose — an admin reruns the index/catalog
+    rebuild from the Operations tab once a batch of edits is done.
     """
     if action == "keep":
         return [], []
@@ -282,12 +283,7 @@ def _execute_deletion(
     else:  # pragma: no cover — _validate_action already gated this
         raise EditError(f"unsupported action {action!r}")
 
-    rebuilt: list[str] = []
-    for textid in sorted(touched):
-        bundle_dir = _bundle_dir(state, textid)
-        build_index(bundle_dir)
-        rebuilt.append(textid)
-    return ops, rebuilt
+    return ops, sorted(touched)
 
 
 def _run_action(
@@ -319,13 +315,13 @@ def _run_action(
                 update_action(report_path, row_id, action, actor=actor, at=at)
             finally:
                 fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
-        ops, rebuilt = _execute_deletion(state, row, action)
+        ops, touched_bundles = _execute_deletion(state, row, action)
         jobs.mark_done(job_id, {
             "row_id": row_id,
             "action": action,
             "deletion_executed": action != "keep",
             "operations": ops,
-            "rebuilt_bundles": rebuilt,
+            "touched_bundles": touched_bundles,
         })
     except Exception as exc:
         jobs.mark_error(job_id, exc)

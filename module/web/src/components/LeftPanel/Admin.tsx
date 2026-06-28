@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getAdminInfo,
   getAdminJob,
+  getDuplications,
   getServerInfo,
   postAdminAnnotations,
   postAdminCatalog,
@@ -13,9 +14,16 @@ import {
   postAdminUpdate,
   postAdminValidate,
 } from "../../api/client";
-import type { AdminInfoResponse, AdminJob } from "../../api/types";
+import type {
+  AdminInfoResponse,
+  AdminJob,
+  DuplicationListResponse,
+  DuplicationRowSummary,
+} from "../../api/types";
+import { krClass } from "../../lib/krClass";
+import { useWorkspace, workspace, type PaneNode } from "../../state/useWorkspace";
 
-type Tab = "dashboard" | "operations";
+type Tab = "dashboard" | "operations" | "duplications";
 
 export function Admin() {
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -37,8 +45,17 @@ export function Admin() {
         <TabButton active={tab === "operations"} onClick={() => setTab("operations")}>
           Operations
         </TabButton>
+        <TabButton active={tab === "duplications"} onClick={() => setTab("duplications")}>
+          Duplications
+        </TabButton>
       </div>
-      {tab === "dashboard" ? <Dashboard /> : <Operations />}
+      {tab === "dashboard" ? (
+        <Dashboard />
+      ) : tab === "operations" ? (
+        <Operations />
+      ) : (
+        <Duplications />
+      )}
     </div>
   );
 }
@@ -652,6 +669,267 @@ function JobRow({
           failed
         </span>
       )}
+    </div>
+  );
+}
+
+// ---------- Duplications ----------
+
+type DupFilter = "pending" | "all" | "done";
+const DUP_PAGE_SIZE = 100;
+
+type DupListState =
+  | { status: "loading" }
+  | { status: "ok"; data: DuplicationListResponse }
+  | { status: "error"; error: string };
+
+function Duplications() {
+  const [filter, setFilter] = useState<DupFilter>("pending");
+  const [offset, setOffset] = useState(0);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [list, setList] = useState<DupListState>({ status: "loading" });
+  const focusedPaneId = useWorkspace((s) => s.focusedPaneId);
+  const pane = useWorkspace((s) => s.pane);
+
+  // Read the active tab in the focused pane (best-effort) so we can
+  // highlight the row that the workspace is currently showing.
+  const activeRowId = (() => {
+    const stack: PaneNode[] = [pane];
+    while (stack.length) {
+      const node = stack.shift()!;
+      if (node.kind === "leaf") {
+        if (focusedPaneId && node.id !== focusedPaneId) continue;
+        const tab = node.tabs.find((t) => t.id === node.activeTabId);
+        if (tab?.type === "duplication") return tab.rowId;
+      } else {
+        stack.push(...node.children);
+      }
+    }
+    return null;
+  })();
+
+  useEffect(() => {
+    let cancelled = false;
+    setList({ status: "loading" });
+    getDuplications({ limit: DUP_PAGE_SIZE, offset, filter })
+      .then((data) => {
+        if (!cancelled) setList({ status: "ok", data });
+      })
+      .catch((e) => {
+        if (!cancelled) setList({ status: "error", error: String(e) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filter, offset, reloadToken]);
+
+  const onFilter = (f: DupFilter) => {
+    setFilter(f);
+    setOffset(0);
+  };
+
+  return (
+    <div style={{ padding: "8px 10px", fontSize: 12 }}>
+      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+        {(["pending", "all", "done"] as DupFilter[]).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => onFilter(f)}
+            style={{
+              flex: 1,
+              padding: "3px 6px",
+              fontSize: 11,
+              background: filter === f ? "var(--bg-1)" : "transparent",
+              color: filter === f ? "var(--t1)" : "var(--t2)",
+              border: "1px solid var(--bd)",
+              borderRadius: 3,
+              cursor: "pointer",
+              textTransform: "capitalize",
+            }}
+          >
+            {f}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setReloadToken((n) => n + 1)}
+          title="Refresh"
+          style={{
+            padding: "3px 8px",
+            fontSize: 11,
+            background: "transparent",
+            color: "var(--t2)",
+            border: "1px solid var(--bd)",
+            borderRadius: 3,
+            cursor: "pointer",
+          }}
+        >
+          ↻
+        </button>
+      </div>
+
+      {list.status === "loading" && <div className="empty">Loading…</div>}
+      {list.status === "error" && (
+        <div className="empty" style={{ color: "var(--kr2)" }}>
+          {list.error}
+        </div>
+      )}
+      {list.status === "ok" && (
+        <>
+          <div style={{ fontSize: 11, color: "var(--t2)", marginBottom: 4 }}>
+            {list.data.total} row{list.data.total === 1 ? "" : "s"} ·{" "}
+            showing {offset + 1}–{Math.min(offset + list.data.returned, list.data.total)}
+          </div>
+          <div>
+            {list.data.rows.map((row) => (
+              <DupListRow
+                key={row.id}
+                row={row}
+                active={row.id === activeRowId}
+                onClick={() => workspace.openDuplication(row.id)}
+              />
+            ))}
+            {list.data.returned === 0 && (
+              <div className="empty">No rows.</div>
+            )}
+          </div>
+          <DupPager
+            total={list.data.total}
+            offset={offset}
+            limit={DUP_PAGE_SIZE}
+            onOffset={setOffset}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function DupListRow({
+  row,
+  active,
+  onClick,
+}: {
+  row: DuplicationRowSummary;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const cov = Math.max(row.coverage_a, row.coverage_b);
+  const intra = row.intra_juan;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        padding: "4px 6px",
+        marginBottom: 2,
+        fontSize: 11,
+        background: active ? "var(--bg-1)" : "transparent",
+        color: "var(--t1)",
+        border: `1px solid ${active ? "var(--blu)" : "var(--bd)"}`,
+        borderRadius: 3,
+        cursor: "pointer",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 4 }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {intra ? (
+            <>
+              <span className={krClass(row.textid_a)}>{row.textid_a}</span>
+              :{row.juan_seq_a}/{row.bucket_a}{" "}
+              <span style={{ color: "var(--t3)" }}>(intra)</span>
+            </>
+          ) : (
+            <>
+              <span className={krClass(row.textid_a)}>{row.textid_a}</span>
+              :{row.juan_seq_a} ↔{" "}
+              <span className={krClass(row.textid_b)}>{row.textid_b}</span>
+              :{row.juan_seq_b}
+            </>
+          )}
+        </span>
+        {row.action && (
+          <span
+            style={{
+              fontSize: 10,
+              padding: "0 4px",
+              borderRadius: 2,
+              color: row.action === "keep" ? "var(--t2)" : "var(--grn)",
+              border: `1px solid ${row.action === "keep" ? "var(--bd)" : "var(--grn)"}`,
+            }}
+            title={`${row.action} by ${row.action_actor ?? "?"} at ${row.action_at ?? "?"}`}
+          >
+            {row.action}
+          </span>
+        )}
+      </div>
+      <div style={{ marginTop: 2, fontSize: 10, color: "var(--t2)" }}>
+        longest {row.longest_span} · {row.cluster_count} cluster
+        {row.cluster_count === 1 ? "" : "s"} · cov {(cov * 100).toFixed(0)}%
+      </div>
+    </button>
+  );
+}
+
+function DupPager({
+  total,
+  offset,
+  limit,
+  onOffset,
+}: {
+  total: number;
+  offset: number;
+  limit: number;
+  onOffset: (o: number) => void;
+}) {
+  if (total <= limit) return null;
+  const canPrev = offset > 0;
+  const canNext = offset + limit < total;
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 4,
+        marginTop: 8,
+      }}
+    >
+      <button
+        type="button"
+        disabled={!canPrev}
+        onClick={() => onOffset(Math.max(0, offset - limit))}
+        style={{
+          padding: "3px 8px",
+          fontSize: 11,
+          background: "var(--bg-1)",
+          color: canPrev ? "var(--t1)" : "var(--t3)",
+          border: "1px solid var(--bd)",
+          borderRadius: 3,
+          cursor: canPrev ? "pointer" : "not-allowed",
+        }}
+      >
+        ← Prev
+      </button>
+      <button
+        type="button"
+        disabled={!canNext}
+        onClick={() => onOffset(offset + limit)}
+        style={{
+          padding: "3px 8px",
+          fontSize: 11,
+          background: "var(--bg-1)",
+          color: canNext ? "var(--t1)" : "var(--t3)",
+          border: "1px solid var(--bd)",
+          borderRadius: 3,
+          cursor: canNext ? "pointer" : "not-allowed",
+        }}
+      >
+        Next →
+      </button>
     </div>
   );
 }

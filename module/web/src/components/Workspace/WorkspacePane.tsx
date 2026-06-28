@@ -5,6 +5,7 @@ import { setResizing, useWorkspace, workspace, type PaneLeaf } from "../../state
 import { CharInfoBar } from "../CharInfoBar";
 import { Welcome } from "../Welcome";
 import { CoreRecord } from "./CoreRecord";
+import { DuplicationViewer } from "./DuplicationViewer";
 import { ImagePanel } from "./ImagePanel";
 import { TextViewer } from "./TextViewer";
 import { TranslationViewer } from "./TranslationViewer";
@@ -53,6 +54,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
     pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0] ?? null;
   const activeTextTab = activeTab?.type === "text" ? activeTab : null;
   const activeCoreTab = activeTab?.type === "core-record" ? activeTab : null;
+  const activeDupTab = activeTab?.type === "duplication" ? activeTab : null;
 
   const readMode = activeTextTab?.readMode ?? defaultReadMode;
   const lineMode = activeTextTab?.lineMode ?? defaultLineMode;
@@ -113,6 +115,36 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
         )}
         {pane.tabs.map((t) => {
           const isActive = t.id === activeTab?.id;
+          if (t.type === "duplication") {
+            return (
+              <button
+                key={t.id}
+                className={`tab${isActive ? " on" : ""}`}
+                title={`duplication row #${t.rowId}`}
+                onClick={() => workspace.focusPane(pane.id)}
+              >
+                <span className="tab-title">dup #{t.rowId}</span>
+                <span
+                  className={`tab-pin${t.pinned ? " on" : ""}`}
+                  role="button"
+                  tabIndex={0}
+                  title={t.pinned ? "Unpin row" : "Pin row"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    workspace.togglePinnedTab(pane.id, t.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    workspace.togglePinnedTab(pane.id, t.id);
+                  }}
+                >
+                  {t.pinned ? "●" : "○"}
+                </span>
+              </button>
+            );
+          }
           if (t.type === "core-record") {
             return (
               <button
@@ -219,7 +251,9 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
           </button>
         )}
       </div>
-      {activeCoreTab ? (
+      {activeDupTab ? (
+        <DuplicationViewer key={`dup:${activeDupTab.rowId}`} rowId={activeDupTab.rowId} />
+      ) : activeCoreTab ? (
         <CoreRecord
           key={`${activeCoreTab.collection}:${activeCoreTab.uuid}`}
           paneId={pane.id}
@@ -275,7 +309,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
       ) : (
         <Welcome empty="Select a text from the catalog or TOC." />
       )}
-      {!activeCoreTab && (
+      {!activeCoreTab && !activeDupTab && (
         <CharInfoBar
           ch={activeTextTab?.hoverChar ?? null}
           cp={activeTextTab?.hoverCodepoint ?? null}
