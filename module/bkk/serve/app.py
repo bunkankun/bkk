@@ -24,6 +24,7 @@ from .routers import catalog as catalog_router
 from .routers import contributions as contributions_router
 from .routers import core as core_router
 from .routers import core_edit as core_edit_router
+from .routers import duplications as duplications_router
 from .routers import recipes as recipes_router
 from .routers import redirects as redirects_router
 from .routers import search as search_router
@@ -145,6 +146,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(auth_router.router, prefix="/api")
     app.include_router(workspace_router.router, prefix="/api")
     app.include_router(admin_router.router, prefix="/api")
+    app.include_router(duplications_router.router, prefix="/api")
     app.include_router(redirects_router.router, prefix="/api")
 
     spa_will_mount = (

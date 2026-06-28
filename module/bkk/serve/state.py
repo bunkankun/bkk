@@ -270,6 +270,10 @@ class AppState:
         return self.config.source_branch
 
     @property
+    def duplications_report_path(self) -> Path | None:
+        return self.config.duplications_report_path
+
+    @property
     def cache(self) -> CorpusCache:
         if self._cache is None:
             self._cache = CorpusCache(self.corpus_root)

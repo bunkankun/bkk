@@ -94,9 +94,11 @@ def run(argv: list[str] | None = None) -> int:
     rc = load_rc()
     rc_serve = {**rc.get("global", {}), **rc.get("serve", {}), **rc.get("annotations", {})}
     rc_core = rc.get("core", {})
+    rc_duplications = rc.get("duplications", {})
 
     base = ServeConfig.from_env(
         corpus_root=args.corpus, rc=rc_serve, core_rc=rc_core,
+        duplications_rc=rc_duplications,
     )
     config = base.merge_cli(
         corpus_root=args.corpus,

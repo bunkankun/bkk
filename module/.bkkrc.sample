@@ -8,8 +8,8 @@
 # Precedence (lowest → highest): .bkkrc < env vars < CLI flags
 #
 # Supported sections: global, import, cbeta, export, index, validate, serve,
-# repair, voice, recipe, info, annotations, core, chars. Unknown section
-# names cause bkk to exit with an error.
+# repair, voice, recipe, info, annotations, core, chars, duplications.
+# Unknown section names cause bkk to exit with an error.
 #
 # Path values are resolved relative to the file that defines them.
 # ~ is expanded.  Relative paths without ~ are made absolute from the
@@ -196,6 +196,16 @@ annotations:
 #                                # for the `bkk annotations` and `bkk index
 #                                # annotations` subcommands only (e.g. harvest into
 #                                # a staging dir before promoting it).
+
+# ── Duplications editor ────────────────────────────────────────────────────
+# `bkk index duplications` writes a TSV report of duplicated juan-pairs. The
+# admin UI's duplications editor reads from the path below and rewrites it in
+# place to record per-row actions (keep / delete-side / delete-span). Without
+# this key the editor returns 404.
+duplications:
+#   report: /data/bkk/dups.tsv     # path of the report TSV (output of
+#                                  # `bkk index duplications --out`).
+#                                  # Env: BKK_DUPLICATIONS_REPORT.
 
 # ── Core knowledge layer ───────────────────────────────────────────────────
 # Wires the bkk-core checkout into both the serve-time browser at /core/*

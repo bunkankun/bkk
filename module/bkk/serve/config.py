@@ -44,6 +44,7 @@ class ServeConfig:
     source_root: Path | None = None
     source_branch: str = "master"
     max_search_hits: int = 20000
+    duplications_report_path: Path | None = None
 
     def __post_init__(self) -> None:
         if self.catalog_path is None:
@@ -66,6 +67,7 @@ class ServeConfig:
         corpus_root: Path | str | None = None,
         rc: dict | None = None,
         core_rc: dict | None = None,
+        duplications_rc: dict | None = None,
     ) -> "ServeConfig":
         """Build config from defaults < rc file < env vars.
 
@@ -285,6 +287,15 @@ class ServeConfig:
         else:
             max_search_hits = int(rc.get("max_search_hits", 20000))
 
+        duplications_rc = duplications_rc or {}
+        env_dup_report = os.environ.get("BKK_DUPLICATIONS_REPORT")
+        if env_dup_report:
+            duplications_report_path: Path | None = Path(env_dup_report).resolve()
+        elif duplications_rc.get("report"):
+            duplications_report_path = Path(duplications_rc["report"]).resolve()
+        else:
+            duplications_report_path = None
+
         env_workspace_repo_name = os.environ.get("BKK_WORKSPACE_REPO_NAME")
         workspace_repo_name = (
             env_workspace_repo_name
@@ -335,6 +346,7 @@ class ServeConfig:
             source_root=source_root,
             source_branch=source_branch,
             max_search_hits=max_search_hits,
+            duplications_report_path=duplications_report_path,
         )
 
     def merge_cli(
