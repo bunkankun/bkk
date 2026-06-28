@@ -21,6 +21,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import yaml
@@ -212,6 +213,7 @@ def _action_init(
     org: str,
     visibility: str,
     default_branch: str,
+    create_delay_s: float,
     dry_run: bool,
 ) -> str:
     textid = bundle_dir.name
@@ -246,9 +248,11 @@ def _action_init(
         if desc:
             cmd.extend(["--description", desc])
         cmd.extend(["--source", str(bundle_dir), "--push"])
+        if create_delay_s > 0:
+            time.sleep(create_delay_s)
         r = _run(cmd)
         if r.returncode != 0:
-            return f"error: gh repo create: {_first_err_line(r)}"
+            return f"partial: local repo created, github pending ({_first_err_line(r)})"
     return "ok"
 
 
@@ -322,6 +326,7 @@ def _action_publish(
     *,
     org: str,
     visibility: str,
+    create_delay_s: float,
     dry_run: bool,
 ) -> str:
     textid = bundle_dir.name
@@ -337,6 +342,8 @@ def _action_publish(
     if desc:
         cmd.extend(["--description", desc])
     cmd.extend(["--source", str(bundle_dir), "--push"])
+    if create_delay_s > 0:
+        time.sleep(create_delay_s)
     r = _run(cmd)
     if r.returncode != 0:
         return f"error: gh repo create: {_first_err_line(r)}"
@@ -437,6 +444,7 @@ def run(argv: list[str] | None = None) -> int:
     org = repo_rc.get("github_org", "bkkbooks")
     visibility = repo_rc.get("visibility", "public")
     default_branch = repo_rc.get("default_branch", "main")
+    create_delay_s = float(repo_rc.get("create_delay_s", 2.0))
 
     if args.action == "clone":
         return _action_clone(corpus, args.prefix, args.all_flag, org, args.dry_run)
@@ -446,19 +454,21 @@ def run(argv: list[str] | None = None) -> int:
         print("no bundles matched", file=sys.stderr)
         return 0
 
-    ok = skipped = errors = 0
+    ok = skipped = errors = partial = 0
     for b in bundles:
         if args.action == "init":
             result = _action_init(
                 b, corpus=corpus, rc=rc,
                 github=args.github, org=org, visibility=visibility,
-                default_branch=default_branch, dry_run=args.dry_run,
+                default_branch=default_branch,
+                create_delay_s=create_delay_s, dry_run=args.dry_run,
             )
         elif args.action == "commit":
             result = _action_commit(b, args.message, args.dry_run)
         elif args.action == "publish":
             result = _action_publish(
-                b, org=org, visibility=visibility, dry_run=args.dry_run,
+                b, org=org, visibility=visibility,
+                create_delay_s=create_delay_s, dry_run=args.dry_run,
             )
         elif args.action == "push":
             result = _action_push(b, args.dry_run)
@@ -473,11 +483,16 @@ def run(argv: list[str] | None = None) -> int:
         print(f"{b.name}  {result}")
         if result.startswith("error"):
             errors += 1
+        elif result.startswith("partial"):
+            partial += 1
         elif result.startswith("skipped") or result.startswith("not a repo"):
             skipped += 1
         else:
             ok += 1
-    print(f"\n{ok} ok, {skipped} skipped, {errors} errors", file=sys.stderr)
+    print(
+        f"\n{ok} ok, {partial} partial, {skipped} skipped, {errors} errors",
+        file=sys.stderr,
+    )
     return 1 if errors else 0
 
 

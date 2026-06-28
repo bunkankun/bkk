@@ -238,3 +238,8 @@ repo:
 #                                  # public | private | internal. Default: public.
 #   default_branch: main           # branch used for `git init -b ...`.
 #                                  # Default: main.
+#   create_delay_s: 2.0            # seconds to sleep before each
+#                                  # `gh repo create` call (init --github,
+#                                  # publish). Throttles bulk runs to stay
+#                                  # under GitHub's secondary rate limit on
+#                                  # repo creation. Default: 2.0.
