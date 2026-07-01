@@ -109,7 +109,7 @@ def list_duplications(
     request: Request,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    filter: str = Query("all", pattern="^(all|pending|done)$"),
+    filter: str = Query("all", pattern="^(all|pending|done|intra)$"),
     state: AppState = Depends(_require_admin),
 ) -> dict[str, Any]:
     rows = _read_rows(state)
@@ -117,6 +117,8 @@ def list_duplications(
         rows = [r for r in rows if not r["action"]]
     elif filter == "done":
         rows = [r for r in rows if r["action"]]
+    elif filter == "intra":
+        rows = [r for r in rows if r["intra_juan"] and not r["action"]]
     total = len(rows)
     page = rows[offset : offset + limit]
     return {

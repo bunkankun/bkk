@@ -110,7 +110,7 @@ export function DuplicationViewer({ rowId }: { rowId: number }) {
         </div>
       </div>
 
-      <ActionBar rowId={row.id} intra={intra} />
+      <ActionBar rowId={row.id} intra={intra} alreadyActioned={row.action != null} />
     </div>
   );
 }
@@ -242,10 +242,13 @@ function SnippetBlock({
 function ActionBar({
   rowId,
   intra,
+  alreadyActioned,
 }: {
   rowId: number;
   intra: boolean;
+  alreadyActioned: boolean;
 }) {
+  const [applied, setApplied] = useState(alreadyActioned);
   const actions: { key: DuplicationAction; label: string; danger?: boolean }[] = intra
     ? [
         { key: "keep", label: "Keep" },
@@ -276,6 +279,8 @@ function ActionBar({
           action={a.key}
           label={a.label}
           danger={a.danger}
+          locked={applied}
+          onApplied={() => setApplied(true)}
         />
       ))}
     </div>
@@ -287,11 +292,15 @@ function ActionButton({
   action,
   label,
   danger,
+  locked,
+  onApplied,
 }: {
   rowId: number;
   action: DuplicationAction;
   label: string;
   danger?: boolean;
+  locked: boolean;
+  onApplied: () => void;
 }) {
   const [job, setJob] = useState<AdminJob | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -320,13 +329,16 @@ function ActionButton({
     postDuplicationAction(rowId, action)
       .then((j) => {
         setJob(j);
-        if (j.status === "pending" || j.status === "running") {
+        if (j.status === "success") {
+          onApplied();
+        } else if (j.status === "pending" || j.status === "running") {
           timerRef.current = window.setInterval(() => {
             getAdminJob(j.id)
               .then((next) => {
                 setJob(next);
                 if (next.status === "success" || next.status === "error") {
                   stop();
+                  if (next.status === "success") onApplied();
                 }
               })
               .catch((e) => {
@@ -337,27 +349,29 @@ function ActionButton({
         }
       })
       .catch((e) => setError(String(e)));
-  }, [action, danger, rowId, stop]);
+  }, [action, danger, onApplied, rowId, stop]);
 
   const status = job?.status;
   const busy = status === "pending" || status === "running";
   const ok = status === "success";
   const errored = status === "error" || error != null;
+  const disabled = busy || locked;
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
       <button
         type="button"
         onClick={start}
-        disabled={busy}
+        disabled={disabled}
         style={{
           padding: "4px 10px",
           fontSize: 12,
           background: "var(--bg-1)",
-          color: danger ? "var(--kr2)" : "var(--t1)",
-          border: `1px solid ${danger ? "var(--kr2)" : "var(--bd)"}`,
+          color: disabled ? "var(--t3)" : danger ? "var(--kr2)" : "var(--t1)",
+          border: `1px solid ${disabled ? "var(--bd)" : danger ? "var(--kr2)" : "var(--bd)"}`,
           borderRadius: 3,
-          cursor: busy ? "wait" : "pointer",
+          cursor: busy ? "wait" : disabled ? "not-allowed" : "pointer",
+          opacity: disabled && !busy ? 0.6 : 1,
         }}
         title={action}
       >

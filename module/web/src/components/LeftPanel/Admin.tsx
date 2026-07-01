@@ -675,7 +675,7 @@ function JobRow({
 
 // ---------- Duplications ----------
 
-type DupFilter = "pending" | "all" | "done";
+type DupFilter = "pending" | "all" | "done" | "intra";
 const DUP_PAGE_SIZE = 100;
 
 type DupListState =
@@ -731,7 +731,7 @@ function Duplications() {
   return (
     <div style={{ padding: "8px 10px", fontSize: 12 }}>
       <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-        {(["pending", "all", "done"] as DupFilter[]).map((f) => (
+        {(["pending", "all", "done", "intra"] as DupFilter[]).map((f) => (
           <button
             key={f}
             type="button"

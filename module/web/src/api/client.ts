@@ -194,7 +194,7 @@ export async function postAdminRestart(): Promise<{ status: string }> {
 export async function getDuplications(params: {
   limit?: number;
   offset?: number;
-  filter?: "all" | "pending" | "done";
+  filter?: "all" | "pending" | "done" | "intra";
 }): Promise<DuplicationListResponse> {
   const q = new URLSearchParams();
   if (params.limit != null) q.set("limit", String(params.limit));
