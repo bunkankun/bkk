@@ -189,9 +189,14 @@ def _run(cmd: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProc
     )
 
 
-_RATE_LIMIT_RE = re.compile(r"\brate limit\b|ratelimit|secondary rate", re.I)
+_RATE_LIMIT_RE = re.compile(
+    r"\brate limit\b|ratelimit|secondary rate|too many repositories,\s*too quickly",
+    re.I,
+)
 _SECONDARY_LIMIT_RE = re.compile(
-    r"secondary rate|abuse detection|content creation|temporarily blocked", re.I,
+    r"secondary rate|abuse detection|content creation|temporarily blocked|"
+    r"too many repositories,\s*too quickly",
+    re.I,
 )
 _RATE_LIMIT_RESET_RE = re.compile(
     r"(?:reset|retry[- ]?after|try again in)[^0-9]*(\d+)", re.I,
@@ -258,6 +263,47 @@ def _gh_primary_reset_wait_s(max_wait_s: float) -> float | None:
     return min(max(waits), max_wait_s)
 
 
+def _rate_limit_sleep_s(
+    msg: str,
+    wait_s: float,
+    *,
+    max_wait_s: float,
+) -> tuple[float, bool]:
+    """Return the planned delay and whether this is a secondary/content block."""
+    secondary = bool(_SECONDARY_LIMIT_RE.search(msg))
+    candidates = [wait_s]
+    hint = _reset_hint_s(msg)
+    if hint is not None:
+        candidates.append(hint)
+    if secondary:
+        candidates.append(float(_GH_BACKOFF["secondary_floor_s"]))
+    else:
+        # Primary/quota limit: wait exactly until the bucket resets.
+        reset = _gh_primary_reset_wait_s(max_wait_s)
+        if reset is not None:
+            candidates.append(reset)
+    return min(max_wait_s, max(candidates)), secondary
+
+
+def _with_rate_limit_delay_note(
+    r: subprocess.CompletedProcess,
+    *,
+    sleep_s: float,
+    max_retries: int,
+    secondary: bool,
+) -> subprocess.CompletedProcess:
+    """Add expected-delay context to a final rate-limit failure."""
+    original = (r.stderr or r.stdout or "").strip()
+    first = original.splitlines()[0] if original else f"exit {r.returncode}"
+    kind = "secondary/content-creation" if secondary else "rate"
+    note = (
+        f"gh {kind} limit persisted after {max_retries} retries; "
+        f"next retry would wait about {sleep_s:.0f}s; last error: {first}"
+    )
+    stderr = note if not r.stderr else f"{note}\n{r.stderr}"
+    return subprocess.CompletedProcess(r.args, r.returncode, r.stdout, stderr)
+
+
 def _run_gh_with_rate_limit_backoff(
     cmd: list[str],
     *,
@@ -284,23 +330,15 @@ def _run_gh_with_rate_limit_backoff(
             return r
 
         msg = (r.stderr or "") + "\n" + (r.stdout or "")
-        if not _RATE_LIMIT_RE.search(msg) or attempt >= max_retries:
+        if not _RATE_LIMIT_RE.search(msg):
             return r
 
-        secondary = bool(_SECONDARY_LIMIT_RE.search(msg))
-        candidates = [wait_s]
-        hint = _reset_hint_s(msg)
-        if hint is not None:
-            candidates.append(hint)
-        if secondary:
-            candidates.append(float(_GH_BACKOFF["secondary_floor_s"]))
-        else:
-            # Primary/quota limit: wait exactly until the bucket resets.
-            reset = _gh_primary_reset_wait_s(max_wait_s)
-            if reset is not None:
-                candidates.append(reset)
+        sleep_s, secondary = _rate_limit_sleep_s(msg, wait_s, max_wait_s=max_wait_s)
+        if attempt >= max_retries:
+            return _with_rate_limit_delay_note(
+                r, sleep_s=sleep_s, max_retries=max_retries, secondary=secondary,
+            )
 
-        sleep_s = min(max_wait_s, max(candidates))
         # Jitter de-syncs retries so a long batch doesn't march in lockstep
         # back into the same limit.
         sleep_s = min(max_wait_s, sleep_s + random.uniform(0.0, min(15.0, sleep_s / 10)))
