@@ -40,6 +40,14 @@ def _state(request: Request) -> AppState:
     return request.app.state.bkk
 
 
+def _require_bluesky_enabled(request: Request) -> None:
+    if not _state(request).config.bluesky_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Bluesky integration is disabled; set BKK_BLUESKY_ENABLE=True to enable it.",
+        )
+
+
 def _require_user(request: Request) -> tuple[str, UserSession]:
     session_id = request.cookies.get(SESSION_COOKIE)
     user = _state(request).sessions.get(session_id)
@@ -74,6 +82,7 @@ class BlueskyStatus(BaseModel):
     summary="Current Bluesky connection status (no tokens returned)",
 )
 def get_bluesky_session(request: Request) -> BlueskyStatus:
+    _require_bluesky_enabled(request)
     _, user = _require_user(request)
     if user.bluesky is None:
         return BlueskyStatus()
@@ -90,6 +99,7 @@ def get_bluesky_session(request: Request) -> BlueskyStatus:
     summary="Exchange a Bluesky app password for an in-memory session",
 )
 def post_bluesky_session(request: Request, body: BlueskyLoginRequest) -> BlueskyStatus:
+    _require_bluesky_enabled(request)
     session_id, _ = _require_user(request)
     handle = body.handle.lstrip("@").strip()
     result = create_session(handle, body.app_password)
@@ -125,6 +135,7 @@ def post_bluesky_session(request: Request, body: BlueskyLoginRequest) -> Bluesky
     summary="Forget the in-memory Bluesky session",
 )
 def delete_bluesky_session(request: Request) -> dict[str, bool]:
+    _require_bluesky_enabled(request)
     session_id, _ = _require_user(request)
     _state(request).sessions.detach_bluesky(session_id)
     return {"ok": True}
@@ -326,6 +337,7 @@ def post_translation(
 def _post_record(
     request: Request, collection: str, record: dict[str, Any],
 ) -> PostResponse:
+    _require_bluesky_enabled(request)
     session_id, user = _require_user(request)
     bluesky = _require_bluesky(user)
     result, new_tokens = create_record(

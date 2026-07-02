@@ -146,6 +146,7 @@ export function AnnotationsTab() {
   const localAnnotations = useWorkspace((s) => s.localAnnotations);
   const selectedAnnId = useWorkspace((s) => s.selectedAnnotationId);
   const authUser = useWorkspace((s) => s.auth.session?.user ?? null);
+  const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [anns, setAnns] = useState<Annotation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -307,9 +308,10 @@ export function AnnotationsTab() {
   const resolveAction = (a: Annotation): AnnAction | null => {
     if (!canManage(a)) return null;
     if (a.curation_state === "rejected" && a.uri) {
+      if (!blueskyEnabled) return null;
       return { kind: "unreject", uri: a.uri };
     }
-    if (a.uri) return { kind: "reject", uri: a.uri };
+    if (a.uri) return blueskyEnabled ? { kind: "reject", uri: a.uri } : null;
     return { kind: "archive-delete" };
   };
 
@@ -383,8 +385,12 @@ export function AnnotationsTab() {
             </button>
           </div>
           <CoreTargetPicker selection={sel} edition={edition} />
-          {edition && <AnnotationCompose selection={sel} edition={edition} />}
-          {edition && <ContribCompose selection={sel} edition={edition} />}
+          {blueskyEnabled && edition && (
+            <AnnotationCompose selection={sel} edition={edition} />
+          )}
+          {blueskyEnabled && edition && (
+            <ContribCompose selection={sel} edition={edition} />
+          )}
           <label className="sel-pin-toggle">
             <input
               type="checkbox"

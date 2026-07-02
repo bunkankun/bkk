@@ -274,7 +274,11 @@ export interface WorkspaceState {
   // in AnnotationsTab and flash-on-text from the card.
   selectedAnnotationId: string | null;
   // info from GET /api/info (loaded once at startup).
-  serverInfo: { upstream_repo?: string | null; version?: string } | null;
+  serverInfo: {
+    upstream_repo?: string | null;
+    version?: string;
+    bluesky_enabled?: boolean;
+  } | null;
   auth: {
     status: "unknown" | "loading" | "authenticated" | "anonymous" | "error";
     error: string | null;

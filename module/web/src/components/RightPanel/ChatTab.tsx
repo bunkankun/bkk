@@ -373,6 +373,12 @@ export function ChatTab() {
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const inFlight = useRef(false);
+  const labelStore = useLabelStore(new Map());
+  const isEditor = useWorkspace((s) => s.auth.session?.user?.is_editor ?? false);
+  const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
+  const hasBluesky = useWorkspace(
+    (s) => s.serverInfo?.bluesky_enabled === true && s.blueskyStatus != null,
+  );
 
   const load = useCallback(async () => {
     if (inFlight.current) return;
@@ -392,6 +398,7 @@ export function ChatTab() {
   }, []);
 
   useEffect(() => {
+    if (!blueskyEnabled) return;
     void load();
     const tick = () => {
       setNowMs(Date.now());
@@ -399,11 +406,7 @@ export function ChatTab() {
     };
     const id = window.setInterval(tick, REFRESH_MS);
     return () => window.clearInterval(id);
-  }, [load]);
-
-  const labelStore = useLabelStore(new Map());
-  const isEditor = useWorkspace((s) => s.auth.session?.user?.is_editor ?? false);
-  const hasBluesky = useWorkspace((s) => s.blueskyStatus != null);
+  }, [blueskyEnabled, load]);
 
   useEffect(() => {
     return subscribeCoreRecordSaved((event) => {
@@ -424,6 +427,16 @@ export function ChatTab() {
 
   const threads = buildThreads(items);
   const cardProps = { nowMs, store: labelStore, isEditor, hasBluesky, onCurationChange: handleCurationChange };
+
+  if (!blueskyEnabled) {
+    return (
+      <div className="rc">
+        <div className="empty">
+          Bluesky contributions are disabled.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rc">

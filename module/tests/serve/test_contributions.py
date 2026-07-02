@@ -132,6 +132,7 @@ def env(tmp_path: Path):
         annotations_root=annotations_root,
         annotation_dids=(EDITOR_DID, ADMIN_DID, DID),
         annotation_admin_dids=(ADMIN_DID,),
+        bluesky_enabled=True,
     )
     app = create_app(config)
     resolver = CurationResolver(

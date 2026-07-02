@@ -41,6 +41,10 @@ class ServeConfig:
     github_callback_url: str | None = None
     workspace_template_repo: str = "bunkankun/BKK-Workspace"
     workspace_repo_name: str = "BKK-Workspace"
+    # Bluesky write/feed UI and atproto-backed endpoints are opt-in. Keep the
+    # comparison exact so the deploy knob is unambiguous:
+    # ``BKK_BLUESKY_ENABLE=True``.
+    bluesky_enabled: bool = False
     source_root: Path | None = None
     source_branch: str = "master"
     max_search_hits: int = 20000
@@ -303,6 +307,8 @@ class ServeConfig:
             else rc.get("workspace_repo_name", "BKK-Workspace")
         )
 
+        bluesky_enabled = os.environ.get("BKK_BLUESKY_ENABLE") == "True"
+
         rc_image_base_urls = rc.get("image_base_urls") or {}
         if not isinstance(rc_image_base_urls, dict) or not all(
             isinstance(k, str) and isinstance(v, str)
@@ -343,6 +349,7 @@ class ServeConfig:
             github_callback_url=github_callback_url,
             workspace_template_repo=workspace_template_repo,
             workspace_repo_name=workspace_repo_name,
+            bluesky_enabled=bluesky_enabled,
             source_root=source_root,
             source_branch=source_branch,
             max_search_hits=max_search_hits,

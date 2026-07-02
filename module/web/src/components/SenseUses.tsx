@@ -7,7 +7,7 @@ import {
 } from "../api/client";
 import type { AnnotationBySenseLocation, Rating } from "../api/types";
 import { RatingStar } from "./RatingStar";
-import { workspace } from "../state/useWorkspace";
+import { useWorkspace, workspace } from "../state/useWorkspace";
 
 export type UsesStatus = "loading" | "ok" | "error";
 
@@ -77,6 +77,7 @@ export function LocationRow({
   extraAction?: ReactNode;
 }) {
   const jumpDisabled = loc.offset == null || loc.bucket == null;
+  const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
   const [rating, setRating] = useState<Rating>(loc.rating ?? 0);
   useEffect(() => {
     setRating(loc.rating ?? 0);
@@ -98,17 +99,20 @@ export function LocationRow({
           {loc.resp && <span className="core-target-where-resp">{loc.resp}</span>}
         </button>
         <div className="core-target-where-actions">
-          <button
-            type="button"
-            className="core-target-where-action icon"
-            onClick={stopLocationAction}
-            title="Change curation state"
-            aria-label="Change curation state"
-          >
-            <ThumbIcon />
-          </button>
+          {blueskyEnabled && loc.uri && (
+            <button
+              type="button"
+              className="core-target-where-action icon"
+              onClick={stopLocationAction}
+              title="Change curation state"
+              aria-label="Change curation state"
+            >
+              <ThumbIcon />
+            </button>
+          )}
           <RatingStar
             rating={rating}
+            disabled={Boolean(loc.uri && !blueskyEnabled)}
             onRate={(next) =>
               loc.uri
                 ? patchContributionCuration(loc.uri, { rating: next }).then(
@@ -125,15 +129,17 @@ export function LocationRow({
             }
             onPersisted={(r) => setRating(r)}
           />
-          <button
-            type="button"
-            className="core-target-where-action icon"
-            onClick={stopLocationAction}
-            title="Comment on this location"
-            aria-label="Comment on this location"
-          >
-            <CommentIcon />
-          </button>
+          {blueskyEnabled && loc.uri && (
+            <button
+              type="button"
+              className="core-target-where-action icon"
+              onClick={stopLocationAction}
+              title="Comment on this location"
+              aria-label="Comment on this location"
+            >
+              <CommentIcon />
+            </button>
+          )}
           {extraAction}
         </div>
       </div>

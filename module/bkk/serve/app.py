@@ -42,9 +42,10 @@ log = logging.getLogger("bkk.serve")
 async def _lifespan(app: FastAPI):
     """Start the Jetstream subscriber on boot; cancel it on shutdown.
 
-    Gated by ``BKK_DISABLE_CONTRIBUTIONS_POLL`` so tests and offline dev don't
-    hit the network on every ``create_app``. The feed object is always
-    attached so ``/contributions`` returns an empty response uniformly.
+    Gated by ``BKK_BLUESKY_ENABLE=True`` and
+    ``BKK_DISABLE_CONTRIBUTIONS_POLL`` so tests and offline dev don't hit the
+    network on every ``create_app``. The feed object is always attached so
+    ``/contributions`` returns an empty response uniformly.
 
     The ``dids`` from ``[annotations].dids`` (if any) become a ``wantedDids``
     filter on the Jetstream subscription; an empty list means firehose-wide.
@@ -63,7 +64,12 @@ async def _lifespan(app: FastAPI):
     )
     state.contributions = feed
     task: asyncio.Task | None = None
-    if not os.environ.get("BKK_DISABLE_CONTRIBUTIONS_POLL"):
+    if not state.config.bluesky_enabled:
+        log.info(
+            "contributions subscriber disabled "
+            "(set BKK_BLUESKY_ENABLE=True to enable Bluesky integration)"
+        )
+    elif not os.environ.get("BKK_DISABLE_CONTRIBUTIONS_POLL"):
         task = asyncio.create_task(feed.run(), name="bkk-contributions-jetstream")
     else:
         log.info("contributions subscriber disabled (BKK_DISABLE_CONTRIBUTIONS_POLL set)")
@@ -165,6 +171,7 @@ def create_app(config: ServeConfig) -> FastAPI:
                 "index_path": str(config.index_path),
                 "catalog_path": str(config.catalog_path),
                 "upstream_repo": config.upstream_repo,
+                "bluesky_enabled": config.bluesky_enabled,
                 "docs": "/docs",
                 "openapi": "/openapi.json",
             }
@@ -199,6 +206,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             "index_path": str(config.index_path),
             "catalog_path": str(config.catalog_path),
             "upstream_repo": config.upstream_repo,
+            "bluesky_enabled": config.bluesky_enabled,
             "docs": "/docs",
             "openapi": "/openapi.json",
         }

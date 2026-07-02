@@ -114,34 +114,38 @@ function LeftPanel() {
 function RightPanel() {
   const tab = useWorkspace((s) => s.rightTab);
   const searchActive = useWorkspace((s) => s.search.status !== "idle");
+  const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
   const width = useWorkspace((s) => s.panelWidths.right);
+  const effectiveTab = tab === "chat" && !blueskyEnabled ? "annotations" : tab;
   return (
     <div className="rp" style={{ width }}>
       <div className="rt-bar">
         <button
-          className={`rt${tab === "annotations" ? " on" : ""}`}
+          className={`rt${effectiveTab === "annotations" ? " on" : ""}`}
           onClick={() => workspace.setRightTab("annotations")}
         >
           Annot.
         </button>
-        <button
-          className={`rt${tab === "chat" ? " on" : ""}`}
-          onClick={() => workspace.setRightTab("chat")}
-        >
-          Chat
-        </button>
+        {blueskyEnabled && (
+          <button
+            className={`rt${effectiveTab === "chat" ? " on" : ""}`}
+            onClick={() => workspace.setRightTab("chat")}
+          >
+            Chat
+          </button>
+        )}
         {searchActive && (
           <button
-            className={`rt${tab === "search" ? " on" : ""}`}
+            className={`rt${effectiveTab === "search" ? " on" : ""}`}
             onClick={() => workspace.setRightTab("search")}
           >
             Search
           </button>
         )}
       </div>
-      {tab === "search" ? (
+      {effectiveTab === "search" ? (
         <SearchTab />
-      ) : tab === "chat" ? (
+      ) : effectiveTab === "chat" ? (
         <ChatTab />
       ) : (
         <AnnotationsTab />
@@ -164,6 +168,7 @@ export function App() {
         workspace.setServerInfo({
           upstream_repo: info.upstream_repo ?? null,
           version: info.version,
+          bluesky_enabled: info.bluesky_enabled === true,
         });
       })
       .catch(() => {

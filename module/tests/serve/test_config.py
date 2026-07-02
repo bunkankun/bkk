@@ -27,6 +27,7 @@ def test_root_reports_no_upstream_repo_by_default(client: TestClient):
     body = client.get("/").json()
     assert body["service"] == "bkk-serve"
     assert body["upstream_repo"] is None
+    assert body["bluesky_enabled"] is False
     assert body["catalog_path"].endswith("_catalog.bkkc")
 
 
@@ -48,12 +49,31 @@ def test_from_env_reads_upstream_repo(corpus: Path, monkeypatch: pytest.MonkeyPa
 
 def test_from_env_unset_yields_none(corpus: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("BKK_UPSTREAM_REPO", raising=False)
+    monkeypatch.delenv("BKK_BLUESKY_ENABLE", raising=False)
     monkeypatch.delenv("BKK_INDEX_PATH", raising=False)
     monkeypatch.delenv("BKK_CATALOG_PATH", raising=False)
     monkeypatch.delenv("BKK_WEB_DIST", raising=False)
 
     config = ServeConfig.from_env(corpus_root=corpus)
     assert config.upstream_repo is None
+    assert config.bluesky_enabled is False
+
+
+def test_from_env_enables_bluesky_only_on_exact_true(
+    corpus: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("BKK_BLUESKY_ENABLE", "true")
+    monkeypatch.delenv("BKK_INDEX_PATH", raising=False)
+    monkeypatch.delenv("BKK_CATALOG_PATH", raising=False)
+    monkeypatch.delenv("BKK_WEB_DIST", raising=False)
+    monkeypatch.delenv("BKK_UPSTREAM_REPO", raising=False)
+
+    config = ServeConfig.from_env(corpus_root=corpus)
+    assert config.bluesky_enabled is False
+
+    monkeypatch.setenv("BKK_BLUESKY_ENABLE", "True")
+    config = ServeConfig.from_env(corpus_root=corpus)
+    assert config.bluesky_enabled is True
 
 
 def test_cli_flag_overrides_env(corpus: Path, monkeypatch: pytest.MonkeyPatch):
@@ -79,6 +99,18 @@ def test_cli_flag_alone_sets_value(corpus: Path):
 
     client = TestClient(create_app(config))
     assert client.get("/").json()["upstream_repo"] == "flag-only/repo"
+
+
+def test_bluesky_session_endpoint_disabled_by_default(client: TestClient):
+    r = client.get("/annotations/bluesky/session")
+    assert r.status_code == 403
+    assert "BKK_BLUESKY_ENABLE=True" in r.json()["detail"]
+
+
+def test_bluesky_session_endpoint_enabled_when_configured(corpus: Path):
+    client = _make_client(corpus, bluesky_enabled=True)
+    r = client.get("/annotations/bluesky/session")
+    assert r.status_code == 401
 
 
 def test_web_dist_env_and_cli(corpus: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -82,6 +82,7 @@ function SenseRow({
   store: LabelStore;
 }) {
   const coreTarget = useWorkspace((s) => s.coreTarget);
+  const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
   const blueskyStatus = useWorkspace((s) => s.blueskyStatus);
   const [showWhere, setShowWhere] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -90,7 +91,10 @@ function SenseRow({
   const selected = coreTarget?.sense.id === sense.uuid;
 
   const canUse =
-    blueskyStatus != null && edition != null && selection.anchorMarkerId != null;
+    blueskyEnabled &&
+    blueskyStatus != null &&
+    edition != null &&
+    selection.anchorMarkerId != null;
 
   const onPick = () => {
     if (selected) {
@@ -174,7 +178,7 @@ function SenseRow({
             <SenseRowLabel uuid={sense.uuid} store={store} />
           </span>
         </button>
-        {blueskyStatus != null && (
+        {blueskyEnabled && blueskyStatus != null && (
           <button
             type="button"
             className="core-target-sense-use"

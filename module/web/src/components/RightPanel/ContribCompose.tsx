@@ -16,6 +16,7 @@ interface Props {
 // Full UI lives in follow-up tasks; this just exercises the two endpoints
 // end-to-end so the round-trip with the harvester can be tested manually.
 export function ContribCompose({ selection, edition }: Props) {
+  const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
   const status = useWorkspace((s) => s.blueskyStatus);
   const [kind, setKind] = useState<Kind>("comment");
   const [body, setBody] = useState("");
@@ -25,6 +26,7 @@ export function ContribCompose({ selection, edition }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
+  if (!blueskyEnabled) return null;
   if (status == null) return null;
   if (!selection.anchorMarkerId) return null;
 

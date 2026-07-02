@@ -612,6 +612,7 @@ export interface ServerInfo {
   index_path?: string;
   catalog_path?: string;
   upstream_repo?: string | null;
+  bluesky_enabled?: boolean;
   docs?: string;
   openapi?: string;
 }

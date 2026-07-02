@@ -39,6 +39,7 @@ function SidebarToggles() {
 export function Menubar() {
   const upstream = useWorkspace((s) => s.serverInfo?.upstream_repo);
   const version = useWorkspace((s) => s.serverInfo?.version);
+  const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
   const auth = useWorkspace((s) => s.auth);
   const persistence = useWorkspace((s) => s.persistence);
   const user = auth.session?.user ?? null;
@@ -81,7 +82,7 @@ export function Menubar() {
           {persistence.status === "error" ? "Sync error" : "Syncing"}
         </span>
       ) : null}
-      <BlueskyLogin />
+      {blueskyEnabled && <BlueskyLogin />}
       {user ? (
         <div className="mb-user" title={`${user.workspace.repo} (${user.workspace.branch})`}>
           {user.avatar_url ? (

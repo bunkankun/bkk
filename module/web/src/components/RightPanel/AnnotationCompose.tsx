@@ -13,12 +13,14 @@ interface Props {
 }
 
 export function AnnotationCompose({ selection, edition }: Props) {
+  const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
   const status = useWorkspace((s) => s.blueskyStatus);
   const coreTarget = useWorkspace((s) => s.coreTarget);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  if (!blueskyEnabled) return null;
   if (status == null) return null;
   if (!selection.anchorMarkerId) return null;
 

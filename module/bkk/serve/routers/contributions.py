@@ -2,8 +2,10 @@
 
 The feed is populated by ``bkk.serve.contributions_feed.ContributionFeed``, a
 Jetstream subscriber attached to ``AppState.contributions`` by ``app.py``'s
-lifespan. When the subscriber is disabled (e.g. ``BKK_DISABLE_CONTRIBUTIONS_POLL=1``
-or tests), this endpoint returns an empty list.
+lifespan. When Bluesky is disabled (default; enable with
+``BKK_BLUESKY_ENABLE=True``) or the subscriber is disabled explicitly (e.g.
+``BKK_DISABLE_CONTRIBUTIONS_POLL=1`` or tests), this endpoint returns an empty
+list.
 
 Items carry a ``kind`` discriminator (``annotation`` / ``comment`` /
 ``translation``); the SPA branches on kind to render each shape.
@@ -35,7 +37,12 @@ from ..contributions_feed import _created_at_us
 from ..curation import Judgment, SELF_ALLOWED_STATES
 from ..state import AppState
 from .annotations import read_raw_records
-from .annotations_write import _now_iso, _require_bluesky, _require_user
+from .annotations_write import (
+    _now_iso,
+    _require_bluesky,
+    _require_bluesky_enabled,
+    _require_user,
+)
 
 
 router = APIRouter(tags=["contributions"])
@@ -272,6 +279,7 @@ def patch_curation_state(
 ) -> CurationStateResponse:
     state: AppState = request.app.state.bkk
 
+    _require_bluesky_enabled(request)
     session_id, user = _require_user(request)
     if not user.is_editor:
         raise HTTPException(status_code=403, detail="Editor role required")

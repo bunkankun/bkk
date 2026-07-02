@@ -7,6 +7,7 @@ import {
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 
 export function BlueskyLogin() {
+  const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
   const status = useWorkspace((s) => s.blueskyStatus);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [handle, setHandle] = useState("");
@@ -15,6 +16,10 @@ export function BlueskyLogin() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!blueskyEnabled) {
+      workspace.setBlueskyStatus(null);
+      return;
+    }
     let cancelled = false;
     getBlueskyStatus()
       .then((s) => {
@@ -35,7 +40,9 @@ export function BlueskyLogin() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [blueskyEnabled]);
+
+  if (!blueskyEnabled) return null;
 
   const openDialog = () => {
     setError(null);
