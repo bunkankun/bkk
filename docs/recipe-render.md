@@ -86,6 +86,37 @@ The forms are mutually exclusive: `offset/length` does not combine with
 Selection errors surface as `missing_juan`, `bad_slice_range`,
 `marker_not_found`, `bad_bucket`, or `bad_toc_id`.
 
+### Pin shorthand
+
+For KR text slices, a pin may use `ref` instead of `textid` plus `selection`:
+
+```yaml
+pins:
+  - name: text
+    role: base
+    ref: 1h4/1/@0+86
+```
+
+This is normalized at load time to:
+
+```yaml
+textid: KR1h0004
+selection:
+  juan: 1
+  offset: 0
+  length: 86
+```
+
+The four forms are:
+
+- `1h4/1`: whole `body` bucket
+- `1h4/1/front`: whole explicit bucket
+- `1h4/1/@0+86`: slice of the default `body` bucket
+- `1h4/1/front@0+86`: slice of an explicit bucket
+
+`KR` and leading zeroes in the four-digit text serial may be omitted.
+`front` and `back` must be explicit. `+86` means slice length, not end offset.
+
 A pin's `role:` is an open vocabulary — common values are `base`,
 `translation`, `commentary`, `overlay`, and `glossary` — and is interpreted by
 the consumer.

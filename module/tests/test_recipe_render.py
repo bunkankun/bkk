@@ -9,7 +9,7 @@ import yaml
 
 from bkk.recipe.cli import run as recipe_cli
 from bkk.recipe.render import RecipeRenderError, render_recipe
-from bkk.serve.schemas import RecipeRequest
+from bkk.serve.schemas import RecipePin, RecipeRequest
 
 
 def _write_voice_bundle(root: Path, textid: str = "RND0001") -> Path:
@@ -107,6 +107,29 @@ def test_composition_only_recipe_still_parses_with_unnamed_pin():
         "pins": [{"role": "base", "textid": "RND0001"}]
     })
     assert recipe.pins[0].role == "base"
+
+
+def test_short_ref_pin_normalizes_before_validation():
+    recipe = RecipeRequest.model_validate({
+        "pins": [{"role": "base", "ref": "KR1h4/001/body@0+86"}]
+    })
+    assert recipe.pins[0].ref is None
+    assert recipe.pins[0].textid == "KR1h0004"
+    assert recipe.pins[0].selection == {"juan": 1, "offset": 0, "length": 86}
+
+
+def test_short_ref_is_exposed_in_recipe_pin_schema():
+    ref_schema = RecipePin.model_json_schema()["properties"]["ref"]
+    assert "KR shorthand" in ref_schema["description"]
+
+
+@pytest.mark.parametrize("field", ["textid", "canonical_identifier", "selection"])
+def test_short_ref_rejects_explicit_equivalent_fields(field):
+    pin = {"role": "base", "ref": "1h4/1"}
+    pin[field] = {"juan": 1} if field == "selection" else "duplicate"
+
+    with pytest.raises(ValueError, match=f"cannot be combined with {field}"):
+        RecipeRequest.model_validate({"pins": [pin]})
 
 
 def test_render_voice_marker_dataset(tmp_path: Path):

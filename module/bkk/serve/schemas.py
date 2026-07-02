@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from .recipe_refs import normalize_recipe_refs
 
 
 class EditionInfo(BaseModel):
@@ -346,6 +348,13 @@ class RecipePin(BaseModel):
     """A single pin within a recipe (per bunkankun.md "Recipe format")."""
 
     role: str
+    ref: str | None = Field(
+        None,
+        description=(
+            "KR shorthand expanded into textid and selection when validating "
+            "a RecipeRequest"
+        ),
+    )
     canonical_identifier: str | None = None
     textid: str | None = None
     hash: str | None = None
@@ -386,6 +395,11 @@ class RecipeRequest(BaseModel):
     """Body of POST /recipes:fulfil. ``pins`` is a list of RecipePin shapes."""
 
     pins: list[RecipePin]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_short_refs(cls, data: Any) -> Any:
+        return normalize_recipe_refs(data)
 
 
 class FulfilResult(BaseModel):

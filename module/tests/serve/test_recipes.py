@@ -37,6 +37,14 @@ def recipe_corpus(tmp_path: Path) -> Path:
         canonical_identifier="bkk:test/RCP0002/v1",
         manifest_hash="sha256:rcp0002",
     )
+    write_bundle(
+        tmp_path,
+        "KR1h0004",
+        "abcdefghij",
+        title="Short Ref",
+        canonical_identifier="bkk:test/KR1h0004/v1",
+        manifest_hash="sha256:kr1h0004",
+    )
     return tmp_path
 
 
@@ -97,6 +105,36 @@ def test_fulfil_marker_range(recipe_client):
     assert r.status_code == 200
     res = r.json()["results"][0]
     assert res["content"]["text"] == "甲乙丙丁戊己庚辛壬癸"
+
+
+def test_fulfil_short_ref_expands_to_textid_and_selection(recipe_client):
+    body = {"pins": [{"role": "base", "ref": "1h4/1/@2+3"}]}
+    r = recipe_client.post("/recipes:fulfil", json=body)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["errors"] == []
+    res = data["results"][0]
+    assert res["textid"] == "KR1h0004"
+    assert res["selection"] == {"juan": 1, "offset": 2, "length": 3}
+    assert res["content"]["text"] == "cde"
+    resolved_pin = data["resolved_recipe"]["pins"][0]
+    assert "ref" not in resolved_pin
+    assert resolved_pin["textid"] == "KR1h0004"
+    assert resolved_pin["selection"] == {"juan": 1, "offset": 2, "length": 3}
+
+
+def test_fulfil_short_ref_requires_explicit_non_body_bucket(recipe_client):
+    body = {"pins": [{"role": "base", "ref": "1h4/1/front@0+1"}]}
+    r = recipe_client.post("/recipes:fulfil", json=body)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["results"][0]["selection"] == {
+        "juan": 1,
+        "bucket": "front",
+        "offset": 0,
+        "length": 1,
+    }
+    assert data["errors"][0]["error"] == "bad_slice_range"
 
 
 def test_fulfil_unresolved_pin(recipe_client):
