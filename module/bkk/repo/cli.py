@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import random
 import shutil
 import subprocess
 import sys
@@ -188,6 +189,64 @@ def _run(cmd: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProc
     )
 
 
+_RATE_LIMIT_RE = re.compile(r"\brate limit\b|ratelimit|secondary rate", re.I)
+_RATE_LIMIT_RESET_RE = re.compile(
+    r"(?:reset|retry[- ]?after|try again in)[^0-9]*(\d+)", re.I,
+)
+
+
+def _rate_limit_wait_s(text: str, fallback_s: float, *, max_wait_s: float) -> float:
+    """Best-effort wait time for a GitHub rate-limit error message.
+
+    ``gh`` error text is not stable across API endpoints.  Prefer a nearby
+    numeric hint when it looks like a reset/retry value, otherwise fall back to
+    caller-controlled exponential backoff.  The value is capped so a bad parse
+    never blocks the batch indefinitely.
+    """
+    matches = [int(m.group(1)) for m in _RATE_LIMIT_RESET_RE.finditer(text)]
+    if matches:
+        hinted = max(matches)
+        # GitHub reset values are sometimes epoch seconds, sometimes seconds.
+        if hinted > 1_000_000_000:
+            hinted = max(0, hinted - int(time.time()))
+        return max(1.0, min(float(hinted), max_wait_s))
+    return max(1.0, min(fallback_s, max_wait_s))
+
+
+def _run_gh_with_rate_limit_backoff(
+    cmd: list[str],
+    *,
+    cwd: Path | None = None,
+    initial_wait_s: float = 60.0,
+    max_wait_s: float = 900.0,
+    max_retries: int = 8,
+) -> subprocess.CompletedProcess:
+    """Run a ``gh`` command, sleeping/retrying on GitHub rate-limit errors."""
+    wait_s = max(1.0, initial_wait_s)
+    for attempt in range(max_retries + 1):
+        r = _run(cmd, cwd=cwd)
+        if r.returncode == 0:
+            return r
+
+        msg = (r.stderr or "") + "\n" + (r.stdout or "")
+        if not _RATE_LIMIT_RE.search(msg) or attempt >= max_retries:
+            return r
+
+        sleep_s = _rate_limit_wait_s(msg, wait_s, max_wait_s=max_wait_s)
+        # Small jitter avoids re-hitting secondary limits at exactly the same
+        # cadence across long bulk publishes.
+        sleep_s = min(max_wait_s, sleep_s + random.uniform(0.0, min(5.0, sleep_s / 10)))
+        print(
+            "gh rate limit encountered; "
+            f"waiting {sleep_s:.0f}s before retry {attempt + 1}/{max_retries}…",
+            file=sys.stderr,
+        )
+        time.sleep(sleep_s)
+        wait_s = min(wait_s * 2, max_wait_s)
+
+    return r
+
+
 def _first_err_line(proc: subprocess.CompletedProcess) -> str:
     msg = (proc.stderr or proc.stdout or "").strip()
     return msg.splitlines()[0] if msg else f"exit {proc.returncode}"
@@ -318,7 +377,7 @@ def _action_init(
         cmd.extend(["--source", str(bundle_dir), "--push"])
         if create_delay_s > 0:
             time.sleep(create_delay_s)
-        r = _run(cmd)
+        r = _run_gh_with_rate_limit_backoff(cmd)
         if r.returncode != 0:
             return f"partial: local repo created, github pending ({_first_err_line(r)})"
     return "ok"
@@ -547,7 +606,7 @@ def _action_publish(
     cmd.extend(["--source", str(bundle_dir), "--push"])
     if create_delay_s > 0:
         time.sleep(create_delay_s)
-    r = _run(cmd)
+    r = _run_gh_with_rate_limit_backoff(cmd)
     if r.returncode != 0:
         return f"error: gh repo create: {_first_err_line(r)}"
     return "ok"
