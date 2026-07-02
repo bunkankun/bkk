@@ -190,38 +190,93 @@ def _run(cmd: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProc
 
 
 _RATE_LIMIT_RE = re.compile(r"\brate limit\b|ratelimit|secondary rate", re.I)
+_SECONDARY_LIMIT_RE = re.compile(
+    r"secondary rate|abuse detection|content creation|temporarily blocked", re.I,
+)
 _RATE_LIMIT_RESET_RE = re.compile(
     r"(?:reset|retry[- ]?after|try again in)[^0-9]*(\d+)", re.I,
 )
 
+# Defaults tuned for bulk `gh repo create` (content-creation secondary limit).
+# Retrying too soon *extends* a secondary block, so we start high, back off
+# aggressively, and cap near GitHub's hourly reset window. Overridable from
+# ``[repo]`` in ``.bkkrc`` (see :func:`run`).
+_GH_BACKOFF = {
+    "initial_wait_s": 120.0,
+    # Floor applied specifically to secondary/content-creation blocks, which
+    # need minutes (not seconds) or the block just gets extended.
+    "secondary_floor_s": 300.0,
+    "max_wait_s": 3600.0,
+    "max_retries": 12,
+}
 
-def _rate_limit_wait_s(text: str, fallback_s: float, *, max_wait_s: float) -> float:
-    """Best-effort wait time for a GitHub rate-limit error message.
 
-    ``gh`` error text is not stable across API endpoints.  Prefer a nearby
-    numeric hint when it looks like a reset/retry value, otherwise fall back to
-    caller-controlled exponential backoff.  The value is capped so a bad parse
-    never blocks the batch indefinitely.
+def _reset_hint_s(text: str) -> float | None:
+    """Parse a numeric reset/retry hint out of a ``gh`` error message.
+
+    ``gh`` error text is not stable across endpoints; when a nearby number
+    looks like a ``Retry-After``/reset value we honor it. Epoch-style values
+    are converted to a relative wait.
     """
     matches = [int(m.group(1)) for m in _RATE_LIMIT_RESET_RE.finditer(text)]
-    if matches:
-        hinted = max(matches)
-        # GitHub reset values are sometimes epoch seconds, sometimes seconds.
-        if hinted > 1_000_000_000:
-            hinted = max(0, hinted - int(time.time()))
-        return max(1.0, min(float(hinted), max_wait_s))
-    return max(1.0, min(fallback_s, max_wait_s))
+    if not matches:
+        return None
+    hinted = max(matches)
+    if hinted > 1_000_000_000:  # epoch seconds
+        hinted = max(0, hinted - int(time.time()))
+    return float(hinted)
+
+
+def _gh_primary_reset_wait_s(max_wait_s: float) -> float | None:
+    """Seconds until the soonest exhausted REST/GraphQL bucket resets.
+
+    Consults ``gh api rate_limit`` (which itself does not count against the
+    limit). Returns ``None`` when nothing is exhausted or the probe fails —
+    e.g. a *secondary* content-creation block, which this endpoint does not
+    report; callers fall back to backoff in that case.
+    """
+    r = _run(["gh", "api", "rate_limit"])
+    if r.returncode != 0:
+        return None
+    try:
+        data = json.loads(r.stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+    resources = data.get("resources")
+    if not isinstance(resources, dict):
+        return None
+    now = time.time()
+    waits: list[float] = []
+    for res in resources.values():
+        if not isinstance(res, dict) or res.get("remaining", 1) != 0:
+            continue
+        reset = res.get("reset")
+        if isinstance(reset, (int, float)) and reset - now > 0:
+            waits.append(reset - now)
+    if not waits:
+        return None
+    return min(max(waits), max_wait_s)
 
 
 def _run_gh_with_rate_limit_backoff(
     cmd: list[str],
     *,
     cwd: Path | None = None,
-    initial_wait_s: float = 60.0,
-    max_wait_s: float = 900.0,
-    max_retries: int = 8,
+    initial_wait_s: float | None = None,
+    max_wait_s: float | None = None,
+    max_retries: int | None = None,
 ) -> subprocess.CompletedProcess:
-    """Run a ``gh`` command, sleeping/retrying on GitHub rate-limit errors."""
+    """Run a ``gh`` command, sleeping/retrying on GitHub rate-limit errors.
+
+    Wait time is the max of: exponential backoff, any numeric reset hint in the
+    error, and (for primary limits) the true reset from ``gh api rate_limit``.
+    Secondary/content-creation blocks get a higher floor because retrying too
+    soon extends them. All waits are capped at ``max_wait_s``.
+    """
+    initial_wait_s = _GH_BACKOFF["initial_wait_s"] if initial_wait_s is None else initial_wait_s
+    max_wait_s = _GH_BACKOFF["max_wait_s"] if max_wait_s is None else max_wait_s
+    max_retries = _GH_BACKOFF["max_retries"] if max_retries is None else max_retries
+
     wait_s = max(1.0, initial_wait_s)
     for attempt in range(max_retries + 1):
         r = _run(cmd, cwd=cwd)
@@ -232,13 +287,27 @@ def _run_gh_with_rate_limit_backoff(
         if not _RATE_LIMIT_RE.search(msg) or attempt >= max_retries:
             return r
 
-        sleep_s = _rate_limit_wait_s(msg, wait_s, max_wait_s=max_wait_s)
-        # Small jitter avoids re-hitting secondary limits at exactly the same
-        # cadence across long bulk publishes.
-        sleep_s = min(max_wait_s, sleep_s + random.uniform(0.0, min(5.0, sleep_s / 10)))
+        secondary = bool(_SECONDARY_LIMIT_RE.search(msg))
+        candidates = [wait_s]
+        hint = _reset_hint_s(msg)
+        if hint is not None:
+            candidates.append(hint)
+        if secondary:
+            candidates.append(float(_GH_BACKOFF["secondary_floor_s"]))
+        else:
+            # Primary/quota limit: wait exactly until the bucket resets.
+            reset = _gh_primary_reset_wait_s(max_wait_s)
+            if reset is not None:
+                candidates.append(reset)
+
+        sleep_s = min(max_wait_s, max(candidates))
+        # Jitter de-syncs retries so a long batch doesn't march in lockstep
+        # back into the same limit.
+        sleep_s = min(max_wait_s, sleep_s + random.uniform(0.0, min(15.0, sleep_s / 10)))
+        kind = "secondary/content-creation" if secondary else "rate"
         print(
-            "gh rate limit encountered; "
-            f"waiting {sleep_s:.0f}s before retry {attempt + 1}/{max_retries}…",
+            f"gh {kind} limit encountered; waiting {sleep_s:.0f}s before "
+            f"retry {attempt + 1}/{max_retries}…",
             file=sys.stderr,
         )
         time.sleep(sleep_s)
@@ -827,6 +896,15 @@ def run(argv: list[str] | None = None) -> int:
     visibility = repo_rc.get("visibility", "public")
     default_branch = repo_rc.get("default_branch", "main")
     create_delay_s = float(repo_rc.get("create_delay_s", 2.0))
+    for key, caster in (
+        ("initial_wait_s", float),
+        ("secondary_floor_s", float),
+        ("max_wait_s", float),
+        ("max_retries", int),
+    ):
+        rc_key = f"rate_limit_{key}"
+        if rc_key in repo_rc:
+            _GH_BACKOFF[key] = caster(repo_rc[rc_key])
 
     if args.action == "clone":
         return _action_clone(corpus, args.prefix, args.all_flag, org, args.dry_run)

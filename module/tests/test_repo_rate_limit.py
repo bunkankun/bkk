@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -10,7 +11,7 @@ def _cp(returncode: int, stderr: str = "", stdout: str = "") -> subprocess.Compl
     return subprocess.CompletedProcess(["gh"], returncode, stdout, stderr)
 
 
-def test_gh_backoff_retries_then_succeeds(monkeypatch):
+def test_gh_backoff_uses_secondary_floor_before_retrying(monkeypatch):
     calls = {"n": 0}
     slept: list[float] = []
 
@@ -30,8 +31,9 @@ def test_gh_backoff_retries_then_succeeds(monkeypatch):
 
     assert r.returncode == 0
     assert calls["n"] == 3
-    # Exponential backoff between the two failed attempts.
-    assert slept == [10, 20]
+    # Secondary/content-creation blocks use a minutes-long floor, not the
+    # short exponential seed, so we do not extend the block by retrying early.
+    assert slept == [300, 300]
 
 
 def test_gh_backoff_gives_up_after_max_retries(monkeypatch):
@@ -45,6 +47,7 @@ def test_gh_backoff_gives_up_after_max_retries(monkeypatch):
     monkeypatch.setattr(cli, "_run", fake_run)
     monkeypatch.setattr(cli.time, "sleep", lambda s: slept.append(s))
     monkeypatch.setattr(cli.random, "uniform", lambda a, b: 0.0)
+    monkeypatch.setattr(cli, "_gh_primary_reset_wait_s", lambda max_wait_s: None)
 
     r = cli._run_gh_with_rate_limit_backoff(
         ["gh", "repo", "create"], initial_wait_s=5, max_wait_s=40, max_retries=3,
@@ -75,21 +78,80 @@ def test_gh_backoff_does_not_retry_non_rate_limit_error(monkeypatch):
     assert calls["n"] == 1
 
 
-def test_rate_limit_wait_prefers_reset_hint():
+def test_reset_hint_parser():
     # Epoch-style reset value is converted to a relative wait.
-    epoch_wait = cli._rate_limit_wait_s(
-        f"rate limit; reset {int(cli.time.time()) + 120}", 999, max_wait_s=900,
-    )
+    epoch_wait = cli._reset_hint_s(f"rate limit; reset {int(cli.time.time()) + 120}")
+    assert epoch_wait is not None
     assert 100 <= epoch_wait <= 130
 
     # "retry after N" seconds is honored directly.
-    retry_wait = cli._rate_limit_wait_s(
-        "secondary rate limit, retry after 45 seconds", 999, max_wait_s=900,
-    )
+    retry_wait = cli._reset_hint_s("secondary rate limit, retry after 45 seconds")
     assert retry_wait == 45
 
+    assert cli._reset_hint_s("secondary rate limit") is None
 
-def test_publish_retries_on_rate_limit(tmp_path, monkeypatch):
+
+def test_primary_rate_limit_uses_gh_rate_limit_reset(monkeypatch):
+    slept: list[float] = []
+    now = 1_000_000
+    reset = now + 1200
+    calls = {"n": 0}
+
+    def fake_run(cmd, *, cwd=None):
+        calls["n"] += 1
+        if cmd == ["gh", "repo", "create"]:
+            return _cp(1, stderr="API rate limit exceeded")
+        if cmd == ["gh", "api", "rate_limit"]:
+            return _cp(
+                0,
+                stdout=json.dumps(
+                    {"resources": {"core": {"remaining": 0, "reset": reset}}}
+                ),
+            )
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+    monkeypatch.setattr(cli.time, "time", lambda: now)
+    monkeypatch.setattr(cli.time, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(cli.random, "uniform", lambda a, b: 0.0)
+
+    r = cli._run_gh_with_rate_limit_backoff(
+        ["gh", "repo", "create"], initial_wait_s=10, max_wait_s=3600, max_retries=1,
+    )
+
+    assert r.returncode == 1
+    assert slept == [1200]
+
+
+def test_run_loads_rate_limit_backoff_config(tmp_path, monkeypatch):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+
+    # Isolate the module-level config so run()'s in-place update doesn't leak.
+    monkeypatch.setattr(cli, "_GH_BACKOFF", dict(cli._GH_BACKOFF))
+    monkeypatch.setattr(
+        cli,
+        "load_rc",
+        lambda: {
+            "repo": {
+                "corpus": str(corpus),
+                "rate_limit_initial_wait_s": 11,
+                "rate_limit_secondary_floor_s": 22,
+                "rate_limit_max_wait_s": 33,
+                "rate_limit_max_retries": 4,
+            }
+        },
+    )
+    monkeypatch.setattr(cli, "_action_clone", lambda *args: 0)
+
+    assert cli.run(["clone", "--all", "--dry-run"]) == 0
+    assert cli._GH_BACKOFF["initial_wait_s"] == 11.0
+    assert cli._GH_BACKOFF["secondary_floor_s"] == 22.0
+    assert cli._GH_BACKOFF["max_wait_s"] == 33.0
+    assert cli._GH_BACKOFF["max_retries"] == 4
+
+
+def test_publish_retries_on_rate_limit_after_long_secondary_wait(tmp_path, monkeypatch):
     bundle = tmp_path / "KR1a0001"
     bundle.mkdir()
     (bundle / f"{bundle.name}.manifest.yaml").write_text("metadata: {}\n", encoding="utf-8")
@@ -116,4 +178,4 @@ def test_publish_retries_on_rate_limit(tmp_path, monkeypatch):
     )
 
     assert result == "ok"
-    assert len(slept) == 1
+    assert slept == [300]
