@@ -139,6 +139,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--download-missing", action="store_true",
         help="clone each remote-only repo into the corpus",
     )
+    p_diff.add_argument(
+        "--check-origin", action="store_true",
+        help=(
+            "for bundles present both locally and in <org>, verify each local "
+            "bundle is a git repo whose origin points at <org>/<textid> "
+            "(shells out to git per bundle)"
+        ),
+    )
 
     return p
 
@@ -177,6 +185,33 @@ def _first_err_line(proc: subprocess.CompletedProcess) -> str:
 
 def _is_repo(bundle_dir: Path) -> bool:
     return (bundle_dir / ".git").is_dir()
+
+
+def _origin_matches_org_repo(bundle_dir: Path, org: str, textid: str) -> tuple[bool, str]:
+    """Return whether ``bundle_dir`` has an origin for ``org/textid``.
+
+    Accepts the common GitHub URL shapes emitted by ``gh repo clone`` /
+    ``gh repo create --source --push``:
+
+    - ``git@github.com:org/textid.git``
+    - ``https://github.com/org/textid.git``
+    - ``https://github.com/org/textid``
+
+    The second return value is either the origin URL or a short diagnostic.
+    """
+    r = _run(["git", "remote", "get-url", "origin"], cwd=bundle_dir)
+    if r.returncode != 0:
+        return False, "no origin"
+    url = r.stdout.strip()
+    if not url:
+        return False, "empty origin"
+    patterns = {
+        f"git@github.com:{org}/{textid}.git",
+        f"ssh://git@github.com/{org}/{textid}.git",
+        f"https://github.com/{org}/{textid}.git",
+        f"https://github.com/{org}/{textid}",
+    }
+    return url in patterns, url
 
 
 _TITLES_CACHE: dict[str, str] | None = None
@@ -492,6 +527,7 @@ def _action_diff(
     create_delay_s: float,
     upload: bool,
     download: bool,
+    check_origin: bool,
     dry_run: bool,
 ) -> int:
     if not all_flag and not prefix:
@@ -503,7 +539,19 @@ def _action_diff(
 
     local_only = sorted(set(local) - remote)
     remote_only = sorted(remote - set(local))
-    in_sync = len(set(local) & remote)
+    present_both = sorted(set(local) & remote)
+    local_repos = [name for name in present_both if _is_repo(local[name])]
+    plain_bundles = [name for name in present_both if not _is_repo(local[name])]
+
+    origin_ok: list[str] = []
+    origin_bad: list[tuple[str, str]] = []
+    if check_origin:
+        for name in local_repos:
+            ok, detail = _origin_matches_org_repo(local[name], org, name)
+            if ok:
+                origin_ok.append(name)
+            else:
+                origin_bad.append((name, detail))
 
     print(f"local-only ({len(local_only)}):")
     for name in local_only:
@@ -511,11 +559,27 @@ def _action_diff(
     print(f"\nremote-only ({len(remote_only)}):")
     for name in remote_only:
         print(f"  {name}")
+    print(f"\npresent in both by name ({len(present_both)}):")
+    print(f"  local git repos: {len(local_repos)}")
+    print(f"  plain bundles (not git repos): {len(plain_bundles)}")
+    if check_origin:
+        print(f"  origin matches {org}/<textid>: {len(origin_ok)}")
+        print(f"  origin missing/mismatch: {len(origin_bad)}")
+        for name, detail in origin_bad:
+            print(f"    {name}: {detail}")
     print(
         f"\n{len(local_only)} local-only, "
-        f"{len(remote_only)} remote-only, {in_sync} in sync",
+        f"{len(remote_only)} remote-only, "
+        f"{len(present_both)} present in both "
+        f"({len(local_repos)} local git repos, "
+        f"{len(plain_bundles)} plain bundles)",
         file=sys.stderr,
     )
+    if check_origin:
+        print(
+            f"{len(origin_ok)} origin ok, {len(origin_bad)} origin missing/mismatch",
+            file=sys.stderr,
+        )
 
     if not upload and not download:
         return 0 if not (local_only or remote_only) else 1
@@ -593,6 +657,7 @@ def run(argv: list[str] | None = None) -> int:
             default_branch=default_branch,
             create_delay_s=create_delay_s,
             upload=args.upload_missing, download=args.download_missing,
+            check_origin=args.check_origin,
             dry_run=args.dry_run,
         )
 
