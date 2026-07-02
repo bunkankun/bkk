@@ -200,7 +200,7 @@ _RATE_LIMIT_RESET_RE = re.compile(
 # Defaults tuned for bulk `gh repo create` (content-creation secondary limit).
 # Retrying too soon *extends* a secondary block, so we start high, back off
 # aggressively, and cap near GitHub's hourly reset window. Overridable from
-# ``[repo]`` in ``.bkkrc`` (see :func:`run`).
+# the YAML ``repo:`` mapping in ``.bkkrc`` (see :func:`run`).
 _GH_BACKOFF = {
     "initial_wait_s": 120.0,
     # Floor applied specifically to secondary/content-creation blocks, which
