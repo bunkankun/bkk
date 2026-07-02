@@ -4,8 +4,8 @@ Each bundle dir (``<corpus>/<section>/<textid8>/``) becomes a standalone git
 repo. Source files (``*.bkkx`` SQLite index, ``*.source.yaml`` cache) are
 gitignored; manifest + juan YAMLs are tracked.
 
-Actions: ``init``, ``clone``, ``commit``, ``push``, ``pull``, ``status``,
-``diff`` (compare local corpus to org, optionally sync the gap).
+Actions: ``init``, ``clone``, ``reclone``, ``commit``, ``push``, ``pull``,
+``status``, ``diff`` (compare local corpus to org, optionally sync the gap).
 
 Scope: a positional ``<prefix>`` (textid8/4/3, e.g. ``KR1a0001``, ``KR1a``)
 or ``--all``. The prefix is forwarded to
@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -88,6 +89,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_clone.add_argument("prefix", nargs="?")
     p_clone.add_argument("--all", action="store_true", dest="all_flag")
     p_clone.add_argument("--dry-run", action="store_true")
+
+    p_reclone = sub.add_parser(
+        "reclone",
+        help=(
+            "replace local bundle(s) that also exist in the GitHub org with "
+            "fresh clones from GitHub"
+        ),
+    )
+    _scope(p_reclone)
 
     p_commit = sub.add_parser("commit", help="stage and commit local changes")
     _scope(p_commit)
@@ -330,9 +340,7 @@ def _list_remote_bundles(org: str, prefix: str | None) -> list[str]:
     return names
 
 
-def _clone_one(name: str, corpus: Path, org: str, dry_run: bool) -> str:
-    section = name[:4]
-    target = corpus / section / name
+def _clone_to_target(name: str, target: Path, org: str, dry_run: bool) -> str:
     if target.exists():
         return "skipped (exists)"
     if dry_run:
@@ -341,6 +349,78 @@ def _clone_one(name: str, corpus: Path, org: str, dry_run: bool) -> str:
     cr = _run(["gh", "repo", "clone", f"{org}/{name}", str(target)])
     if cr.returncode != 0:
         return f"error: {_first_err_line(cr)}"
+    return "ok"
+
+
+def _clone_one(name: str, corpus: Path, org: str, dry_run: bool) -> str:
+    section = name[:4]
+    return _clone_to_target(name, corpus / section / name, org, dry_run)
+
+
+def _unique_sibling(path: Path, stem: str) -> Path:
+    """Return a non-existing hidden sibling path for transient reclone work."""
+    parent = path.parent
+    for i in range(1000):
+        suffix = f"{int(time.time() * 1000)}-{i}"
+        candidate = parent / f".{path.name}.{stem}-{suffix}"
+        if not candidate.exists():
+            return candidate
+    raise FileExistsError(f"could not allocate temporary path next to {path}")
+
+
+def _reclone_one(bundle_dir: Path, org: str, dry_run: bool) -> str:
+    """Replace ``bundle_dir`` with a freshly cloned copy of ``org/name``.
+
+    The remote is cloned to a hidden sibling before the local bundle is moved
+    aside.  This keeps the old local bundle in place if GitHub is unavailable
+    or the clone fails, and lets us roll back if the final rename fails.
+    """
+    name = bundle_dir.name
+    if not bundle_dir.exists():
+        return "skipped (missing locally)"
+    if bundle_dir.is_symlink():
+        return "skipped (local path is a symlink)"
+
+    if dry_run:
+        return f"plan: replace {bundle_dir} with gh repo clone {org}/{name}"
+
+    try:
+        tmp = _unique_sibling(bundle_dir, "reclone-tmp")
+        backup = _unique_sibling(bundle_dir, "reclone-backup")
+    except OSError as exc:
+        return f"error: temp path: {exc}"
+
+    cr = _run(["gh", "repo", "clone", f"{org}/{name}", str(tmp)])
+    if cr.returncode != 0:
+        if tmp.exists():
+            shutil.rmtree(tmp, ignore_errors=True)
+        return f"error: gh repo clone: {_first_err_line(cr)}"
+
+    moved_old = False
+    installed_new = False
+    try:
+        bundle_dir.rename(backup)
+        moved_old = True
+        tmp.rename(bundle_dir)
+        installed_new = True
+    except OSError as exc:
+        if moved_old and not installed_new and backup.exists() and not bundle_dir.exists():
+            try:
+                backup.rename(bundle_dir)
+            except OSError as rollback_exc:
+                return (
+                    "error: replace: "
+                    f"{exc}; rollback failed: {rollback_exc}; "
+                    f"old bundle remains at {backup}; new clone remains at {tmp}"
+                )
+        if tmp.exists():
+            shutil.rmtree(tmp, ignore_errors=True)
+        return f"error: replace: {exc}"
+
+    try:
+        shutil.rmtree(backup)
+    except OSError as exc:
+        return f"partial: cloned; old bundle remains at {backup} ({exc})"
     return "ok"
 
 
@@ -377,6 +457,48 @@ def _action_clone(
         else:
             ok += 1
     print(f"\n{ok} ok, {skipped} skipped, {errors} errors", file=sys.stderr)
+    return 1 if errors else 0
+
+
+def _action_reclone(
+    corpus: Path,
+    prefix: str | None,
+    all_flag: bool,
+    org: str,
+    dry_run: bool,
+) -> int:
+    if not all_flag and not prefix:
+        sys.exit("bkk repo reclone: provide a textid prefix or --all")
+
+    local_paths = discover_bundles(corpus, prefix=prefix)
+    if not local_paths:
+        print("no local bundles matched", file=sys.stderr)
+        return 0
+
+    remote = set(_list_remote_bundles(org, prefix))
+    ok = skipped = errors = partial = 0
+    for bundle_dir in local_paths:
+        name = bundle_dir.name
+        if name not in remote:
+            result = "skipped (no GitHub repo)"
+        else:
+            result = _reclone_one(bundle_dir, org, dry_run)
+        print(f"{name}  {result}")
+        if result.startswith("error"):
+            errors += 1
+        elif result.startswith("partial"):
+            partial += 1
+        elif result.startswith("skipped"):
+            skipped += 1
+        elif result.startswith("plan"):
+            pass
+        else:
+            ok += 1
+
+    print(
+        f"\n{ok} ok, {partial} partial, {skipped} skipped, {errors} errors",
+        file=sys.stderr,
+    )
     return 1 if errors else 0
 
 
@@ -649,6 +771,9 @@ def run(argv: list[str] | None = None) -> int:
 
     if args.action == "clone":
         return _action_clone(corpus, args.prefix, args.all_flag, org, args.dry_run)
+
+    if args.action == "reclone":
+        return _action_reclone(corpus, args.prefix, args.all_flag, org, args.dry_run)
 
     if args.action == "diff":
         return _action_diff(

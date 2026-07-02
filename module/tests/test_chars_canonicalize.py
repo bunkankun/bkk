@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+import yaml
 
 from bkk.chars.canonicalize import (
     SUBSTITUTION_REASON,
+    InvalidSubstitutionMarkerError,
     UnmappedCodepointError,
     canonicalize_text,
+    revert_substitution_markers,
 )
+from bkk.chars.run import run_revert
+from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
+from bkk.importer.write.yaml_writer import dump, marker_to_flow
+from bkk.marker_assets import build_marker_asset, hydrate_juan_markers, load_marker_asset
 from bkk.chars.refs import (
     CanonicalizationContext,
     MappingAsset,
@@ -126,3 +135,221 @@ def test_load_context_real_charset_covers_excluded_with_mapping():
         f"{len(missing)} excluded codepoint(s) lack a mapping entry: "
         f"{['U+{:04X}'.format(cp) for cp in missing[:5]]}"
     )
+
+def test_revert_substitution_markers_restores_originals_and_drops_markers():
+    src = chr(0x5434)
+    repl = chr(0x5449)
+    punctuation = {"type": "punctuation", "offset": 2, "content": "。"}
+    substitution = {
+        "type": "substitution",
+        "offset": 1,
+        "original": src,
+        "replacement": repl,
+        "reason": SUBSTITUTION_REASON,
+        "mapping": {"identifier": "bkk:mapping/test-v1", "hash": "sha256:x", "entry": "tf-0001"},
+    }
+
+    new_text, kept, removed = revert_substitution_markers(
+        "周" + repl + "易",
+        [punctuation, substitution],
+    )
+
+    assert new_text == "周" + src + "易"
+    assert kept == [punctuation]
+    assert removed == [substitution]
+
+
+def test_revert_substitution_markers_rejects_mismatch():
+    with pytest.raises(InvalidSubstitutionMarkerError):
+        revert_substitution_markers(
+            "周易",
+            [{"type": "substitution", "offset": 1, "original": "吴", "replacement": "吾"}],
+        )
+
+
+def _self_hash(data: dict) -> str:
+    zeroed = dict(data)
+    zeroed["hash"] = ZERO_HASH
+    return sha256_jcs(zeroed)
+
+
+def test_run_revert_restores_text_and_refreshes_external_markers(tmp_path: Path):
+    text_id = "KR0chr01"
+    bundle_dir = tmp_path / text_id
+    bundle_dir.mkdir()
+    (bundle_dir / "assets").mkdir()
+
+    original = chr(0x5434)
+    replacement = chr(0x5433)
+    mapping_id = "bkk:mapping/variant-fold-v1"
+    mapping_hash = "sha256:" + "1" * 64
+    juan_name = f"{text_id}_001.yaml"
+    head_id = f"{text_id}_T_001-h"
+
+    juan = {
+        "canonical_identifier": f"bkk:krp/{text_id}/bkk/v1/juan/1",
+        "seq": 1,
+        "body": {
+            "text": "周" + replacement + "易",
+            "hash": sha256_text("周" + replacement + "易"),
+            "markers": [
+                marker_to_flow({"type": "tls:head", "offset": 0, "content": "卷一", "id": head_id}),
+            ],
+        },
+        "metadata": {"title": "Chars revert", "edition": {"short": "bkk"}},
+        "hash": ZERO_HASH,
+    }
+    juan["hash"] = _self_hash(juan)
+    (bundle_dir / juan_name).write_text(dump(juan), encoding="utf-8")
+
+    marker_asset = build_marker_asset(
+        text_id,
+        1,
+        None,
+        {
+            "body": [
+                {
+                    "type": "substitution",
+                    "offset": 1,
+                    "original": original,
+                    "replacement": replacement,
+                    "reason": SUBSTITUTION_REASON,
+                    "mapping": {
+                        "identifier": mapping_id,
+                        "hash": mapping_hash,
+                        "entry": "vf-0001",
+                    },
+                },
+                {"type": "punctuation", "offset": 2, "content": "。"},
+            ],
+        },
+    )
+    asset_name = f"assets/{text_id}_001.markers.yaml"
+    (bundle_dir / asset_name).write_text(dump(marker_asset), encoding="utf-8")
+
+    manifest = {
+        "canonical_identifier": f"bkk:krp/{text_id}/v1",
+        "canonical_location": f"https://kanripo.org/bkk/{text_id}/v1",
+        "canonical_set": {"identifier": "bkk:charset/cjk-v1", "hash": "sha256:" + "2" * 64},
+        "mappings": [marker_to_flow({"canonical_identifier": mapping_id, "hash": mapping_hash})],
+        "assets": {
+            "parts": [marker_to_flow({"seq": 1, "filename": juan_name, "hash": juan["hash"]})],
+            "markers": [marker_to_flow({"seq": 1, "role": "markers", "filename": asset_name, "hash": marker_asset["hash"]})],
+        },
+        "table_of_contents": [
+            {
+                "ref": marker_to_flow({"seq": 1, "marker_id": head_id, "span": ["body", 0, 3]}),
+                "label": "卷一",
+                "type": "section",
+                "level": 1,
+            }
+        ],
+        "metadata": {"title": "Chars revert", "edition": {"short": "bkk"}},
+        "hash": ZERO_HASH,
+    }
+    manifest["hash"] = manifest_hash(manifest)
+    (bundle_dir / f"{text_id}.manifest.yaml").write_text(dump(manifest), encoding="utf-8")
+
+    assert run_revert(tmp_path, text_ids=[text_id], log_file=None) == 0
+
+    new_manifest = yaml.safe_load(
+        (bundle_dir / f"{text_id}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    new_juan = yaml.safe_load((bundle_dir / juan_name).read_text(encoding="utf-8"))
+    new_asset = load_marker_asset(bundle_dir, new_manifest, 1)
+    hydrated = hydrate_juan_markers(new_juan, new_asset)
+
+    assert new_juan["body"]["text"] == "周" + original + "易"
+    assert hydrated["body"]["text"] == "周" + original + "易"
+    assert [m["type"] for m in hydrated["body"]["markers"]] == [
+        "tls:head",
+        "punctuation",
+    ]
+    assert "mappings" not in new_manifest
+    assert new_manifest["assets"]["parts"][0]["hash"] == new_juan["hash"]
+    assert new_manifest["hash"] == manifest_hash(new_manifest)
+
+
+def test_run_revert_recovers_orphan_stale_marker_asset(tmp_path: Path):
+    """A rerun cleans marker assets orphaned by the earlier revert code."""
+    text_id = "KR0chr02"
+    bundle_dir = tmp_path / text_id
+    bundle_dir.mkdir()
+    (bundle_dir / "assets").mkdir()
+
+    original = chr(0x5434)
+    replacement = chr(0x5433)
+    juan_name = f"{text_id}_001.yaml"
+    juan = {
+        "canonical_identifier": f"bkk:krp/{text_id}/bkk/v1/juan/1",
+        "seq": 1,
+        "body": {
+            # Text is already restored, but an orphan asset still has the old
+            # substitution marker.
+            "text": "周" + original + "易",
+            "hash": sha256_text("周" + original + "易"),
+        },
+        "metadata": {"title": "Orphan cleanup", "edition": {"short": "bkk"}},
+        "hash": ZERO_HASH,
+    }
+    juan["hash"] = _self_hash(juan)
+    (bundle_dir / juan_name).write_text(dump(juan), encoding="utf-8")
+
+    marker_asset = build_marker_asset(
+        text_id,
+        1,
+        None,
+        {
+            "body": [
+                {
+                    "type": "substitution",
+                    "offset": 1,
+                    "original": original,
+                    "replacement": replacement,
+                    "reason": SUBSTITUTION_REASON,
+                    "mapping": {
+                        "identifier": "bkk:mapping/variant-fold-v1",
+                        "hash": "sha256:" + "1" * 64,
+                        "entry": "vf-0001",
+                    },
+                },
+                {"type": "punctuation", "offset": 2, "content": "。"},
+            ],
+        },
+    )
+    asset_name = f"assets/{text_id}_001.markers.yaml"
+    (bundle_dir / asset_name).write_text(dump(marker_asset), encoding="utf-8")
+
+    manifest = {
+        "canonical_identifier": f"bkk:krp/{text_id}/v1",
+        "canonical_location": f"https://kanripo.org/bkk/{text_id}/v1",
+        "canonical_set": {"identifier": "bkk:charset/cjk-v1", "hash": "sha256:" + "2" * 64},
+        "assets": {
+            "parts": [marker_to_flow({"seq": 1, "filename": juan_name, "hash": juan["hash"]})],
+            # No marker entry: this is the orphaned-asset state to recover.
+        },
+        "table_of_contents": [],
+        "metadata": {"title": "Orphan cleanup", "edition": {"short": "bkk"}},
+        "hash": ZERO_HASH,
+    }
+    manifest["hash"] = manifest_hash(manifest)
+    (bundle_dir / f"{text_id}.manifest.yaml").write_text(dump(manifest), encoding="utf-8")
+
+    assert run_revert(tmp_path, text_ids=[text_id], log_file=None) == 0
+
+    new_manifest = yaml.safe_load(
+        (bundle_dir / f"{text_id}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    new_juan = yaml.safe_load((bundle_dir / juan_name).read_text(encoding="utf-8"))
+    new_asset = load_marker_asset(bundle_dir, new_manifest, 1)
+    hydrated = hydrate_juan_markers(new_juan, new_asset)
+
+    assert new_juan["body"]["text"] == "周" + original + "易"
+    assert [m["type"] for m in hydrated["body"]["markers"]] == ["punctuation"]
+    assert all(
+        m.get("type") != "substitution"
+        for markers in (new_asset.get("markers") or {}).values()
+        for m in markers
+    )
+    assert new_manifest["assets"]["markers"][0]["filename"] == asset_name
+    assert new_manifest["hash"] == manifest_hash(new_manifest)

@@ -20,12 +20,19 @@ import yaml
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
 from bkk.index.merge import discover_bundles, find_bundle
-from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
+from bkk.marker_assets import (
+    hydrate_juan_markers,
+    load_marker_asset,
+    marker_asset_entries,
+    marker_asset_filename,
+)
 
 from .canonicalize import (
+    InvalidSubstitutionMarkerError,
     UnmappedCodepointError,
     canonicalize_text,
     canonicalize_text_lenient,
+    revert_substitution_markers,
 )
 from .refs import CanonicalizationContext
 
@@ -159,6 +166,307 @@ def run_canonicalize(
     finally:
         if log_fh is not None:
             log_fh.close()
+
+
+
+def run_revert(
+    out_root: Path,
+    *,
+    text_ids: list[str] | None = None,
+    dry_run: bool = False,
+    log_file: Path | None = None,
+) -> int:
+    """Undo substitutions emitted by ``bkk chars canonicalize``.
+
+    For each master juan, every ``substitution`` marker is applied in reverse:
+    the text character at the marker's offset is changed from ``replacement``
+    back to ``original``, and the marker is removed. Hashes, marker assets, and
+    manifest asset references are then refreshed.
+    """
+    log_fh: TextIO | None = None
+    if log_file is not None:
+        log_path = Path(log_file).expanduser().resolve()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_fh = log_path.open("a", encoding="utf-8")
+        log_fh.write(
+            f"=== [{_ts()}] bkk chars revert "
+            f"out_root={out_root} dry_run={dry_run} "
+            f"text_ids={text_ids or 'ALL'} ===\n"
+        )
+        log_fh.flush()
+
+    try:
+        out_root = Path(out_root).expanduser().resolve()
+        if not out_root.is_dir():
+            _emit_error(log_fh, f"error: corpus root not found: {out_root}")
+            return 2
+
+        bundle_dirs = _select_bundles(out_root, text_ids, log_fh=log_fh)
+        if not bundle_dirs:
+            _emit_error(log_fh, f"no bundles found under {out_root}")
+            return 1
+
+        total_reverted = 0
+        total_juans = 0
+        failed: list[str] = []
+        rewrote_bundles = 0
+
+        for bundle_dir in bundle_dirs:
+            text_id = bundle_dir.name
+            rel = bundle_dir.relative_to(out_root)
+            print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
+            try:
+                stats = _process_bundle_revert(
+                    bundle_dir, text_id,
+                    dry_run=dry_run,
+                    log_fh=log_fh,
+                )
+            except (RuntimeError, ValueError, FileNotFoundError) as exc:
+                _emit_error(log_fh, f"[{text_id}] error: {exc}")
+                failed.append(text_id)
+                continue
+            total_reverted += stats["reverted"]
+            total_juans += stats["juans"]
+            if stats["reverted"] or stats["manifest_changed"]:
+                rewrote_bundles += 1
+            for line in stats["lines"]:
+                print(line)
+
+        verb = "would revert" if dry_run else "reverted"
+        print(
+            f"{verb} {total_reverted} substitution marker(s) across "
+            f"{total_juans} juan file(s) in "
+            f"{rewrote_bundles}/{len(bundle_dirs)} bundle(s)"
+        )
+        if failed:
+            _emit_error(
+                log_fh,
+                f"skipped {len(failed)} bundle(s) due to errors: "
+                f"{', '.join(failed)}",
+            )
+            return 1
+        return 0
+    finally:
+        if log_fh is not None:
+            log_fh.close()
+
+
+def _process_bundle_revert(
+    bundle_dir: Path,
+    text_id: str,
+    *,
+    dry_run: bool,
+    log_fh: TextIO | None = None,
+) -> dict[str, Any]:
+    manifest_path = bundle_dir / f"{text_id}.manifest.yaml"
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"master manifest not found: {manifest_path}")
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(manifest, dict):
+        raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
+
+    juan_entries = _master_juan_entries(bundle_dir, text_id)
+    if not juan_entries:
+        raise RuntimeError(f"no master juan files found under {bundle_dir}")
+
+    lines: list[str] = []
+    total_reverted = 0
+    pending_juans: list[tuple[Path, dict, str]] = []
+    removed_mapping_ids: set[str] = set()
+
+    for seq, juan_path in juan_entries:
+        data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
+        marker_asset, stale_asset = _marker_asset_for_revert(
+            bundle_dir, manifest, text_id, seq,
+        )
+        data = hydrate_juan_markers(data, marker_asset)
+
+        juan_reverted = 0
+        for bucket_name in _BUCKETS:
+            bucket = data.get(bucket_name)
+            if not isinstance(bucket, dict):
+                continue
+            markers = bucket.get("markers") or []
+            if not isinstance(markers, list) or not markers:
+                continue
+            text = bucket.get("text") or ""
+            try:
+                new_text, kept_markers, removed = revert_substitution_markers(
+                    text, markers,
+                    allow_already_reverted=stale_asset,
+                )
+            except InvalidSubstitutionMarkerError as exc:
+                raise RuntimeError(
+                    f"{juan_path.name} [{bucket_name}]: {exc}"
+                ) from exc
+            if not removed:
+                continue
+
+            for marker in removed:
+                mapping = marker.get("mapping") or {}
+                if isinstance(mapping, dict):
+                    mapping_id = mapping.get("identifier")
+                    if isinstance(mapping_id, str) and mapping_id:
+                        removed_mapping_ids.add(mapping_id)
+
+            juan_reverted += len(removed)
+            bucket["text"] = new_text
+            bucket["hash"] = sha256_text(new_text) if new_text else ZERO_HASH
+            if kept_markers:
+                indexed = list(enumerate(kept_markers))
+                indexed.sort(key=lambda p: (_marker_offset(p[1]), p[0]))
+                bucket["markers"] = [
+                    marker_to_flow(dict(m)) for _, m in indexed
+                ]
+            else:
+                bucket.pop("markers", None)
+
+        if juan_reverted == 0 and not stale_asset:
+            lines.append(f"  juan {seq:03d}: no substitution markers")
+            continue
+
+        if juan_reverted:
+            total_reverted += juan_reverted
+            line = f"  juan {seq:03d}: reverted {juan_reverted} substitution(s)"
+        else:
+            line = f"  juan {seq:03d}: recovered orphan marker asset"
+        if stale_asset:
+            line += " (from orphan marker asset)"
+        lines.append(line)
+        new_hash = _juan_self_hash(data)
+        data["hash"] = new_hash
+        pending_juans.append((juan_path, data, new_hash))
+
+    manifest_changed, new_manifest = _patch_manifest_after_revert(
+        manifest,
+        removed_mapping_ids,
+        affected_marker_seqs={
+            int(_JUAN_RE.match(p.name).group("seq"))
+            for p, _, _ in pending_juans
+        },
+        new_hashes={
+            int(_JUAN_RE.match(p.name).group("seq")): h
+            for p, _, h in pending_juans
+        },
+    )
+
+    if dry_run:
+        return {
+            "juans": len(juan_entries),
+            "reverted": total_reverted,
+            "manifest_changed": manifest_changed,
+            "lines": lines,
+        }
+
+    if pending_juans:
+        for juan_path, data, _ in pending_juans:
+            juan_path.write_text(dump(data), encoding="utf-8")
+
+    if manifest_changed:
+        manifest_path.write_text(dump(new_manifest), encoding="utf-8")
+        if pending_juans:
+            from bkk.repair.markers import externalize_markers
+            externalize_markers(bundle_dir, dry_run=False)
+            _cleanup_unreferenced_marker_assets(
+                bundle_dir, text_id,
+                {int(_JUAN_RE.match(p.name).group("seq")) for p, _, _ in pending_juans},
+                manifest_path,
+                dry_run=False,
+            )
+
+    return {
+        "juans": len(juan_entries),
+        "reverted": total_reverted,
+        "manifest_changed": manifest_changed,
+        "lines": lines,
+    }
+
+
+def _marker_offset(marker: dict[str, Any]) -> int:
+    offset = marker.get("offset", 0)
+    return offset if isinstance(offset, int) and not isinstance(offset, bool) else 0
+
+
+def _marker_asset_for_revert(
+    bundle_dir: Path,
+    manifest: dict,
+    text_id: str,
+    seq: int,
+) -> tuple[dict[str, Any] | None, bool]:
+    """Return marker asset plus whether it was an orphan fallback.
+
+    Earlier versions of ``bkk chars revert`` could leave marker asset files on
+    disk after removing their manifest entries. Loading the predictable
+    per-juan asset filename lets a later run clean those stale substitution
+    markers and recover any non-substitution markers in the same asset.
+    """
+    asset = load_marker_asset(bundle_dir, manifest, seq)
+    if asset is not None:
+        return asset, False
+
+    path = bundle_dir / marker_asset_filename(text_id, seq, None)
+    if not path.exists():
+        return None, False
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return (data if isinstance(data, dict) else None), True
+
+
+def _remove_marker_entries_for_seqs(
+    assets: dict[str, Any],
+    seqs: set[int],
+) -> bool:
+    """Drop manifest marker-asset entries for juans about to be rewritten."""
+    if not seqs or "markers" not in assets:
+        return False
+    markers = assets.get("markers")
+    if not isinstance(markers, list):
+        assets.pop("markers", None)
+        return True
+
+    kept = []
+    changed = False
+    for entry in markers:
+        if isinstance(entry, dict) and entry.get("seq") in seqs:
+            changed = True
+            continue
+        kept.append(marker_to_flow(dict(entry)) if isinstance(entry, dict) else entry)
+    if kept:
+        assets["markers"] = kept
+    else:
+        assets.pop("markers", None)
+    return changed
+
+
+def _cleanup_unreferenced_marker_assets(
+    bundle_dir: Path,
+    text_id: str,
+    seqs: set[int],
+    manifest_path: Path,
+    *,
+    dry_run: bool,
+) -> int:
+    """Remove stale per-juan marker files for affected master juans."""
+    if not seqs:
+        return 0
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    referenced = {
+        entry.get("filename")
+        for entry in marker_asset_entries(manifest if isinstance(manifest, dict) else {})
+        if isinstance(entry.get("filename"), str)
+    }
+    removed = 0
+    for seq in seqs:
+        filename = marker_asset_filename(text_id, seq, None)
+        if filename in referenced:
+            continue
+        path = bundle_dir / filename
+        if path.exists():
+            removed += 1
+            if not dry_run:
+                path.unlink()
+    return removed
 
 
 def _select_bundles(
@@ -313,6 +621,12 @@ def _process_bundle(
         if pending_juans:
             from bkk.repair.markers import externalize_markers
             externalize_markers(bundle_dir, dry_run=False)
+            _cleanup_unreferenced_marker_assets(
+                bundle_dir, text_id,
+                {int(_JUAN_RE.match(p.name).group("seq")) for p, _, _ in pending_juans},
+                manifest_path,
+                dry_run=False,
+            )
 
     return {
         "juans": len(juan_entries),
@@ -357,6 +671,64 @@ def _juan_self_hash(juan_dict: dict) -> str:
     m = copy.deepcopy(juan_dict)
     m["hash"] = ZERO_HASH
     return sha256_jcs(m)
+
+
+
+def _patch_manifest_after_revert(
+    manifest: dict,
+    removed_mapping_ids: set[str],
+    *,
+    affected_marker_seqs: set[int],
+    new_hashes: dict[int, str],
+) -> tuple[bool, dict]:
+    """Patch manifest after substitution markers are reverted."""
+    new = copy.deepcopy(manifest)
+    changed = False
+
+    if removed_mapping_ids:
+        mappings = new.get("mappings")
+        if isinstance(mappings, list):
+            kept_mappings = []
+            for entry in mappings:
+                if (
+                    isinstance(entry, dict)
+                    and entry.get("canonical_identifier") in removed_mapping_ids
+                ):
+                    changed = True
+                    continue
+                kept_mappings.append(marker_to_flow(dict(entry)) if isinstance(entry, dict) else entry)
+            if kept_mappings:
+                if kept_mappings != mappings:
+                    changed = True
+                new["mappings"] = kept_mappings
+            elif "mappings" in new:
+                new.pop("mappings", None)
+                changed = True
+
+    assets = new.get("assets")
+    if isinstance(assets, dict):
+        parts = assets.get("parts")
+        if isinstance(parts, list) and new_hashes:
+            new_parts: list = []
+            for entry in parts:
+                if not isinstance(entry, dict):
+                    new_parts.append(entry)
+                    continue
+                seq = entry.get("seq")
+                if isinstance(seq, int) and seq in new_hashes:
+                    entry = dict(entry)
+                    entry["hash"] = new_hashes[seq]
+                    changed = True
+                new_parts.append(marker_to_flow(entry))
+            assets["parts"] = new_parts
+        if _remove_marker_entries_for_seqs(assets, affected_marker_seqs):
+            # Stale only for juans we rewrote/recovered; keep other marker
+            # asset entries so externalize can preserve unchanged juans.
+            changed = True
+
+    if changed:
+        new["hash"] = manifest_hash(new)
+    return changed, new
 
 
 def _patch_manifest(
@@ -429,9 +801,9 @@ def _patch_manifest(
                     changed = True
                 new_parts.append(marker_to_flow(entry))
             assets["parts"] = new_parts
-        if new_hashes and "markers" in assets:
-            # Stale once we re-shuffle markers; externalize pass rebuilds it.
-            assets.pop("markers", None)
+        if _remove_marker_entries_for_seqs(assets, set(new_hashes)):
+            # Stale only for juans we re-shuffle; keep unchanged juans' marker
+            # asset entries so externalize can preserve them.
             changed = True
 
     if changed:

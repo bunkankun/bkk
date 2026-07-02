@@ -39,6 +39,10 @@ class UnmappedCodepointError(ValueError):
         )
 
 
+class InvalidSubstitutionMarkerError(ValueError):
+    """A substitution marker cannot be applied to the current text."""
+
+
 def _build_substitution_marker(
     offset: int,
     original_cp: int,
@@ -179,3 +183,74 @@ def canonicalize_query(text: str, ctx: CanonicalizationContext) -> str:
         else:
             out.append(ch)
     return "".join(out)
+
+
+def revert_substitution_markers(
+    text: str,
+    markers: list[dict[str, Any]],
+    *,
+    allow_already_reverted: bool = False,
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
+    """Undo ``substitution`` markers in ``text``.
+
+    Returns ``(reverted_text, kept_markers, removed_markers)``. Each
+    substitution marker is expected to describe a v1 1:1 replacement emitted
+    by :func:`canonicalize_text`: ``text[offset]`` must currently be the
+    marker's ``replacement`` character, and it is rewritten to ``original``.
+    The marker itself is omitted from ``kept_markers``. If
+    ``allow_already_reverted`` is true, a marker whose offset already contains
+    ``original`` is treated as stale and removed without changing the text.
+    """
+    if not markers:
+        return text, [], []
+
+    chars = list(text)
+    kept: list[dict[str, Any]] = []
+    removed: list[dict[str, Any]] = []
+    seen_offsets: set[int] = set()
+
+    for marker in markers:
+        if not isinstance(marker, dict) or marker.get("type") != "substitution":
+            if isinstance(marker, dict):
+                kept.append(marker)
+            continue
+
+        offset = marker.get("offset")
+        original = marker.get("original")
+        replacement = marker.get("replacement")
+        if (
+            not isinstance(offset, int)
+            or isinstance(offset, bool)
+            or not isinstance(original, str)
+            or len(original) != 1
+            or not isinstance(replacement, str)
+            or len(replacement) != 1
+        ):
+            raise InvalidSubstitutionMarkerError(
+                f"malformed substitution marker: {marker!r}"
+            )
+        if offset in seen_offsets:
+            raise InvalidSubstitutionMarkerError(
+                f"multiple substitution markers at offset {offset}"
+            )
+        if offset < 0 or offset >= len(chars):
+            raise InvalidSubstitutionMarkerError(
+                f"substitution marker offset {offset} is outside text length "
+                f"{len(chars)}"
+            )
+        if chars[offset] == replacement:
+            chars[offset] = original
+        elif allow_already_reverted and chars[offset] == original:
+            # The text was already restored by an earlier run, but a stale
+            # marker asset still contains the substitution marker. Drop it.
+            pass
+        else:
+            raise InvalidSubstitutionMarkerError(
+                f"substitution marker at offset {offset} expects "
+                f"{replacement!r}, found {chars[offset]!r}"
+            )
+
+        seen_offsets.add(offset)
+        removed.append(marker)
+
+    return "".join(chars), kept, removed

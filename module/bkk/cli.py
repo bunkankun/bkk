@@ -108,7 +108,7 @@ SUBCOMMANDS: dict[str, tuple[Callable[[], SubCommand], str]] = {
     "info":     (_load_info,      "show corpus, index, and config summary"),
     "annotations": (_load_annotations, "harvest Bluesky annotation records into the archive"),
     "core":     (_load_core,      "maintain the bkk-core knowledge layer (sync, …)"),
-    "chars":    (_load_chars,     "canonicalize text against the BKK character set"),
+    "chars":    (_load_chars,     "canonicalize or revert text against the BKK character set"),
     "repo":     (_load_repo,      "manage text bundles as git repositories"),
 }
 
