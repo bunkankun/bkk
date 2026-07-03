@@ -111,6 +111,8 @@ def discover_parallel_passages(
     index_path: Path | str,
     *,
     seed: str | None = None,
+    target_textid: str | None = None,
+    target_juan_seq: int | None = None,
     bucket: str = "body",
     min_length: int = 12,
     min_occurrences: int = 2,
@@ -125,12 +127,20 @@ def discover_parallel_passages(
     ``seed`` narrows discovery to occurrences of a 1-6 character term, then
     extends around those occurrences. When ``seed`` is omitted, the function
     falls back to a full trigram-anchor scan, which is intended only for small
-    indices. ``bucket`` is one of ``"front"``, ``"body"``, ``"back"``, or
+    indices. When ``target_textid`` is set, anchors come only from that text
+    (and only ``target_juan_seq``, when supplied), but are compared with
+    postings from the complete index; every retained pair therefore contains
+    at least one target location. ``bucket`` is one of ``"front"``,
+    ``"body"``, ``"back"``, or
     ``"all"``. ``max_edits`` (0-4) allows that many character edits
     (insertion/deletion/substitution) between occurrences when extending past
     the exact anchor; the anchor itself still has to match exactly. The
     function opens the index read-only and writes only TEMP tables.
     """
+    if seed is not None and target_textid is not None:
+        raise ValueError("seed and target_textid are mutually exclusive")
+    if target_juan_seq is not None and target_textid is None:
+        raise ValueError("target_juan_seq requires target_textid")
     if seed is not None:
         seed = unicodedata.normalize("NFC", seed)
         if canon_ctx is not None:
@@ -153,16 +163,48 @@ def discover_parallel_passages(
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("PRAGMA temp_store = FILE")
-        _prepare_temp_tables(conn, bucket)
+        _prepare_temp_tables(
+            conn,
+            bucket,
+            target_textid=target_textid,
+            target_juan_seq=target_juan_seq,
+        )
         cache = _BucketCache(conn)
+        target_bucket_ids: set[int] | None = None
+        if target_textid is not None:
+            target_bucket_ids = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT bucket_id FROM temp.parallel_target"
+                )
+            }
+            if target_juan_seq is None:
+                exists = conn.execute(
+                    "SELECT 1 FROM juan WHERE textid = ? LIMIT 1",
+                    (target_textid,),
+                ).fetchone()
+            else:
+                exists = conn.execute(
+                    "SELECT 1 FROM juan WHERE textid = ? AND seq = ? LIMIT 1",
+                    (target_textid, target_juan_seq),
+                ).fetchone()
+            if exists is None:
+                target = (
+                    target_textid
+                    if target_juan_seq is None
+                    else f"{target_textid}/{target_juan_seq}"
+                )
+                raise ValueError(f"target {target!r} is not present in the index")
         if seed is not None:
             postings = _seed_postings(conn, seed, max_postings)
             _record_spans_for_postings(
                 conn, cache, postings, min_length, len(seed),
-                max_edits=max_edits,
+                max_edits=max_edits, target_bucket_ids=target_bucket_ids,
             )
         else:
-            for gram in _usable_grams(conn, max_postings):
+            for gram in _usable_grams(
+                conn, max_postings, targeted=target_textid is not None,
+            ):
                 postings = conn.execute(
                     "SELECT t.source_id AS bucket_id, t.position "
                     "FROM trigram t JOIN temp.parallel_source s "
@@ -174,6 +216,7 @@ def discover_parallel_passages(
                 _record_spans_for_postings(
                     conn, cache, postings, min_length, 3,
                     max_edits=max_edits,
+                    target_bucket_ids=target_bucket_ids,
                 )
         if max_edits == 0:
             clusters = _clusters_from_spans(
@@ -214,10 +257,19 @@ def write_parallel_report(
         _write_parallel_report(clusters, f, format=format)
 
 
-def _prepare_temp_tables(conn: sqlite3.Connection, bucket: str) -> None:
+def _prepare_temp_tables(
+    conn: sqlite3.Connection,
+    bucket: str,
+    *,
+    target_textid: str | None = None,
+    target_juan_seq: int | None = None,
+) -> None:
     conn.executescript(
         """
         CREATE TEMP TABLE parallel_source (
+          bucket_id INTEGER PRIMARY KEY
+        );
+        CREATE TEMP TABLE parallel_target (
           bucket_id INTEGER PRIMARY KEY
         );
         CREATE TEMP TABLE parallel_pair_span (
@@ -243,17 +295,53 @@ def _prepare_temp_tables(conn: sqlite3.Connection, bucket: str) -> None:
             "SELECT bucket_id FROM bucket WHERE kind = ? AND length(text) >= 3",
             (bucket,),
         )
+    if target_textid is not None:
+        sql = (
+            "INSERT INTO temp.parallel_target(bucket_id) "
+            "SELECT b.bucket_id FROM bucket b "
+            "JOIN juan j ON j.juan_id = b.juan_id "
+            "JOIN temp.parallel_source s ON s.bucket_id = b.bucket_id "
+            "WHERE j.textid = ?"
+        )
+        params: tuple = (target_textid,)
+        if target_juan_seq is not None:
+            sql += " AND j.seq = ?"
+            params += (target_juan_seq,)
+        conn.execute(sql, params)
 
 
-def _usable_grams(conn: sqlite3.Connection, max_postings: int) -> Iterator[str]:
-    rows = conn.execute(
-        "SELECT t.gram, COUNT(*) AS n "
-        "FROM trigram t JOIN temp.parallel_source s ON s.bucket_id = t.source_id "
-        "WHERE t.source_kind = 'bucket' "
-        "GROUP BY t.gram HAVING n BETWEEN 2 AND ? "
-        "ORDER BY n ASC, t.gram",
-        (max_postings,),
-    )
+def _usable_grams(
+    conn: sqlite3.Connection,
+    max_postings: int,
+    *,
+    targeted: bool = False,
+) -> Iterator[str]:
+    if targeted:
+        rows = conn.execute(
+            "SELECT candidate.gram, COUNT(*) AS n "
+            "FROM ("
+            "  SELECT DISTINCT t.gram FROM trigram t "
+            "  JOIN temp.parallel_target target "
+            "    ON target.bucket_id = t.source_id "
+            "  WHERE t.source_kind = 'bucket'"
+            ") candidate "
+            "JOIN trigram all_t ON all_t.gram = candidate.gram "
+            "JOIN temp.parallel_source source "
+            "  ON source.bucket_id = all_t.source_id "
+            "WHERE all_t.source_kind = 'bucket' "
+            "GROUP BY candidate.gram HAVING n BETWEEN 2 AND ? "
+            "ORDER BY n ASC, candidate.gram",
+            (max_postings,),
+        )
+    else:
+        rows = conn.execute(
+            "SELECT t.gram, COUNT(*) AS n "
+            "FROM trigram t JOIN temp.parallel_source s ON s.bucket_id = t.source_id "
+            "WHERE t.source_kind = 'bucket' "
+            "GROUP BY t.gram HAVING n BETWEEN 2 AND ? "
+            "ORDER BY n ASC, t.gram",
+            (max_postings,),
+        )
     for row in rows:
         yield row["gram"]
 
@@ -346,10 +434,17 @@ def _record_spans_for_postings(
     seed_length: int,
     *,
     max_edits: int = 0,
+    target_bucket_ids: set[int] | None = None,
 ) -> None:
     rows = []
     for i, left in enumerate(postings):
         for right in postings[i + 1:]:
+            if (
+                target_bucket_ids is not None
+                and left["bucket_id"] not in target_bucket_ids
+                and right["bucket_id"] not in target_bucket_ids
+            ):
+                continue
             if max_edits == 0:
                 span_a, span_b = _maximal_pair_span(
                     cache,

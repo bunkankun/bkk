@@ -9,16 +9,16 @@ for every other location.  Markers are grouped into per-text, per-juan files:
 Example:
 
     python scripts/parallel_markers.py tail-index-4.out \
-        --output /tmp/parallel-markers --name KR6q
+        --output /tmp/parallel-markers --name KR6q \
+        --index /data/bkk/_corpus.bkkx
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
-import os
-import re
 import sqlite3
 import sys
 import tempfile
@@ -26,47 +26,24 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, TextIO
 
-import yaml
+from bkk.index.parallel_assets import (
+    BUCKETS,
+    TEXTID_RE,
+    FlowDict,
+    atomic_write,
+    assert_index_unchanged,
+    capture_index_snapshot,
+    dump_parallel_yaml,
+    short_ref,
+    validate_name,
+)
 
 
-BUCKETS = ("front", "body", "back")
-NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-TEXTID_RE = re.compile(r"^KR(?P<section>[0-9][a-z])(?P<serial>[0-9]{4})$")
 LOGGER = logging.getLogger("parallel_markers")
 
 
 class InputError(ValueError):
     """A malformed parallel-scan input record."""
-
-
-class _FlowDict(dict):
-    """Mapping rendered on one line in the generated YAML."""
-
-
-class _Dumper(yaml.SafeDumper):
-    pass
-
-
-def _represent_flow_dict(
-    dumper: yaml.SafeDumper, data: _FlowDict,
-) -> yaml.MappingNode:
-    return dumper.represent_mapping(
-        "tag:yaml.org,2002:map", data.items(), flow_style=True,
-    )
-
-
-_Dumper.add_representer(_FlowDict, _represent_flow_dict)
-
-
-def _dump_yaml(data: dict[str, Any]) -> str:
-    return yaml.dump(
-        data,
-        Dumper=_Dumper,
-        allow_unicode=True,
-        default_flow_style=False,
-        sort_keys=False,
-        width=10**9,
-    )
 
 
 def _require_int(
@@ -185,18 +162,14 @@ def _validate_cluster(value: Any, line_number: int) -> list[dict[str, Any]]:
     return unique_locations
 
 
-def _short_ref(location: dict[str, Any]) -> str:
-    match = TEXTID_RE.fullmatch(location["textid"])
-    assert match is not None
-    serial = str(int(match.group("serial")))
-    prefix = f"{match.group('section')}{serial}/{location['juan_seq']}/"
-    bucket = "" if location["bucket"] == "body" else location["bucket"]
-    length = location["end"] - location["start"]
-    return f"{prefix}{bucket}@{location['start']}+{length}"
-
-
-def _input_lines(stream: TextIO) -> Iterator[tuple[int, str]]:
+def _input_lines(
+    stream: TextIO,
+    *,
+    hasher: Any | None = None,
+) -> Iterator[tuple[int, str]]:
     for line_number, line in enumerate(stream, 1):
+        if hasher is not None:
+            hasher.update(line.encode("utf-8"))
         if line.strip():
             yield line_number, line
 
@@ -226,7 +199,7 @@ def _create_spool(path: Path) -> sqlite3.Connection:
 
 
 def _spool_input(
-    stream: TextIO, conn: sqlite3.Connection,
+    stream: TextIO, conn: sqlite3.Connection, *, hasher: Any | None = None,
 ) -> tuple[int, int]:
     cluster_count = 0
     marker_count = 0
@@ -237,7 +210,7 @@ def _spool_input(
         "toc_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
 
-    for line_number, line in _input_lines(stream):
+    for line_number, line in _input_lines(stream, hasher=hasher):
         try:
             raw_cluster = json.loads(line)
         except json.JSONDecodeError as exc:
@@ -259,7 +232,7 @@ def _spool_input(
                     cluster_count,
                     local_order,
                     remote_order,
-                    _short_ref(remote),
+                    short_ref(remote),
                     remote["edit_distance"],
                     remote["toc_label"],
                 ))
@@ -285,7 +258,7 @@ def _output_files(conn: sqlite3.Connection) -> Iterator[tuple[str, int]]:
 
 def _markers_for_bucket(
     conn: sqlite3.Connection, textid: str, juan_seq: int, bucket: str,
-) -> list[_FlowDict]:
+) -> list[FlowDict]:
     rows = conn.execute(
         "SELECT local_offset, local_length, ref, edit_distance, toc_label "
         "FROM marker "
@@ -295,7 +268,7 @@ def _markers_for_bucket(
         (textid, juan_seq, bucket),
     )
     return [
-        _FlowDict({
+        FlowDict({
             "type": "parallel",
             "offset": offset,
             "length": length,
@@ -307,35 +280,26 @@ def _markers_for_bucket(
     ]
 
 
-def _atomic_write(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent,
-    )
-    temporary_path = Path(temporary_name)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            stream.write(content)
-        os.chmod(temporary_path, 0o644)
-        os.replace(temporary_path, path)
-    except BaseException:
-        temporary_path.unlink(missing_ok=True)
-        raise
-
-
 def _write_outputs(
-    conn: sqlite3.Connection, output_dir: Path, name: str,
+    conn: sqlite3.Connection,
+    output_dir: Path,
+    name: str,
+    provenance: dict[str, Any],
 ) -> int:
     file_count = 0
     for textid, juan_seq in _output_files(conn):
         data = {
+            "provenance": provenance,
             "markers": {
                 bucket: _markers_for_bucket(conn, textid, juan_seq, bucket)
                 for bucket in BUCKETS
             }
         }
         filename = f"{textid}_{juan_seq:03d}.{name}.parallels.yaml"
-        _atomic_write(output_dir / textid / filename, _dump_yaml(data))
+        atomic_write(
+            output_dir / textid / filename,
+            dump_parallel_yaml(data),
+        )
         file_count += 1
     return file_count
 
@@ -345,23 +309,37 @@ def convert(
     output_dir: Path,
     name: str,
     *,
+    index_path: Path,
+    input_name: str,
     temp_dir: Path | None = None,
 ) -> tuple[int, int, int]:
     """Convert one JSONL stream and return cluster, marker, and file counts."""
-    if NAME_RE.fullmatch(name) is None:
-        raise ValueError(
-            "name must match [A-Za-z0-9][A-Za-z0-9._-]*"
-        )
+    validate_name(name)
     if temp_dir is not None and not temp_dir.is_dir():
         raise ValueError(f"temporary directory does not exist: {temp_dir}")
 
+    snapshot = capture_index_snapshot(
+        index_path,
+        command="scripts/parallel_markers.py",
+        algorithm="imported-jsonl-v1",
+        scan={"input": input_name, "input_hash": None, "name": name},
+    )
     with tempfile.TemporaryDirectory(
         prefix="bkk-parallel-markers-", dir=temp_dir,
     ) as workspace:
         conn = _create_spool(Path(workspace) / "markers.sqlite3")
         try:
-            cluster_count, marker_count = _spool_input(input_stream, conn)
-            file_count = _write_outputs(conn, output_dir, name)
+            input_hasher = hashlib.sha256()
+            cluster_count, marker_count = _spool_input(
+                input_stream, conn, hasher=input_hasher,
+            )
+            snapshot.provenance["scan"]["input_hash"] = (
+                f"sha256:{input_hasher.hexdigest()}"
+            )
+            assert_index_unchanged(snapshot)
+            file_count = _write_outputs(
+                conn, output_dir, name, snapshot.provenance,
+            )
         finally:
             conn.close()
     return cluster_count, marker_count, file_count
@@ -385,6 +363,12 @@ def _parser() -> argparse.ArgumentParser:
         help="run/subcorpus name inserted before .parallels.yaml",
     )
     parser.add_argument(
+        "--index",
+        type=Path,
+        required=True,
+        help="source .bkkx index used to generate the JSONL",
+    )
+    parser.add_argument(
         "--temp-dir",
         type=Path,
         help="directory for the temporary SQLite spool (default: system temp)",
@@ -401,14 +385,24 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.input == "-":
             counts = convert(
-                sys.stdin, args.output, args.name, temp_dir=args.temp_dir,
+                sys.stdin,
+                args.output,
+                args.name,
+                index_path=args.index,
+                input_name="-",
+                temp_dir=args.temp_dir,
             )
         else:
             with Path(args.input).open(encoding="utf-8") as stream:
                 counts = convert(
-                    stream, args.output, args.name, temp_dir=args.temp_dir,
+                    stream,
+                    args.output,
+                    args.name,
+                    index_path=args.index,
+                    input_name=Path(args.input).name,
+                    temp_dir=args.temp_dir,
                 )
-    except (InputError, OSError, sqlite3.Error, ValueError) as exc:
+    except (InputError, OSError, sqlite3.Error, RuntimeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

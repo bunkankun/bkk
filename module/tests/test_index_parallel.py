@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from bkk.index import build_index, merge_bundles
+from bkk.index.build import compute_bkkx_hash
 from bkk.index.cli import run as cli_run
 from bkk.index.parallel import discover_parallel_passages
 from bkk.index.parallel_scan import discover_parallel_passages_scan
@@ -20,6 +21,7 @@ def _write_bundle(
     body_text: str,
     *,
     front_text: str = "",
+    second_body_text: str | None = None,
 ) -> Path:
     bundle_dir = root / textid
     bundle_dir.mkdir(parents=True)
@@ -35,6 +37,29 @@ def _write_bundle(
         yaml.safe_dump(juan, allow_unicode=True),
         encoding="utf-8",
     )
+    parts = [
+        {"seq": 1, "filename": f"{textid}_001.yaml", "hash": "sha256:0"},
+    ]
+    if second_body_text is not None:
+        second = {
+            "canonical_identifier": f"bkk:test/{textid}/v1/juan/2",
+            "seq": 2,
+            "body": {
+                "text": second_body_text,
+                "hash": "sha256:0",
+                "markers": [],
+            },
+            "hash": "sha256:0",
+        }
+        (bundle_dir / f"{textid}_002.yaml").write_text(
+            yaml.safe_dump(second, allow_unicode=True),
+            encoding="utf-8",
+        )
+        parts.append({
+            "seq": 2,
+            "filename": f"{textid}_002.yaml",
+            "hash": "sha256:0",
+        })
     toc = [
         {
             "ref": {
@@ -54,15 +79,20 @@ def _write_bundle(
             },
             "label": f"{textid} front",
         })
+    if second_body_text is not None:
+        toc.append({
+            "ref": {
+                "seq": 2,
+                "marker_id": f"{textid}_002-body",
+                "span": ["body", 0, len(second_body_text)],
+            },
+            "label": f"{textid} body 2",
+        })
     (bundle_dir / f"{textid}.manifest.yaml").write_text(
         yaml.safe_dump({
             "canonical_identifier": f"bkk:test/{textid}/v1",
             "editions": [{"short": "X", "label": "x"}],
-            "assets": {
-                "parts": [
-                    {"seq": 1, "filename": f"{textid}_001.yaml", "hash": "sha256:0"},
-                ],
-            },
+            "assets": {"parts": parts},
             "table_of_contents": toc,
         }, allow_unicode=True),
         encoding="utf-8",
@@ -198,6 +228,147 @@ def test_parallel_cli_requires_seed_unless_full_scan(tmp_path):
         cli_run(["parallel", str(out)])
 
     assert exc.value.code == 2
+
+
+def test_parallel_target_scans_whole_index_and_writes_target_assets(tmp_path):
+    shared = "TARGET-SHARED-PASSAGE"
+    remote_only = "REMOTE-ONLY-PASSAGE"
+    target = _write_bundle(
+        tmp_path, "KR0a0001", f"aa{shared}bb",
+    )
+    _write_bundle(
+        tmp_path, "KR0a0002", f"cc{shared}dd{remote_only}ee",
+    )
+    _write_bundle(
+        tmp_path, "KR0a0003", f"ff{remote_only}gg",
+    )
+    out = _merge(tmp_path)
+    targeted = discover_parallel_passages(
+        out,
+        target_textid="KR0a0001",
+        min_length=12,
+    )
+    assert [cluster.text for cluster in targeted] == [shared]
+
+    rc = cli_run([
+        "parallel",
+        str(out),
+        "--text-id",
+        "KR0a0001",
+        "--min-length",
+        "12",
+    ])
+
+    assert rc == 0
+    path = (
+        target / "parallels"
+        / "KR0a0001_001.corpus.parallels.yaml"
+    )
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert data["provenance"]["generator"]["command"] == "bkk index parallel"
+    assert data["provenance"]["generator"]["algorithm"] == "targeted-trigram-v1"
+    assert data["provenance"]["index"] == {
+        "filename": "_corpus.bkkx",
+        "hash": compute_bkkx_hash(out),
+        "schema_version": 3,
+    }
+    assert data["provenance"]["scan"]["text_id"] == "KR0a0001"
+    assert data["provenance"]["scan"]["min_length"] == 12
+    assert data["provenance"]["generated_at"].endswith("Z")
+    markers = data["markers"]["body"]
+    assert len(markers) == 1
+    assert markers[0]["ref"].startswith("0a2/1/")
+    assert not (tmp_path / "KR0a0002" / "parallels").exists()
+    assert not (tmp_path / "KR0a0003" / "parallels").exists()
+
+
+def test_parallel_target_uses_configured_index_and_removes_stale_file(
+    tmp_path, monkeypatch,
+):
+    _write_bundle(tmp_path, "KR0a0001", "no repeated passage here")
+    _write_bundle(tmp_path, "KR0a0002", "entirely different content")
+    out = _merge(tmp_path)
+    parallels = tmp_path / "KR0a0001" / "parallels"
+    parallels.mkdir()
+    stale = parallels / "KR0a0001_002.corpus.parallels.yaml"
+    stale.write_text("stale\n", encoding="utf-8")
+    other = parallels / "KR0a0001_002.other.parallels.yaml"
+    other.write_text("keep\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "bkk.config.load_rc",
+        lambda: {"index": {"out": out}, "global": {"corpus": tmp_path}},
+    )
+
+    rc = cli_run([
+        "parallel",
+        "--text-id",
+        "KR0a0001",
+        "--min-length",
+        "12",
+    ])
+
+    assert rc == 0
+    assert not stale.exists()
+    assert other.read_text(encoding="utf-8") == "keep\n"
+
+
+@pytest.mark.parametrize(
+    ("selector", "name"),
+    [
+        ("KR1h0004/1", "canonical"),
+        ("1h4/1", "shortcut"),
+    ],
+)
+def test_parallel_target_can_scan_one_juan(
+    tmp_path, selector, name,
+):
+    first = "JUAN-ONE-PARALLEL"
+    second = "JUAN-TWO-PARALLEL"
+    target = _write_bundle(
+        tmp_path,
+        "KR1h0004",
+        f"aa{first}bb",
+        second_body_text=f"cc{second}dd",
+    )
+    _write_bundle(
+        tmp_path,
+        "KR1h0005",
+        f"xx{first}yy{second}zz",
+    )
+    out = _merge(tmp_path)
+
+    clusters = discover_parallel_passages(
+        out,
+        target_textid="KR1h0004",
+        target_juan_seq=1,
+        min_length=12,
+    )
+    assert [cluster.text for cluster in clusters] == [first]
+
+    parallels = target / "parallels"
+    parallels.mkdir()
+    unrelated = parallels / f"KR1h0004_002.{name}.parallels.yaml"
+    unrelated.write_text("keep\n", encoding="utf-8")
+
+    rc = cli_run([
+        "parallel",
+        str(out),
+        "--text-id",
+        selector,
+        "--name",
+        name,
+        "--min-length",
+        "12",
+    ])
+
+    assert rc == 0
+    generated = parallels / f"KR1h0004_001.{name}.parallels.yaml"
+    data = yaml.safe_load(generated.read_text(encoding="utf-8"))
+    assert data["provenance"]["scan"]["text_id"] == "KR1h0004"
+    assert data["provenance"]["scan"]["juan"] == 1
+    assert len(data["markers"]["body"]) == 1
+    assert data["markers"]["body"][0]["ref"].startswith("1h5/1/")
+    assert unrelated.read_text(encoding="utf-8") == "keep\n"
 
 
 def test_parallel_two_character_seed_extends_to_full_passage(tmp_path):

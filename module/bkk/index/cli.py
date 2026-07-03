@@ -13,6 +13,7 @@ Subcommands::
     python -m bkk.index core <core_root> [--out PATH]
     python -m bkk.index parallel <bkkx_path> <seed> [--out PATH]
                                                 [--format jsonl|tsv]
+    python -m bkk.index parallel [<bkkx_path>] --text-id KR1h0004[/1]
     python -m bkk.index parallel-scan <bkkx_path> [--out PATH]
                                                      [--work-dir DIR]
     python -m bkk.index duplications <bkkx_path> [--out PATH]
@@ -119,7 +120,11 @@ def build_parser() -> argparse.ArgumentParser:
                           "else <core_root>/_core.bkki)")
 
     pp = sub.add_parser("parallel", help="discover exact repeated passages in a .bkkx index")
-    pp.add_argument("index_path", type=Path)
+    pp.add_argument(
+        "index_path", type=Path, nargs="?", default=None,
+        help="index path (with --text-id: defaults to index.out or "
+             "<configured corpus>/_corpus.bkkx)",
+    )
     pp.add_argument("seed", nargs="?", default=None,
                     help="1-6 character seed term to extend around")
     pp.add_argument("--out", type=Path, default=None,
@@ -134,7 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--max-postings", type=int, default=500,
                     help="maximum seed postings, or gram postings under --full-scan "
                          "(default: 500)")
-    pp.add_argument("--format", choices=["jsonl", "tsv"], default="jsonl",
+    pp.add_argument("--format", choices=["jsonl", "tsv"], default=None,
                     help="report format (default: jsonl)")
     pp.add_argument("--context", type=int, default=20,
                     help="snippet context around each occurrence (default: 20)")
@@ -148,6 +153,12 @@ def build_parser() -> argparse.ArgumentParser:
                     help="scan all trigram anchors; expensive and intended only for small indices")
     pp.add_argument("--force-full-scan", action="store_true",
                     help="allow --full-scan on corpus indices")
+    pp.add_argument("--text-id", dest="text_id", default=None,
+                    help="scan a text or juan against the complete index "
+                         "(KR1h0004, KR1h0004/1, or shortcut 1h4/1)")
+    pp.add_argument("--name", default=None,
+                    help="parallel source name in generated filenames "
+                         "(default: index filename without extension/leading _)")
 
     pps = sub.add_parser(
         "parallel-scan",
@@ -324,6 +335,20 @@ def run(argv: list[str] | None = None) -> int:
             args.annotations_root = Path(rc_ann) if rc_ann else None
         if args.annotations_index is None and args.annotations_root is not None:
             args.annotations_index = args.annotations_root / "_annotations.bkka"
+    if args.cmd == "parallel" and args.index_path is None:
+        if args.text_id is None:
+            parser.error("index_path is required")
+        corpus = idx.get("corpus") or g.get("corpus")
+        configured_index = idx.get("out")
+        if configured_index is not None:
+            args.index_path = Path(configured_index)
+        elif corpus is not None:
+            args.index_path = Path(corpus) / "_corpus.bkkx"
+        else:
+            parser.error(
+                "index is required (pass INDEX, set index.out, or configure "
+                "index.corpus/global.corpus)"
+            )
 
     if args.cmd == "build":
         path = build_index(args.bundle_dir, args.out)
@@ -366,6 +391,100 @@ def run(argv: list[str] | None = None) -> int:
         print(f"wrote {path}")
         return 0
     if args.cmd == "parallel":
+        if not args.index_path.is_file():
+            parser.error(f"index does not exist: {args.index_path}")
+        if args.text_id is not None:
+            incompatible = []
+            if args.seed is not None:
+                incompatible.append("seed")
+            if args.full_scan:
+                incompatible.append("--full-scan")
+            if args.force_full_scan:
+                incompatible.append("--force-full-scan")
+            if args.out is not None:
+                incompatible.append("--out")
+            if args.format is not None:
+                incompatible.append("--format")
+            if incompatible:
+                parser.error(
+                    "--text-id is incompatible with " + ", ".join(incompatible)
+                )
+            from .merge import find_bundle
+            from .parallel_assets import (
+                assert_index_unchanged,
+                capture_index_snapshot,
+                derive_index_name,
+                validate_name,
+                validate_textid,
+                write_target_parallel_assets,
+            )
+            from bkk.short_refs import parse_text_juan_selector
+
+            try:
+                name = args.name or derive_index_name(args.index_path)
+                validate_name(name)
+                target_textid, target_juan_seq = parse_text_juan_selector(
+                    args.text_id
+                )
+                validate_textid(target_textid)
+            except ValueError as exc:
+                parser.error(str(exc))
+            corpus = idx.get("corpus") or g.get("corpus")
+            try:
+                bundle_dir = _bundle_for_parallel_target(
+                    args.index_path,
+                    target_textid,
+                    juan_seq=target_juan_seq,
+                    corpus=Path(corpus) if corpus is not None else None,
+                    find_bundle=find_bundle,
+                )
+            except (FileNotFoundError, ValueError) as exc:
+                parser.error(str(exc))
+            scan_settings = {
+                "text_id": target_textid,
+                "juan": target_juan_seq,
+                "bucket": args.bucket,
+                "min_length": args.min_length,
+                "min_occurrences": args.min_occurrences,
+                "max_postings": args.max_postings,
+                "max_edits": args.max_edits,
+                "include_contained": args.include_contained,
+            }
+            snapshot = capture_index_snapshot(
+                args.index_path,
+                command="bkk index parallel",
+                algorithm="targeted-trigram-v1",
+                scan=scan_settings,
+            )
+            clusters = discover_parallel_passages(
+                args.index_path,
+                target_textid=target_textid,
+                target_juan_seq=target_juan_seq,
+                bucket=args.bucket,
+                min_length=args.min_length,
+                min_occurrences=args.min_occurrences,
+                max_postings=args.max_postings,
+                include_contained=args.include_contained,
+                context=args.context,
+                max_edits=args.max_edits,
+            )
+            assert_index_unchanged(snapshot)
+            cluster_count, marker_count, file_count = (
+                write_target_parallel_assets(
+                    clusters,
+                    bundle_dir,
+                    textid=target_textid,
+                    target_juan_seq=target_juan_seq,
+                    name=name,
+                    provenance=snapshot.provenance,
+                )
+            )
+            print(
+                f"clusters: {cluster_count:,}; directed markers: "
+                f"{marker_count:,}; files: {file_count:,} "
+                f"→ {bundle_dir / 'parallels'}"
+            )
+            return 0
         if args.seed is None and not args.full_scan:
             parser.error(
                 "parallel now requires a 1-6 character seed term "
@@ -391,9 +510,13 @@ def run(argv: list[str] | None = None) -> int:
         )
         if args.out is None:
             import sys
-            write_parallel_report(clusters, sys.stdout, format=args.format)
+            write_parallel_report(
+                clusters, sys.stdout, format=args.format or "jsonl",
+            )
         else:
-            write_parallel_report(clusters, args.out, format=args.format)
+            write_parallel_report(
+                clusters, args.out, format=args.format or "jsonl",
+            )
             print(f"wrote {args.out}")
         return 0
     if args.cmd == "parallel-scan":
@@ -481,6 +604,58 @@ def _is_corpus_index(path: Path) -> bool:
             conn.close()
     except sqlite3.DatabaseError:
         return False
+
+
+def _bundle_for_parallel_target(
+    index_path: Path,
+    text_id: str,
+    *,
+    juan_seq: int | None,
+    corpus: Path | None,
+    find_bundle,
+) -> Path:
+    """Resolve the writable bundle represented by ``text_id``."""
+    import sqlite3
+
+    conn = sqlite3.connect(f"file:{index_path}?mode=ro", uri=True)
+    try:
+        if juan_seq is None:
+            exists = conn.execute(
+                "SELECT 1 FROM juan WHERE textid = ? LIMIT 1",
+                (text_id,),
+            ).fetchone()
+        else:
+            exists = conn.execute(
+                "SELECT 1 FROM juan WHERE textid = ? AND seq = ? LIMIT 1",
+                (text_id, juan_seq),
+            ).fetchone()
+        if exists is None:
+            target = text_id if juan_seq is None else f"{text_id}/{juan_seq}"
+            raise ValueError(f"target {target!r} is not present in the index")
+        row = conn.execute(
+            "SELECT source_path FROM bundle WHERE textid = ?",
+            (text_id,),
+        ).fetchone()
+    except sqlite3.DatabaseError as exc:
+        raise ValueError(f"cannot inspect index {index_path}: {exc}") from exc
+    finally:
+        conn.close()
+
+    candidates: list[Path] = []
+    if row is not None:
+        candidates.append(Path(row[0]).expanduser().resolve().parent)
+    candidates.append(index_path.resolve().parent)
+    for candidate in candidates:
+        if (candidate / f"{text_id}.manifest.yaml").is_file():
+            return candidate
+    if corpus is not None:
+        found = find_bundle(corpus, text_id)
+        if found is not None:
+            return found
+    raise FileNotFoundError(
+        f"cannot locate bundle for {text_id!r}; configure index.corpus or "
+        "global.corpus"
+    )
 
 
 def _print_hit(h: Hit) -> None:
