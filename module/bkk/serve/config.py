@@ -19,6 +19,7 @@ class ServeConfig:
     core_pr_base: str = "master"
     annotations_root: Path | None = None
     annotations_index_path: Path | None = None
+    parallels_root: Path | None = None
     comments_root: Path | None = None
     translations_root: Path | None = None
     annotation_dids: tuple[str, ...] = ()
@@ -164,6 +165,15 @@ class ServeConfig:
             annotations_index = annotations_root / "_annotations.bkka"
         else:
             annotations_index = None
+
+        env_parallels_root = os.environ.get("BKK_PARALLELS_ROOT")
+        rc_parallels_root = rc.get("parallels_root")
+        if env_parallels_root:
+            parallels_root: Path | None = Path(env_parallels_root).resolve()
+        elif rc_parallels_root:
+            parallels_root = Path(rc_parallels_root).resolve()
+        else:
+            parallels_root = None
 
         rc_dids = rc.get("dids") or ()
         if isinstance(rc_dids, str):
@@ -343,6 +353,7 @@ class ServeConfig:
             core_pr_base=core_pr_base,
             annotations_root=annotations_root,
             annotations_index_path=annotations_index,
+            parallels_root=parallels_root,
             comments_root=comments_root,
             translations_root=translations_root,
             annotation_dids=annotation_dids,
@@ -384,6 +395,7 @@ class ServeConfig:
         core_pr_base: str | None = None,
         annotations_root: Path | str | None = None,
         annotations_index_path: Path | str | None = None,
+        parallels_root: Path | str | None = None,
         host: str | None = None,
         port: int | None = None,
         admin_team: str | None = None,
@@ -424,6 +436,8 @@ class ServeConfig:
             updates["annotations_root"] = Path(annotations_root).resolve()
         if annotations_index_path is not None:
             updates["annotations_index_path"] = Path(annotations_index_path).resolve()
+        if parallels_root is not None:
+            updates["parallels_root"] = Path(parallels_root).resolve()
         if host is not None:
             updates["host"] = host
         if port is not None:

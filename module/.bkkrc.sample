@@ -171,6 +171,10 @@ serve:
 #                                # [annotations] section below only needs an
 #                                # `annotations_root` line in the rare case
 #                                # where you want a per-tool override.
+#   parallels_root: /data/bkk/parallels
+#                                # root of per-juan *.parallels.yaml assets
+#                                # displayed in the reader's Parallels panel.
+#                                # Env: BKK_PARALLELS_ROOT.
 #   max_search_hits: 20000        # per-query cap on hits the /search endpoint
 #                                 # will materialise. When a query (e.g. a
 #                                 # common bigram like 謂之) would exceed this,

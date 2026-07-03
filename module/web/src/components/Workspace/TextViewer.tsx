@@ -377,6 +377,7 @@ interface Props {
 }
 
 export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
+  const rightTab = useWorkspace((s) => s.rightTab);
   const showPageBreaks = useWorkspace((s) => s.readPrefs.showPageBreaks);
   const lineBreakDisplay = useWorkspace((s) => s.readPrefs.lineBreakDisplay);
   const currentPageMarkerId = useWorkspace((s) =>
@@ -756,8 +757,8 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
       ...anchor,
     });
     workspace.setSearchQuery(selChars.join(""));
-    workspace.setRightTab("annotations");
-  }, [textid, seq, resolveAnchor]);
+    if (rightTab !== "parallels") workspace.setRightTab("annotations");
+  }, [textid, seq, resolveAnchor, rightTab]);
 
   // iOS Safari often doesn't deliver mouseup after the selection grippers are
   // dragged, so commit via a debounced selectionchange as well.
@@ -816,6 +817,14 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
             {textid}
           </a>
           {editionShort ? ` · ${editionShort}` : ""} · 卷 {seq}
+          <button
+            type="button"
+            className="tv-parallels-btn"
+            title="Load parallel passages for this juan"
+            onClick={() => workspace.openParallelsPanel(textid, seq)}
+          >
+            Parallels
+          </button>
           {altIds.length > 0 ? (
             <span className="tv-alt-ids"> {altIds.join(" ")}</span>
           ) : null}

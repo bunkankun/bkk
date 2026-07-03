@@ -254,6 +254,10 @@ class AppState:
         return self.config.annotations_index_path
 
     @property
+    def parallels_root(self) -> Path | None:
+        return self.config.parallels_root
+
+    @property
     def core_root(self) -> Path | None:
         return self.config.core_root
 

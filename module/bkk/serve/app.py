@@ -26,6 +26,7 @@ from .routers import contributions as contributions_router
 from .routers import core as core_router
 from .routers import core_edit as core_edit_router
 from .routers import duplications as duplications_router
+from .routers import parallels as parallels_router
 from .routers import recipes as recipes_router
 from .routers import redirects as redirects_router
 from .routers import search as search_router
@@ -110,6 +111,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             {"name": "core", "description": "Browse the bkk-core knowledge layer (concepts, graphs, words, …)."},
             {"name": "search", "description": "Variant-aware KWIC search across the corpus."},
             {"name": "translations", "description": "Translation overlay discovery and alignment."},
+            {"name": "parallels", "description": "Per-juan links to parallel passages."},
             {"name": "recipes", "description": "Recipe-as-request: assemble pinned slices."},
             {"name": "auth", "description": "GitHub login and per-user BKK workspace setup."},
             {"name": "workspace", "description": "GitHub-backed user workspace files."},
@@ -143,6 +145,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(annotations_write_router.router, prefix="/api")
     app.include_router(contributions_router.router, prefix="/api")
     app.include_router(translations_router.router, prefix="/api")
+    app.include_router(parallels_router.router, prefix="/api")
     app.include_router(bundle_edit_router.router, prefix="/api")
     app.include_router(bundles_router.router, prefix="/api")
     app.include_router(texts_router.router, prefix="/api")
@@ -174,6 +177,7 @@ def create_app(config: ServeConfig) -> FastAPI:
                 "catalog_path": str(config.catalog_path),
                 "upstream_repo": config.upstream_repo,
                 "bluesky_enabled": config.bluesky_enabled,
+                "parallels_enabled": config.parallels_root is not None,
                 "docs": "/docs",
                 "openapi": "/openapi.json",
             }
@@ -209,6 +213,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             "catalog_path": str(config.catalog_path),
             "upstream_repo": config.upstream_repo,
             "bluesky_enabled": config.bluesky_enabled,
+            "parallels_enabled": config.parallels_root is not None,
             "docs": "/docs",
             "openapi": "/openapi.json",
         }

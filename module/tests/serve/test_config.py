@@ -59,6 +59,25 @@ def test_from_env_unset_yields_none(corpus: Path, monkeypatch: pytest.MonkeyPatc
     assert config.bluesky_enabled is False
 
 
+def test_from_env_reads_parallels_root(
+    corpus: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    rc_root = tmp_path / "rc-parallels"
+    env_root = tmp_path / "env-parallels"
+    monkeypatch.delenv("BKK_PARALLELS_ROOT", raising=False)
+
+    config = ServeConfig.from_env(
+        corpus_root=corpus, rc={"parallels_root": rc_root},
+    )
+    assert config.parallels_root == rc_root.resolve()
+
+    monkeypatch.setenv("BKK_PARALLELS_ROOT", str(env_root))
+    config = ServeConfig.from_env(
+        corpus_root=corpus, rc={"parallels_root": rc_root},
+    )
+    assert config.parallels_root == env_root.resolve()
+
+
 def test_from_env_enables_bluesky_only_on_exact_true(
     corpus: Path, monkeypatch: pytest.MonkeyPatch,
 ):

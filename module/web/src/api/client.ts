@@ -48,6 +48,7 @@ import type {
   AnnotationsByRhetoricalDeviceResponse,
   AnnotationsByRhetoricalDeviceCountsResponse,
   Juan,
+  JuanParallelsResponse,
   Manifest,
   ManifestPart,
   OverlaysResponse,
@@ -429,6 +430,38 @@ export async function getAnnotations(
   });
   annotationsCache.set(key, promise);
   return promise;
+}
+
+export async function getJuanParallels(
+  textid: string,
+  seq: number,
+  options: {
+    offset?: number;
+    limit?: number;
+    bucket?: "front" | "body" | "back";
+    start?: number;
+    end?: number;
+    minLength?: number;
+    maxLength?: number;
+    sort?: "local" | "remote";
+    remoteTextid?: string | null;
+  } = {},
+): Promise<JuanParallelsResponse> {
+  const params = new URLSearchParams();
+  if (options.offset != null) params.set("offset", String(options.offset));
+  if (options.limit != null) params.set("limit", String(options.limit));
+  if (options.bucket != null) params.set("bucket", options.bucket);
+  if (options.start != null) params.set("start", String(options.start));
+  if (options.end != null) params.set("end", String(options.end));
+  if (options.minLength != null) params.set("min_length", String(options.minLength));
+  if (options.maxLength != null) params.set("max_length", String(options.maxLength));
+  if (options.sort != null) params.set("sort", options.sort);
+  if (options.remoteTextid != null) params.set("remote_textid", options.remoteTextid);
+  const query = params.toString();
+  return fetchJson<JuanParallelsResponse>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/parallels`
+      + (query ? `?${query}` : ""),
+  );
 }
 
 export interface ArchiveDeleteResponse {

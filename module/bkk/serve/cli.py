@@ -54,6 +54,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--annotations-index", type=Path, default=None, dest="annotations_index_path",
                    help="annotation .bkka index path "
                         "(default: <annotations-root>/_annotations.bkka)")
+    p.add_argument("--parallels-root", type=Path, default=None,
+                   help="per-juan parallel marker asset root "
+                        "(default: serve.parallels_root from .bkkrc)")
     p.add_argument("--host", default=None, help="bind address (default: 127.0.0.1)")
     p.add_argument("--port", type=int, default=None, help="port (default: 8000)")
     p.add_argument("--admin-team", default=None, dest="admin_team",
@@ -116,6 +119,7 @@ def run(argv: list[str] | None = None) -> int:
         core_pr_base=args.core_pr_base,
         annotations_root=args.annotations_root,
         annotations_index_path=args.annotations_index_path,
+        parallels_root=args.parallels_root,
         host=args.host,
         port=args.port,
         admin_team=args.admin_team,
@@ -153,6 +157,8 @@ def run(argv: list[str] | None = None) -> int:
             os.environ["BKK_ANNOTATIONS_ROOT"] = str(config.annotations_root)
         if config.annotations_index_path is not None:
             os.environ["BKK_ANNOTATIONS_INDEX_PATH"] = str(config.annotations_index_path)
+        if config.parallels_root is not None:
+            os.environ["BKK_PARALLELS_ROOT"] = str(config.parallels_root)
         os.environ["BKK_HOST"] = config.host
         os.environ["BKK_PORT"] = str(config.port)
         os.environ["BKK_ADMIN_TEAM"] = config.admin_team

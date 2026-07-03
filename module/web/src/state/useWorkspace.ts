@@ -54,7 +54,7 @@ export type Activity =
   | "edit"
   | "admin"
   | "settings";
-export type RightTab = "annotations" | "chat" | "search";
+export type RightTab = "annotations" | "parallels" | "chat" | "search";
 export type ReadMode = "read" | "trans" | "inspect" | "edit";
 export type OpenMode = "read" | "trans" | "sticky";
 export type SearchTarget = "fulltext" | "dictionary" | "translations" | "parallel";
@@ -65,6 +65,10 @@ export interface ParallelOptions {
   minOccurrences: number;
   maxEdits: number;
   sort: ParallelSort;
+}
+export interface ParallelsSource {
+  textid: string;
+  seq: number;
 }
 export type LineMode = "paragraph" | "phrase";
 export type LineBreakDisplay = "off" | "glyph" | "br";
@@ -266,6 +270,7 @@ export interface WorkspaceState {
   coreTarget: CoreTarget | null;
   // right panel
   rightTab: RightTab;
+  parallelsSource: ParallelsSource | null;
   // upper-right "Read | Trans | Inspect" — Trans/Inspect disabled in v1.
   readMode: ReadMode;
   openMode: OpenMode;
@@ -279,6 +284,7 @@ export interface WorkspaceState {
     upstream_repo?: string | null;
     version?: string;
     bluesky_enabled?: boolean;
+    parallels_enabled?: boolean;
   } | null;
   auth: {
     status: "unknown" | "loading" | "authenticated" | "anonymous" | "error";
@@ -576,6 +582,7 @@ let state: WorkspaceState = {
   selection: null,
   coreTarget: null,
   rightTab: "annotations",
+  parallelsSource: null,
   readMode: "read",
   openMode: "read",
   selectedTranslation: null,
@@ -1653,6 +1660,19 @@ export const workspace = {
     state = { ...state, rightTab };
     notify();
   },
+  setParallelsSource(source: ParallelsSource | null) {
+    state = { ...state, parallelsSource: source };
+    notify();
+  },
+  openParallelsPanel(textid: string, seq: number) {
+    state = {
+      ...state,
+      parallelsSource: { textid, seq },
+      rightTab: "parallels",
+    };
+    notify();
+    workspace.setSidebarVisible("right", true);
+  },
   setReadMode(readMode: ReadMode) {
     const target = activePaneLeaf(state.pane);
     const currentTab = activeTabForLeaf(target);
@@ -1948,12 +1968,17 @@ export const workspace = {
     const pane = paneForOpenTab(tab);
     const focusedPaneId = leafIdForTab(pane, tabId);
     const activity: Activity = tab.readMode === "trans" ? "overlays" : "texts";
+    const keepSelection =
+      state.parallelsSource != null &&
+      state.selection != null &&
+      state.selection.textid === state.parallelsSource.textid &&
+      state.selection.seq === state.parallelsSource.seq;
     state = {
       ...state,
       activeTextid: textid,
       activeSeq: seq,
       focusedPaneId,
-      selection: null,
+      selection: keepSelection ? state.selection : null,
       currentPage: null,
       pane,
       activity,
@@ -2707,6 +2732,11 @@ export const workspace = {
     // target juan, then fall back to replacing a non-pinned text tab
     // elsewhere in the tree. See planOpenTextLocation for the decision rules.
     const plan = planOpenTextLocation(state.pane, target?.id ?? null, tabId);
+    const keepSelection =
+      state.parallelsSource != null &&
+      state.selection != null &&
+      state.selection.textid === state.parallelsSource.textid &&
+      state.selection.seq === state.parallelsSource.seq;
     if (plan.kind === "focus") {
       const nextPane = mapPaneLeaves(state.pane, (leaf) =>
         leaf.id === plan.leafId ? { ...leaf, activeTabId: tabId } : leaf,
@@ -2719,7 +2749,7 @@ export const workspace = {
         activeTextid: args.textid,
         activeSeq: args.seq,
         focusedPaneId: plan.leafId,
-        selection: null,
+        selection: keepSelection ? state.selection : null,
         currentPage: null,
         pane: nextPane,
         activity: "texts",
@@ -2758,7 +2788,7 @@ export const workspace = {
         activeTextid: args.textid,
         activeSeq: args.seq,
         focusedPaneId: plan.leafId,
-        selection: null,
+        selection: keepSelection ? state.selection : null,
         currentPage: null,
         pane: nextPane,
         activity: "texts",

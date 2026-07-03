@@ -644,6 +644,51 @@ export interface ParallelSearchResponse {
   clusters: ParallelCluster[];
 }
 
+export interface JuanParallelLocation {
+  id: string;
+  source: string;
+  local_bucket: "front" | "body" | "back";
+  local_offset: number;
+  local_length: number;
+  local_text?: string;
+  local_gap?: number | null;
+  remote_gap?: number | null;
+  textid: string;
+  juan_seq: number;
+  bucket: "front" | "body" | "back";
+  offset: number;
+  length: number;
+  toc_label: string | null;
+  title: string | null;
+  edit_distance: number;
+  left: string;
+  text: string;
+  right: string;
+  diff?: DiffOp[];
+  available: boolean;
+}
+
+export interface JuanParallelRemoteText {
+  textid: string;
+  title: string | null;
+  count: number;
+  overlap_length: number;
+}
+
+export interface JuanParallelsResponse {
+  textid: string;
+  juan_seq: number;
+  sort: "local" | "remote";
+  remote_textid: string | null;
+  total: number;
+  offset: number;
+  limit: number;
+  available_min_length: number;
+  available_max_length: number;
+  remote_texts: JuanParallelRemoteText[];
+  locations: JuanParallelLocation[];
+}
+
 // Server identity
 export interface ServerInfo {
   service?: string;
@@ -653,6 +698,7 @@ export interface ServerInfo {
   catalog_path?: string;
   upstream_repo?: string | null;
   bluesky_enabled?: boolean;
+  parallels_enabled?: boolean;
   docs?: string;
   openapi?: string;
 }

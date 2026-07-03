@@ -1055,6 +1055,10 @@ button {
   margin-bottom: 4px;
 }
 .tv-title h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   font-weight: 400;
   color: var(--t2);
@@ -1067,6 +1071,22 @@ button {
 .tv-title h2 a:hover {
   color: var(--amb);
   text-decoration: underline;
+}
+.tv-parallels-btn {
+  border: 1px solid var(--bdr);
+  background: var(--bg-pan);
+  color: var(--t2);
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1;
+  padding: 4px 10px;
+}
+.tv-parallels-btn:hover {
+  border-color: var(--amb);
+  color: var(--amb);
 }
 .tv-alt-ids {
   color: var(--t3);
@@ -2476,6 +2496,304 @@ button {
 .kwic-pager button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* per-juan parallel passage panel ------------------------------- */
+.parallel-panel {
+  padding: 0;
+}
+.parallel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid var(--bdr-l);
+  background:
+    linear-gradient(180deg, rgba(127, 96, 36, 0.08), rgba(127, 96, 36, 0)),
+    var(--amb-d);
+}
+.parallel-title {
+  min-width: 0;
+}
+.parallel-order {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px 0;
+  background: var(--bg-pan);
+}
+.parallel-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--t2);
+  font-family: var(--fm);
+  font-size: 10px;
+}
+.parallel-order-row select {
+  min-width: 210px;
+  max-width: 100%;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg-ed);
+  color: var(--t1);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+.parallel-order-buttons {
+  display: flex;
+  gap: 6px;
+}
+.parallel-kicker {
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.parallel-source {
+  margin-top: 2px;
+  color: var(--t1);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  word-break: break-word;
+}
+.parallel-rebind {
+  flex: 0 0 auto;
+  border: 1px solid var(--bdr);
+  border-radius: 999px;
+  background: var(--bg-pan);
+  color: var(--t2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  padding: 5px 10px;
+}
+.parallel-rebind:hover {
+  border-color: var(--amb);
+  color: var(--amb);
+}
+.parallel-limits {
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--bdr-l);
+  background: var(--bg-pan);
+}
+.parallel-limits-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--t2);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.parallel-limits-meta span:last-child {
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 10px;
+}
+.parallel-sliders {
+  display: grid;
+  gap: 6px;
+}
+.parallel-sliders input[type="range"] {
+  width: 100%;
+  accent-color: var(--amb);
+}
+.parallel-limits-fields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.parallel-limits-fields label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 10px;
+}
+.parallel-limits-fields input[type="number"] {
+  width: 76px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg-ed);
+  color: var(--t1);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+.parallel-limits-fields button {
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  padding: 4px 8px;
+}
+.parallel-limits-fields button:hover:not(:disabled) {
+  border-color: var(--amb);
+  color: var(--amb);
+}
+.parallel-limits-fields button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.parallel-filter {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bdr-l);
+  background: var(--amb-d);
+  color: var(--t2);
+  font-size: 11px;
+}
+.parallel-filter span {
+  display: block;
+  margin-top: 2px;
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 10px;
+}
+.parallel-filter button {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--amb);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+}
+.parallel-count {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--bdr-l);
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 10px;
+}
+.parallel-group {
+  margin-top: 8px;
+  border-top: 1px solid var(--bdr-l);
+}
+.parallel-group-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px 6px;
+  background: linear-gradient(180deg, rgba(127, 96, 36, 0.06), rgba(127, 96, 36, 0));
+}
+.parallel-group-title {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.parallel-group-name {
+  color: var(--t1);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.parallel-group-textid {
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 10px;
+}
+.parallel-group-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 10px;
+  text-align: right;
+}
+.parallel-group-body {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+.parallel-row {
+  position: relative;
+}
+.parallel-main {
+  padding-right: 34px;
+}
+.parallel-diff {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bdr-l);
+}
+.parallel-diff-row {
+  display: grid;
+  gap: 4px;
+}
+.parallel-diff-label {
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.parallel-diff-text {
+  color: var(--t1);
+  font-family: var(--fm);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.parallel-gaps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.parallel-gap {
+  border: 1px solid var(--bdr);
+  border-radius: 999px;
+  color: var(--t2);
+  font-family: var(--fm);
+  font-size: 9px;
+  padding: 2px 7px;
+}
+.parallel-open {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg-pan);
+  color: var(--t2);
+  cursor: pointer;
+  font: inherit;
+}
+.parallel-open:hover:not(:disabled) {
+  border-color: var(--amb);
+  color: var(--amb);
+}
+.parallel-open:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.parallel-local,
+.parallel-remote,
+.parallel-unavailable {
+  margin-top: 4px;
+  color: var(--t3);
+  font-family: var(--fm);
+  font-size: 9px;
 }
 
 /* match flash applied via TextViewer's pendingHighlight ----------- */

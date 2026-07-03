@@ -13,6 +13,7 @@ import { Toc } from "./components/LeftPanel/Toc";
 import { Menubar } from "./components/Menubar";
 import { AnnotationsTab } from "./components/RightPanel/AnnotationsTab";
 import { ChatTab } from "./components/RightPanel/ChatTab";
+import { ParallelsTab } from "./components/RightPanel/ParallelsTab";
 import { SearchTab } from "./components/RightPanel/SearchTab";
 import { StatusBar } from "./components/StatusBar";
 import { PaneTree } from "./components/Workspace/PaneTree";
@@ -115,8 +116,15 @@ function RightPanel() {
   const tab = useWorkspace((s) => s.rightTab);
   const searchActive = useWorkspace((s) => s.search.status !== "idle");
   const blueskyEnabled = useWorkspace((s) => s.serverInfo?.bluesky_enabled === true);
+  const parallelsEnabled = useWorkspace((s) => s.serverInfo?.parallels_enabled === true);
+  const parallelsSource = useWorkspace((s) => s.parallelsSource);
+  const activeTextid = useWorkspace((s) => s.activeTextid);
+  const activeSeq = useWorkspace((s) => s.activeSeq);
   const width = useWorkspace((s) => s.panelWidths.right);
-  const effectiveTab = tab === "chat" && !blueskyEnabled ? "annotations" : tab;
+  const effectiveTab =
+    (tab === "chat" && !blueskyEnabled) || (tab === "parallels" && !parallelsEnabled)
+      ? "annotations"
+      : tab;
   return (
     <div className="rp" style={{ width }}>
       <div className="rt-bar">
@@ -126,6 +134,20 @@ function RightPanel() {
         >
           Annot.
         </button>
+        {parallelsEnabled && (
+          <button
+            className={`rt${effectiveTab === "parallels" ? " on" : ""}`}
+            onClick={() => {
+              if (parallelsSource == null && activeTextid != null && activeSeq != null) {
+                workspace.openParallelsPanel(activeTextid, activeSeq);
+                return;
+              }
+              workspace.setRightTab("parallels");
+            }}
+          >
+            Parall.
+          </button>
+        )}
         {blueskyEnabled && (
           <button
             className={`rt${effectiveTab === "chat" ? " on" : ""}`}
@@ -145,6 +167,8 @@ function RightPanel() {
       </div>
       {effectiveTab === "search" ? (
         <SearchTab />
+      ) : effectiveTab === "parallels" ? (
+        <ParallelsTab />
       ) : effectiveTab === "chat" ? (
         <ChatTab />
       ) : (
@@ -169,6 +193,7 @@ export function App() {
           upstream_repo: info.upstream_repo ?? null,
           version: info.version,
           bluesky_enabled: info.bluesky_enabled === true,
+          parallels_enabled: info.parallels_enabled === true,
         });
       })
       .catch(() => {
