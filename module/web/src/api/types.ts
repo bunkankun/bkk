@@ -678,6 +678,8 @@ export interface JuanParallelRemoteText {
 export interface JuanParallelsResponse {
   textid: string;
   juan_seq: number;
+  source_title: string | null;
+  source_char_count: number;
   sort: "local" | "remote";
   remote_textid: string | null;
   total: number;
