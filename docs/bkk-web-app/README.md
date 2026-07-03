@@ -81,7 +81,7 @@ Major slices (non-exhaustive):
 | `activity`         | which LeftPanel module is showing                                                   |
 | `pane`             | recursive `PaneNode` tree (leaf has tabs of text or core-record; split has children)|
 | `activeTextid` / `activeSeq` | the focused text + juan (computed from active pane's active tab)         |
-| `readMode`         | `read` / `trans` / `inspect` — affects WorkspacePane rendering                      |
+| `readMode`         | `read` / `trans` / `inspect` / `edit` — affects WorkspacePane rendering             |
 | `rightTab`         | which RightPanel tab is visible                                                     |
 | `search`           | query, target, filters, results, status, pagination, abort controller               |
 | `searchHistory`    | last 50 queries; saved to `session.json`                                            |
@@ -112,7 +112,7 @@ Persistence strategy:
 - Annotation responses (`getAnnotations`) go through `annotationsCache` keyed by `${textid}_${seq}`, so the Read pane, the Trans pane, and the AnnotationsTab share one fetch per juan. `archiveDeleteAnnotation` and `patchContributionCuration` invalidate the affected juan automatically; `invalidateAnnotationsCache(textid, seq)` is exported for explicit refreshes.
 - Errors throw `ApiError(status, message, body)`. Components display these inline; there is no global error boundary.
 
-Endpoint groups: server info, auth, admin jobs, catalog, bundles + juan + annotations, full-text search, translation search + alignment, annotation write + Bluesky, CORE (dictionary) read/write/PR, workspace file CRUD. See [api/types.ts](../../module/web/src/api/types.ts) for the response shapes.
+Endpoint groups: server info, auth, admin jobs, catalog, bundles + juan + annotations, GitHub-backed bundle editing, full-text search, translation search + alignment, annotation write + Bluesky, CORE (dictionary) read/write/PR, workspace file CRUD. See [api/types.ts](../../module/web/src/api/types.ts) for the response shapes.
 
 ## Components by area
 
@@ -144,6 +144,7 @@ Each file is the entire UI for one activity. Switching activity unmounts the pre
 - [Workspace/TranslationViewer.tsx](../../module/web/src/components/Workspace/TranslationViewer.tsx) — parallel source/target alignment table. Mirrors TextViewer's annotation linkage: source spans decorated from the same `annotationsCache`, single-click on an annotated char sets `selectedAnnotationId` and opens the Annotations tab, and `pendingHighlight` scrolls + flashes the matching span (so card↔text navigation works in either direction). When the pane is opened in Trans mode for a text with no translations, it calls `getBundleTranslations` and falls back to Read mode via `setReadMode("read")` instead of leaving an empty pane.
 - [Workspace/CoreRecord.tsx](../../module/web/src/components/Workspace/CoreRecord.tsx) — dictionary entry view. Sense tree, backlinks, concept words, attribution badges.
 - [Workspace/CoreRecordEditor.tsx](../../module/web/src/components/Workspace/CoreRecordEditor.tsx) — edit mode for a core record. Fork → patch → commit → PR via the backend GitHub proxy.
+- [Workspace/BundleEditor.tsx](../../module/web/src/components/Workspace/BundleEditor.tsx) — GitHub-backed text/marker editor. It edits one front/body/back bucket, shifts markers through codepoint-based text splices, blocks ambiguous anchors, and submits either an admin commit or a user fork PR.
 - [Workspace/AnnotationLayer.tsx](../../module/web/src/components/Workspace/AnnotationLayer.tsx) — pure helper (no JSX): builds the per-juan annotation index TextViewer overlays.
 
 ### RightPanel tabs
@@ -181,6 +182,8 @@ No CSS modules, no Tailwind. Components add classes directly; style rules live i
 **Theme** — `workspace.setTheme()` writes to `uiPrefs`, persists, and sets `document.documentElement.dataset.theme`. CSS handles the rest.
 
 **Auth** — `startGithubLogin()` redirects to `/api/auth/github/start`; the backend completes the OAuth dance and sets a session cookie. On boot, `loadAuthSession()` calls `GET /api/auth/session`. Logout clears the cookie and resets in-memory session-derived slices. Workspace sync (pull `session.json`, push debounced) is triggered by login.
+
+**Bundle editing** — authenticated users load the editable remote from `GET /api/bundles/{textid}/juan/{seq}/edit`. `POST` saves the juan, marker asset, and manifest as one Git commit. Admins update the upstream repository's default branch; other users get a fork branch and pull request. Repositories default to `bkkbooks/<textid>` and each repository's GitHub `default_branch`; override these with `BKK_BUNDLE_GITHUB_ORG` / `BKK_BUNDLE_GITHUB_BRANCH` or the corresponding `serve` keys.
 
 **Search lifecycle** — `runSearch()` aborts any in-flight request via `searchAbort`, fires the new one, and writes status (`idle`/`loading`/`ok`/`error`) into `state.search`. List filters narrow the textid scope via `scopedListTextids()` before the request.
 

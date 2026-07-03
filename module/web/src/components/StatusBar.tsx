@@ -16,6 +16,7 @@ const MODES: { id: ReadMode; label: string; enabled: boolean; tip: string }[] = 
   { id: "read", label: "Read", enabled: true, tip: "Read mode" },
   { id: "trans", label: "Trans", enabled: true, tip: "Translation mode" },
   { id: "inspect", label: "Inspect", enabled: true, tip: "Inspect mode (image + text)" },
+  { id: "edit", label: "Edit", enabled: true, tip: "Edit text and markers" },
 ];
 
 const LINE_MODES: { id: LineMode; label: string; tip: string }[] = [
@@ -53,6 +54,7 @@ export function StatusBar() {
   const mode = textTab?.readMode ?? defaultMode;
   const lineMode = textTab?.lineMode ?? defaultLineMode;
   const cp = textTab?.hoverCodepoint ?? null;
+  const authenticated = useWorkspace((s) => s.auth.status === "authenticated");
 
   return (
     <div className="sb">
@@ -87,13 +89,13 @@ export function StatusBar() {
           {m.label}
         </button>
       ))}
-      {MODES.map((m) => (
+      {MODES.filter((m) => m.id !== "edit" || authenticated).map((m) => (
         <button
           key={m.id}
           className={`sdb${mode === m.id ? " on" : ""}`}
-          disabled={!m.enabled}
+          disabled={!m.enabled || (m.id === "edit" && textTab == null)}
           title={m.tip}
-          onClick={() => m.enabled && workspace.setReadMode(m.id)}
+          onClick={() => m.enabled && textTab != null && workspace.setReadMode(m.id)}
         >
           {m.label}
         </button>

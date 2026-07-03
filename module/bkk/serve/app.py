@@ -20,6 +20,7 @@ from .routers import annotations as annotations_router
 from .routers import annotations_write as annotations_write_router
 from .routers import auth as auth_router
 from .routers import bundles as bundles_router
+from .routers import bundle_edit as bundle_edit_router
 from .routers import catalog as catalog_router
 from .routers import contributions as contributions_router
 from .routers import core as core_router
@@ -142,6 +143,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(annotations_write_router.router, prefix="/api")
     app.include_router(contributions_router.router, prefix="/api")
     app.include_router(translations_router.router, prefix="/api")
+    app.include_router(bundle_edit_router.router, prefix="/api")
     app.include_router(bundles_router.router, prefix="/api")
     app.include_router(texts_router.router, prefix="/api")
     app.include_router(catalog_router.router, prefix="/api")

@@ -41,6 +41,10 @@ class ServeConfig:
     github_callback_url: str | None = None
     workspace_template_repo: str = "bunkankun/BKK-Workspace"
     workspace_repo_name: str = "BKK-Workspace"
+    bundle_github_org: str = "bkkbooks"
+    # "auto" follows each repository's GitHub default_branch. An explicit
+    # branch remains available for deployments with a uniform branch policy.
+    bundle_github_branch: str = "auto"
     # Bluesky write/feed UI and atproto-backed endpoints are opt-in. Keep the
     # comparison exact so the deploy knob is unambiguous:
     # ``BKK_BLUESKY_ENABLE=True``.
@@ -278,6 +282,15 @@ class ServeConfig:
             except Exception:
                 source_root = None
 
+        bundle_github_org = os.environ.get(
+            "BKK_BUNDLE_GITHUB_ORG",
+            str(rc.get("bundle_github_org", "bkkbooks")),
+        )
+        bundle_github_branch = os.environ.get(
+            "BKK_BUNDLE_GITHUB_BRANCH",
+            str(rc.get("bundle_github_branch", "auto")),
+        )
+
         env_source_branch = os.environ.get("BKK_SOURCE_BRANCH")
         source_branch = (
             env_source_branch
@@ -352,6 +365,8 @@ class ServeConfig:
             bluesky_enabled=bluesky_enabled,
             source_root=source_root,
             source_branch=source_branch,
+            bundle_github_org=bundle_github_org,
+            bundle_github_branch=bundle_github_branch,
             max_search_hits=max_search_hits,
             duplications_report_path=duplications_report_path,
         )
@@ -384,6 +399,8 @@ class ServeConfig:
         workspace_repo_name: str | None = None,
         source_root: Path | str | None = None,
         source_branch: str | None = None,
+        bundle_github_org: str | None = None,
+        bundle_github_branch: str | None = None,
     ) -> "ServeConfig":
         """Return a copy with any non-``None`` argument overriding the field."""
         updates: dict = {}
@@ -437,4 +454,8 @@ class ServeConfig:
             updates["source_root"] = Path(source_root).resolve()
         if source_branch is not None:
             updates["source_branch"] = source_branch
+        if bundle_github_org is not None:
+            updates["bundle_github_org"] = bundle_github_org
+        if bundle_github_branch is not None:
+            updates["bundle_github_branch"] = bundle_github_branch
         return replace(self, **updates)

@@ -9,6 +9,7 @@ import { DuplicationViewer } from "./DuplicationViewer";
 import { ImagePanel } from "./ImagePanel";
 import { TextViewer } from "./TextViewer";
 import { TranslationViewer } from "./TranslationViewer";
+import { BundleEditor } from "./BundleEditor";
 
 function InspectResizer() {
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -60,6 +61,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
   const lineMode = activeTextTab?.lineMode ?? defaultLineMode;
   const showInspect = readMode === "inspect" && activeTextTab != null;
   const showTranslation = readMode === "trans" && activeTextTab != null;
+  const showEdit = readMode === "edit" && activeTextTab != null;
 
   useEffect(() => {
     let cancelled = false;
@@ -262,7 +264,13 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
           uuid={activeCoreTab.uuid}
         />
       ) : activeTextTab ? (
-        showInspect ? (
+        showEdit ? (
+          <BundleEditor
+            key={`${activeTextTab.textid}:${activeTextTab.seq}`}
+            textid={activeTextTab.textid}
+            seq={activeTextTab.seq}
+          />
+        ) : showInspect ? (
           <div className="ws-split">
             <div className="ws-split-left">
               <TextViewer

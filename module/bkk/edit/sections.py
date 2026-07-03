@@ -19,7 +19,7 @@ from typing import Any
 import yaml
 
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
-from bkk.importer.write.yaml_writer import dump, marker_to_flow
+from bkk.importer.write.yaml_writer import dump, marker_to_flow, reflow_manifest
 from bkk.marker_assets import (
     VALID_BUCKETS,
     marker_asset_entry_for_seq,
@@ -350,6 +350,7 @@ def _rebase_toc_for_bucket(
 
 
 def _rehash_and_write_manifest(ctx: _EditContext) -> None:
+    reflow_manifest(ctx.manifest)
     ctx.manifest["hash"] = ZERO_HASH
     ctx.manifest["hash"] = manifest_hash(ctx.manifest)
     ctx.manifest_path.write_text(dump(ctx.manifest), encoding="utf-8")

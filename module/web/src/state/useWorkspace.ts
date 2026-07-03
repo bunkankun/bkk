@@ -41,6 +41,7 @@ import {
   serializeTextList,
 } from "../lib/textLists";
 import { planOpenTextLocation } from "./openLocationPlan";
+import { confirmDiscardBundleEditor } from "../lib/editorDirty";
 
 export type Activity =
   | "texts"
@@ -54,7 +55,7 @@ export type Activity =
   | "admin"
   | "settings";
 export type RightTab = "annotations" | "chat" | "search";
-export type ReadMode = "read" | "trans" | "inspect";
+export type ReadMode = "read" | "trans" | "inspect" | "edit";
 export type OpenMode = "read" | "trans" | "sticky";
 export type SearchTarget = "fulltext" | "dictionary" | "translations" | "parallel";
 
@@ -1429,6 +1430,7 @@ async function loadWorkspacePersistence(): Promise<void> {
       restoredSessionOnce = true;
       const readMode =
         sessionDoc.readMode === "inspect" ||
+        sessionDoc.readMode === "edit" ||
         sessionDoc.readMode === "trans" ||
         sessionDoc.readMode === "read"
           ? sessionDoc.readMode
@@ -1653,6 +1655,13 @@ export const workspace = {
   },
   setReadMode(readMode: ReadMode) {
     const target = activePaneLeaf(state.pane);
+    const currentTab = activeTabForLeaf(target);
+    if (
+      currentTab?.type === "text" &&
+      currentTab.readMode === "edit" &&
+      readMode !== "edit" &&
+      !confirmDiscardBundleEditor()
+    ) return;
     const activity: Activity =
       readMode === "trans"
         ? "overlays"
@@ -1918,6 +1927,7 @@ export const workspace = {
     scheduleSessionSave();
   },
   openJuan(textid: string, seq: number, options: { pinned?: boolean } = {}) {
+    if (!confirmDiscardBundleEditor()) return;
     const tabId = `${textid}:${seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
@@ -2100,6 +2110,7 @@ export const workspace = {
     scheduleSessionSave();
   },
   closePane(paneId: string) {
+    if (!confirmDiscardBundleEditor()) return;
     const newPane = removePaneLeaf(state.pane, paneId);
     if (newPane === state.pane) return;
     const leaves = paneLeaves(newPane);
@@ -2209,6 +2220,7 @@ export const workspace = {
       textHistory: [],
       activeTextid: null,
       activeSeq: null,
+      readMode: state.readMode === "edit" ? "read" : state.readMode,
       focusedPaneId: null,
       currentPage: null,
       pane: { kind: "leaf", id: "root", tabs: [], activeTabId: null },

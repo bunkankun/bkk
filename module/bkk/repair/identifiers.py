@@ -7,29 +7,7 @@ from pathlib import Path
 import yaml
 
 from bkk.importer.hashing import manifest_hash
-from bkk.importer.write.yaml_writer import dump, marker_to_flow
-
-
-def _reflow_manifest(manifest: dict) -> None:
-    """Re-apply flow style to the leaf dicts that the BKK manifest format
-    emits inline (``assets.parts`` / ``assets.markers`` entries, top-level
-    ``editions`` entries). ``yaml.safe_load`` drops the flow marker; we
-    have to re-mark before dumping or the file's shape changes."""
-    assets = manifest.get("assets")
-    if isinstance(assets, dict):
-        for key in ("parts", "markers"):
-            seq = assets.get(key)
-            if isinstance(seq, list):
-                assets[key] = [
-                    marker_to_flow(item) if isinstance(item, dict) else item
-                    for item in seq
-                ]
-    editions = manifest.get("editions")
-    if isinstance(editions, list):
-        manifest["editions"] = [
-            marker_to_flow(item) if isinstance(item, dict) else item
-            for item in editions
-        ]
+from bkk.importer.write.yaml_writer import dump, reflow_manifest
 
 
 def apply_alt_ids(
@@ -78,7 +56,7 @@ def apply_alt_ids(
 
     changed = before != after
     if changed and not dry_run:
-        _reflow_manifest(manifest)
+        reflow_manifest(manifest)
         manifest["hash"] = manifest_hash(manifest)
         manifest_path.write_text(dump(manifest), encoding="utf-8")
 
@@ -130,7 +108,7 @@ def purge_non_alt_ids(
         del metadata["identifiers"]
 
     if not dry_run:
-        _reflow_manifest(manifest)
+        reflow_manifest(manifest)
         manifest["hash"] = manifest_hash(manifest)
         manifest_path.write_text(dump(manifest), encoding="utf-8")
 

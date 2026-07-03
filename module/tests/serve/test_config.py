@@ -101,6 +101,29 @@ def test_cli_flag_alone_sets_value(corpus: Path):
     assert client.get("/").json()["upstream_repo"] == "flag-only/repo"
 
 
+def test_bundle_github_defaults_env_and_cli(corpus: Path, monkeypatch: pytest.MonkeyPatch):
+    defaults = ServeConfig(corpus_root=corpus, index_path=corpus / "_corpus.bkkx")
+    assert defaults.bundle_github_org == "bkkbooks"
+    assert defaults.bundle_github_branch == "auto"
+
+    monkeypatch.setenv("BKK_BUNDLE_GITHUB_ORG", "env-books")
+    monkeypatch.setenv("BKK_BUNDLE_GITHUB_BRANCH", "main")
+    from_env = ServeConfig.from_env(corpus_root=corpus)
+    assert from_env.bundle_github_org == "env-books"
+    assert from_env.bundle_github_branch == "main"
+
+    args = build_parser().parse_args([
+        "--bundle-github-org", "cli-books",
+        "--bundle-github-branch", "stable",
+    ])
+    merged = from_env.merge_cli(
+        bundle_github_org=args.bundle_github_org,
+        bundle_github_branch=args.bundle_github_branch,
+    )
+    assert merged.bundle_github_org == "cli-books"
+    assert merged.bundle_github_branch == "stable"
+
+
 def test_bluesky_session_endpoint_disabled_by_default(client: TestClient):
     r = client.get("/annotations/bluesky/session")
     assert r.status_code == 403

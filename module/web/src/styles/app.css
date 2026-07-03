@@ -2869,6 +2869,123 @@ button {
   accent-color: var(--amb);
 }
 
+/* Bundle editor */
+.bundle-editor {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background: var(--bg);
+}
+.be-markers {
+  width: 380px;
+  min-width: 280px;
+  max-width: 45%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--bdr);
+  min-height: 0;
+}
+.be-text {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.be-toolbar {
+  min-height: 34px;
+  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 1px solid var(--bdr);
+  color: var(--t2);
+  font-size: 11px;
+}
+.be-toolbar select { min-width: 130px; }
+.be-grow { flex: 1; }
+.be-marker-list {
+  flex: 1;
+  min-height: 100px;
+  overflow: auto;
+  border-bottom: 1px solid var(--bdr);
+}
+.be-marker-list > button {
+  width: 100%;
+  padding: 6px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 0;
+  border-bottom: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--t1);
+  text-align: left;
+}
+.be-marker-list > button:hover { background: var(--hov); }
+.be-marker-list > button.on { background: var(--bg-act); }
+.be-marker-list > button.unresolved {
+  border-left: 3px solid var(--red, #c44);
+}
+.be-marker-list small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--t3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.be-list-empty, .be-empty {
+  padding: 18px;
+  color: var(--t3);
+}
+.be-marker-form {
+  max-height: 46%;
+  overflow: auto;
+  padding: 8px;
+}
+.be-prop {
+  display: grid;
+  grid-template-columns: minmax(72px, .8fr) 76px minmax(90px, 1.4fr) 24px;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+.be-prop.invalid input:last-of-type { border-color: var(--red, #c44); }
+.be-prop input, .be-prop select { min-width: 0; width: 100%; }
+.be-prop button { padding: 0; }
+.be-warning, .be-error {
+  padding: 7px 9px;
+  color: var(--red, #c44);
+  background: color-mix(in srgb, var(--red, #c44) 10%, transparent);
+}
+.be-success {
+  padding: 7px 9px;
+  color: var(--grn);
+  border-bottom: 1px solid var(--bdr);
+}
+.be-form-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.be-form-actions .danger { color: var(--red, #c44); }
+.be-unresolved-count { color: var(--red, #c44); }
+.be-text textarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  padding: 14px 18px;
+  border: 0;
+  outline: none;
+  background: var(--bg);
+  color: var(--t1);
+  font-family: var(--font-cjk, serif);
+  font-size: 18px;
+  line-height: 1.8;
+  writing-mode: horizontal-tb;
+}
+
 /* KR category color classes — applied alongside element classes so they
  * win via cascade order (defined last). */
 .kr1 { color: var(--kr1); }

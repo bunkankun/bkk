@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import time
 from typing import Any
@@ -19,6 +20,7 @@ SESSION_COOKIE = "bkk_session"
 OAUTH_STATE_COOKIE = "bkk_oauth_state"
 GITHUB_API = "https://api.github.com"
 REF_READY_ATTEMPTS = 12
+log = logging.getLogger("bkk.serve.github")
 
 
 def _state(request: Request) -> AppState:
@@ -84,6 +86,13 @@ def _github_json(method: str, path: str, token: str, **kwargs: Any) -> Any:
             detail = r.json()
         except ValueError:
             detail = r.text
+        log.warning(
+            "GitHub API error: %s %s -> %s: %r",
+            method,
+            path,
+            r.status_code,
+            detail,
+        )
         raise HTTPException(
             status_code=502,
             detail={"github_status": r.status_code, "body": detail},

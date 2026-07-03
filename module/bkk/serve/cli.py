@@ -84,6 +84,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--workspace-repo-name", default=None,
                    help="workspace repo name created under each user "
                         "(default: BKK-Workspace)")
+    p.add_argument("--bundle-github-org", default=None,
+                   help="GitHub organization containing per-text bundle repositories "
+                        "(default: bkkbooks)")
+    p.add_argument("--bundle-github-branch", default=None,
+                   help="base branch for bundle edits "
+                        "(default: auto-detect each repository's default branch)")
     return p
 
 
@@ -122,6 +128,8 @@ def run(argv: list[str] | None = None) -> int:
         github_callback_url=args.github_callback_url,
         workspace_template_repo=args.workspace_template_repo,
         workspace_repo_name=args.workspace_repo_name,
+        bundle_github_org=args.bundle_github_org,
+        bundle_github_branch=args.bundle_github_branch,
     )
 
     import uvicorn
@@ -162,6 +170,8 @@ def run(argv: list[str] | None = None) -> int:
             os.environ["BKK_GITHUB_CALLBACK_URL"] = config.github_callback_url
         os.environ["BKK_WORKSPACE_TEMPLATE_REPO"] = config.workspace_template_repo
         os.environ["BKK_WORKSPACE_REPO_NAME"] = config.workspace_repo_name
+        os.environ["BKK_BUNDLE_GITHUB_ORG"] = config.bundle_github_org
+        os.environ["BKK_BUNDLE_GITHUB_BRANCH"] = config.bundle_github_branch
         uvicorn.run(
             "bkk.serve.cli:app_factory",
             factory=True,

@@ -17,6 +17,9 @@ import type {
   BlueskyLoginRequest,
   BlueskyStatus,
   BundleSearchResponse,
+  BundleEditDocument,
+  BundleEditSaveRequest,
+  BundleEditSaveResponse,
   CatalogResponse,
   CategoriesResponse,
   ContributionsResponse,
@@ -83,6 +86,28 @@ export class ApiError extends Error {
   }
 }
 
+function apiErrorDetail(body: unknown): string | null {
+  if (typeof body === "string" && body) return body;
+  if (!body || typeof body !== "object") return null;
+  const record = body as Record<string, unknown>;
+  if (typeof record.detail === "string") return record.detail;
+  if (record.detail && typeof record.detail === "object") {
+    const detail = record.detail as Record<string, unknown>;
+    const githubStatus = detail.github_status;
+    const githubBody = detail.body;
+    if (githubBody && typeof githubBody === "object") {
+      const message = (githubBody as Record<string, unknown>).message;
+      if (typeof message === "string") {
+        return `${typeof githubStatus === "number" ? `GitHub ${githubStatus}: ` : ""}${message}`;
+      }
+    }
+    if (typeof githubBody === "string") {
+      return `${typeof githubStatus === "number" ? `GitHub ${githubStatus}: ` : ""}${githubBody}`;
+    }
+  }
+  return null;
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   let body: unknown = null;
@@ -101,7 +126,12 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     }
   }
   if (!res.ok) {
-    throw new ApiError(res.status, `${res.status} ${res.statusText} for ${url}`, body);
+    const detail = apiErrorDetail(body);
+    throw new ApiError(
+      res.status,
+      detail ?? `${res.status} ${res.statusText} for ${url}`,
+      body,
+    );
   }
   // Refuse a 200 OK that isn't JSON — typically means the request fell through
   // to the SPA fallback (HTML) or a proxy interstitial, and returning that as
@@ -347,6 +377,30 @@ export async function getJuanList(textid: string): Promise<ManifestPart[]> {
 export async function getJuan(textid: string, seq: number): Promise<Juan> {
   return fetchJson<Juan>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}`,
+  );
+}
+
+export async function getBundleEdit(
+  textid: string,
+  seq: number,
+): Promise<BundleEditDocument> {
+  return fetchJson<BundleEditDocument>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit`,
+  );
+}
+
+export async function saveBundleEdit(
+  textid: string,
+  seq: number,
+  payload: BundleEditSaveRequest,
+): Promise<BundleEditSaveResponse> {
+  return fetchJson<BundleEditSaveResponse>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
   );
 }
 

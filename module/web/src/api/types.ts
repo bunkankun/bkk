@@ -151,6 +151,46 @@ export interface Juan {
   [k: string]: unknown;
 }
 
+export interface BundleEditBucket {
+  text: string;
+  markers: JuanMarker[];
+}
+
+export interface BundleEditDocument {
+  repository: string;
+  branch: string;
+  base_commit_sha: string;
+  seq: number;
+  buckets: Partial<Record<"front" | "body" | "back", BundleEditBucket>>;
+  toc_marker_ids: string[];
+}
+
+export interface BundleTextSplice {
+  start: number;
+  delete_count: number;
+  insert: string;
+}
+
+export interface BundleEditSaveRequest {
+  base_commit_sha: string;
+  bucket: "front" | "body" | "back";
+  text: string;
+  markers: JuanMarker[];
+  text_splices: BundleTextSplice[];
+  renamed_marker_ids: Record<string, string>;
+  acknowledge_toc_deletions: boolean;
+  unresolved_marker_indexes: number[];
+  message?: string;
+}
+
+export interface BundleEditSaveResponse {
+  kind: "commit" | "pull_request";
+  commit_sha: string;
+  url: string;
+  pull_request_number?: number | null;
+  removed_toc_marker_ids: string[];
+}
+
 // Annotations
 export interface AnnotationForm {
   orig?: string;

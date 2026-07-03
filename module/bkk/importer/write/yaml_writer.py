@@ -61,6 +61,30 @@ def marker_to_flow(m: dict) -> _FlowDict:
     return _FlowDict(m)
 
 
+def reflow_manifest(manifest: dict) -> None:
+    """Restore the canonical flow style of compact manifest leaf mappings.
+
+    PyYAML does not retain block-vs-flow presentation through ``safe_load``.
+    Any code that reads, modifies, and rewrites a manifest must call this
+    before :func:`dump` so high-churn lists remain one entry per line.
+    """
+    assets = manifest.get("assets")
+    if isinstance(assets, dict):
+        for key in ("parts", "markers"):
+            entries = assets.get(key)
+            if isinstance(entries, list):
+                assets[key] = [
+                    marker_to_flow(entry) if isinstance(entry, dict) else entry
+                    for entry in entries
+                ]
+    editions = manifest.get("editions")
+    if isinstance(editions, list):
+        manifest["editions"] = [
+            marker_to_flow(entry) if isinstance(entry, dict) else entry
+            for entry in editions
+        ]
+
+
 def dump(obj: Any) -> str:
     """Serialize ``obj`` to a YAML string with stable, BKK-shaped formatting."""
     return yaml.dump(
