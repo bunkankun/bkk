@@ -93,6 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="append errors and warnings to this file (default: "
              "chars-revert.log in the current directory)",
     )
+    pr.add_argument(
+        "--jobs", dest="jobs", type=int, default=1,
+        help="number of bundles to process in parallel (default: 1)",
+    )
     return p
 
 
@@ -151,6 +155,7 @@ def run(argv: list[str] | None = None) -> int:
             text_ids=args.text_ids,
             dry_run=args.dry_run,
             log_file=log_file,
+            jobs=args.jobs,
         )
 
     parser.error(f"unknown op: {args.op}")

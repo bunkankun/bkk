@@ -12,6 +12,7 @@ import copy
 import datetime
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -175,6 +176,7 @@ def run_revert(
     text_ids: list[str] | None = None,
     dry_run: bool = False,
     log_file: Path | None = None,
+    jobs: int = 1,
 ) -> int:
     """Undo substitutions emitted by ``bkk chars canonicalize``.
 
@@ -205,32 +207,56 @@ def run_revert(
         if not bundle_dirs:
             _emit_error(log_fh, f"no bundles found under {out_root}")
             return 1
+        if jobs < 1:
+            _emit_error(log_fh, f"error: jobs must be >= 1, got {jobs}")
+            return 2
 
         total_reverted = 0
         total_juans = 0
         failed: list[str] = []
         rewrote_bundles = 0
 
-        for bundle_dir in bundle_dirs:
-            text_id = bundle_dir.name
-            rel = bundle_dir.relative_to(out_root)
-            print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
-            try:
-                stats = _process_bundle_revert(
-                    bundle_dir, text_id,
-                    dry_run=dry_run,
-                    log_fh=log_fh,
-                )
-            except (RuntimeError, ValueError, FileNotFoundError) as exc:
-                _emit_error(log_fh, f"[{text_id}] error: {exc}")
-                failed.append(text_id)
-                continue
-            total_reverted += stats["reverted"]
-            total_juans += stats["juans"]
-            if stats["reverted"] or stats["manifest_changed"]:
-                rewrote_bundles += 1
-            for line in stats["lines"]:
-                print(line)
+        if jobs == 1 or len(bundle_dirs) == 1:
+            for bundle_dir in bundle_dirs:
+                text_id = bundle_dir.name
+                rel = bundle_dir.relative_to(out_root)
+                print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
+                try:
+                    stats = _run_revert_bundle(bundle_dir, dry_run=dry_run)
+                except (RuntimeError, ValueError, FileNotFoundError) as exc:
+                    _emit_error(log_fh, f"[{text_id}] error: {exc}")
+                    failed.append(text_id)
+                    continue
+                total_reverted += stats["reverted"]
+                total_juans += stats["juans"]
+                if stats["reverted"] or stats["manifest_changed"]:
+                    rewrote_bundles += 1
+                for line in stats["lines"]:
+                    print(line)
+        else:
+            max_workers = min(jobs, len(bundle_dirs))
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = {
+                    pool.submit(_run_revert_bundle, bundle_dir, dry_run=dry_run): bundle_dir
+                    for bundle_dir in bundle_dirs
+                }
+                for fut in as_completed(futures):
+                    bundle_dir = futures[fut]
+                    text_id = bundle_dir.name
+                    rel = bundle_dir.relative_to(out_root)
+                    print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
+                    try:
+                        stats = fut.result()
+                    except (RuntimeError, ValueError, FileNotFoundError) as exc:
+                        _emit_error(log_fh, f"[{text_id}] error: {exc}")
+                        failed.append(text_id)
+                        continue
+                    total_reverted += stats["reverted"]
+                    total_juans += stats["juans"]
+                    if stats["reverted"] or stats["manifest_changed"]:
+                        rewrote_bundles += 1
+                    for line in stats["lines"]:
+                        print(line)
 
         verb = "would revert" if dry_run else "reverted"
         print(
@@ -382,6 +408,19 @@ def _process_bundle_revert(
         "manifest_changed": manifest_changed,
         "lines": lines,
     }
+
+
+def _run_revert_bundle(
+    bundle_dir: Path,
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    return _process_bundle_revert(
+        bundle_dir,
+        bundle_dir.name,
+        dry_run=dry_run,
+        log_fh=None,
+    )
 
 
 def _marker_offset(marker: dict[str, Any]) -> int:

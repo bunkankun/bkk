@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 import pytest
 import yaml
@@ -353,3 +354,39 @@ def test_run_revert_recovers_orphan_stale_marker_asset(tmp_path: Path):
     )
     assert new_manifest["assets"]["markers"][0]["filename"] == asset_name
     assert new_manifest["hash"] == manifest_hash(new_manifest)
+
+
+def test_run_revert_jobs_processes_bundles_concurrently(tmp_path: Path, monkeypatch):
+    bundle_a = tmp_path / "KR0chr03"
+    bundle_b = tmp_path / "KR0chr04"
+    bundle_a.mkdir()
+    bundle_b.mkdir()
+
+    barrier = threading.Barrier(2)
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def fake_run_revert_bundle(bundle_dir: Path, *, dry_run: bool):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        barrier.wait(timeout=2)
+        with lock:
+            active -= 1
+        return {
+            "juans": 1,
+            "reverted": 0,
+            "manifest_changed": False,
+            "lines": [f"  {bundle_dir.name}: done"],
+        }
+
+    monkeypatch.setattr(
+        "bkk.chars.run._select_bundles",
+        lambda out_root, text_ids, log_fh=None: [bundle_a, bundle_b],
+    )
+    monkeypatch.setattr("bkk.chars.run._run_revert_bundle", fake_run_revert_bundle)
+
+    assert run_revert(tmp_path, text_ids=[bundle_a.name, bundle_b.name], log_file=None, jobs=2) == 0
+    assert max_active == 2
