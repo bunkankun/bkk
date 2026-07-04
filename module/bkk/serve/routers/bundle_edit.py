@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Path as PathParam, Request
 from pydantic import BaseModel, Field
 
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
+from bkk.importer.idassigner import allocate_marker_ids
 from bkk.importer.write.yaml_writer import dump, marker_to_flow, reflow_manifest
 from bkk.marker_assets import (
     VALID_BUCKETS,
@@ -50,6 +51,13 @@ class BundleEditRequest(BaseModel):
     acknowledge_toc_deletions: bool = False
     unresolved_marker_indexes: list[int] = Field(default_factory=list)
     message: str | None = None
+
+
+class MarkerIdAllocationRequest(BaseModel):
+    base_commit_sha: str
+    bucket: Literal["front", "body", "back"]
+    marker_types: list[str] = Field(min_length=1, max_length=1000)
+    occupied_ids: list[str] = Field(default_factory=list, max_length=100_000)
 
 
 def _session(request: Request) -> UserSession:
@@ -516,6 +524,9 @@ def get_bundle_edit(
     repo = _repo(state, textid)
     branch = _branch(state, session.access_token, repo)
     remote = _load_remote(session.access_token, repo, branch, textid, seq)
+    edition = ((remote["juan"].get("metadata") or {}).get("edition") or {}).get("short")
+    if not isinstance(edition, str) or not edition:
+        edition = ""
     buckets: dict[str, Any] = {}
     for bucket in VALID_BUCKETS:
         bucket_obj = remote["juan"].get(bucket)
@@ -534,6 +545,58 @@ def get_bundle_edit(
         "seq": seq,
         "buckets": buckets,
         "toc_marker_ids": sorted(toc_marker_ids(remote["manifest"], seq)),
+        "marker_id_context": {
+            "edition": edition,
+            "juan_label": f"{seq:03d}",
+        },
+    }
+
+
+@router.post("/{textid}/juan/{seq}/edit/marker-ids")
+def allocate_bundle_marker_ids(
+    request: Request,
+    payload: MarkerIdAllocationRequest,
+    textid: str = PathParam(...),
+    seq: int = PathParam(..., ge=0),
+) -> dict[str, list[str]]:
+    session = _session(request)
+    state: AppState = request.app.state.bkk
+    repo = _repo(state, textid)
+    branch = _branch(state, session.access_token, repo)
+    current_sha = _head_sha(session.access_token, repo, branch)
+    if current_sha != payload.base_commit_sha:
+        raise HTTPException(status_code=409, detail="bundle changed; reload and retry")
+    remote = _load_remote(
+        session.access_token, repo, branch, textid, seq, ref=payload.base_commit_sha,
+    )
+    if not isinstance(remote["juan"].get(payload.bucket), dict):
+        raise HTTPException(status_code=404, detail=f"bucket {payload.bucket} not found")
+    edition = ((remote["juan"].get("metadata") or {}).get("edition") or {}).get("short")
+    if not isinstance(edition, str) or not edition:
+        raise HTTPException(status_code=422, detail="juan edition short is required for marker IDs")
+    marker_types = []
+    for index, marker_type in enumerate(payload.marker_types):
+        if not isinstance(marker_type, str) or not marker_type:
+            raise HTTPException(
+                status_code=422, detail=f"marker type {index} must be a non-empty string",
+            )
+        marker_types.append(marker_type)
+    occupied = set(payload.occupied_ids)
+    for bucket in VALID_BUCKETS:
+        for marker in effective_markers_for_bucket(
+            remote["juan"], bucket, remote["marker_asset"],
+        ):
+            marker_id = marker.get("id")
+            if isinstance(marker_id, str) and marker_id:
+                occupied.add(marker_id)
+    return {
+        "ids": allocate_marker_ids(
+            marker_types,
+            text_id=textid,
+            edition=edition,
+            juan_label=f"{seq:03d}",
+            occupied_ids=occupied,
+        ),
     }
 
 

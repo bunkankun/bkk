@@ -3604,6 +3604,12 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.be-marker-list .be-marker-content {
+  color: var(--t2);
+  font-family: var(--font-cjk, serif);
+  font-size: 14px;
+  white-space: pre-wrap;
+}
 .be-list-empty, .be-empty {
   padding: 18px;
   color: var(--t3);
@@ -3639,6 +3645,12 @@ button {
 }
 .be-form-actions .danger { color: var(--red, #c44); }
 .be-unresolved-count { color: var(--red, #c44); }
+.be-punctuation-select {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.be-punctuation-select select { min-width: 90px; }
 .be-text textarea {
   flex: 1;
   min-height: 0;

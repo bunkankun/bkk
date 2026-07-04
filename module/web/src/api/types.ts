@@ -220,6 +220,10 @@ export interface BundleEditDocument {
   seq: number;
   buckets: Partial<Record<"front" | "body" | "back", BundleEditBucket>>;
   toc_marker_ids: string[];
+  marker_id_context: {
+    edition: string;
+    juan_label: string;
+  };
 }
 
 export interface BundleTextSplice {
@@ -246,6 +250,17 @@ export interface BundleEditSaveResponse {
   url: string;
   pull_request_number?: number | null;
   removed_toc_marker_ids: string[];
+}
+
+export interface BundleMarkerIdAllocationRequest {
+  base_commit_sha: string;
+  bucket: "front" | "body" | "back";
+  marker_types: string[];
+  occupied_ids: string[];
+}
+
+export interface BundleMarkerIdAllocationResponse {
+  ids: string[];
 }
 
 // Annotations

@@ -6,6 +6,7 @@ import copy
 import yaml
 
 from bkk.importer.hashing import manifest_hash, sha256_jcs, sha256_text
+from bkk.importer.idassigner import allocate_marker_ids
 from bkk.marker_assets import marker_asset_hash
 from bkk.serve.routers import bundle_edit
 
@@ -217,6 +218,67 @@ def test_edit_endpoint_allows_non_admin_user(client, monkeypatch):
         "head", "punctuation",
     ]
     assert body["toc_marker_ids"] == ["TEST0001_X_001-head"]
+    assert body["marker_id_context"] == {
+        "edition": "X",
+        "juan_label": "001",
+    }
+
+
+def test_allocate_marker_ids_starts_after_largest_occupied_suffix():
+    assert allocate_marker_ids(
+        ["punctuation", "punctuation", "custom:type"],
+        text_id="TEST0001",
+        edition="X",
+        juan_label="001",
+        occupied_ids={
+            "TEST0001_X_001-bkkpn1",
+            "TEST0001_X_001-bkkpn4",
+            "TEST0001_X_001-bkkcustom2",
+        },
+    ) == [
+        "TEST0001_X_001-bkkpn5",
+        "TEST0001_X_001-bkkpn6",
+        "TEST0001_X_001-bkkcustom3",
+    ]
+
+
+def test_marker_id_endpoint_uses_remote_context(client, monkeypatch):
+    _login(client, admin=False)
+    monkeypatch.setattr(bundle_edit, "_branch", lambda *args: "main")
+    monkeypatch.setattr(bundle_edit, "_head_sha", lambda *args: "base")
+    monkeypatch.setattr(bundle_edit, "_load_remote", lambda *args, **kwargs: _remote())
+    response = client.post(
+        "/bundles/TEST0001/juan/1/edit/marker-ids",
+        json={
+            "base_commit_sha": "base",
+            "bucket": "body",
+            "marker_types": ["punctuation", "punctuation"],
+            "occupied_ids": ["TEST0001_X_001-bkkpn3"],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "ids": [
+            "TEST0001_X_001-bkkpn4",
+            "TEST0001_X_001-bkkpn5",
+        ],
+    }
+
+
+def test_marker_id_endpoint_rejects_stale_base(client, monkeypatch):
+    _login(client, admin=True)
+    monkeypatch.setattr(bundle_edit, "_branch", lambda *args: "main")
+    monkeypatch.setattr(bundle_edit, "_head_sha", lambda *args: "newer")
+    response = client.post(
+        "/bundles/TEST0001/juan/1/edit/marker-ids",
+        json={
+            "base_commit_sha": "base",
+            "bucket": "body",
+            "marker_types": ["head"],
+            "occupied_ids": [],
+        },
+    )
+    assert response.status_code == 409
 
 
 def test_admin_save_commits_directly(client, monkeypatch):

@@ -10,6 +10,7 @@ import { ImagePanel } from "./ImagePanel";
 import { TextViewer } from "./TextViewer";
 import { TranslationViewer } from "./TranslationViewer";
 import { BundleEditor } from "./BundleEditor";
+import type { EditorPosition } from "../../lib/editorText";
 
 function InspectResizer() {
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -51,6 +52,11 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
   const selectedTranslation = useWorkspace((s) => s.selectedTranslation);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [seqsMap, setSeqsMap] = useState<Record<string, number[]>>({});
+  const [editCursor, setEditCursor] = useState<EditorPosition>({
+    offset: 0,
+    ch: null,
+    cp: null,
+  });
   const activeTab =
     pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0] ?? null;
   const activeTextTab = activeTab?.type === "text" ? activeTab : null;
@@ -269,6 +275,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
             key={`${activeTextTab.textid}:${activeTextTab.seq}`}
             textid={activeTextTab.textid}
             seq={activeTextTab.seq}
+            onCursorInfoChange={setEditCursor}
           />
         ) : showInspect ? (
           <div className="ws-split">
@@ -319,8 +326,9 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
       )}
       {!activeCoreTab && !activeDupTab && (
         <CharInfoBar
-          ch={activeTextTab?.hoverChar ?? null}
-          cp={activeTextTab?.hoverCodepoint ?? null}
+          ch={showEdit ? editCursor.ch : activeTextTab?.hoverChar ?? null}
+          cp={showEdit ? editCursor.cp : activeTextTab?.hoverCodepoint ?? null}
+          offset={showEdit ? editCursor.offset : null}
         />
       )}
     </div>

@@ -5,6 +5,7 @@ export interface EditableMarker {
   data: JuanMarker;
   originalId: string | null;
   unresolved: boolean;
+  generatedId?: boolean;
 }
 
 export function codepoints(text: string): string[] {

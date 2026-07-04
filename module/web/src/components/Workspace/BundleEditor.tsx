@@ -1,5 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { getBundleEdit, saveBundleEdit } from "../../api/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  allocateBundleMarkerIds,
+  getBundleEdit,
+  saveBundleEdit,
+} from "../../api/client";
 import type {
   BundleEditDocument,
   BundleEditSaveResponse,
@@ -13,6 +17,18 @@ import {
   type EditableMarker,
 } from "../../lib/editSplices";
 import { setBundleEditorDirty } from "../../lib/editorDirty";
+import {
+  canonicalSelectionFromDom,
+  editorPositionAt,
+  markerDomSelection,
+  parsePunctuatedText,
+  punctuationInputAllowed,
+  punctuationSetLabel,
+  punctuationSets,
+  reconcilePunctuationMarkers,
+  renderEditorText,
+  type EditorPosition,
+} from "../../lib/editorText";
 
 type BucketName = "front" | "body" | "back";
 type LoadState =
@@ -22,9 +38,13 @@ type LoadState =
 
 let nextMarkerKey = 1;
 
+function newMarkerKey(): string {
+  return `marker-${nextMarkerKey++}`;
+}
+
 function editableMarkers(markers: JuanMarker[]): EditableMarker[] {
   return markers.map((data) => ({
-    key: `marker-${nextMarkerKey++}`,
+    key: newMarkerKey(),
     data: { ...data },
     originalId: typeof data.id === "string" && data.id ? data.id : null,
     unresolved: false,
@@ -134,7 +154,16 @@ function PropertyRow({
   );
 }
 
-export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
+export function BundleEditor({
+  textid,
+  seq,
+  onCursorInfoChange,
+}: {
+  textid: string;
+  seq: number;
+  onCursorInfoChange?: (info: EditorPosition) => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
   const [bucket, setBucket] = useState<BucketName>("body");
   const [text, setText] = useState("");
@@ -144,9 +173,11 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [allocatingIds, setAllocatingIds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<BundleEditSaveResponse | null>(null);
   const [tocDeleteAcknowledged, setTocDeleteAcknowledged] = useState(false);
+  const [punctuationSet, setPunctuationSet] = useState<string | null>(null);
 
   const installBucket = (document: BundleEditDocument, nextBucket: BucketName) => {
     const value = document.buckets[nextBucket];
@@ -162,6 +193,7 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
     setSaved(null);
     setError(null);
     setTocDeleteAcknowledged(false);
+    setPunctuationSet(null);
   };
 
   const reload = () => {
@@ -207,6 +239,14 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
     [markers, category],
   );
   const selected = markers.find((marker) => marker.key === selectedKey) ?? null;
+  const availablePunctuationSets = useMemo(
+    () => punctuationSets(markers),
+    [markers],
+  );
+  const editorView = useMemo(
+    () => renderEditorText(text, markers, punctuationSet),
+    [markers, punctuationSet, text],
+  );
   const unresolvedCount = markers.filter((marker) => marker.unresolved).length;
   const validationError = useMemo(() => {
     const textLength = codepoints(text).length;
@@ -241,6 +281,19 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
     return null;
   }, [markers, text]);
 
+  const reportCursor = () => {
+    const textarea = textareaRef.current;
+    if (!textarea || !onCursorInfoChange) return;
+    onCursorInfoChange(editorPositionAt(editorView, textarea.selectionStart));
+  };
+
+  useEffect(() => {
+    if (load.status !== "ready" || !onCursorInfoChange) return;
+    const textarea = textareaRef.current;
+    const position = textarea?.selectionStart ?? 0;
+    onCursorInfoChange(editorPositionAt(editorView, position));
+  }, [editorView, load.status, onCursorInfoChange]);
+
   if (load.status === "loading") return <div className="be-empty">Loading editable bundle from GitHub…</div>;
   if (load.status === "error") {
     return (
@@ -251,6 +304,28 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
     );
   }
   const document = load.document;
+
+  const requestMarkerIds = async (
+    markerTypes: string[],
+    occupiedMarkers: EditableMarker[] = markers,
+  ): Promise<string[]> => {
+    if (markerTypes.length === 0) return [];
+    setAllocatingIds((count) => count + 1);
+    try {
+      const response = await allocateBundleMarkerIds(textid, seq, {
+        base_commit_sha: document.base_commit_sha,
+        bucket,
+        marker_types: markerTypes,
+        occupied_ids: occupiedMarkers.flatMap((marker) => {
+          const id = marker.data.id;
+          return typeof id === "string" && id ? [id] : [];
+        }),
+      });
+      return response.ids;
+    } finally {
+      setAllocatingIds((count) => Math.max(0, count - 1));
+    }
+  };
 
   const changeBucket = (nextBucket: BucketName) => {
     if (dirty && !window.confirm("Discard unsaved edits in this bucket?")) return;
@@ -267,6 +342,33 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
     setSaved(null);
   };
 
+  const changeEditorText = (nextText: string) => {
+    if (punctuationSet == null) {
+      changeText(nextText);
+      return;
+    }
+    if (!punctuationInputAllowed(editorView.text, nextText)) {
+      setError("Only punctuation can be inserted while punctuation is loaded.");
+      return;
+    }
+    const parsed = parsePunctuatedText(text, nextText);
+    if (!parsed.ok) {
+      setError(parsed.message);
+      return;
+    }
+    setMarkers((current) =>
+      reconcilePunctuationMarkers(
+        current,
+        punctuationSet,
+        parsed.punctuation,
+        newMarkerKey,
+      )
+    );
+    setDirty(true);
+    setSaved(null);
+    setError(null);
+  };
+
   const updateSelected = (data: JuanMarker, resolved = false) => {
     if (!selected) return;
     setMarkers((current) => current.map((marker) =>
@@ -275,6 +377,55 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
         : marker
     ));
     setDirty(true);
+    setSaved(null);
+  };
+
+  const changeSelectedProperty = (name: string, value: unknown) => {
+    if (!selected) return;
+    const manuallyEditedGeneratedId =
+      name === "id" &&
+      selected.generatedId === true &&
+      value !== selected.data.id;
+    const generatedTypeChange =
+      name === "type" &&
+      selected.generatedId === true &&
+      typeof value === "string" &&
+      value.length > 0 &&
+      value !== selected.data.type;
+    const data = {
+      ...selected.data,
+      [name]: value,
+      ...(generatedTypeChange ? { id: "" } : {}),
+    };
+    if (manuallyEditedGeneratedId) {
+      setMarkers((current) => current.map((marker) =>
+        marker.key === selected.key
+          ? { ...marker, data, generatedId: false }
+          : marker
+      ));
+      setDirty(true);
+      setSaved(null);
+      return;
+    }
+    updateSelected(data, name === "offset" || name === "length");
+    if (!generatedTypeChange) return;
+    const key = selected.key;
+    const type = value as string;
+    const occupied = markers.filter((marker) => marker.key !== key);
+    void requestMarkerIds([type], occupied)
+      .then(([id]) => {
+        if (!id) return;
+        setMarkers((current) => current.map((marker) =>
+          marker.key === key &&
+          marker.generatedId === true &&
+          marker.data.type === type
+            ? { ...marker, data: { ...marker.data, id } }
+            : marker
+        ));
+      })
+      .catch((reason) => {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      });
   };
 
   const deleteSelected = () => {
@@ -291,16 +442,55 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
     setDirty(true);
   };
 
-  const addMarker = () => {
-    const marker: EditableMarker = {
-      key: `marker-${nextMarkerKey++}`,
-      originalId: null,
-      unresolved: false,
-      data: { type: category === "*" ? "marker" : category, offset: 0, content: "", id: "" },
-    };
-    setMarkers((current) => [...current, marker]);
+  const selectMarker = (marker: EditableMarker) => {
     setSelectedKey(marker.key);
-    setDirty(true);
+    const selection = markerDomSelection(editorView, marker);
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(selection.start, selection.end);
+      reportCursor();
+    });
+  };
+
+  const addMarker = async () => {
+    const textarea = textareaRef.current;
+    const selection = textarea
+      ? canonicalSelectionFromDom(
+          editorView,
+          textarea.selectionStart,
+          textarea.selectionEnd,
+        )
+      : { offset: 0, length: null };
+    const type = category === "*" ? "marker" : category;
+    setError(null);
+    try {
+      const [id] = await requestMarkerIds([type]);
+      if (!id) throw new Error("Marker ID allocation returned no ID.");
+      const data: JuanMarker = {
+        type,
+        offset: selection.offset,
+        content: "",
+        id,
+      };
+      if (selection.length != null && selection.length > 1) {
+        data.length = selection.length;
+      }
+      const marker: EditableMarker = {
+        key: newMarkerKey(),
+        originalId: null,
+        unresolved: false,
+        generatedId: true,
+        data,
+      };
+      setMarkers((current) => [...current, marker]);
+      setSelectedKey(marker.key);
+      setDirty(true);
+      setSaved(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
   };
 
   const addProperty = () => {
@@ -316,28 +506,46 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
       setError(`${unresolvedCount} marker${unresolvedCount === 1 ? "" : "s"} still need offset resolution.`);
       return;
     }
-    const ordered = [...markers].sort(
-      (left, right) => Number(left.data.offset ?? 0) - Number(right.data.offset ?? 0),
-    );
-    const renamed: Record<string, string> = {};
-    for (const marker of ordered) {
-      const currentId = typeof marker.data.id === "string" ? marker.data.id : "";
-      if (marker.originalId && currentId && marker.originalId !== currentId) {
-        renamed[marker.originalId] = currentId;
-      }
-    }
-    const tocRenames = Object.keys(renamed).filter((id) =>
-      document.toc_marker_ids.includes(id)
-    );
-    if (
-      tocRenames.length > 0 &&
-      !window.confirm(
-        `${tocRenames.length} renamed marker${tocRenames.length === 1 ? " is" : "s are"} referenced by the table of contents. Update those TOC references?`,
-      )
-    ) return;
     setSaving(true);
     setError(null);
     try {
+      let workingMarkers = markers;
+      const needingIds = workingMarkers.filter((marker) =>
+        marker.generatedId === true &&
+        (typeof marker.data.id !== "string" || !marker.data.id)
+      );
+      if (needingIds.length > 0) {
+        const allocated = await requestMarkerIds(
+          needingIds.map((marker) => marker.data.type),
+        );
+        const byKey = new Map(
+          needingIds.map((marker, index) => [marker.key, allocated[index]]),
+        );
+        workingMarkers = workingMarkers.map((marker) => {
+          const id = byKey.get(marker.key);
+          return id ? { ...marker, data: { ...marker.data, id } } : marker;
+        });
+        setMarkers(workingMarkers);
+      }
+      const ordered = [...workingMarkers].sort(
+        (left, right) => Number(left.data.offset ?? 0) - Number(right.data.offset ?? 0),
+      );
+      const renamed: Record<string, string> = {};
+      for (const marker of ordered) {
+        const currentId = typeof marker.data.id === "string" ? marker.data.id : "";
+        if (marker.originalId && currentId && marker.originalId !== currentId) {
+          renamed[marker.originalId] = currentId;
+        }
+      }
+      const tocRenames = Object.keys(renamed).filter((id) =>
+        document.toc_marker_ids.includes(id)
+      );
+      if (
+        tocRenames.length > 0 &&
+        !window.confirm(
+          `${tocRenames.length} renamed marker${tocRenames.length === 1 ? " is" : "s are"} referenced by the table of contents. Update those TOC references?`,
+        )
+      ) return;
       const result = await saveBundleEdit(textid, seq, {
         base_commit_sha: document.base_commit_sha,
         bucket,
@@ -380,7 +588,13 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
             <option value="*">All marker types</option>
             {categories.map((type) => <option key={type} value={type}>{type}</option>)}
           </select>
-          <button type="button" onClick={addMarker}>Add</button>
+          <button
+            type="button"
+            onClick={() => void addMarker()}
+            disabled={allocatingIds > 0}
+          >
+            Add
+          </button>
         </div>
         <div className="be-marker-list">
           {visibleMarkers.map((marker) => (
@@ -388,10 +602,16 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
               type="button"
               key={marker.key}
               className={`${marker.key === selectedKey ? "on " : ""}${marker.unresolved ? "unresolved" : ""}`}
-              onClick={() => setSelectedKey(marker.key)}
+              onClick={() => selectMarker(marker)}
             >
               <span>{marker.data.type}</span>
-              <small>@{String(marker.data.offset ?? "?")} {String(marker.data.id ?? marker.data.content ?? "")}</small>
+              <small>
+                @{String(marker.data.offset ?? "?")}
+                {marker.data.id ? ` · ${String(marker.data.id)}` : ""}
+              </small>
+              {typeof marker.data.content === "string" && marker.data.content && (
+                <small className="be-marker-content">{marker.data.content}</small>
+              )}
             </button>
           ))}
           {visibleMarkers.length === 0 && <div className="be-list-empty">No markers</div>}
@@ -415,10 +635,7 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
                   updateSelected(data);
                 }}
                 onChange={(nextValue) =>
-                  updateSelected(
-                    { ...selected.data, [name]: nextValue },
-                    name === "offset" || name === "length",
-                  )
+                  changeSelectedProperty(name, nextValue)
                 }
                 onDelete={() => {
                   const data = { ...selected.data };
@@ -441,6 +658,25 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
+          <label className="be-punctuation-select">
+            Punctuation
+            <select
+              value={punctuationSet ?? "__off__"}
+              onChange={(event) => {
+                setPunctuationSet(
+                  event.target.value === "__off__" ? null : event.target.value,
+                );
+                setError(null);
+              }}
+            >
+              <option value="__off__">Off</option>
+              {availablePunctuationSets.map((set) => (
+                <option key={set || "__default__"} value={set}>
+                  {punctuationSetLabel(set)}
+                </option>
+              ))}
+            </select>
+          </label>
           <span>{codepoints(text).length.toLocaleString()} characters</span>
           {unresolvedCount > 0 && <span className="be-unresolved-count">{unresolvedCount} unresolved</span>}
           {validationError && <span className="be-unresolved-count">{validationError}</span>}
@@ -448,7 +684,13 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
           <button
             type="button"
             onClick={save}
-            disabled={!dirty || saving || unresolvedCount > 0 || validationError != null}
+            disabled={
+              !dirty ||
+              saving ||
+              allocatingIds > 0 ||
+              unresolvedCount > 0 ||
+              validationError != null
+            }
           >
             {saving ? "Saving…" : "Save"}
           </button>
@@ -463,10 +705,14 @@ export function BundleEditor({ textid, seq }: { textid: string; seq: number }) {
           </div>
         )}
         <textarea
-          value={text}
+          ref={textareaRef}
+          value={editorView.text}
           aria-label={`${bucket} text`}
           spellCheck={false}
-          onChange={(event) => changeText(event.target.value)}
+          onChange={(event) => changeEditorText(event.target.value)}
+          onSelect={reportCursor}
+          onKeyUp={reportCursor}
+          onClick={reportCursor}
         />
       </main>
     </div>
