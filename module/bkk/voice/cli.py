@@ -53,6 +53,7 @@ import yaml
 from bkk.importer.hashing import manifest_hash, sha256_jcs, ZERO_HASH
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
 from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
+from bkk.short_refs import text_or_path_arg
 
 from .derive import derive_voice_markers
 from .derive_indent import derive_voice_markers_from_indent
@@ -76,7 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
              "juan and write them back (master + every edition)",
     )
     pa.add_argument(
-        "bundle", type=str,
+        "bundle", type=text_or_path_arg,
         help="bundle directory, or a bare text-id resolved against "
              "voice.out / import.out / global.corpus from .bkkrc",
     )
@@ -106,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
              "edition) and refresh juan and manifest hashes; does not derive",
     )
     pr.add_argument(
-        "bundle", type=str,
+        "bundle", type=text_or_path_arg,
         help="bundle directory, or a bare text-id resolved against "
              "voice.out / import.out / global.corpus from .bkkrc",
     )

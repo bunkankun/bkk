@@ -302,7 +302,7 @@ def test_parallel_target_uses_configured_index_and_removes_stale_file(
     rc = cli_run([
         "parallel",
         "--text-id",
-        "KR0a0001",
+        "0a1",
         "--min-length",
         "12",
     ])

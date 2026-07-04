@@ -33,6 +33,8 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
+from bkk.short_refs import text_id_arg
+
 from .recipe import Recipe, RecipeError, apply_overrides, load_recipe
 
 
@@ -59,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--corpus", type=Path, default=None,
                    help="corpus root containing bundle subdirs; iterate every "
                         "bundle (filtered by --text-id / --section)")
-    p.add_argument("--text-id", dest="text_id", default=None,
+    p.add_argument("--text-id", dest="text_id", default=None, type=text_id_arg,
                    help="with --corpus: restrict to a single text id")
     p.add_argument("--section", default=None,
                    help="with --corpus: restrict to text ids starting with "

@@ -40,6 +40,7 @@ from bkk.chars.refs import (
     load_context,
 )
 from bkk.index.merge import discover_bundles, find_bundle
+from bkk.short_refs import text_id_arg
 
 
 _JUAN_RE = re.compile(
@@ -286,6 +287,7 @@ def _build_parser() -> argparse.ArgumentParser:
     group = p.add_mutually_exclusive_group()
     group.add_argument(
         "--text-id", dest="text_ids", action="append", default=None,
+        type=text_id_arg,
         help="restrict the run to the named bundle (repeatable)",
     )
     group.add_argument(

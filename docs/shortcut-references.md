@@ -32,6 +32,13 @@ This references the same span under these conditions:
 - A reference to the `front` or `back` bucket always has to be explicit, so `1h4/1/front@0+86` is clearly distinct from `1h4/1/@0+86`.
 - Use `+length`, not `-end`. `@10-86` is ambiguous because it can mean either length 86 or end offset 86.
 
+When a CLI argument expects a complete text rather than a selection, the
+juan component is omitted as well: `1h4` is shorthand for `KR1h0004`.
+This applies consistently to `--text-id`/`--textid` filters and to commands
+such as `bkk voice`, `bkk repair`, and `bkk repo` that accept a bare text ID.
+Text-only arguments reject `/juan` or slice suffixes instead of silently
+discarding the narrower selection.
+
 ## Parallel scan selectors
 
 `bkk index parallel --text-id` accepts the same compact text/juan prefix:

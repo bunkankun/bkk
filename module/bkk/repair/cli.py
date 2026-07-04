@@ -16,6 +16,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from bkk.short_refs import text_or_path_arg
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk repair")
@@ -27,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
              "files on disk (use after a multi-XML-file TLS bulk import)",
     )
     pm.add_argument(
-        "bundle", type=str,
+        "bundle", type=text_or_path_arg,
         help="bundle directory, or a bare text-id resolved against "
              "repair.out / import.out / global.corpus from .bkkrc",
     )
@@ -42,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="move bulky inline juan markers into per-juan assets/*.markers.yaml files",
     )
     px.add_argument(
-        "bundle", type=str,
+        "bundle", type=text_or_path_arg,
         help="bundle directory, or a bare text-id resolved against "
              "repair.out / import.out / global.corpus from .bkkrc",
     )

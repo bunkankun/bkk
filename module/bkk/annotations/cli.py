@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from bkk.config import load_rc
+from bkk.short_refs import text_id_arg
 
 from . import delete as _delete
 from .harvest import harvest
@@ -77,7 +78,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ("repair",   "validate + rewrite records whose anchor can be shifted to a unique nearby match"),
     ):
         s = sub.add_parser(name, help=help_text)
-        s.add_argument("text_id", nargs="?", default=None,
+        s.add_argument("text_id", nargs="?", default=None, type=text_id_arg,
                        help="restrict to a single text id (default: scan whole archive)")
         s.add_argument("--annotations-root", type=Path, default=None,
                        help="archive root (default: [annotations].annotations_root or [serve].annotations_root)")

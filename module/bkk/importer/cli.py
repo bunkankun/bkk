@@ -102,6 +102,8 @@ import re
 import sys
 from pathlib import Path
 
+from bkk.short_refs import text_id_arg
+
 from .diverge import diff_trees, render_report
 from .read.tls import read_tls
 from .recipe import Recipe, load_recipe
@@ -272,7 +274,10 @@ def build_parser() -> argparse.ArgumentParser:
                         "<annotations-out>/<text-id>/. If omitted, the "
                         "annotation layer is skipped. (Or set "
                         "import.annotations_out in .bkkrc.)")
-    p.add_argument("--text-id", default=None, help="single text id (e.g. KR6q0053)")
+    p.add_argument(
+        "--text-id", default=None, type=text_id_arg,
+        help="single text id (e.g. KR6q0053 or shortcut 6q53)",
+    )
     p.add_argument("--mapping", dest="mapping_csv", type=Path, default=None,
                    help="cbeta: CSV mapping old_id to kr_id "
                         "(default: cbeta.mapping in .bkkrc)")

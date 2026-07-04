@@ -26,6 +26,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from bkk.short_refs import text_id_arg
+
 from .refs import DEFAULT_REFS_DIR, load_context
 from .run import run_canonicalize, run_revert
 
@@ -46,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pc.add_argument(
         "--text-id", dest="text_ids", action="append", default=None,
+        type=text_id_arg,
         help="restrict the run to the named bundle (repeatable; default: "
              "every bundle under the corpus root)",
     )
@@ -81,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pr.add_argument(
         "--text-id", dest="text_ids", action="append", default=None,
+        type=text_id_arg,
         help="restrict the run to the named bundle (repeatable; default: "
              "every bundle under the corpus root)",
     )

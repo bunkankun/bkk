@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import re
 from typing import Any
 
@@ -19,6 +20,9 @@ _REF_RE = re.compile(
     r"$"
 )
 _TEXTID_RE = re.compile(r"^KR[0-9][a-z][0-9]{4}$")
+_COMPACT_TEXTID_RE = re.compile(
+    r"^(?:KR)?(?P<section>[0-9][a-z])(?P<serial>[0-9]{1,4})$"
+)
 
 
 def parse_short_ref(ref: str) -> tuple[str, dict[str, Any]]:
@@ -62,11 +66,61 @@ def parse_text_juan_selector(value: str) -> tuple[str, int | None]:
     addresses either a complete bundle or a complete juan.
     """
     selector = value.strip()
-    if _TEXTID_RE.fullmatch(selector):
-        return selector, None
+    if "/" not in selector and "\\" not in selector:
+        normalized = normalize_text_id(selector)
+        if _TEXTID_RE.fullmatch(normalized):
+            return normalized, None
     textid, selection = parse_short_ref(selector)
     if set(selection) != {"juan"}:
         raise ValueError(
             f"selector {value!r} must identify a complete text or juan"
         )
     return textid, selection["juan"]
+
+
+def normalize_text_id(value: str) -> str:
+    """Expand a compact KR text ID, preserving other identifier schemes.
+
+    ``1h4`` and ``KR1h4`` become ``KR1h0004``. Already canonical IDs are
+    unchanged. Non-KR identifiers such as CBETA's ``J01nA001`` pass through
+    because several shared CLIs accept those schemes too.
+    """
+    textid = value.strip()
+    match = _COMPACT_TEXTID_RE.fullmatch(textid)
+    if match is not None:
+        return (
+            f"KR{match.group('section')}"
+            f"{match.group('serial').zfill(4)}"
+        )
+    if "/" in textid or "\\" in textid:
+        try:
+            parsed_textid, _selection = parse_short_ref(textid)
+        except ValueError:
+            return textid
+        raise ValueError(
+            f"{value!r} selects part of {parsed_textid}; "
+            "this argument requires a complete text"
+        )
+    return textid
+
+
+def text_id_arg(value: str) -> str:
+    """``argparse`` type for text-only selectors."""
+    try:
+        return normalize_text_id(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def text_or_path_arg(value: str) -> str:
+    """Normalize a compact ID while preserving bundle-directory arguments."""
+    expanded = str(value).strip()
+    if "/" in expanded or "\\" in expanded:
+        try:
+            parse_short_ref(expanded)
+        except ValueError:
+            return expanded
+        return text_id_arg(expanded)
+    if expanded.startswith((".", "~")):
+        return expanded
+    return text_id_arg(expanded)

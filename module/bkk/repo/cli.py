@@ -32,6 +32,7 @@ import yaml
 
 from bkk.config import load_rc
 from bkk.index.merge import discover_bundles
+from bkk.short_refs import text_id_arg
 
 _GITIGNORE = """\
 *.bkkx
@@ -59,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def _scope(sp: argparse.ArgumentParser) -> None:
         sp.add_argument(
-            "prefix", nargs="?",
+            "prefix", nargs="?", type=text_id_arg,
             help="textid prefix (8/4/3 chars). Omit together with --all.",
         )
         sp.add_argument(
@@ -87,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_clone = sub.add_parser(
         "clone", help="clone bundles from the GitHub org into the corpus",
     )
-    p_clone.add_argument("prefix", nargs="?")
+    p_clone.add_argument("prefix", nargs="?", type=text_id_arg)
     p_clone.add_argument("--all", action="store_true", dest="all_flag")
     p_clone.add_argument("--dry-run", action="store_true")
 
@@ -139,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
             "list differences and optionally sync the gap"
         ),
     )
-    p_diff.add_argument("prefix", nargs="?")
+    p_diff.add_argument("prefix", nargs="?", type=text_id_arg)
     p_diff.add_argument("--all", action="store_true", dest="all_flag")
     p_diff.add_argument("--dry-run", action="store_true")
     p_diff.add_argument(

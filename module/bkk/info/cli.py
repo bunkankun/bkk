@@ -36,6 +36,7 @@ from bkk.index.schema import SCHEMA_VERSION
 from bkk.importer.hashing import manifest_hash
 from bkk.importer.write.yaml_writer import dump as dump_bkk_yaml, marker_to_flow
 from bkk.marker_assets import effective_markers_for_bucket, load_marker_asset
+from bkk.short_refs import text_id_arg
 
 _INDEX_TABLES = (
     "bundle", "juan", "bucket", "witness", "variant", "voice_range",
@@ -62,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--prefix", default=None,
                    help="restrict per-bundle table to textids starting with "
                         "PREFIX (implies --bundles)")
-    p.add_argument("--text-id", default=None, dest="text_id",
+    p.add_argument("--text-id", default=None, dest="text_id", type=text_id_arg,
                    help="show a focused per-text dossier (suppresses other "
                         "blocks)")
     p.add_argument("--readme", action="store_true",

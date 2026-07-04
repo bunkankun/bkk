@@ -30,6 +30,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from bkk.short_refs import text_id_arg
+
 from .annotations import build_annotation_index
 from .build import build_index
 from .catalog import build_catalog_index, default_catalog_csv
@@ -244,7 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--witness", action="append", default=None,
                     help="restrict witness-side matches (repeatable); "
                          "master matches are always returned")
-    ps.add_argument("--textid", default=None,
+    ps.add_argument("--textid", default=None, type=text_id_arg,
                     help="restrict to one bundle (corpus indices)")
     ps.add_argument("--voice", action="append", default=None,
                     help="restrict to hits fully contained in a voice range "
