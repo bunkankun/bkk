@@ -229,6 +229,26 @@ _PB_INLINE_RE = re.compile(r"<pb:[^>]+>")
 _MD_INLINE_RE = re.compile(r"<md:[^>]+>")
 
 
+class _OffsetBuffer(list[str]):
+    """Text fragments with an O(1) codepoint-length counter.
+
+    KRP parsing emits a marker for most punctuation and layout boundaries.
+    Computing each marker offset with ``sum(len(part) for part in text_buf)``
+    made a long, punctuated pasted text quadratic. Keep the same list
+    interface while maintaining the accumulated length on append.
+    """
+
+    length: int
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.length = 0
+
+    def append(self, value: str) -> None:
+        super().append(value)
+        self.length += len(value)
+
+
 def _clean_head_text(raw: str) -> str:
     """Strip layout markup from a JUAN directive value.
 
@@ -269,7 +289,7 @@ def _parse_juan_text(text: str, juan_seq: int,
     """
     sections: list[Section] = []
 
-    text_buf: list[str] = []
+    text_buf = _OffsetBuffer()
     markers: list[Marker] = []
     pending_head_text = ""
     head_text = ""
@@ -281,7 +301,7 @@ def _parse_juan_text(text: str, juan_seq: int,
     pending_newlines = 0
 
     def offset() -> int:
-        return sum(len(p) for p in text_buf)
+        return text_buf.length
 
     def close_section() -> None:
         nonlocal text_buf, markers, head_text, head_marker_id
@@ -291,7 +311,7 @@ def _parse_juan_text(text: str, juan_seq: int,
             text="".join(text_buf),
             markers=markers,
         ))
-        text_buf = []
+        text_buf = _OffsetBuffer()
         markers = []
         head_text = ""
         head_marker_id = ""

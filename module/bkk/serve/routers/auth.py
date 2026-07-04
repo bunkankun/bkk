@@ -69,6 +69,7 @@ def _github_headers(token: str) -> dict[str, str]:
 
 
 def _github_json(method: str, path: str, token: str, **kwargs: Any) -> Any:
+    expected_statuses = set(kwargs.pop("expected_statuses", ()))
     url = path if path.startswith("https://") else f"{GITHUB_API}{path}"
     try:
         r = requests.request(
@@ -86,7 +87,8 @@ def _github_json(method: str, path: str, token: str, **kwargs: Any) -> Any:
             detail = r.json()
         except ValueError:
             detail = r.text
-        log.warning(
+        log_method = log.debug if r.status_code in expected_statuses else log.warning
+        log_method(
             "GitHub API error: %s %s -> %s: %r",
             method,
             path,
@@ -318,7 +320,7 @@ def github_start(request: Request) -> RedirectResponse:
         {
             "client_id": client_id,
             "redirect_uri": _callback_url(request),
-            "scope": "repo read:user read:org",
+            "scope": "repo delete_repo read:user read:org",
             "state": oauth_state,
         }
     )

@@ -41,14 +41,16 @@ from .annotations_write import _require_user
 router = APIRouter(tags=["annotations"])
 
 
-def _ann_path(state: AppState, textid: str, seq: int) -> Path | None:
+def _ann_path(
+    state: AppState, textid: str, seq: int, owner: str | None = None,
+) -> Path | None:
     """Return the bkk-annotations JSONL path for ``(textid, seq)`` if any."""
+    rec = state.lookup_visible_bundle(textid, owner)
+    if rec is None:
+        raise errors.bundle_not_found(textid)
     root = state.annotations_root
     if root is None:
         return None
-    rec = state.lookup_bundle(textid)
-    if rec is None:
-        raise errors.bundle_not_found(textid)
     candidate = root / textid / f"{textid}_{seq:03d}.ann.jsonl"
     return candidate if candidate.exists() else None
 
@@ -793,7 +795,8 @@ def get_juan_annotations(
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
 ) -> list[AnnotationOut]:
     state = request.app.state.bkk
-    path = _ann_path(state, textid, seq)
+    session = state.sessions.get(request.cookies.get("bkk_session"))
+    path = _ann_path(state, textid, seq, session.login if session else None)
     if path is None:
         return []
     return _load_annotations(path, state)

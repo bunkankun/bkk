@@ -33,6 +33,7 @@ from .routers import search as search_router
 from .routers import texts as texts_router
 from .routers import translations as translations_router
 from .routers import workspace as workspace_router
+from .routers import user_texts as user_texts_router
 from .state import AppState
 from .static import mount_spa
 
@@ -115,6 +116,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             {"name": "recipes", "description": "Recipe-as-request: assemble pinned slices."},
             {"name": "auth", "description": "GitHub login and per-user BKK workspace setup."},
             {"name": "workspace", "description": "GitHub-backed user workspace files."},
+            {"name": "user-texts", "description": "Owner-scoped text import and publication."},
             {"name": "admin", "description": "Maintenance: rebuild indexes, validate bundles."},
             {"name": "redirects", "description": "Cross-tree convenience redirects."},
             {"name": "meta", "description": "Server health and configuration."},
@@ -156,6 +158,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(recipes_router.router, prefix="/api")
     app.include_router(auth_router.router, prefix="/api")
     app.include_router(workspace_router.router, prefix="/api")
+    app.include_router(user_texts_router.router, prefix="/api")
     app.include_router(admin_router.router, prefix="/api")
     app.include_router(duplications_router.router, prefix="/api")
     app.include_router(redirects_router.router, prefix="/api")

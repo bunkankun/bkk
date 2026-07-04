@@ -93,6 +93,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bundle-github-branch", default=None,
                    help="base branch for bundle edits "
                         "(default: auto-detect each repository's default branch)")
+    p.add_argument(
+        "--user-texts-root",
+        type=Path,
+        default=None,
+        help="owner-partitioned cache for private user bundles "
+             "(default: sibling of the corpus root)",
+    )
     return p
 
 
@@ -134,6 +141,7 @@ def run(argv: list[str] | None = None) -> int:
         workspace_repo_name=args.workspace_repo_name,
         bundle_github_org=args.bundle_github_org,
         bundle_github_branch=args.bundle_github_branch,
+        user_texts_root=args.user_texts_root,
     )
 
     import uvicorn

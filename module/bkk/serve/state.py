@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import threading
 import time
@@ -19,7 +20,7 @@ from bkk.index.merge import find_bundle
 
 from .catalog import CatalogService
 from .config import ServeConfig
-from .resolver import BundleRecord, CorpusCache, IdentifierResolver
+from .resolver import BundleRecord, CorpusCache, IdentifierResolver, build_snapshot
 
 if TYPE_CHECKING:
     from .contributions_feed import ContributionFeed
@@ -228,6 +229,13 @@ class AppState:
     _canon_ctx: CanonicalizationContext | None = field(default=None, repr=False)
     _canon_ctx_loaded: bool = field(default=False, repr=False)
     _canon_ctx_error: str | None = field(default=None, repr=False)
+    _user_text_statuses: dict[tuple[str, str], dict[str, Any]] = field(
+        default_factory=dict, repr=False
+    )
+    _user_text_previews: dict[str, dict[str, Any]] = field(
+        default_factory=dict, repr=False
+    )
+    _user_text_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @property
     def corpus_root(self) -> Path:
@@ -322,6 +330,93 @@ class AppState:
             return None
         path = rec.bundle_dir / f"{textid}.bkkx"
         return path if path.exists() else None
+
+    @property
+    def user_texts_root(self) -> Path:
+        assert self.config.user_texts_root is not None
+        return self.config.user_texts_root
+
+    def user_text_dir(self, owner: str, textid: str) -> Path:
+        if not re.fullmatch(r"[A-Za-z0-9-]+", owner):
+            raise ValueError("invalid GitHub owner")
+        if not re.fullmatch(r"KR\d+[a-z]\d{4}", textid):
+            raise ValueError("invalid user text ID")
+        return self.user_texts_root / owner / textid
+
+    def user_text_records(self, owner: str) -> list[BundleRecord]:
+        root = self.user_texts_root / owner
+        if not root.is_dir():
+            return []
+        return build_snapshot(root).records
+
+    def lookup_user_text(self, owner: str, textid: str) -> BundleRecord | None:
+        try:
+            bundle_dir = self.user_text_dir(owner, textid)
+        except ValueError:
+            return None
+        manifest_path = bundle_dir / f"{textid}.manifest.yaml"
+        if not manifest_path.is_file():
+            return None
+        try:
+            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+            if not isinstance(manifest, dict):
+                return None
+            return BundleRecord(
+                textid=textid,
+                bundle_dir=bundle_dir,
+                manifest_path=manifest_path,
+                manifest=manifest,
+                mtime=manifest_path.stat().st_mtime,
+            )
+        except (OSError, yaml.YAMLError):
+            return None
+
+    def lookup_visible_bundle(
+        self, textid: str, owner: str | None = None,
+    ) -> BundleRecord | None:
+        if owner:
+            private = self.lookup_user_text(owner, textid)
+            if private is not None:
+                return private
+        return self.lookup_bundle(textid)
+
+    def visible_bundle_records(self, owner: str | None = None) -> list[BundleRecord]:
+        records = list(self.cache.get().records)
+        if owner:
+            records.extend(self.user_text_records(owner))
+        return records
+
+    def user_text_index_path(self, owner: str, textid: str) -> Path | None:
+        path = self.user_text_dir(owner, textid) / f"{textid}.bkkx"
+        return path if path.is_file() else None
+
+    def open_user_text_indexes(self, owner: str | None) -> list[Index]:
+        if not owner:
+            return []
+        indexes: list[Index] = []
+        for rec in self.user_text_records(owner):
+            path = rec.bundle_dir / f"{rec.textid}.bkkx"
+            if path.is_file():
+                indexes.append(Index(path, canon_ctx=self.canon_ctx))
+        return indexes
+
+    def set_user_text_status(
+        self, owner: str, textid: str, **values: Any,
+    ) -> dict[str, Any]:
+        with self._user_text_lock:
+            key = (owner, textid)
+            current = dict(self._user_text_statuses.get(key, {}))
+            current.update(values)
+            self._user_text_statuses[key] = current
+            return dict(current)
+
+    def user_text_status(self, owner: str, textid: str) -> dict[str, Any]:
+        with self._user_text_lock:
+            return dict(self._user_text_statuses.get((owner, textid), {}))
+
+    def delete_user_text_status(self, owner: str, textid: str) -> None:
+        with self._user_text_lock:
+            self._user_text_statuses.pop((owner, textid), None)
 
     def open_bundle_index(self, textid: str) -> Index | None:
         """Open the per-bundle ``.bkkx``, or ``None`` if missing."""

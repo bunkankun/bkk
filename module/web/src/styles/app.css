@@ -756,6 +756,172 @@ button {
 .settings-select:focus {
   border-color: var(--amb);
 }
+.settings-divider {
+  height: 1px;
+  margin: 10px 0;
+  background: var(--bdr);
+}
+.settings-action,
+.user-text-dialog button {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg-act);
+  color: var(--t1);
+  font: inherit;
+  cursor: pointer;
+}
+.settings-action:disabled,
+.user-text-dialog button:disabled {
+  cursor: default;
+  opacity: .5;
+}
+.settings-help {
+  margin: 6px 0 0;
+  color: var(--t3);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.settings-user-texts {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.settings-user-text {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--bg-act);
+}
+.settings-user-text-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.settings-user-text-id {
+  color: var(--t1);
+  font-size: 12px;
+}
+.settings-user-text-title {
+  color: var(--t3);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-delete {
+  border-color: var(--red, #c44);
+  color: var(--red, #c44);
+}
+.settings-delete:hover {
+  border-color: var(--red, #c44);
+  background: color-mix(in srgb, var(--red, #c44) 12%, transparent);
+}
+.settings-error {
+  color: var(--red, #c44);
+}
+.user-text-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--t1);
+}
+.user-text-dialog::backdrop {
+  background: rgb(0 0 0 / .55);
+}
+.user-text-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bdr);
+}
+.user-text-head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.user-text-head button {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+}
+.user-text-form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.user-text-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--t2);
+  font-size: 12px;
+}
+.user-text-form input,
+.user-text-form select,
+.user-text-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg-act);
+  color: var(--t1);
+  font: inherit;
+}
+.user-text-form textarea {
+  resize: vertical;
+}
+.user-text-or,
+.user-text-summary,
+.user-text-files {
+  color: var(--t3);
+  font-size: 11px;
+}
+.user-text-or {
+  margin: -5px 0;
+  text-align: center;
+  text-transform: uppercase;
+}
+.user-text-files {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.user-text-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.user-text-dialog button.primary {
+  border-color: var(--amb);
+  background: var(--amb);
+  color: #111;
+}
+.user-text-error,
+.user-text-warnings {
+  margin: 0 16px 16px;
+  padding: 9px;
+  border: 1px solid var(--red, #c44);
+  border-radius: 4px;
+  color: var(--red, #c44);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+.user-text-warnings {
+  margin: 0;
+  border-color: var(--amb);
+  color: var(--amb);
+}
 .cat-add-list {
   width: 22px;
   height: 22px;
@@ -770,6 +936,28 @@ button {
   border-color: var(--amb);
   color: var(--amb);
   background: var(--amb-d);
+}
+.cat-user-status {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 4px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  font-size: 9px;
+  line-height: 14px;
+}
+.cat-user-status.ready {
+  border-color: var(--grn);
+  color: var(--grn);
+}
+.cat-user-status.pending,
+.cat-user-status.indexing {
+  border-color: var(--amb);
+  color: var(--amb);
+}
+.cat-user-status.failed {
+  border-color: var(--red, #c44);
+  color: var(--red, #c44);
 }
 .lists-panel {
   display: flex;

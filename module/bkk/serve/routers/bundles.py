@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+from bkk.index import Index
 from fastapi import APIRouter, Path as PathParam, Query, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
@@ -24,12 +25,19 @@ from ..schemas import (
 )
 from ..state import AppState
 from .. import selection
+from .auth import SESSION_COOKIE
 
 router = APIRouter(prefix="/bundles", tags=["bundles"])
 
 
-def _record(state: AppState, textid: str) -> BundleRecord:
-    rec = state.lookup_bundle(textid)
+def _owner(request: Request) -> str | None:
+    session = request.app.state.bkk.sessions.get(request.cookies.get(SESSION_COOKIE))
+    return session.login if session is not None else None
+
+
+def _record(request: Request, textid: str) -> BundleRecord:
+    state: AppState = request.app.state.bkk
+    rec = state.lookup_visible_bundle(textid, _owner(request))
     if rec is None:
         raise errors.bundle_not_found(textid)
     return rec
@@ -64,7 +72,7 @@ def list_bundles(
     offset: int = Query(0, ge=0),
 ) -> BundleListResponse:
     state: AppState = request.app.state.bkk
-    records = state.cache.get().records
+    records = state.visible_bundle_records(_owner(request))
     if prefix:
         records = [r for r in records if r.textid.startswith(prefix)]
     total = len(records)
@@ -81,7 +89,7 @@ def list_bundles(
     summary="Bundle summary (textid, canonical id, title, editions)",
 )
 def get_bundle(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> BundleSummary:
-    rec = _record(request.app.state.bkk, textid)
+    rec = _record(request, textid)
     return _summary_from_manifest(rec.textid, rec.manifest)
 
 
@@ -92,7 +100,7 @@ def get_bundle(request: Request, textid: str = PathParam(..., openapi_examples=e
 )
 def get_manifest(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> dict[str, Any]:
     state: AppState = request.app.state.bkk
-    rec = _record(state, textid)
+    rec = _record(request, textid)
     return _manifest_with_image_overrides(rec.manifest, state)
 
 
@@ -116,9 +124,24 @@ def bundle_search(
     ),
 ) -> BundleSearchResponse:
     state: AppState = request.app.state.bkk
-    _record(state, textid)  # 404 if unknown textid
+    rec = _record(request, textid)  # 404 if unknown textid
     # Prefer the per-bundle .bkkx; fall back to the corpus index with textid filter.
-    ix = state.open_bundle_index(textid) or state.open_index()
+    private_index = rec.bundle_dir / f"{textid}.bkkx"
+    is_private = False
+    owner = _owner(request)
+    if owner:
+        try:
+            rec.bundle_dir.relative_to(state.user_texts_root / owner)
+            is_private = True
+        except ValueError:
+            pass
+    if is_private and not private_index.is_file():
+        raise errors.index_unavailable("user text indexing is still pending")
+    ix = (
+        Index(private_index, canon_ctx=state.canon_ctx)
+        if private_index.is_file()
+        else state.open_index()
+    )
     if ix is None:
         raise errors.index_unavailable(state._index_error or "index not built")
     cap = state.config.max_search_hits
@@ -194,7 +217,7 @@ def _local_file_image_path(base_url: str, image_path: str) -> Path | None:
     summary="List of juan declared in the manifest's assets.parts",
 )
 def list_juan(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> list[dict[str, Any]]:
-    rec = _record(request.app.state.bkk, textid)
+    rec = _record(request, textid)
     parts = (rec.manifest.get("assets") or {}).get("parts") or []
     return list(parts)
 
@@ -209,7 +232,7 @@ def get_juan(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
 ) -> dict[str, Any]:
-    rec = _record(request.app.state.bkk, textid)
+    rec = _record(request, textid)
     return selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
 
 
@@ -259,7 +282,7 @@ def get_juan_slice(
         openapi_examples=ex.SLICE_TOC,
     ),
 ) -> JuanSliceOut:
-    rec = _record(request.app.state.bkk, textid)
+    rec = _record(request, textid)
     forms_used = sum(
         1 for f in (from_ or to, offset is not None or length is not None, toc) if f
     )
@@ -325,7 +348,7 @@ def get_juan_bucket(
         raise errors.bad_request(
             "bad_bucket", bucket=bucket, valid=list(VALID_BUCKETS)
         )
-    rec = _record(request.app.state.bkk, textid)
+    rec = _record(request, textid)
     juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
     return juan.get(bucket) or {}
 
@@ -345,7 +368,7 @@ def get_juan_bucket_text(
         raise errors.bad_request(
             "bad_bucket", bucket=bucket, valid=list(VALID_BUCKETS)
         )
-    rec = _record(request.app.state.bkk, textid)
+    rec = _record(request, textid)
     juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
     body = juan.get(bucket) or {}
     text = body.get("text") if isinstance(body, dict) else ""
@@ -385,7 +408,7 @@ def get_juan_bucket_markers(
         raise errors.bad_request(
             "bad_bucket", bucket=bucket, valid=list(VALID_BUCKETS)
         )
-    rec = _record(request.app.state.bkk, textid)
+    rec = _record(request, textid)
     juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
     body = juan.get(bucket) or {}
     markers = body.get("markers") or [] if isinstance(body, dict) else []
@@ -416,7 +439,7 @@ def get_local_image(
     image_path: str = PathParam(..., description="image path from the page-break marker"),
 ) -> Response:
     state: AppState = request.app.state.bkk
-    rec = _record(state, textid)
+    rec = _record(request, textid)
     manifest = _manifest_with_image_overrides(rec.manifest, state)
     base_url = _image_base_url(manifest, edition)
     if base_url is None:
@@ -447,7 +470,7 @@ def _asset_entries(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 def list_assets(
     request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)
 ) -> BundleAssetsResponse:
-    rec = _record(request.app.state.bkk, textid)
+    rec = _record(request, textid)
     out: list[BundleAsset] = []
     for entry in _asset_entries(rec.manifest):
         name = entry.get("filename") or entry.get("name")
@@ -476,7 +499,7 @@ def get_asset(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     name: str = PathParam(..., openapi_examples=ex.ASSET_NAME),
 ) -> Response:
-    rec = _record(request.app.state.bkk, textid)
+    rec = _record(request, textid)
     declared = {
         entry.get("filename") or entry.get("name")
         for entry in _asset_entries(rec.manifest)

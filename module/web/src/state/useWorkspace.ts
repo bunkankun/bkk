@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from "react";
 import {
   ApiError,
+  clearSessionCaches,
   deleteWorkspaceFile,
   getAuthSession,
   getWorkspaceFile,
@@ -17,6 +18,7 @@ import {
   searchParallel,
   searchTextids,
   searchTranslationSegments,
+  syncUserTexts,
 } from "../api/client";
 import type {
   Annotation,
@@ -2218,7 +2220,10 @@ export const workspace = {
         },
       };
       notify();
-      if (session.authenticated) void loadWorkspacePersistence();
+      if (session.authenticated) {
+        void loadWorkspacePersistence();
+        void syncUserTexts().catch(() => undefined);
+      }
     } catch (e) {
       state = {
         ...state,
@@ -2233,6 +2238,7 @@ export const workspace = {
   },
   async logout() {
     await logoutRequest();
+    clearSessionCaches();
     restoredSessionOnce = false;
     state = {
       ...state,

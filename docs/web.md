@@ -47,6 +47,7 @@ To exercise the prod bundle against the same GitHub OAuth app used for vite dev,
 | `--corpus PATH`           | `BKK_CORPUS_ROOT`     | required; bundle root |
 | `--index PATH`            | `BKK_INDEX_PATH`      | merged `.bkkx`; default `<corpus>/_corpus.bkkx` |
 | `--catalog PATH`          | `BKK_CATALOG_PATH`    | catalog `.bkkc`; default `<corpus>/_catalog.bkkc` |
+| `--user-texts-root PATH`  | `BKK_USER_TEXTS_ROOT` | validated owner-partitioned cache outside the shared corpus |
 | `--host` / `--port`       | `BKK_HOST` / `BKK_PORT` | default `127.0.0.1:8000` |
 | `--admin-team ORG/SLUG`   | `BKK_ADMIN_TEAM`      | GitHub team for `/admin/*` access (default `bunkankun/bkk-admin`); members get the Admin activity in the SPA |
 | —                         | `BKK_SOURCE_ROOT`     | git checkout used by `POST /admin/update` and `POST /admin/restart`; auto-detected for editable installs |
@@ -71,6 +72,13 @@ CLI flags override env vars.
 - The menubar logo tooltip reports the configured `upstream_repo`; the search bar sits at the right next to the theme selector and GitHub login/user controls
 - Full-text search (Menubar) with five sort modes; results render in a Search tab on the right panel and clicking a hit scrolls + flashes the matched span in the workspace for 15s
 - User text lists live in the left activity bar's Lists view. Lists are plain `lists/*.txt` files: a KR id in the first token of a line counts as membership, while comments and other line content are ignored. Anonymous lists persist locally; logged-in lists sync through the GitHub workspace. Active lists mark search hits; when a search is open they also appear as colored list facets, where the user can switch list filtering between badges-only, Any, and All.
+- Logged-in users create private texts from **Settings → New user text**.
+  The wizard accepts pasted or uploaded KRP, TLS, or CBETA source, confirms a
+  detected ID (or suggests the next owner-local `KR9a####` ID), applies
+  `bkk chars canonicalize`, validates the bundle, and creates a private
+  `<github-user>/<text-id>` repository. The text is readable and visible in
+  that owner's Catalog immediately; its badge changes to `search ready` after
+  background indexing. Other users and anonymous requests receive 404.
 
 For lists:
 

@@ -14,6 +14,7 @@ from bkk.serve.schemas import (
     TranslationSearchResponse,
 )
 from bkk.serve.state import AppState
+from bkk.serve.routers.auth import SESSION_COOKIE
 from bkk.serve.translations import (
     align_translation,
     get_segment_translations,
@@ -163,7 +164,10 @@ def bundle_translations(
     offset: int = Query(0, ge=0),
 ) -> TranslationListResponse:
     state: AppState = request.app.state.bkk
-    if state.lookup_bundle(textid) is None:
+    session = state.sessions.get(request.cookies.get(SESSION_COOKIE))
+    if state.lookup_visible_bundle(
+        textid, session.login if session else None,
+    ) is None:
         raise errors.bundle_not_found(textid)
     conn = state.open_catalog()
     if conn is not None:
@@ -204,7 +208,8 @@ def juan_translation_alignment(
     translation_id: str = PathParam(...),
 ) -> TranslationAlignmentResponse:
     state: AppState = request.app.state.bkk
-    rec = state.lookup_bundle(textid)
+    session = state.sessions.get(request.cookies.get(SESSION_COOKIE))
+    rec = state.lookup_visible_bundle(textid, session.login if session else None)
     if rec is None:
         raise errors.bundle_not_found(textid)
     translation = None

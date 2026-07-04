@@ -440,6 +440,9 @@ function CatalogBundleRow({
   paddingLeft: number;
 }) {
   const lists = useWorkspace((s) => s.textLists);
+  const userIndexStatus = match.metadata?.source === "user"
+    ? String(match.metadata.index_status ?? "pending")
+    : null;
   const addToList = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (lists.length === 0) {
@@ -489,6 +492,11 @@ function CatalogBundleRow({
         <div className="list-sub">
           <span className={krClass(match.textid)}>{match.textid}</span>
           {match.edition_short ? ` · ${match.edition_short}` : ""}
+          {userIndexStatus ? (
+            <span className={`cat-user-status ${userIndexStatus}`}>
+              {userIndexStatus === "ready" ? "search ready" : userIndexStatus}
+            </span>
+          ) : null}
           {matchAltIds(match).length > 0 ? (
             <span className="cat-alt-ids"> {matchAltIds(match).join(" ")}</span>
           ) : null}

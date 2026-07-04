@@ -46,6 +46,8 @@ class ServeConfig:
     # "auto" follows each repository's GitHub default_branch. An explicit
     # branch remains available for deployments with a uniform branch policy.
     bundle_github_branch: str = "auto"
+    user_texts_root: Path | None = None
+    user_text_upload_limit: int = 20 * 1024 * 1024
     # Bluesky write/feed UI and atproto-backed endpoints are opt-in. Keep the
     # comparison exact so the deploy knob is unambiguous:
     # ``BKK_BLUESKY_ENABLE=True``.
@@ -67,6 +69,12 @@ class ServeConfig:
         if self.annotations_index_path is None and self.annotations_root is not None:
             object.__setattr__(
                 self, "annotations_index_path", self.annotations_root / "_annotations.bkka"
+            )
+        if self.user_texts_root is None:
+            object.__setattr__(
+                self,
+                "user_texts_root",
+                self.corpus_root.parent / f"_{self.corpus_root.name}_user_texts",
             )
 
     @classmethod
@@ -300,6 +308,22 @@ class ServeConfig:
             "BKK_BUNDLE_GITHUB_BRANCH",
             str(rc.get("bundle_github_branch", "auto")),
         )
+        env_user_texts_root = os.environ.get("BKK_USER_TEXTS_ROOT")
+        user_texts_root = (
+            Path(env_user_texts_root).resolve()
+            if env_user_texts_root
+            else (
+                Path(rc["user_texts_root"]).resolve()
+                if rc.get("user_texts_root")
+                else None
+            )
+        )
+        user_text_upload_limit = int(
+            os.environ.get(
+                "BKK_USER_TEXT_UPLOAD_LIMIT",
+                rc.get("user_text_upload_limit", 20 * 1024 * 1024),
+            )
+        )
 
         env_source_branch = os.environ.get("BKK_SOURCE_BRANCH")
         source_branch = (
@@ -378,6 +402,8 @@ class ServeConfig:
             source_branch=source_branch,
             bundle_github_org=bundle_github_org,
             bundle_github_branch=bundle_github_branch,
+            user_texts_root=user_texts_root,
+            user_text_upload_limit=user_text_upload_limit,
             max_search_hits=max_search_hits,
             duplications_report_path=duplications_report_path,
         )
@@ -413,6 +439,7 @@ class ServeConfig:
         source_branch: str | None = None,
         bundle_github_org: str | None = None,
         bundle_github_branch: str | None = None,
+        user_texts_root: Path | str | None = None,
     ) -> "ServeConfig":
         """Return a copy with any non-``None`` argument overriding the field."""
         updates: dict = {}
@@ -472,4 +499,6 @@ class ServeConfig:
             updates["bundle_github_org"] = bundle_github_org
         if bundle_github_branch is not None:
             updates["bundle_github_branch"] = bundle_github_branch
+        if user_texts_root is not None:
+            updates["user_texts_root"] = Path(user_texts_root).resolve()
         return replace(self, **updates)

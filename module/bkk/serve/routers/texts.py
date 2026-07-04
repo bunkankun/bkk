@@ -37,6 +37,7 @@ from ..schemas import (
     MultipleChoicesResponse,
 )
 from . import bundles as bundles_router
+from .auth import SESSION_COOKIE
 
 router = APIRouter(prefix="/texts", tags=["texts"])
 
@@ -92,8 +93,25 @@ def _resolve_or_respond(
     request: Request, identifier: str
 ) -> tuple[BundleRef | None, JSONResponse | None]:
     """Run resolution; return either ``(ref, None)`` or ``(None, response)``."""
-    resolver: IdentifierResolver = request.app.state.bkk.resolver
+    state = request.app.state.bkk
+    resolver: IdentifierResolver = state.resolver
     chosen, candidates = _resolve(resolver, identifier)
+    session = state.sessions.get(getattr(request, "cookies", {}).get(SESSION_COOKIE))
+    if session is not None:
+        head, edition = _split_edition(identifier)
+        for rec in state.user_text_records(session.login):
+            values: list[str] = [rec.textid]
+            if rec.canonical_identifier:
+                values.append(rec.canonical_identifier)
+            for value in rec.identifiers.values():
+                if isinstance(value, str):
+                    values.append(value)
+                elif isinstance(value, list):
+                    values.extend(str(item) for item in value)
+            ref = rec.to_ref()
+            if head in values and (edition is None or ref.edition_short == edition):
+                candidates.append(ref)
+        chosen = resolver.disambiguate(candidates)
     if not candidates:
         raise errors.bad_request(
             "identifier_not_found", identifier=identifier

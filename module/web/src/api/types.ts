@@ -21,6 +21,63 @@ export interface BundleListResponse {
   limit: number;
 }
 
+export type UserTextFormat = "krp" | "tls" | "cbeta";
+
+export interface UserTextSourceFile {
+  name: string;
+  content: string;
+}
+
+export interface UserTextFinding {
+  rule_id: string;
+  severity: "error" | "warning";
+  path: string;
+  message: string;
+}
+
+export interface UserTextPreview {
+  preview_token: string;
+  format: UserTextFormat;
+  detected_text_id?: string | null;
+  suggested_text_id: string;
+  title?: string | null;
+  source_files: string[];
+  substitution_count: number;
+  findings: UserTextFinding[];
+  first_seq: number;
+}
+
+export interface UserTextCreateResult {
+  text_id: string;
+  title: string;
+  repository: string;
+  repository_url?: string | null;
+  commit_sha: string;
+  first_seq: number;
+  substitution_count: number;
+  findings: UserTextFinding[];
+  index_status: "pending" | "indexing" | "ready" | "failed";
+}
+
+export interface UserTextListItem {
+  text_id: string;
+  title: string;
+  index_status: "pending" | "indexing" | "ready" | "failed";
+  sync_status: "ready" | "registry-error" | "failed" | "syncing";
+  repository?: string;
+  repository_url?: string | null;
+  commit_sha?: string;
+  index_error?: string;
+  sync_error?: string;
+}
+
+export interface UserTextDeleteResult {
+  text_id: string;
+  deleted: boolean;
+  github_deleted: boolean;
+  github_delete_error?: string | null;
+}
+
 export interface CatalogMatch {
   textid: string;
   canonical_identifier?: string | null;

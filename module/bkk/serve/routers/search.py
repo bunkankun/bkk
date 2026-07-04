@@ -32,6 +32,13 @@ from ..schemas import (
     SearchTextidsResponse,
     TrigramExtension,
 )
+from .auth import SESSION_COOKIE
+
+
+def _request_owner(request: Request) -> str | None:
+    cookies = getattr(request, "cookies", {})
+    session = request.app.state.bkk.sessions.get(cookies.get(SESSION_COOKIE))
+    return session.login if session else None
 
 
 Sort = Literal["match", "textid", "reverse_prematch", "date", "closeness"]
@@ -209,12 +216,15 @@ def _catalog_meta_from_index(request: Request) -> dict[str, _CatalogMeta]:
 
 def _catalog_meta(request: Request, snap: CorpusSnapshot | None) -> dict[str, _CatalogMeta]:
     indexed = _catalog_meta_from_index(request)
-    if indexed:
-        return indexed
+    state = request.app.state.bkk
     if snap is None:
-        snap = request.app.state.bkk.cache.get()
-    out: dict[str, _CatalogMeta] = {}
-    for rec in snap.records:
+        snap = state.cache.get()
+    out: dict[str, _CatalogMeta] = dict(indexed)
+    owner = _request_owner(request)
+    records = [] if indexed else list(snap.records)
+    if owner is not None:
+        records.extend(state.user_text_records(owner))
+    for rec in records:
         m = _SECTION_RE.match(rec.textid)
         section = m.group(1) if m else None
         out[rec.textid] = _CatalogMeta(
@@ -577,8 +587,10 @@ def _search_hits(
     max_results: int | None = None,
 ) -> tuple[list[Hit], dict[str, _CatalogMeta], set[str] | None, set[str], set[str] | None, set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], CorpusSnapshot | None, IndexSummary | None]:
     state = request.app.state.bkk
-    ix = state.open_index()
-    if ix is None:
+    primary = state.open_index()
+    owner = _request_owner(request)
+    indexes = ([primary] if primary is not None else []) + state.open_user_text_indexes(owner)
+    if not indexes:
         raise errors.index_unavailable(state._index_error or "index not built")
     cap = max_results if max_results is not None else state.config.max_search_hits
 
@@ -603,28 +615,48 @@ def _search_hits(
     selected_around_binom = _selected(around_binom)
     excluded_around_binom = _selected(around_binom_not)
     if voices is not None:
-        available = set(ix.available_voices())
+        available = {
+            value for index in indexes for value in index.available_voices()
+        }
         unknown = voices - available
         if unknown:
-            ix.close()
+            for index in indexes:
+                index.close()
             raise errors.bad_request(
                 "unknown_voice",
                 unknown=sorted(unknown),
                 available=sorted(available),
             )
     try:
-        candidates, _raw_total = ix.candidates_and_total(q)
-        # Cap check uses the scope-aware summary so a tightly-scoped query
-        # whose unscoped total is huge still falls back to the normal hit
-        # path when the scoped subset fits under the limit.
-        summary = ix.summarise(
-            q,
-            candidates=candidates,
-            textids=scoped_textids or None,
-            witnesses=witnesses,
-            master_only=master_only,
+        prepared: list[tuple[Any, dict, IndexSummary]] = []
+        combined_textids: Counter[str] = Counter()
+        combined_witnesses: Counter[str] = Counter()
+        left_extensions: Counter[str] = Counter()
+        right_extensions: Counter[str] = Counter()
+        total = 0
+        for index in indexes:
+            candidates, _raw_total = index.candidates_and_total(q)
+            part_summary = index.summarise(
+                q,
+                candidates=candidates,
+                textids=scoped_textids or None,
+                witnesses=witnesses,
+                master_only=master_only,
+            )
+            prepared.append((index, candidates, part_summary))
+            total += part_summary.total
+            combined_textids.update(part_summary.by_textid)
+            combined_witnesses.update(part_summary.by_witness_label)
+            left_extensions.update(dict(part_summary.trigram_left))
+            right_extensions.update(dict(part_summary.trigram_right))
+        summary = IndexSummary(
+            total=total,
+            by_textid=dict(combined_textids),
+            by_witness_label=dict(combined_witnesses),
+            trigram_left=left_extensions.most_common(20),
+            trigram_right=right_extensions.most_common(20),
         )
-        if summary.total > cap:
+        if total > cap:
             empty_hits: list[Hit] = []
             meta = _catalog_meta(request, None)
             return (
@@ -651,30 +683,30 @@ def _search_hits(
                 None,
                 summary,
             )
-        if scoped_textids:
-            all_hits = [
-                hit
-                for tid in sorted(scoped_textids)
-                for hit in ix.search(
+        all_hits: list[Hit] = []
+        for index, candidates, _part_summary in prepared:
+            if scoped_textids:
+                for tid in sorted(scoped_textids):
+                    all_hits.extend(index.search(
+                        q,
+                        context=context,
+                        witnesses=witnesses,
+                        textid=tid,
+                        voices=voices,
+                        candidates=candidates,
+                    ))
+            else:
+                all_hits.extend(index.search(
                     q,
                     context=context,
                     witnesses=witnesses,
-                    textid=tid,
+                    textid=textid,
                     voices=voices,
                     candidates=candidates,
-                )
-            ]
-        else:
-            all_hits = list(ix.search(
-                q,
-                context=context,
-                witnesses=witnesses,
-                textid=textid,
-                voices=voices,
-                candidates=candidates,
-            ))
+                ))
     finally:
-        ix.close()
+        for index in indexes:
+            index.close()
 
     if master_only:
         all_hits = [h for h in all_hits if h.matched_via == "master"]

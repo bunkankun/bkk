@@ -11,6 +11,7 @@ generated tree against ``import/samples/KR3a0013`` and fails on
 from __future__ import annotations
 
 from pathlib import Path
+import time
 
 import pytest
 import yaml
@@ -442,3 +443,25 @@ def test_head_text_filtered_to_cjk():
     juan = _parse_juan_text(_DIRTY_HEAD_JUAN, juan_seq=1, text_id="KRT0001",
                             imglist={}, edition_short="TEST")
     assert juan.sections[0].head_text == "試験篇"
+
+
+def test_large_punctuated_juan_parses_in_linear_time():
+    """Marker offsets must not rescan all preceding text for each punctuation."""
+    repeats = 20_000
+    source = ("甲，" * repeats) + "¶"
+    started = time.perf_counter()
+    juan = _parse_juan_text(
+        source,
+        juan_seq=1,
+        text_id="KRT0001",
+        imglist={},
+        edition_short="TEST",
+    )
+    elapsed = time.perf_counter() - started
+
+    section = juan.sections[0]
+    punctuation = [m for m in section.markers if m.type == "punctuation"]
+    assert len(section.text) == repeats
+    assert len(punctuation) == repeats
+    assert punctuation[-1].offset == repeats
+    assert elapsed < 3.0

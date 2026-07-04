@@ -28,6 +28,13 @@ from bkk.serve.schemas import (
     CatalogResponse,
     RecipePin,
 )
+from .auth import SESSION_COOKIE
+
+
+def _request_owner(request: Request) -> str | None:
+    cookies = getattr(request, "cookies", {})
+    session = request.app.state.bkk.sessions.get(cookies.get(SESSION_COOKIE))
+    return session.login if session else None
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -89,10 +96,18 @@ def _natural_key(code: str) -> tuple[int, str]:
 )
 def categories(request: Request) -> CategoriesResponse:
     state = request.app.state.bkk
-    counts, counts_are_descendant = _category_counts(state)
+    owner = _request_owner(request)
+    counts, counts_are_descendant = _category_counts(state, owner)
 
-    yaml_data = _load_kr_categories()
+    yaml_data = dict(_load_kr_categories())
     catalog_sections = _catalog_sections(state)
+    if owner and state.user_text_records(owner):
+        catalog_sections.setdefault(
+            "KR9", {"label": "User Texts", "zh": "其他"},
+        )
+        catalog_sections.setdefault(
+            "KR9a", {"label": "User Texts", "zh": "其他"},
+        )
     for code, info in catalog_sections.items():
         yaml_data.setdefault(code, info)
     children_by_parent: dict[str | None, list[str]] = {}
@@ -214,6 +229,27 @@ def browse(request: Request) -> CatalogResponse:
             "unknown_filter_keys",
             unknown=bad,
             allowed=service.whitelist(),
+    )
+    owner = _request_owner(request)
+    private_records = state.user_text_records(owner) if owner else []
+    private_wanted = {
+        value.strip()
+        for value in filters.get("tags.kr-categories", [])
+        if value and value.strip()
+    }
+    if private_records and private_wanted and all(
+        code.startswith("KR9") for code in private_wanted
+    ):
+        return _browse_visible_records(
+            private_records,
+            private_textids={rec.textid for rec in private_records},
+            filters=filters,
+            q=q,
+            century=century,
+            limit=limit,
+            offset=offset,
+            state=state,
+            owner=owner,
         )
 
     indexed = _browse_catalog_index(
@@ -331,25 +367,134 @@ def timeline(request: Request) -> TimelineResponse:
     return _timeline_from_year_counts(rows)
 
 
-def _category_counts(state: AppState) -> tuple[Counter[str], bool]:
+def _category_counts(
+    state: AppState, owner: str | None = None,
+) -> tuple[Counter[str], bool]:
+    private = state.user_text_records(owner) if owner else []
     conn = state.open_catalog()
     if conn is not None:
         try:
             rows = conn.execute(
                 "SELECT code, descendant_bundle_count FROM catalog_section"
             ).fetchall()
-            return Counter({code: count for code, count in rows}), True
+            counts = Counter({code: count for code, count in rows})
+            for rec in private:
+                code = _record_category(rec)
+                if code:
+                    counts[code] += 1
+                    if code.startswith("KR9") and code != "KR9":
+                        counts["KR9"] += 1
+            return counts, True
         except sqlite3.DatabaseError:
             pass
         finally:
             conn.close()
 
-    snap = state.cache.get()
     counts: Counter[str] = Counter()
-    for rec in snap.records:
+    for rec in private:
         for code in _kr_categories(rec):
             counts[code] += 1
+        if not _kr_categories(rec):
+            code = _record_category(rec)
+            if code:
+                counts[code] += 1
     return counts, False
+
+
+def _record_category(rec) -> str | None:
+    categories = sorted(_kr_categories(rec), key=len, reverse=True)
+    if categories:
+        return categories[0]
+    match = re.match(r"^(KR\d+[a-z]+)", rec.textid)
+    return match.group(1) if match else None
+
+
+def _record_filter_values(key: str, rec) -> set[str]:
+    values = FILTERS[key](rec)
+    if key == "tags.kr-categories" and not values:
+        category = _record_category(rec)
+        return {category} if category else set()
+    return values
+
+
+def _browse_visible_records(
+    records,
+    *,
+    private_textids: set[str],
+    filters: dict[str, list[str]],
+    q: str | None,
+    century: str | None,
+    limit: int,
+    offset: int,
+    state: AppState,
+    owner: str,
+) -> CatalogResponse:
+    visible = list(records)
+    for key, wanted_raw in filters.items():
+        wanted = {value.strip() for value in wanted_raw if value.strip()}
+        if wanted:
+            visible = [
+                rec for rec in visible
+                if _record_filter_values(key, rec) & wanted
+            ]
+    if q:
+        visible = _filter_snapshot_query(visible, q)
+    else:
+        visible.sort(key=lambda rec: rec.textid)
+    if century:
+        start, end = _century_range_from_key(century)
+        visible = [
+            rec for rec in visible
+            if (year := _snapshot_index_date(rec)) is not None
+            and start <= year <= end
+        ]
+    total = len(visible)
+    page = visible[offset:offset + limit]
+    matches: list[CatalogMatchOut] = []
+    pins: list[RecipePin] = []
+    for rec in page:
+        metadata: dict[str, Any] = {}
+        for key in filters:
+            present = sorted(_record_filter_values(key, rec))
+            if present:
+                metadata[key] = present
+        if rec.textid in private_textids:
+            status = state.user_text_status(owner, rec.textid)
+            metadata.update({
+                "source": "user",
+                "index_status": status.get(
+                    "index_status",
+                    "ready"
+                    if (rec.bundle_dir / f"{rec.textid}.bkkx").is_file()
+                    else "pending",
+                ),
+                "sync_status": status.get("sync_status", "ready"),
+                "repository_url": status.get("repository_url"),
+            })
+        matches.append(CatalogMatchOut(
+            textid=rec.textid,
+            canonical_identifier=rec.canonical_identifier,
+            title=rec.title,
+            edition_short=rec.edition_short,
+            base_edition=rec.base_edition,
+            metadata=metadata,
+        ))
+        pins.append(RecipePin(
+            role="match",
+            canonical_identifier=rec.canonical_identifier,
+            textid=rec.textid,
+            hash=rec.manifest_hash,
+            metadata={"title": rec.title, "edition_short": rec.edition_short},
+        ))
+    return CatalogResponse(
+        total=total,
+        offset=offset,
+        limit=limit,
+        next_offset=offset + limit if offset + limit < total else None,
+        filters_applied=_filters_applied(filters, q=q, century=century),
+        matches=matches,
+        recipe={"pins": [pin.model_dump(exclude_none=True) for pin in pins]},
+    )
 
 
 def _browse_catalog_index(

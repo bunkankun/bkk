@@ -74,11 +74,26 @@ import type {
   WorkspaceFileList,
   WorkspaceDeleteResult,
   WorkspaceWriteResult,
+  UserTextCreateResult,
+  UserTextDeleteResult,
+  UserTextFormat,
+  UserTextListItem,
+  UserTextPreview,
+  UserTextSourceFile,
 } from "./types";
 
 export const apiBase = "/api";
 
 const manifestCache = new Map<string, Promise<Manifest>>();
+
+export function clearSessionCaches(): void {
+  manifestCache.clear();
+  annotationsCache.clear();
+}
+
+export function clearManifestCache(textid: string): void {
+  manifestCache.delete(textid);
+}
 
 export class ApiError extends Error {
   status: number;
@@ -97,6 +112,14 @@ function apiErrorDetail(body: unknown): string | null {
   if (typeof record.detail === "string") return record.detail;
   if (record.detail && typeof record.detail === "object") {
     const detail = record.detail as Record<string, unknown>;
+    if (typeof detail.message === "string") {
+      const diagnostics = Array.isArray(detail.diagnostics)
+        ? detail.diagnostics.filter((value): value is string => typeof value === "string")
+        : [];
+      return diagnostics.length
+        ? `${detail.message}\n${diagnostics.join("\n")}`
+        : detail.message;
+    }
     const githubStatus = detail.github_status;
     const githubBody = detail.body;
     if (githubBody && typeof githubBody === "object") {
@@ -169,6 +192,56 @@ export function startGithubLogin(): void {
 
 export async function logout(): Promise<void> {
   await fetchJson<{ ok: boolean }>(`${apiBase}/auth/logout`, { method: "POST" });
+}
+
+export async function previewUserText(input: {
+  format: UserTextFormat;
+  paste?: string;
+  files?: UserTextSourceFile[];
+}, signal?: AbortSignal): Promise<UserTextPreview> {
+  return fetchJson<UserTextPreview>(`${apiBase}/user-texts/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    signal,
+  });
+}
+
+export async function createUserText(input: {
+  preview_token: string;
+  text_id: string;
+  title: string;
+  author?: string;
+  notes?: string;
+}): Promise<UserTextCreateResult> {
+  return fetchJson<UserTextCreateResult>(`${apiBase}/user-texts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function syncUserTexts(): Promise<void> {
+  await fetchJson<{ results: unknown[] }>(`${apiBase}/user-texts/sync`, {
+    method: "POST",
+  });
+}
+
+export async function listUserTexts(): Promise<{ texts: UserTextListItem[] }> {
+  return fetchJson<{ texts: UserTextListItem[] }>(`${apiBase}/user-texts`);
+}
+
+export async function deleteUserText(
+  textid: string,
+  confirmGithubDelete = false,
+): Promise<UserTextDeleteResult> {
+  const q = new URLSearchParams();
+  if (confirmGithubDelete) q.set("confirm_github_delete", "true");
+  const qs = q.toString();
+  return fetchJson<UserTextDeleteResult>(
+    `${apiBase}/user-texts/${encodeURIComponent(textid)}${qs ? `?${qs}` : ""}`,
+    { method: "DELETE" },
+  );
 }
 
 // ---------- admin ----------

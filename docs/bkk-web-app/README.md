@@ -133,6 +133,7 @@ Each file is the entire UI for one activity. Switching activity unmounts the pre
 - [LeftPanel/Translations.tsx](../../module/web/src/components/LeftPanel/Translations.tsx) — translations available for the active bundle; click to open an alignment.
 - [LeftPanel/History.tsx](../../module/web/src/components/LeftPanel/History.tsx) — recently opened texts.
 - [LeftPanel/Settings.tsx](../../module/web/src/components/LeftPanel/Settings.tsx) — theme + default-open-mode pickers.
+- [LeftPanel/NewUserTextDialog.tsx](../../module/web/src/components/LeftPanel/NewUserTextDialog.tsx) — authenticated KRP/TLS/CBETA import wizard launched from Settings.
 - [LeftPanel/Admin.tsx](../../module/web/src/components/LeftPanel/Admin.tsx) — admin dashboard + operations (job submit, status polling). Visible only to admin team members.
 
 ### Workspace (pane tree)
@@ -184,6 +185,12 @@ No CSS modules, no Tailwind. Components add classes directly; style rules live i
 **Auth** — `startGithubLogin()` redirects to `/api/auth/github/start`; the backend completes the OAuth dance and sets a session cookie. On boot, `loadAuthSession()` calls `GET /api/auth/session`. Logout clears the cookie and resets in-memory session-derived slices. Workspace sync (pull `session.json`, push debounced) is triggered by login.
 
 **Bundle editing** — authenticated users load the editable remote from `GET /api/bundles/{textid}/juan/{seq}/edit`. `POST` saves the juan, marker asset, and manifest as one Git commit. Admins update the upstream repository's default branch; other users get a fork branch and pull request. Repositories default to `bkkbooks/<textid>` and each repository's GitHub `default_branch`; override these with `BKK_BUNDLE_GITHUB_ORG` / `BKK_BUNDLE_GITHUB_BRANCH` or the corresponding `serve` keys.
+
+**User texts** — `POST /api/user-texts/preview` stages and validates source;
+`POST /api/user-texts` publishes the confirmed private bundle and starts
+indexing; `POST /api/user-texts/sync` refreshes registered repositories after
+login. Private resolution, catalog records, and search indexes are keyed by
+the authenticated GitHub login and never merged into shared indexes.
 
 **Search lifecycle** — `runSearch()` aborts any in-flight request via `searchAbort`, fires the new one, and writes status (`idle`/`loading`/`ok`/`error`) into `state.search`. List filters narrow the textid scope via `scopedListTextids()` before the request.
 
