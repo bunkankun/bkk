@@ -2,6 +2,7 @@
 .idea
 *.log
 *.bkkx
+*.bkkx.sha256.json
 *.env
 *.env.local
 tmp/

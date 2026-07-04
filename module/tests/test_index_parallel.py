@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 import yaml
 
 from bkk.index import build_index, merge_bundles
+from bkk.index import parallel_assets
 from bkk.index.build import compute_bkkx_hash
 from bkk.index.cli import run as cli_run
 from bkk.index.parallel import discover_parallel_passages
@@ -280,6 +282,71 @@ def test_parallel_target_scans_whole_index_and_writes_target_assets(tmp_path):
     assert markers[0]["ref"].startswith("0a2/1/")
     assert not (tmp_path / "KR0a0002" / "parallels").exists()
     assert not (tmp_path / "KR0a0003" / "parallels").exists()
+
+
+def test_parallel_index_hash_is_cached(tmp_path, monkeypatch):
+    _write_bundle(tmp_path, "KR0a0001", "abcdef")
+    out = _merge(tmp_path)
+    real_compute = parallel_assets.compute_bkkx_hash
+    calls = 0
+
+    def counted_compute(path):
+        nonlocal calls
+        calls += 1
+        return real_compute(path)
+
+    monkeypatch.setattr(parallel_assets, "compute_bkkx_hash", counted_compute)
+    first = parallel_assets.capture_index_snapshot(
+        out, command="test", algorithm="test-v1", scan={},
+    )
+    second = parallel_assets.capture_index_snapshot(
+        out, command="test", algorithm="test-v1", scan={},
+    )
+
+    assert calls == 1
+    assert (
+        first.provenance["index"]["hash"]
+        == second.provenance["index"]["hash"]
+    )
+    cache_path = parallel_assets.index_hash_cache_path(out)
+    cached = json.loads(cache_path.read_text(encoding="utf-8"))
+    assert cached["version"] == 1
+    assert cached["hash"] == first.provenance["index"]["hash"]
+    assert cache_path.stat().st_mode & 0o777 == 0o644
+
+
+def test_parallel_index_hash_cache_invalidates_and_recovers(tmp_path, monkeypatch):
+    _write_bundle(tmp_path, "KR0a0001", "abcdef")
+    out = _merge(tmp_path)
+    real_compute = parallel_assets.compute_bkkx_hash
+    calls = 0
+
+    def counted_compute(path):
+        nonlocal calls
+        calls += 1
+        return real_compute(path)
+
+    monkeypatch.setattr(parallel_assets, "compute_bkkx_hash", counted_compute)
+    parallel_assets.capture_index_snapshot(
+        out, command="test", algorithm="test-v1", scan={},
+    )
+    stat = out.stat()
+    os.utime(
+        out,
+        ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000),
+    )
+    parallel_assets.capture_index_snapshot(
+        out, command="test", algorithm="test-v1", scan={},
+    )
+    assert calls == 2
+
+    parallel_assets.index_hash_cache_path(out).write_text(
+        "{not-json}\n", encoding="utf-8",
+    )
+    parallel_assets.capture_index_snapshot(
+        out, command="test", algorithm="test-v1", scan={},
+    )
+    assert calls == 3
 
 
 def test_parallel_target_uses_configured_index_and_removes_stale_file(

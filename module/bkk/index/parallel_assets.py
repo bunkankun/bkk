@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import importlib.metadata
+import json
 import os
 import re
 import sqlite3
@@ -72,13 +73,71 @@ def atomic_write(path: Path, content: str) -> None:
 @dataclass(frozen=True)
 class IndexSnapshot:
     path: Path
-    signature: tuple[int, int, int, int]
+    signature: tuple[int, int, int, int, int]
     provenance: dict[str, Any]
 
 
-def _stat_signature(path: Path) -> tuple[int, int, int, int]:
+_HASH_CACHE_VERSION = 1
+_HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def _stat_signature(path: Path) -> tuple[int, int, int, int, int]:
     stat = path.stat()
-    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+    return (
+        stat.st_dev,
+        stat.st_ino,
+        stat.st_size,
+        stat.st_mtime_ns,
+        stat.st_ctime_ns,
+    )
+
+
+def index_hash_cache_path(index_path: Path | str) -> Path:
+    path = Path(index_path)
+    return path.with_name(f"{path.name}.sha256.json")
+
+
+def _read_cached_index_hash(
+    path: Path,
+    signature: tuple[int, int, int, int, int],
+) -> str | None:
+    cache_path = index_hash_cache_path(path)
+    try:
+        raw = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict) or raw.get("version") != _HASH_CACHE_VERSION:
+        return None
+    cached_signature = raw.get("signature")
+    if (
+        not isinstance(cached_signature, list)
+        or tuple(cached_signature) != signature
+    ):
+        return None
+    digest = raw.get("hash")
+    if not isinstance(digest, str) or _HASH_RE.fullmatch(digest) is None:
+        return None
+    return digest
+
+
+def _write_cached_index_hash(
+    path: Path,
+    signature: tuple[int, int, int, int, int],
+    digest: str,
+) -> None:
+    payload = {
+        "version": _HASH_CACHE_VERSION,
+        "signature": list(signature),
+        "hash": digest,
+    }
+    try:
+        atomic_write(
+            index_hash_cache_path(path),
+            json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+        )
+    except OSError:
+        # A read-only index directory must not make parallel discovery fail.
+        pass
 
 
 def _index_schema_version(path: Path) -> int:
@@ -117,10 +176,16 @@ def capture_index_snapshot(
 ) -> IndexSnapshot:
     path = Path(index_path).resolve()
     before = _stat_signature(path)
-    index_hash = compute_bkkx_hash(path)
+    index_hash = _read_cached_index_hash(path, before)
+    cache_miss = index_hash is None
+    if cache_miss:
+        index_hash = compute_bkkx_hash(path)
+    schema_version = _index_schema_version(path)
     after = _stat_signature(path)
     if before != after:
         raise RuntimeError(f"index changed while hashing: {path}")
+    if cache_miss:
+        _write_cached_index_hash(path, after, index_hash)
     provenance = {
         "generated_at": generated_at or utc_timestamp(),
         "generator": {
@@ -131,7 +196,7 @@ def capture_index_snapshot(
         "index": {
             "filename": path.name,
             "hash": index_hash,
-            "schema_version": _index_schema_version(path),
+            "schema_version": schema_version,
         },
         "scan": dict(scan),
     }

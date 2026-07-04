@@ -36,6 +36,7 @@ from bkk.short_refs import text_id_arg
 
 _GITIGNORE = """\
 *.bkkx
+*.bkkx.sha256.json
 *.bkkx-journal
 *.source.yaml
 """
