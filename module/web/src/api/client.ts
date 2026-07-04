@@ -49,6 +49,9 @@ import type {
   AnnotationsByRhetoricalDeviceCountsResponse,
   Juan,
   JuanParallelsResponse,
+  JuanParallelsGeneration,
+  JuanParallelsGenerationParams,
+  JuanParallelsStatus,
   Manifest,
   ManifestPart,
   OverlaysResponse,
@@ -461,6 +464,39 @@ export async function getJuanParallels(
   return fetchJson<JuanParallelsResponse>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/parallels`
       + (query ? `?${query}` : ""),
+  );
+}
+
+export async function getJuanParallelsStatus(
+  textid: string,
+  seq: number,
+): Promise<JuanParallelsStatus> {
+  return fetchJson<JuanParallelsStatus>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/parallels/status`,
+  );
+}
+
+export async function generateJuanParallels(
+  textid: string,
+  seq: number,
+  params: JuanParallelsGenerationParams,
+): Promise<JuanParallelsGeneration> {
+  return fetchJson<JuanParallelsGeneration>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/parallels/generate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bucket: params.bucket,
+        min_length: params.minLength,
+        max_length: params.maxLength,
+        min_occurrences: params.minOccurrences,
+        max_postings: params.maxPostings,
+        max_edits: params.maxEdits,
+        context: params.context,
+        include_contained: params.includeContained,
+      }),
+    },
   );
 }
 

@@ -6,7 +6,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { getAnnotations, getCatalog, getJuan, getManifest } from "../../api/client";
+import {
+  getAnnotations,
+  getCatalog,
+  getJuan,
+  getJuanParallelsStatus,
+  getManifest,
+} from "../../api/client";
 import type {
   Annotation,
   CatalogMatch,
@@ -393,6 +399,7 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [catalogMatch, setCatalogMatch] = useState<CatalogMatch | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[] | null>(null);
+  const [hasParallels, setHasParallels] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -411,18 +418,21 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
     setJuan(null);
     setAnnotations(null);
     setCatalogMatch(null);
+    setHasParallels(null);
     setError(null);
     Promise.all([
       getJuan(textid, seq),
       getAnnotations(textid, seq),
       getManifest(textid).catch(() => null),
       getCatalog({ q: textid, limit: 10 }).catch(() => null),
+      getJuanParallelsStatus(textid, seq).catch(() => null),
     ])
-      .then(([j, a, m, catalog]) => {
+      .then(([j, a, m, catalog, parallels]) => {
         if (cancelled) return;
         setJuan(j);
         setAnnotations(a);
         setManifest(m);
+        setHasParallels(parallels?.has_parallels ?? null);
         setCatalogMatch(
           catalog?.matches.find((match) => match.textid === textid) ?? null,
         );
@@ -446,6 +456,21 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
     return () => {
       cancelled = true;
     };
+  }, [textid, seq]);
+
+  useEffect(() => {
+    const onChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        textid?: string;
+        seq?: number;
+        hasParallels?: boolean;
+      }>).detail;
+      if (detail?.textid === textid && detail.seq === seq) {
+        setHasParallels(detail.hasParallels === true);
+      }
+    };
+    window.addEventListener("bkk:juan-parallels-changed", onChanged);
+    return () => window.removeEventListener("bkk:juan-parallels-changed", onChanged);
   }, [textid, seq]);
 
   const bucketViews = useMemo(
@@ -819,11 +844,21 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
           {editionShort ? ` · ${editionShort}` : ""} · 卷 {seq}
           <button
             type="button"
-            className="tv-parallels-btn"
-            title="Load parallel passages for this juan"
+            className={`tv-parallels-btn ${
+              hasParallels === true
+                ? "has-parallels"
+                : hasParallels === false
+                  ? "no-parallels"
+                  : "unknown"
+            }`}
+            title={
+              hasParallels === false
+                ? "No stored parallels; find them on demand"
+                : "Load parallel passages for this juan"
+            }
             onClick={() => workspace.openParallelsPanel(textid, seq)}
           >
-            Parallels
+            {hasParallels === false ? "Find parallels" : "Parallels"}
           </button>
           {altIds.length > 0 ? (
             <span className="tv-alt-ids"> {altIds.join(" ")}</span>

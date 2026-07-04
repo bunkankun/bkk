@@ -691,6 +691,37 @@ export interface JuanParallelsResponse {
   locations: JuanParallelLocation[];
 }
 
+export interface JuanParallelsStatus {
+  textid: string;
+  juan_seq: number;
+  has_assets: boolean;
+  has_parallels: boolean;
+  sources: Array<"corpus" | "bundle">;
+  can_generate: boolean;
+}
+
+export interface JuanParallelsGeneration {
+  textid: string;
+  juan_seq: number;
+  generated: boolean;
+  has_parallels: boolean;
+  clusters: number;
+  markers: number;
+  files: number;
+  message: string;
+}
+
+export interface JuanParallelsGenerationParams {
+  bucket: "front" | "body" | "back" | "all";
+  minLength: number;
+  maxLength: number | null;
+  minOccurrences: number;
+  maxPostings: number;
+  maxEdits: number;
+  context: number;
+  includeContained: boolean;
+}
+
 // Server identity
 export interface ServerInfo {
   service?: string;

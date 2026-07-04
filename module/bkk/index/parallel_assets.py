@@ -275,6 +275,7 @@ def write_target_parallel_assets(
     target_juan_seq: int | None = None,
     name: str,
     provenance: dict[str, Any],
+    write_empty: bool = False,
 ) -> tuple[int, int, int]:
     """Write target-side directed markers.
 
@@ -340,6 +341,11 @@ def write_target_parallel_assets(
                 marker_count += 1
 
     rendered: dict[str, str] = {}
+    if write_empty and target_juan_seq is not None:
+        rows.setdefault(
+            target_juan_seq,
+            {bucket: [] for bucket in BUCKETS},
+        )
     for juan_seq, by_bucket in sorted(rows.items()):
         data = {
             "provenance": provenance,

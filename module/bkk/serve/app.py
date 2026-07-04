@@ -177,7 +177,7 @@ def create_app(config: ServeConfig) -> FastAPI:
                 "catalog_path": str(config.catalog_path),
                 "upstream_repo": config.upstream_repo,
                 "bluesky_enabled": config.bluesky_enabled,
-                "parallels_enabled": config.parallels_root is not None,
+                "parallels_enabled": True,
                 "docs": "/docs",
                 "openapi": "/openapi.json",
             }
@@ -213,7 +213,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             "catalog_path": str(config.catalog_path),
             "upstream_repo": config.upstream_repo,
             "bluesky_enabled": config.bluesky_enabled,
-            "parallels_enabled": config.parallels_root is not None,
+            "parallels_enabled": True,
             "docs": "/docs",
             "openapi": "/openapi.json",
         }

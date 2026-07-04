@@ -4,17 +4,25 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from .. import errors
-from ..state import AppState
+from ..state import AppState, UserSession
 from .. import selection
-from bkk.index.parallel import _align_ops
+from bkk.index.parallel import _align_ops, discover_parallel_passages
+from bkk.index.parallel_assets import (
+    assert_index_unchanged,
+    capture_index_snapshot,
+    derive_index_name,
+    write_target_parallel_assets,
+)
+from .auth import SESSION_COOKIE
 
 
 router = APIRouter(tags=["parallels"])
@@ -26,6 +34,7 @@ _REF_RE = re.compile(
 )
 _BUCKET_ORDER = {"front": 0, "body": 1, "back": 2}
 _CONTEXT = 20
+_GENERATION_LOCK = threading.Lock()
 
 
 class ParallelPassageOut(BaseModel):
@@ -75,6 +84,50 @@ class JuanParallelsResponse(BaseModel):
     locations: list[ParallelPassageOut]
 
 
+class JuanParallelsStatus(BaseModel):
+    textid: str
+    juan_seq: int
+    has_assets: bool
+    has_parallels: bool
+    sources: list[Literal["corpus", "bundle"]]
+    can_generate: bool
+
+
+class JuanParallelsGeneration(BaseModel):
+    textid: str
+    juan_seq: int
+    generated: bool
+    has_parallels: bool
+    clusters: int = 0
+    markers: int = 0
+    files: int = 0
+    message: str
+
+
+class JuanParallelsGenerationParams(BaseModel):
+    bucket: Literal["front", "body", "back", "all"] = "all"
+    min_length: int = Field(12, ge=3)
+    max_length: int | None = Field(None, ge=3)
+    min_occurrences: int = Field(2, ge=2)
+    max_postings: int = Field(500, ge=2)
+    max_edits: int = Field(0, ge=0, le=4)
+    context: int = Field(20, ge=0, le=500)
+    include_contained: bool = False
+
+    @model_validator(mode="after")
+    def validate_length_range(self) -> "JuanParallelsGenerationParams":
+        if self.max_length is not None and self.max_length < self.min_length:
+            raise ValueError("max_length must be greater than or equal to min_length")
+        return self
+
+
+def _require_user(request: Request) -> UserSession:
+    session = request.app.state.bkk.sessions.get(request.cookies.get(SESSION_COOKIE))
+    if session is None:
+        raise HTTPException(status_code=401, detail="GitHub login required")
+    return session
+
+
 def _asset_source(path: Path, textid: str, seq: int) -> str:
     prefix = f"{textid}_{seq:03d}."
     suffix = ".parallels.yaml"
@@ -100,11 +153,30 @@ def _parse_ref(ref: Any) -> tuple[str, int, str, int, int] | None:
     )
 
 
+def _asset_paths(
+    state: AppState, textid: str, seq: int,
+) -> tuple[list[Path], list[Literal["corpus", "bundle"]]]:
+    pattern = f"{textid}_{seq:03d}.*.parallels.yaml"
+    paths: list[Path] = []
+    sources: list[Literal["corpus", "bundle"]] = []
+    root = state.parallels_root
+    if root is not None:
+        found = sorted((root / textid).glob(pattern))
+        if found:
+            paths.extend(found)
+            sources.append("corpus")
+    rec = state.lookup_bundle(textid)
+    if rec is not None:
+        found = sorted((rec.bundle_dir / "parallels").glob(pattern))
+        if found:
+            paths.extend(found)
+            sources.append("bundle")
+    return paths, sources
+
+
 def _load_markers(
-    root: Path, textid: str, seq: int,
+    paths: list[Path], textid: str, seq: int,
 ) -> list[dict[str, Any]]:
-    bundle_root = root / textid
-    paths = sorted(bundle_root.glob(f"{textid}_{seq:03d}.*.parallels.yaml"))
     markers: list[dict[str, Any]] = []
     for path in paths:
         try:
@@ -388,6 +460,146 @@ def _source_char_count(state: AppState, textid: str, seq: int) -> int:
     return total
 
 
+def _parallel_status(
+    state: AppState, textid: str, seq: int,
+) -> JuanParallelsStatus:
+    paths, sources = _asset_paths(state, textid, seq)
+    return JuanParallelsStatus(
+        textid=textid,
+        juan_seq=seq,
+        has_assets=bool(paths),
+        has_parallels=bool(_load_markers(paths, textid, seq)),
+        sources=sources,
+        can_generate=state.index_path.is_file() or state.corpus_root.is_dir(),
+    )
+
+
+@router.get(
+    "/bundles/{textid}/juan/{seq}/parallels/status",
+    response_model=JuanParallelsStatus,
+    summary="Whether this juan already has parallel-passage assets",
+)
+def get_juan_parallels_status(
+    request: Request,
+    textid: str = PathParam(...),
+    seq: int = PathParam(..., ge=0),
+) -> JuanParallelsStatus:
+    state: AppState = request.app.state.bkk
+    if state.lookup_bundle(textid) is None:
+        raise errors.bundle_not_found(textid)
+    return _parallel_status(state, textid, seq)
+
+
+@router.post(
+    "/bundles/{textid}/juan/{seq}/parallels/generate",
+    response_model=JuanParallelsGeneration,
+    summary="Generate missing parallel-passage assets for one juan",
+)
+def generate_juan_parallels(
+    request: Request,
+    textid: str = PathParam(...),
+    seq: int = PathParam(..., ge=0),
+    params: JuanParallelsGenerationParams | None = None,
+) -> JuanParallelsGeneration:
+    state: AppState = request.app.state.bkk
+    _require_user(request)
+    params = params or JuanParallelsGenerationParams()
+    rec = state.lookup_bundle(textid)
+    if rec is None:
+        raise errors.bundle_not_found(textid)
+
+    # The scan is expensive and the asset writer is process-safe but not
+    # intended to run concurrently for the same target. Recheck after taking
+    # the lock so simultaneous requests collapse into one scan.
+    with _GENERATION_LOCK:
+        status = _parallel_status(state, textid, seq)
+        if status.has_assets:
+            return JuanParallelsGeneration(
+                textid=textid,
+                juan_seq=seq,
+                generated=False,
+                has_parallels=status.has_parallels,
+                message=(
+                    "Stored parallel passages were already available."
+                    if status.has_parallels
+                    else "An on-demand scan was already recorded and found no matching passages."
+                ),
+            )
+
+        index_path = state.ensure_index()
+        if index_path is None:
+            raise HTTPException(
+                status_code=503,
+                detail="cannot generate parallel passages: the corpus index is unavailable",
+            )
+        scan = {
+            "text_id": textid,
+            "juan": seq,
+            **params.model_dump(),
+        }
+        try:
+            snapshot = capture_index_snapshot(
+                index_path,
+                command="bkk serve parallels generate",
+                algorithm="targeted-trigram-v1",
+                scan=scan,
+            )
+            clusters = discover_parallel_passages(
+                index_path,
+                target_textid=textid,
+                target_juan_seq=seq,
+                bucket=params.bucket,
+                min_length=params.min_length,
+                min_occurrences=params.min_occurrences,
+                max_postings=params.max_postings,
+                include_contained=params.include_contained,
+                context=params.context,
+                max_edits=params.max_edits,
+            )
+            if params.max_length is not None:
+                clusters = [
+                    cluster
+                    for cluster in clusters
+                    if cluster.length <= params.max_length
+                ]
+            assert_index_unchanged(snapshot)
+            cluster_count, marker_count, file_count = write_target_parallel_assets(
+                clusters,
+                rec.bundle_dir,
+                textid=textid,
+                target_juan_seq=seq,
+                name=derive_index_name(index_path),
+                provenance=snapshot.provenance,
+                write_empty=True,
+            )
+        except (OSError, RuntimeError, ValueError, sqlite3.DatabaseError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"cannot generate parallel passages: {exc}",
+            ) from exc
+
+        if marker_count:
+            message = (
+                f"No stored parallels were found. Generated {marker_count} "
+                f"parallel passage{'s' if marker_count != 1 else ''} on demand."
+            )
+        else:
+            message = (
+                "No stored parallels were found. The on-demand scan completed "
+                "but found no matching passages."
+            )
+        return JuanParallelsGeneration(
+            textid=textid,
+            juan_seq=seq,
+            generated=True,
+            has_parallels=marker_count > 0,
+            clusters=cluster_count,
+            markers=marker_count,
+            files=file_count,
+            message=message,
+        )
+
+
 @router.get(
     "/bundles/{textid}/juan/{seq}/parallels",
     response_model=JuanParallelsResponse,
@@ -423,8 +635,8 @@ def get_juan_parallels(
     if remote_textid is not None and not remote_textid.strip():
         remote_textid = None
 
-    root = state.parallels_root
-    rows = _load_markers(root, textid, seq) if root is not None and root.is_dir() else []
+    paths, _sources = _asset_paths(state, textid, seq)
+    rows = _load_markers(paths, textid, seq)
     if bucket is not None:
         rows = [row for row in rows if row["local_bucket"] == bucket]
     if start is not None and end is not None:

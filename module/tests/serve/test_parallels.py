@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 from fastapi.testclient import TestClient
 
+from bkk.index import merge_bundles
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
 
@@ -17,6 +18,22 @@ def _client(corpus: Path, parallels_root: Path | None) -> TestClient:
         index_path=corpus / "_corpus.bkkx",
         parallels_root=parallels_root,
     )))
+
+
+def _login(client: TestClient) -> None:
+    session = client.app.state.bkk.sessions.create(
+        login="tester",
+        name="Tester",
+        avatar_url=None,
+        html_url="https://github.com/tester",
+        access_token="token",
+        workspace={
+            "repo": "tester/workspace",
+            "html_url": "https://github.com/tester/workspace",
+            "branch": "tester",
+        },
+    )
+    client.cookies.set("bkk_session", session.id)
 
 
 def _write_asset(
@@ -33,10 +50,155 @@ def _write_asset(
 def test_unconfigured_parallels_returns_empty(corpus: Path):
     client = _client(corpus, None)
 
-    assert client.get("/api/server-info").json()["parallels_enabled"] is False
+    assert client.get("/api/server-info").json()["parallels_enabled"] is True
     response = client.get("/api/bundles/TEST0001/juan/1/parallels")
     assert response.status_code == 200
     assert response.json()["total"] == 0
+
+
+def test_parallels_are_loaded_from_bundle_when_corpus_root_has_none(tmp_path: Path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    bundle = write_bundle(corpus, "KR6q0001", "甲乙丙丁")
+    parallel_dir = bundle / "parallels"
+    parallel_dir.mkdir()
+    (parallel_dir / "KR6q0001_001.bundle.parallels.yaml").write_text(
+        yaml.safe_dump({
+            "markers": {
+                "front": [],
+                "body": [{
+                    "type": "parallel",
+                    "offset": 0,
+                    "length": 2,
+                    "ref": "6q1/1/@2+2",
+                }],
+                "back": [],
+            },
+        }, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+    client = _client(corpus, tmp_path / "empty-parallels")
+    status = client.get(
+        "/api/bundles/KR6q0001/juan/1/parallels/status",
+    ).json()
+    assert status["has_parallels"] is True
+    assert status["sources"] == ["bundle"]
+    response = client.get(
+        "/api/bundles/KR6q0001/juan/1/parallels",
+    ).json()
+    assert response["total"] == 1
+
+
+def test_missing_parallels_are_generated_on_demand(tmp_path: Path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    shared = "一二三四五六七八九十天地玄黃"
+    target = write_bundle(corpus, "KR6q0001", f"甲{shared}乙")
+    write_bundle(corpus, "KR6q0002", f"丙{shared}丁")
+    merge_bundles(corpus, corpus / "_corpus.bkkx")
+    client = _client(corpus, tmp_path / "empty-parallels")
+    _login(client)
+
+    before = client.get(
+        "/api/bundles/KR6q0001/juan/1/parallels/status",
+    ).json()
+    assert before["has_parallels"] is False
+
+    generated = client.post(
+        "/api/bundles/KR6q0001/juan/1/parallels/generate",
+        json={
+            "bucket": "body",
+            "min_length": 12,
+            "max_length": 40,
+            "min_occurrences": 2,
+            "max_postings": 100,
+            "max_edits": 0,
+            "context": 8,
+            "include_contained": True,
+        },
+    )
+    assert generated.status_code == 200
+    body = generated.json()
+    assert body["generated"] is True
+    assert body["markers"] >= 1
+    assert "on demand" in body["message"]
+    asset = target / "parallels" / "KR6q0001_001.corpus.parallels.yaml"
+    assert asset.is_file()
+    scan = yaml.safe_load(asset.read_text(encoding="utf-8"))["provenance"]["scan"]
+    assert scan["bucket"] == "body"
+    assert scan["max_length"] == 40
+    assert scan["max_postings"] == 100
+    assert scan["context"] == 8
+    assert scan["include_contained"] is True
+    status = client.get(
+        "/api/bundles/KR6q0001/juan/1/parallels/status",
+    ).json()
+    assert status["has_assets"] is True
+    assert status["has_parallels"] is True
+
+    again = client.post(
+        "/api/bundles/KR6q0001/juan/1/parallels/generate",
+    ).json()
+    assert again["generated"] is False
+    assert client.get(
+        "/api/bundles/KR6q0001/juan/1/parallels",
+    ).json()["total"] >= 1
+
+
+def test_empty_on_demand_scan_is_recorded(tmp_path: Path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    target = write_bundle(corpus, "KR6q0001", "沒有任何重複內容的唯一文本")
+    merge_bundles(corpus, corpus / "_corpus.bkkx")
+    client = _client(corpus, None)
+    _login(client)
+
+    generated = client.post(
+        "/api/bundles/KR6q0001/juan/1/parallels/generate",
+    ).json()
+    assert generated["generated"] is True
+    assert generated["markers"] == 0
+    assert "found no matching passages" in generated["message"]
+    assert (
+        target / "parallels" / "KR6q0001_001.corpus.parallels.yaml"
+    ).is_file()
+    status = client.get(
+        "/api/bundles/KR6q0001/juan/1/parallels/status",
+    ).json()
+    assert status["has_assets"] is True
+    assert status["has_parallels"] is False
+
+    again = client.post(
+        "/api/bundles/KR6q0001/juan/1/parallels/generate",
+    ).json()
+    assert again["generated"] is False
+
+
+def test_on_demand_scan_rejects_invalid_length_range(tmp_path: Path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    write_bundle(corpus, "KR6q0001", "甲乙丙丁")
+    client = _client(corpus, None)
+    _login(client)
+
+    response = client.post(
+        "/api/bundles/KR6q0001/juan/1/parallels/generate",
+        json={"min_length": 20, "max_length": 10},
+    )
+    assert response.status_code == 422
+
+
+def test_on_demand_scan_requires_login(tmp_path: Path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    write_bundle(corpus, "KR6q0001", "甲乙丙丁")
+    client = _client(corpus, None)
+
+    response = client.post(
+        "/api/bundles/KR6q0001/juan/1/parallels/generate",
+    )
+    assert response.status_code == 401
 
 
 def test_parallels_are_merged_filtered_paged_and_hydrated(tmp_path: Path):

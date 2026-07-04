@@ -1088,6 +1088,16 @@ button {
   border-color: var(--amb);
   color: var(--amb);
 }
+.tv-parallels-btn.has-parallels {
+  border-color: color-mix(in srgb, var(--grn) 50%, var(--bdr));
+  color: var(--grn);
+}
+.tv-parallels-btn.no-parallels {
+  border-style: dashed;
+  border-color: var(--amb);
+  background: var(--amb-d);
+  color: var(--amb);
+}
 .tv-alt-ids {
   color: var(--t3);
 }
@@ -2501,6 +2511,134 @@ button {
 /* per-juan parallel passage panel ------------------------------- */
 .parallel-panel {
   padding: 0;
+}
+.parallel-notice {
+  margin: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--amb-b);
+  border-radius: 5px;
+  background: var(--amb-d);
+  color: var(--t1);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.parallel-generate {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.parallel-gate {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--bdr) 70%, var(--amb));
+  border-radius: 8px;
+  margin: 12px;
+  background:
+    radial-gradient(circle at top right, rgba(127, 96, 36, 0.12), transparent 55%),
+    var(--bg-pan);
+}
+.parallel-generate h3 {
+  color: var(--t1);
+  font-size: 15px;
+}
+.parallel-gate h3 {
+  color: var(--t1);
+  font-size: 15px;
+}
+.parallel-generate p,
+.parallel-generate-note {
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.parallel-gate p {
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.parallel-generate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.parallel-generate-grid label {
+  display: grid;
+  gap: 4px;
+  color: var(--t2);
+  font-size: 11px;
+}
+.parallel-generate-grid input,
+.parallel-generate-grid select {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 7px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg-pan);
+  color: var(--t1);
+  font: inherit;
+  font-size: 12px;
+}
+.parallel-generate-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.parallel-generate-check input {
+  margin-top: 2px;
+}
+.parallel-generate-error {
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--err) 40%, var(--bdr));
+  border-radius: 4px;
+  color: var(--err);
+  font-size: 12px;
+}
+.parallel-generate-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.parallel-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.parallel-generate-actions button {
+  padding: 6px 11px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg-pan);
+  color: var(--t2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.parallel-gate-actions button {
+  padding: 6px 11px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg-pan);
+  color: var(--t2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.parallel-gate-login {
+  border-color: var(--amb);
+  background: var(--amb-d);
+  color: var(--amb);
+}
+.parallel-generate-actions button[type="submit"] {
+  border-color: var(--amb);
+  background: var(--amb-d);
+  color: var(--amb);
 }
 .parallel-header {
   display: flex;

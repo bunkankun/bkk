@@ -1,9 +1,15 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
-import { getJuanParallels } from "../../api/client";
+import {
+  generateJuanParallels,
+  getJuanParallels,
+  getJuanParallelsStatus,
+  startGithubLogin,
+} from "../../api/client";
 import type {
   DiffOp,
   JuanParallelLocation,
+  JuanParallelsGenerationParams,
   JuanParallelsResponse,
   JuanParallelRemoteText,
 } from "../../api/types";
@@ -11,6 +17,16 @@ import { krClass } from "../../lib/krClass";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 
 const PAGE_SIZE = 50;
+const DEFAULT_GENERATION_PARAMS: JuanParallelsGenerationParams = {
+  bucket: "all",
+  minLength: 12,
+  maxLength: null,
+  minOccurrences: 2,
+  maxPostings: 500,
+  maxEdits: 0,
+  context: 20,
+  includeContained: false,
+};
 
 function parallelBucket(
   value: string | undefined,
@@ -224,12 +240,20 @@ export function ParallelsTab() {
   const activeSeq = useWorkspace((s) => s.activeSeq);
   const source = useWorkspace((s) => s.parallelsSource);
   const selection = useWorkspace((s) => s.selection);
+  const authStatus = useWorkspace((s) => s.auth.status);
   const [offset, setOffset] = useState(0);
   const [response, setResponse] = useState<JuanParallelsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lengthFilter, setLengthFilter] = useState<{ min: number; max: number } | null>(null);
   const [sortMode, setSortMode] = useState<"local" | "remote">("local");
   const [remoteTextid, setRemoteTextid] = useState<string | null>(null);
+  const [assetState, setAssetState] = useState<
+    "checking" | "confirming" | "generating" | "ready"
+  >("checking");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [generationParams, setGenerationParams] = useState<JuanParallelsGenerationParams>(
+    DEFAULT_GENERATION_PARAMS,
+  );
 
   const textid = source?.textid ?? activeTextid;
   const seq = source?.seq ?? activeSeq;
@@ -251,6 +275,9 @@ export function ParallelsTab() {
     setLengthFilter(null);
     setSortMode("local");
     setRemoteTextid(null);
+    setAssetState("checking");
+    setNotice(null);
+    setGenerationParams({ ...DEFAULT_GENERATION_PARAMS });
   }, [textid, seq]);
 
   useEffect(() => {
@@ -259,6 +286,32 @@ export function ParallelsTab() {
       setError(null);
       return;
     }
+    let cancelled = false;
+    setResponse(null);
+    setError(null);
+    setAssetState("checking");
+    getJuanParallelsStatus(textid, seq)
+      .then((status) => {
+        if (cancelled) return;
+        if (status.has_assets) {
+          setAssetState("ready");
+          return;
+        }
+        if (!status.can_generate) {
+          throw new Error("No stored parallels were found and the corpus index is unavailable.");
+        }
+        setAssetState("confirming");
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(String(reason));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [textid, seq]);
+
+  useEffect(() => {
+    if (textid == null || seq == null || assetState !== "ready") return;
     let cancelled = false;
     setResponse(null);
     setError(null);
@@ -285,6 +338,7 @@ export function ParallelsTab() {
   }, [
     textid,
     seq,
+    assetState,
     offset,
     activeSelection?.bucket,
     activeSelection?.start,
@@ -295,14 +349,211 @@ export function ParallelsTab() {
     remoteTextid,
   ]);
 
+  const runGeneration = async (event: FormEvent) => {
+    event.preventDefault();
+    if (textid == null || seq == null) return;
+    setError(null);
+    setAssetState("generating");
+    setNotice("Finding parallels with the confirmed parameters…");
+    try {
+      const result = await generateJuanParallels(textid, seq, generationParams);
+      setNotice(result.message);
+      setAssetState("ready");
+      window.dispatchEvent(new CustomEvent("bkk:juan-parallels-changed", {
+        detail: { textid, seq, hasParallels: result.has_parallels },
+      }));
+    } catch (reason) {
+      setError(String(reason));
+      setAssetState("confirming");
+    }
+  };
+
   if (textid == null || seq == null) {
     return <div className="rc empty">Open a juan to see parallel passages.</div>;
+  }
+  if (assetState === "confirming") {
+    if (authStatus === "loading" || authStatus === "unknown") {
+      return (
+        <div className="rc parallel-panel">
+          <div className="parallel-gate">
+            <div className="parallel-kicker">Find parallels</div>
+            <h3>Checking login status…</h3>
+            <p>Waiting for the current session before offering an on-demand scan.</p>
+          </div>
+        </div>
+      );
+    }
+    if (authStatus !== "authenticated") {
+      return (
+        <div className="rc parallel-panel">
+          <div className="parallel-gate">
+            <div className="parallel-kicker">Find parallels</div>
+            <h3>Login required</h3>
+            <p>
+              Log in with GitHub before starting an on-demand parallel scan for {textid}, 卷 {seq}.
+            </p>
+            <div className="parallel-gate-actions">
+              <button type="button" className="parallel-gate-login" onClick={startGithubLogin}>
+                GitHub Login
+              </button>
+              <button type="button" onClick={() => workspace.setRightTab("annotations")}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="rc parallel-panel">
+        <form className="parallel-generate" onSubmit={runGeneration}>
+          <div className="parallel-kicker">Find parallels</div>
+          <h3>Confirm scan parameters</h3>
+          <p>
+            No parallel assets exist for {textid}, 卷 {seq}. Review these settings
+            before starting the corpus scan.
+          </p>
+          {error != null && <div className="parallel-generate-error">{error}</div>}
+          <div className="parallel-generate-grid">
+            <label>
+              Bucket (--bucket)
+              <select
+                value={generationParams.bucket}
+                onChange={(event) => setGenerationParams({
+                  ...generationParams,
+                  bucket: event.target.value as JuanParallelsGenerationParams["bucket"],
+                })}
+              >
+                <option value="all">all</option>
+                <option value="body">body</option>
+                <option value="front">front</option>
+                <option value="back">back</option>
+              </select>
+            </label>
+            <label>
+              Minimum length (--min-length)
+              <input
+                type="number"
+                min={3}
+                required
+                value={generationParams.minLength}
+                onChange={(event) => setGenerationParams({
+                  ...generationParams,
+                  minLength: Number(event.target.value),
+                })}
+              />
+            </label>
+            <label>
+              Maximum result length (post-filter)
+              <input
+                type="number"
+                min={generationParams.minLength}
+                placeholder="no limit"
+                value={generationParams.maxLength ?? ""}
+                onChange={(event) => setGenerationParams({
+                  ...generationParams,
+                  maxLength: event.target.value === "" ? null : Number(event.target.value),
+                })}
+              />
+            </label>
+            <label>
+              Edit distance (--max-edits)
+              <input
+                type="number"
+                min={0}
+                max={4}
+                required
+                value={generationParams.maxEdits}
+                onChange={(event) => setGenerationParams({
+                  ...generationParams,
+                  maxEdits: Number(event.target.value),
+                })}
+              />
+            </label>
+            <label>
+              Minimum occurrences (--min-occurrences)
+              <input
+                type="number"
+                min={2}
+                required
+                value={generationParams.minOccurrences}
+                onChange={(event) => setGenerationParams({
+                  ...generationParams,
+                  minOccurrences: Number(event.target.value),
+                })}
+              />
+            </label>
+            <label>
+              Maximum postings (--max-postings)
+              <input
+                type="number"
+                min={2}
+                required
+                value={generationParams.maxPostings}
+                onChange={(event) => setGenerationParams({
+                  ...generationParams,
+                  maxPostings: Number(event.target.value),
+                })}
+              />
+            </label>
+            <label>
+              Context characters (--context)
+              <input
+                type="number"
+                min={0}
+                max={500}
+                required
+                value={generationParams.context}
+                onChange={(event) => setGenerationParams({
+                  ...generationParams,
+                  context: Number(event.target.value),
+                })}
+              />
+            </label>
+          </div>
+          <label className="parallel-generate-check">
+            <input
+              type="checkbox"
+              checked={generationParams.includeContained}
+              onChange={(event) => setGenerationParams({
+                ...generationParams,
+                includeContained: event.target.checked,
+              })}
+            />
+            Include passages wholly contained in longer matches (--include-contained)
+          </label>
+          <div className="parallel-generate-note">
+            Maximum result length is applied after discovery; the other settings map
+            directly to the parallel scanner.
+          </div>
+          <div className="parallel-generate-actions">
+            <button type="button" onClick={() => workspace.setRightTab("annotations")}>
+              Cancel
+            </button>
+            <button type="submit">Run scan</button>
+          </div>
+        </form>
+      </div>
+    );
   }
   if (error != null) {
     return <div className="rc empty">Failed to load parallels: {error}</div>;
   }
+  if (assetState === "generating") {
+    return (
+      <div className="rc parallel-panel">
+        <div className="parallel-notice">{notice}</div>
+      </div>
+    );
+  }
   if (response == null || response.textid !== textid || response.juan_seq !== seq) {
-    return <div className="rc empty">Loading parallel passages…</div>;
+    return (
+      <div className="rc empty">
+        {assetState === "checking"
+          ? "Checking for stored parallel passages…"
+          : "Loading parallel passages…"}
+      </div>
+    );
   }
 
   const pageStart = response.total === 0 ? 0 : response.offset + 1;
@@ -325,6 +576,7 @@ export function ParallelsTab() {
 
   return (
     <div className="rc parallel-panel">
+      {notice != null && <div className="parallel-notice">{notice}</div>}
       <div className="parallel-header">
         <div className="parallel-title">
           <div className="parallel-kicker">Parallels</div>
