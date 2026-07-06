@@ -40,3 +40,6 @@ TW contradictions (21 total), with labels reversed (TW=var, JP=reg)
 Finally,  reviewed and manually resolved:
 
 啟, 眾, 缽, 說, 贗
+
+[2026-07-06]
+Further manual edits to the mapping file.
