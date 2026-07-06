@@ -13,6 +13,7 @@ hashes / marker assets.
 
     python -m bkk chars canonicalize
     python -m bkk chars canonicalize --text-id KR1a0001
+    python -m bkk chars canonicalize --jobs 8
     python -m bkk chars canonicalize --out-root /data/bkk/out --dry-run
     python -m bkk chars revert --text-id KR1a0001
 
@@ -69,6 +70,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--abort-on-error", dest="abort_on_error", action="store_true",
         help="restore legacy behaviour: abort a bundle on the first "
              "unmapped codepoint instead of surveying the whole bundle",
+    )
+    pc.add_argument(
+        "--jobs", dest="jobs", type=int, default=1,
+        help="number of bundles to process in parallel (default: 1)",
     )
 
     pr = sub.add_parser(
@@ -147,6 +152,7 @@ def run(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             log_file=log_file,
             abort_on_error=args.abort_on_error,
+            jobs=args.jobs,
         )
 
     if args.op in {"revert", "decanonicalize"}:

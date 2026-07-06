@@ -12,6 +12,7 @@ import copy
 import datetime
 import re
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, TextIO
@@ -38,6 +39,9 @@ from .canonicalize import (
 from .refs import CanonicalizationContext
 
 
+_LOG_LOCK = threading.Lock()
+
+
 def _ts() -> str:
     return datetime.datetime.now().isoformat(timespec="seconds")
 
@@ -45,8 +49,9 @@ def _ts() -> str:
 def _log(log_fh: TextIO | None, level: str, msg: str) -> None:
     if log_fh is None:
         return
-    log_fh.write(f"[{_ts()}] {level} {msg}\n")
-    log_fh.flush()
+    with _LOG_LOCK:
+        log_fh.write(f"[{_ts()}] {level} {msg}\n")
+        log_fh.flush()
 
 
 def _emit_error(log_fh: TextIO | None, msg: str) -> None:
@@ -73,6 +78,7 @@ def run_canonicalize(
     dry_run: bool = False,
     log_file: Path | None = None,
     abort_on_error: bool = False,
+    jobs: int = 1,
 ) -> int:
     """Process every master bundle under ``out_root``. Returns an exit code.
 
@@ -92,6 +98,7 @@ def run_canonicalize(
             f"=== [{_ts()}] bkk chars canonicalize "
             f"out_root={out_root} dry_run={dry_run} "
             f"abort_on_error={abort_on_error} "
+            f"jobs={jobs} "
             f"text_ids={text_ids or 'ALL'} ===\n"
         )
         log_fh.flush()
@@ -106,6 +113,9 @@ def run_canonicalize(
         if not bundle_dirs:
             _emit_error(log_fh, f"no bundles found under {out_root}")
             return 1
+        if jobs < 1:
+            _emit_error(log_fh, f"error: jobs must be >= 1, got {jobs}")
+            return 2
 
         total_subs = 0
         total_juans = 0
@@ -114,20 +124,9 @@ def run_canonicalize(
         unmapped_bundles: list[str] = []
         rewrote_bundles = 0
 
-        for bundle_dir in bundle_dirs:
+        def record_result(bundle_dir: Path, stats: dict[str, Any]) -> None:
+            nonlocal total_subs, total_juans, total_unmapped, rewrote_bundles
             text_id = bundle_dir.name
-            rel = bundle_dir.relative_to(out_root)
-            print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
-            try:
-                stats = _process_bundle(
-                    bundle_dir, text_id,
-                    ctx=ctx, dry_run=dry_run,
-                    log_fh=log_fh, abort_on_error=abort_on_error,
-                )
-            except (RuntimeError, ValueError, FileNotFoundError) as exc:
-                _emit_error(log_fh, f"[{text_id}] error: {exc}")
-                failed.append(text_id)
-                continue
             total_subs += stats["substitutions"]
             total_juans += stats["juans"]
             bundle_unmapped = stats.get("unmapped", 0)
@@ -143,6 +142,50 @@ def run_canonicalize(
                 rewrote_bundles += 1
             for line in stats["lines"]:
                 print(line)
+
+        if jobs == 1 or len(bundle_dirs) == 1:
+            for bundle_dir in bundle_dirs:
+                text_id = bundle_dir.name
+                rel = bundle_dir.relative_to(out_root)
+                print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
+                try:
+                    stats = _process_bundle(
+                        bundle_dir, text_id,
+                        ctx=ctx, dry_run=dry_run,
+                        log_fh=log_fh, abort_on_error=abort_on_error,
+                    )
+                except (RuntimeError, ValueError, FileNotFoundError) as exc:
+                    _emit_error(log_fh, f"[{text_id}] error: {exc}")
+                    failed.append(text_id)
+                    continue
+                record_result(bundle_dir, stats)
+        else:
+            max_workers = min(jobs, len(bundle_dirs))
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = {
+                    pool.submit(
+                        _process_bundle,
+                        bundle_dir,
+                        bundle_dir.name,
+                        ctx=ctx,
+                        dry_run=dry_run,
+                        log_fh=log_fh,
+                        abort_on_error=abort_on_error,
+                    ): bundle_dir
+                    for bundle_dir in bundle_dirs
+                }
+                for fut in as_completed(futures):
+                    bundle_dir = futures[fut]
+                    text_id = bundle_dir.name
+                    rel = bundle_dir.relative_to(out_root)
+                    print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
+                    try:
+                        stats = fut.result()
+                    except (RuntimeError, ValueError, FileNotFoundError) as exc:
+                        _emit_error(log_fh, f"[{text_id}] error: {exc}")
+                        failed.append(text_id)
+                        continue
+                    record_result(bundle_dir, stats)
 
         verb = "would substitute" if dry_run else "substituted"
         print(

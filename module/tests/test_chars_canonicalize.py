@@ -15,7 +15,7 @@ from bkk.chars.canonicalize import (
     canonicalize_text,
     revert_substitution_markers,
 )
-from bkk.chars.run import run_revert
+from bkk.chars.run import run_canonicalize, run_revert
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
 from bkk.marker_assets import build_marker_asset, hydrate_juan_markers, load_marker_asset
@@ -390,3 +390,97 @@ def test_run_revert_jobs_processes_bundles_concurrently(tmp_path: Path, monkeypa
 
     assert run_revert(tmp_path, text_ids=[bundle_a.name, bundle_b.name], log_file=None, jobs=2) == 0
     assert max_active == 2
+
+
+def test_run_canonicalize_jobs_processes_bundles_concurrently(
+    tmp_path: Path,
+    monkeypatch,
+):
+    bundle_a = tmp_path / "KR0chr05"
+    bundle_b = tmp_path / "KR0chr06"
+    bundle_a.mkdir()
+    bundle_b.mkdir()
+
+    barrier = threading.Barrier(2)
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def fake_process_bundle(
+        bundle_dir: Path,
+        text_id: str,
+        *,
+        ctx: CanonicalizationContext,
+        dry_run: bool,
+        log_fh,
+        abort_on_error: bool,
+    ):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        barrier.wait(timeout=2)
+        with lock:
+            active -= 1
+        return {
+            "juans": 1,
+            "substitutions": 0,
+            "unmapped": 0,
+            "manifest_changed": False,
+            "lines": [f"  {text_id}: done"],
+        }
+
+    monkeypatch.setattr(
+        "bkk.chars.run._select_bundles",
+        lambda out_root, text_ids, log_fh=None: [bundle_a, bundle_b],
+    )
+    monkeypatch.setattr("bkk.chars.run._process_bundle", fake_process_bundle)
+
+    assert run_canonicalize(
+        tmp_path,
+        ctx=_toy_ctx(),
+        text_ids=[bundle_a.name, bundle_b.name],
+        log_file=None,
+        jobs=2,
+    ) == 0
+    assert max_active == 2
+
+
+def test_run_canonicalize_rejects_nonpositive_jobs(tmp_path: Path, monkeypatch):
+    bundle = tmp_path / "KR0chr07"
+    bundle.mkdir()
+    monkeypatch.setattr(
+        "bkk.chars.run._select_bundles",
+        lambda out_root, text_ids, log_fh=None: [bundle],
+    )
+
+    assert run_canonicalize(
+        tmp_path,
+        ctx=_toy_ctx(),
+        log_file=None,
+        jobs=0,
+    ) == 2
+
+
+def test_canonicalize_cli_forwards_jobs(tmp_path: Path, monkeypatch):
+    from bkk.chars import cli
+
+    captured: dict = {}
+
+    def fake_run_canonicalize(out_root: Path, **kwargs):
+        captured["out_root"] = out_root
+        captured.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "load_context", lambda refs_dir: _toy_ctx())
+    monkeypatch.setattr(cli, "run_canonicalize", fake_run_canonicalize)
+
+    assert cli.run([
+        "canonicalize",
+        "--out-root",
+        str(tmp_path),
+        "--jobs",
+        "3",
+    ]) == 0
+    assert captured["out_root"] == tmp_path
+    assert captured["jobs"] == 3
