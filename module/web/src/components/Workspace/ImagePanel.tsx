@@ -22,6 +22,8 @@ const ZOOM_STEP = 0.25;
 interface Props {
   textid: string;
   seq: number;
+  paneId?: string;
+  tabId?: string;
 }
 
 interface PageEntry {
@@ -104,8 +106,14 @@ function imageEditions(entries: PageEntry[], manifest: Manifest | null): ImageEd
     .sort((a, b) => a.short.localeCompare(b.short));
 }
 
-function scrollAnchorIntoView(pageId: string): void {
-  const ec = document.querySelector<HTMLElement>(".ec");
+function scrollAnchorIntoView(pageId: string, paneId?: string, tabId?: string): void {
+  const roots = Array.from(document.querySelectorAll<HTMLElement>(".ec"));
+  const ec =
+    roots.find(
+      (el) =>
+        (paneId == null || el.dataset.paneId === paneId) &&
+        (tabId == null || el.dataset.tabId === tabId),
+    ) ?? roots[0] ?? null;
   const el = ec?.querySelector<HTMLElement>(`.page-anchor[data-page-id="${pageId}"]`);
   if (el) el.scrollIntoView({ block: "start", behavior: "smooth" });
 }
@@ -114,7 +122,7 @@ function clampZoom(value: number): number {
   return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Number(value.toFixed(2))));
 }
 
-export function ImagePanel({ textid, seq }: Props) {
+export function ImagePanel({ textid, seq, paneId, tabId }: Props) {
   const [juan, setJuan] = useState<Juan | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -220,7 +228,7 @@ export function ImagePanel({ textid, seq }: Props) {
       markerId: target.id,
       offset: target.offset,
     });
-    scrollAnchorIntoView(target.id);
+    scrollAnchorIntoView(target.id, paneId, tabId);
   };
 
   const onPrev = () => {

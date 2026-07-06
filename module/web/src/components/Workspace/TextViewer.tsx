@@ -412,6 +412,7 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
   // layout effect can re-run safely (deps include `blocks` + `visibleBlocks`)
   // without scheduling a second scroll/flash for the same target.
   const lastFlashedRef = useRef<typeof pending>(null);
+  const lastScrollSyncRef = useRef<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -575,6 +576,61 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
     return () => obs.disconnect();
   }, [blocks]);
 
+  // Emit the source offset nearest the top of this pane so the translation
+  // sidecar can follow manual source scrolling. This is intentionally DOM
+  // scoped by pane/tab to keep split panes independent.
+  useEffect(() => {
+    const root = scrollRef.current;
+    const container = containerRef.current;
+    if (!root || !container || blocks.length === 0) return;
+    let raf = 0;
+    const emit = () => {
+      raf = 0;
+      const rootRect = root.getBoundingClientRect();
+      const anchorY = rootRect.top + Math.min(80, Math.max(16, rootRect.height * 0.12));
+      const spans = container.querySelectorAll<HTMLElement>("span[data-offset][data-bucket]");
+      let best: { bucket: string; offset: number; distance: number } | null = null;
+      for (const sp of spans) {
+        const bucket = sp.dataset.bucket;
+        const offset = Number(sp.dataset.offset);
+        if (!bucket || Number.isNaN(offset)) continue;
+        const rect = sp.getBoundingClientRect();
+        if (rect.bottom < rootRect.top || rect.top > rootRect.bottom) continue;
+        const distance =
+          rect.top <= anchorY && rect.bottom >= anchorY
+            ? 0
+            : Math.min(Math.abs(rect.top - anchorY), Math.abs(rect.bottom - anchorY));
+        if (best == null || distance < best.distance) {
+          best = { bucket, offset, distance };
+        }
+      }
+      if (best == null) return;
+      const key = `${best.bucket}:${best.offset}`;
+      if (key === lastScrollSyncRef.current) return;
+      lastScrollSyncRef.current = key;
+      window.dispatchEvent(new CustomEvent("bkk:source-scroll-sync", {
+        detail: {
+          paneId,
+          tabId,
+          textid,
+          seq,
+          bucket: best.bucket,
+          offset: best.offset,
+        },
+      }));
+    };
+    const schedule = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(emit);
+    };
+    root.addEventListener("scroll", schedule, { passive: true });
+    schedule();
+    return () => {
+      root.removeEventListener("scroll", schedule);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [blocks, visibleBlocks, paneId, tabId, textid, seq]);
+
   // Page-anchor observer: tracks the topmost page-break anchor in the upper
   // ~15% of the scroll viewport and reports it as currentPage. Distinct from
   // the block observer above (which uses a generous rootMargin for lazy
@@ -683,8 +739,10 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
     if (!target) return;
     lastFlashedRef.current = pending;
     target.scrollIntoView({ block: "center", behavior: "smooth" });
-    setFlashBucket(pending.bucket);
-    setFlashOffsets({ start, end });
+    if (pending.flash !== false) {
+      setFlashBucket(pending.bucket);
+      setFlashOffsets({ start, end });
+    }
     workspace.consumeHighlight();
   }, [pending, textid, seq, visibleBlocks, blocks]);
 
@@ -827,6 +885,8 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
   return (
     <div
       className="ec"
+      data-pane-id={paneId}
+      data-tab-id={tabId}
       ref={scrollRef}
       onMouseUp={handleMouseUp}
       onMouseLeave={() => workspace.setHover(paneId, tabId, null)}

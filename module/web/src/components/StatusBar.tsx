@@ -4,20 +4,12 @@ import {
   type LineBreakDisplay,
   type LineMode,
   type PaneNode,
-  type ReadMode,
 } from "../state/useWorkspace";
 import { krClass } from "../lib/krClass";
 
 function formatCp(cp: number): string {
   return `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
 }
-
-const MODES: { id: ReadMode; label: string; enabled: boolean; tip: string }[] = [
-  { id: "read", label: "Read", enabled: true, tip: "Read mode" },
-  { id: "trans", label: "Trans", enabled: true, tip: "Translation mode" },
-  { id: "inspect", label: "Inspect", enabled: true, tip: "Inspect mode (image + text)" },
-  { id: "edit", label: "Edit", enabled: true, tip: "Edit text and markers" },
-];
 
 const LINE_MODES: { id: LineMode; label: string; tip: string }[] = [
   { id: "paragraph", label: "P", tip: "Paragraph display" },
@@ -45,13 +37,14 @@ export function StatusBar() {
   const seq = useWorkspace((s) => s.activeSeq);
   const pane = useWorkspace((s) => s.pane);
   const focusedPaneId = useWorkspace((s) => s.focusedPaneId);
-  const defaultMode = useWorkspace((s) => s.readMode);
   const defaultLineMode = useWorkspace((s) => s.readPrefs.lineMode);
   const showPageBreaks = useWorkspace((s) => s.readPrefs.showPageBreaks);
   const lineBreakDisplay = useWorkspace((s) => s.readPrefs.lineBreakDisplay);
   const tab = focusedTab(pane, focusedPaneId);
   const textTab = tab?.type === "text" ? tab : null;
-  const mode = textTab?.readMode ?? defaultMode;
+  const editing = textTab?.readMode === "edit";
+  const showTranslation = textTab?.showTranslation === true || textTab?.readMode === "trans";
+  const showImage = textTab?.showImage === true || textTab?.readMode === "inspect";
   const lineMode = textTab?.lineMode ?? defaultLineMode;
   const cp = textTab?.hoverCodepoint ?? null;
   const authenticated = useWorkspace((s) => s.auth.status === "authenticated");
@@ -89,17 +82,38 @@ export function StatusBar() {
           {m.label}
         </button>
       ))}
-      {MODES.filter((m) => m.id !== "edit" || authenticated).map((m) => (
+      <button
+        className={`sdb${showTranslation && !editing ? " on" : ""}`}
+        disabled={textTab == null || editing}
+        title="Toggle translation sidecar"
+        onClick={() => {
+          if (textTab != null && !editing) workspace.toggleTranslationSidecar();
+        }}
+      >
+        Trans
+      </button>
+      <button
+        className={`sdb${showImage && !editing ? " on" : ""}`}
+        disabled={textTab == null || editing}
+        title="Toggle image sidecar"
+        onClick={() => {
+          if (textTab != null && !editing) workspace.toggleImageSidecar();
+        }}
+      >
+        Image
+      </button>
+      {authenticated && (
         <button
-          key={m.id}
-          className={`sdb${mode === m.id ? " on" : ""}`}
-          disabled={!m.enabled || (m.id === "edit" && textTab == null)}
-          title={m.tip}
-          onClick={() => m.enabled && textTab != null && workspace.setReadMode(m.id)}
+          className={`sdb${editing ? " on" : ""}`}
+          disabled={textTab == null}
+          title={editing ? "Return to reading" : "Edit text and markers"}
+          onClick={() => {
+            if (textTab != null) workspace.setReadMode(editing ? "read" : "edit");
+          }}
         >
-          {m.label}
+          Edit
         </button>
-      ))}
+      )}
     </div>
   );
 }

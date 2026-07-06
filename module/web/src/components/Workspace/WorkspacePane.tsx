@@ -8,7 +8,7 @@ import { CoreRecord } from "./CoreRecord";
 import { DuplicationViewer } from "./DuplicationViewer";
 import { ImagePanel } from "./ImagePanel";
 import { TextViewer } from "./TextViewer";
-import { TranslationViewer } from "./TranslationViewer";
+import { TranslationSidecar } from "./TranslationSidecar";
 import { BundleEditor } from "./BundleEditor";
 import type { EditorPosition } from "../../lib/editorText";
 
@@ -49,7 +49,6 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
   const defaultReadMode = useWorkspace((s) => s.readMode);
   const defaultLineMode = useWorkspace((s) => s.readPrefs.lineMode);
   const inspectWidth = useWorkspace((s) => s.panelWidths.inspect);
-  const selectedTranslation = useWorkspace((s) => s.selectedTranslation);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [seqsMap, setSeqsMap] = useState<Record<string, number[]>>({});
   const [editCursor, setEditCursor] = useState<EditorPosition>({
@@ -65,9 +64,16 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
 
   const readMode = activeTextTab?.readMode ?? defaultReadMode;
   const lineMode = activeTextTab?.lineMode ?? defaultLineMode;
-  const showInspect = readMode === "inspect" && activeTextTab != null;
-  const showTranslation = readMode === "trans" && activeTextTab != null;
   const showEdit = readMode === "edit" && activeTextTab != null;
+  const showTranslation =
+    activeTextTab != null &&
+    !showEdit &&
+    (activeTextTab.showTranslation === true || readMode === "trans");
+  const showImage =
+    activeTextTab != null &&
+    !showEdit &&
+    (activeTextTab.showImage === true || readMode === "inspect");
+  const selectedTranslation = activeTextTab?.selectedTranslation ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -277,9 +283,9 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
             seq={activeTextTab.seq}
             onCursorInfoChange={setEditCursor}
           />
-        ) : showInspect ? (
-          <div className="ws-split">
-            <div className="ws-split-left">
+        ) : (
+          <div className={`ws-unified${showTranslation || showImage ? " has-sidecars" : ""}`}>
+            <div className="ws-primary">
               <TextViewer
                 key={`${activeTextTab.textid}:${activeTextTab.seq}`}
                 paneId={pane.id}
@@ -289,37 +295,37 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
                 lineMode={lineMode}
               />
             </div>
-            <InspectResizer />
-            <div className="ws-split-right" style={{ width: inspectWidth }}>
-              <ImagePanel
-                key={`${activeTextTab.textid}:${activeTextTab.seq}`}
-                textid={activeTextTab.textid}
-                seq={activeTextTab.seq}
-              />
-            </div>
+            {(showTranslation || showImage) && (
+              <>
+                <InspectResizer />
+                <div className="ws-sidecars" style={{ width: inspectWidth }}>
+                  {showTranslation && (
+                    <TranslationSidecar
+                      key={`trans:${activeTextTab.textid}:${activeTextTab.seq}:${selectedTranslation?.id ?? ""}`}
+                      paneId={pane.id}
+                      tabId={activeTextTab.id}
+                      textid={activeTextTab.textid}
+                      seq={activeTextTab.seq}
+                      translationId={
+                        selectedTranslation?.source_textid === activeTextTab.textid
+                          ? selectedTranslation.id
+                          : null
+                      }
+                    />
+                  )}
+                  {showImage && (
+                    <ImagePanel
+                      key={`image:${activeTextTab.textid}:${activeTextTab.seq}`}
+                      textid={activeTextTab.textid}
+                      seq={activeTextTab.seq}
+                      paneId={pane.id}
+                      tabId={activeTextTab.id}
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </div>
-        ) : showTranslation ? (
-          <TranslationViewer
-            key={`${activeTextTab.textid}:${activeTextTab.seq}:${selectedTranslation?.id ?? ""}`}
-            paneId={pane.id}
-            tabId={activeTextTab.id}
-            textid={activeTextTab.textid}
-            seq={activeTextTab.seq}
-            translationId={
-              selectedTranslation?.source_textid === activeTextTab.textid
-                ? selectedTranslation.id
-                : null
-            }
-          />
-        ) : (
-          <TextViewer
-            key={`${activeTextTab.textid}:${activeTextTab.seq}`}
-            paneId={pane.id}
-            tabId={activeTextTab.id}
-            textid={activeTextTab.textid}
-            seq={activeTextTab.seq}
-            lineMode={lineMode}
-          />
         )
       ) : (
         <Welcome empty="Select a text from the catalog or TOC." />

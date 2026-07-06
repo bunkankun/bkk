@@ -174,6 +174,7 @@ export interface PendingHighlight {
   bucket: string;
   offset: number;
   length: number;
+  flash?: boolean;
 }
 
 export interface CurrentPage {
@@ -219,6 +220,9 @@ export interface TextTab {
   textid: string;
   seq: number;
   pinned?: boolean;
+  showTranslation?: boolean;
+  showImage?: boolean;
+  selectedTranslation?: TranslationSummary | null;
   readMode?: ReadMode;
   lineMode?: LineMode;
   hoverChar?: string | null;
@@ -766,6 +770,74 @@ function activeTabForLeaf(leaf: PaneLeaf | null): PaneTab | null {
 
 function isTextTab(tab: PaneTab | null | undefined): tab is TextTab {
   return tab?.type === "text";
+}
+
+function textTabShowsTranslation(tab: TextTab | null | undefined): boolean {
+  return tab?.showTranslation === true || tab?.readMode === "trans";
+}
+
+function textTabShowsImage(tab: TextTab | null | undefined): boolean {
+  return tab?.showImage === true || tab?.readMode === "inspect";
+}
+
+function inheritedTextViewState(
+  sourceText: TextTab | null,
+  textid: string,
+): Pick<TextTab, "showTranslation" | "showImage" | "selectedTranslation"> {
+  if (!sourceText || sourceText.textid !== textid) {
+    return { showTranslation: false, showImage: false, selectedTranslation: null };
+  }
+  const selectedTranslation =
+    sourceText.selectedTranslation?.source_textid === textid
+      ? sourceText.selectedTranslation
+      : null;
+  return {
+    showTranslation: textTabShowsTranslation(sourceText),
+    showImage: textTabShowsImage(sourceText),
+    selectedTranslation,
+  };
+}
+
+function makeTextTab(args: {
+  textid: string;
+  seq: number;
+  pinned?: boolean;
+  sourceText?: TextTab | null;
+  showTranslation?: boolean;
+  showImage?: boolean;
+  selectedTranslation?: TranslationSummary | null;
+  lineMode?: LineMode;
+}): TextTab {
+  const inherited = inheritedTextViewState(args.sourceText ?? null, args.textid);
+  const pendingTranslation =
+    state.selectedTranslation?.source_textid === args.textid && state.activity === "overlays"
+      ? state.selectedTranslation
+      : null;
+  const selectedTranslation =
+    args.selectedTranslation?.source_textid === args.textid
+      ? args.selectedTranslation
+      : inherited.selectedTranslation ?? pendingTranslation;
+  return {
+    id: `${args.textid}:${args.seq}`,
+    type: "text",
+    textid: args.textid,
+    seq: args.seq,
+    pinned: args.pinned === true,
+    readMode: "read",
+    lineMode:
+      args.lineMode ??
+      (args.sourceText?.pinned
+        ? state.readPrefs.lineMode
+        : args.sourceText?.lineMode ?? state.readPrefs.lineMode),
+    showTranslation:
+      args.showTranslation ?? (inherited.showTranslation || pendingTranslation != null),
+    showImage: args.showImage ?? inherited.showImage,
+    selectedTranslation,
+  };
+}
+
+function textActivity(tab: TextTab): Activity {
+  return textTabShowsTranslation(tab) ? "overlays" : "texts";
 }
 
 function cancelSearchRequest(): void {
@@ -1438,17 +1510,19 @@ async function loadWorkspacePersistence(): Promise<void> {
     if (!restoredSessionOnce && sessionDoc != null) {
       restoredSessionOnce = true;
       const readMode =
-        sessionDoc.readMode === "inspect" ||
-        sessionDoc.readMode === "edit" ||
-        sessionDoc.readMode === "trans" ||
-        sessionDoc.readMode === "read"
-          ? sessionDoc.readMode
-          : state.readMode;
+        sessionDoc.readMode === "edit"
+          ? "edit"
+          : sessionDoc.readMode === "read" ||
+              sessionDoc.readMode === "inspect" ||
+              sessionDoc.readMode === "trans"
+            ? "read"
+            : state.readMode;
       const openMode =
         sessionDoc.openMode === "read" ||
-        sessionDoc.openMode === "trans" ||
         sessionDoc.openMode === "sticky"
           ? sessionDoc.openMode
+          : sessionDoc.openMode === "trans"
+            ? "read"
           : state.openMode;
       const rightTab =
         sessionDoc.rightTab === "chat" ||
@@ -1684,11 +1758,16 @@ export const workspace = {
       readMode !== "edit" &&
       !confirmDiscardBundleEditor()
     ) return;
+    const normalizedReadMode: ReadMode = readMode === "edit" ? "edit" : "read";
+    const nextShowTranslation = readMode === "trans" ? true : undefined;
+    const nextShowImage = readMode === "inspect" ? true : undefined;
     const activity: Activity =
       readMode === "trans"
         ? "overlays"
-        : readMode === "read"
-          ? "texts"
+        : normalizedReadMode === "read"
+          ? isTextTab(currentTab) && textTabShowsTranslation(currentTab)
+            ? "overlays"
+            : "texts"
           : state.activity;
     // Switching between read and inspect remounts TextViewer (different parent
     // tree), losing scroll position. Reuse pendingHighlight to land at the
@@ -1696,7 +1775,7 @@ export const workspace = {
     const activeTab = target?.tabs.find((t) => t.id === target.activeTabId);
     const cp = state.currentPage;
     const canRestore =
-      (readMode === "read" || readMode === "inspect") &&
+      (normalizedReadMode === "read" || readMode === "inspect") &&
       activeTab != null &&
       activeTab.type === "text" &&
       cp != null &&
@@ -1706,7 +1785,7 @@ export const workspace = {
       ? { textid: cp.textid, seq: cp.seq, bucket: cp.bucket, offset: cp.offset, length: 1 }
       : state.pendingHighlight;
     if (!target) {
-      state = { ...state, readMode, activity, pendingHighlight };
+      state = { ...state, readMode: normalizedReadMode, activity, pendingHighlight };
     } else {
       state = {
         ...state,
@@ -1718,7 +1797,14 @@ export const workspace = {
             ...leaf,
             tabs: leaf.tabs.map((tab) =>
               tab.id === leaf.activeTabId && tab.type === "text"
-                ? { ...tab, readMode }
+                ? {
+                    ...tab,
+                    readMode: normalizedReadMode,
+                    ...(nextShowTranslation != null
+                      ? { showTranslation: nextShowTranslation }
+                      : {}),
+                    ...(nextShowImage != null ? { showImage: nextShowImage } : {}),
+                  }
                 : tab,
             ),
           };
@@ -1734,18 +1820,12 @@ export const workspace = {
     scheduleSessionSave();
   },
   selectTranslation(translation: TranslationSummary) {
-    state = {
-      ...state,
-      selectedTranslation: translation,
-      readMode: "trans",
-      activity: "overlays",
-    };
     if (state.activeTextid !== translation.source_textid) {
       workspace.selectBundle(translation.source_textid);
       state = {
         ...state,
         selectedTranslation: translation,
-        readMode: "trans",
+        readMode: "read",
         activity: "overlays",
       };
       notify();
@@ -1762,13 +1842,73 @@ export const workspace = {
             ...leaf,
             tabs: leaf.tabs.map((tab) =>
               tab.id === leaf.activeTabId && tab.type === "text"
-                ? { ...tab, readMode: "trans" }
+                ? {
+                    ...tab,
+                    readMode: "read",
+                    showTranslation: true,
+                    selectedTranslation: translation,
+                  }
                 : tab,
             ),
           };
         }),
+        selectedTranslation: translation,
+        readMode: "read",
+        activity: "overlays",
+      };
+    } else {
+      state = {
+        ...state,
+        selectedTranslation: translation,
+        readMode: "read",
+        activity: "overlays",
       };
     }
+    notify();
+    scheduleSessionSave();
+  },
+  toggleTranslationSidecar(show?: boolean) {
+    const target = activePaneLeaf(state.pane);
+    const currentTab = activeTabForLeaf(target);
+    if (!target || !isTextTab(currentTab) || currentTab.readMode === "edit") return;
+    const nextShow = show ?? !textTabShowsTranslation(currentTab);
+    state = {
+      ...state,
+      activity: nextShow ? "overlays" : state.activity,
+      pane: mapPaneLeaves(state.pane, (leaf) => {
+        if (leaf.id !== target.id) return leaf;
+        return {
+          ...leaf,
+          tabs: leaf.tabs.map((tab) =>
+            tab.id === leaf.activeTabId && tab.type === "text"
+              ? { ...tab, readMode: "read", showTranslation: nextShow }
+              : tab,
+          ),
+        };
+      }),
+    };
+    notify();
+    scheduleSessionSave();
+  },
+  toggleImageSidecar(show?: boolean) {
+    const target = activePaneLeaf(state.pane);
+    const currentTab = activeTabForLeaf(target);
+    if (!target || !isTextTab(currentTab) || currentTab.readMode === "edit") return;
+    const nextShow = show ?? !textTabShowsImage(currentTab);
+    state = {
+      ...state,
+      pane: mapPaneLeaves(state.pane, (leaf) => {
+        if (leaf.id !== target.id) return leaf;
+        return {
+          ...leaf,
+          tabs: leaf.tabs.map((tab) =>
+            tab.id === leaf.activeTabId && tab.type === "text"
+              ? { ...tab, readMode: "read", showImage: nextShow }
+              : tab,
+          ),
+        };
+      }),
+    };
     notify();
     scheduleSessionSave();
   },
@@ -1814,6 +1954,37 @@ export const workspace = {
     };
     notify();
   },
+  highlightTextLocation(args: {
+    textid: string;
+    seq: number;
+    bucket: string;
+    offset: number;
+    length?: number;
+    markerId?: string;
+    flash?: boolean;
+  }) {
+    state = {
+      ...state,
+      currentPage: args.markerId
+        ? {
+            textid: args.textid,
+            seq: args.seq,
+            bucket: args.bucket,
+            markerId: args.markerId,
+            offset: args.offset,
+          }
+        : state.currentPage,
+      pendingHighlight: {
+        textid: args.textid,
+        seq: args.seq,
+        bucket: args.bucket,
+        offset: args.offset,
+        length: Math.max(1, args.length ?? 1),
+        flash: args.flash,
+      },
+    };
+    notify();
+  },
   setCoreTarget(target: CoreTarget | null) {
     state = { ...state, coreTarget: target };
     notify();
@@ -1846,6 +2017,7 @@ export const workspace = {
       focusedPaneId: paneId,
       activeTextid: textTab?.textid ?? state.activeTextid,
       activeSeq: textTab?.seq ?? state.activeSeq,
+      selectedTranslation: textTab ? textTab.selectedTranslation ?? null : state.selectedTranslation,
     };
     notify();
   },
@@ -1879,16 +2051,16 @@ export const workspace = {
     const pane = paneHasPinnedTab(state.pane)
       ? state.pane
       : { kind: "leaf" as const, id: "root", tabs: [], activeTabId: null };
-    // Mirror openJuan: the LeftPanel activity tracks the mode the next tab
-    // will open in, so users opening a text in Trans mode land on the
-    // Translations panel instead of Contents.
-    const presumedReadMode: ReadMode =
-      state.openMode === "sticky" ? state.readMode : state.openMode;
-    const activity: Activity = presumedReadMode === "trans" ? "overlays" : "texts";
+    const activity: Activity =
+      state.selectedTranslation?.source_textid === textid && state.activity === "overlays"
+        ? "overlays"
+        : "texts";
     state = {
       ...state,
       activeTextid: textid,
       activeSeq: null,
+      selectedTranslation:
+        state.selectedTranslation?.source_textid === textid ? state.selectedTranslation : null,
       selection: null,
       currentPage: null,
       activity,
@@ -1914,21 +2086,20 @@ export const workspace = {
     corresp: string | null,
     sourceText: string | null,
   ) {
-    const tabId = `${summary.source_textid}:${seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
     const sourceTextTab = isTextTab(sourceTab) ? sourceTab : null;
-    const tab: TextTab = {
-      id: tabId,
-      type: "text",
+    const tab = makeTextTab({
       textid: summary.source_textid,
       seq,
       pinned: false,
-      readMode: "trans",
+      sourceText: sourceTextTab,
+      showTranslation: true,
+      selectedTranslation: summary,
       lineMode: sourceTextTab?.lineMode ?? state.readPrefs.lineMode,
-    };
+    });
     const pane = paneForOpenTab(tab);
-    const focusedPaneId = leafIdForTab(pane, tabId);
+    const focusedPaneId = leafIdForTab(pane, tab.id);
     state = {
       ...state,
       activeTextid: summary.source_textid,
@@ -1939,7 +2110,7 @@ export const workspace = {
       pane,
       activity: "overlays",
       selectedTranslation: summary,
-      readMode: "trans",
+      readMode: "read",
       selectedSegment: corresp
         ? { textid: summary.source_textid, seq, corresp, sourceText: sourceText ?? "" }
         : state.selectedSegment,
@@ -1950,26 +2121,18 @@ export const workspace = {
   },
   openJuan(textid: string, seq: number, options: { pinned?: boolean } = {}) {
     if (!confirmDiscardBundleEditor()) return;
-    const tabId = `${textid}:${seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
     const sourceText = isTextTab(sourceTab) ? sourceTab : null;
-    const tab: TextTab = {
-      id: tabId,
-      type: "text",
+    const tab = makeTextTab({
       textid,
       seq,
       pinned: options.pinned === true,
-      readMode: state.openMode === "sticky"
-        ? (sourceText?.pinned ? state.readMode : sourceText?.readMode ?? state.readMode)
-        : state.openMode,
-      lineMode: sourceText?.pinned
-        ? state.readPrefs.lineMode
-        : sourceText?.lineMode ?? state.readPrefs.lineMode,
-    };
+      sourceText,
+    });
     const pane = paneForOpenTab(tab);
-    const focusedPaneId = leafIdForTab(pane, tabId);
-    const activity: Activity = tab.readMode === "trans" ? "overlays" : "texts";
+    const focusedPaneId = leafIdForTab(pane, tab.id);
+    const activity: Activity = textActivity(tab);
     const keepSelection =
       state.parallelsSource != null &&
       state.selection != null &&
@@ -1980,6 +2143,7 @@ export const workspace = {
       activeTextid: textid,
       activeSeq: seq,
       focusedPaneId,
+      selectedTranslation: tab.selectedTranslation ?? null,
       selection: keepSelection ? state.selection : null,
       currentPage: null,
       pane,
@@ -2251,7 +2415,7 @@ export const workspace = {
       textHistory: [],
       activeTextid: null,
       activeSeq: null,
-      readMode: state.readMode === "edit" ? "read" : state.readMode,
+      readMode: "read",
       focusedPaneId: null,
       currentPage: null,
       pane: { kind: "leaf", id: "root", tabs: [], activeTabId: null },
@@ -2616,33 +2780,27 @@ export const workspace = {
     scheduleSessionSave();
   },
   openHit(hit: SearchHit) {
-    const tabId = `${hit.textid}:${hit.juan_seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
     const sourceText = isTextTab(sourceTab) ? sourceTab : null;
-    const tab: TextTab = {
-      id: tabId,
-      type: "text",
+    const tab = makeTextTab({
       textid: hit.textid,
       seq: hit.juan_seq,
       pinned: false,
-      readMode: state.openMode === "sticky"
-        ? (sourceText?.pinned ? state.readMode : sourceText?.readMode ?? state.readMode)
-        : state.openMode,
-      lineMode: sourceText?.pinned
-        ? state.readPrefs.lineMode
-        : sourceText?.lineMode ?? state.readPrefs.lineMode,
-    };
+      sourceText,
+    });
     const pane = paneForOpenTab(tab);
-    const focusedPaneId = leafIdForTab(pane, tabId);
+    const focusedPaneId = leafIdForTab(pane, tab.id);
     state = {
       ...state,
       activeTextid: hit.textid,
       activeSeq: hit.juan_seq,
       focusedPaneId,
+      selectedTranslation: tab.selectedTranslation ?? null,
       selection: null,
       currentPage: null,
       pane,
+      activity: textActivity(tab),
       pendingHighlight: {
         textid: hit.textid,
         seq: hit.juan_seq,
@@ -2662,25 +2820,17 @@ export const workspace = {
     masterOffset: number | null;
     length: number | null;
   }) {
-    const tabId = `${loc.textid}:${loc.seq}`;
     const target = activePaneLeaf(state.pane);
     const sourceTab = activeTabForLeaf(target);
     const sourceText = isTextTab(sourceTab) ? sourceTab : null;
-    const tab: TextTab = {
-      id: tabId,
-      type: "text",
+    const tab = makeTextTab({
       textid: loc.textid,
       seq: loc.seq,
       pinned: false,
-      readMode: state.openMode === "sticky"
-        ? (sourceText?.pinned ? state.readMode : sourceText?.readMode ?? state.readMode)
-        : state.openMode,
-      lineMode: sourceText?.pinned
-        ? state.readPrefs.lineMode
-        : sourceText?.lineMode ?? state.readPrefs.lineMode,
-    };
+      sourceText,
+    });
     const pane = paneForOpenTab(tab);
-    const focusedPaneId = leafIdForTab(pane, tabId);
+    const focusedPaneId = leafIdForTab(pane, tab.id);
     const highlight =
       loc.bucket != null && loc.masterOffset != null
         ? {
@@ -2696,10 +2846,11 @@ export const workspace = {
       activeTextid: loc.textid,
       activeSeq: loc.seq,
       focusedPaneId,
+      selectedTranslation: tab.selectedTranslation ?? null,
       selection: null,
       currentPage: null,
       pane,
-      activity: "texts",
+      activity: textActivity(tab),
       pendingHighlight: highlight,
     };
     rememberTextVisit({ textid: loc.textid, seq: loc.seq, pinned: tab.pinned === true });
@@ -2755,10 +2906,11 @@ export const workspace = {
         activeTextid: args.textid,
         activeSeq: args.seq,
         focusedPaneId: plan.leafId,
+        selectedTranslation: focusedText?.selectedTranslation ?? null,
         selection: keepSelection ? state.selection : null,
         currentPage: null,
         pane: nextPane,
-        activity: "texts",
+        activity: focusedText ? textActivity(focusedText) : "texts",
         pendingHighlight: highlight,
       };
       rememberTextVisit({
@@ -2770,17 +2922,13 @@ export const workspace = {
       return;
     }
     if (plan.kind === "replace") {
-      const newTab: TextTab = {
-        id: tabId,
-        type: "text",
+      const newTab = makeTextTab({
         textid: args.textid,
         seq: args.seq,
         pinned: false,
-        readMode: state.openMode === "sticky"
-          ? plan.existing.readMode ?? state.readMode
-          : state.openMode,
+        sourceText: plan.existing,
         lineMode: plan.existing.lineMode ?? state.readPrefs.lineMode,
-      };
+      });
       const nextPane = mapPaneLeaves(state.pane, (leaf) => {
         if (leaf.id !== plan.leafId) return leaf;
         return {
@@ -2794,10 +2942,11 @@ export const workspace = {
         activeTextid: args.textid,
         activeSeq: args.seq,
         focusedPaneId: plan.leafId,
+        selectedTranslation: newTab.selectedTranslation ?? null,
         selection: keepSelection ? state.selection : null,
         currentPage: null,
         pane: nextPane,
-        activity: "texts",
+        activity: textActivity(newTab),
         pendingHighlight: highlight,
       };
       rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
@@ -2805,30 +2954,24 @@ export const workspace = {
       scheduleSessionSave();
       return;
     }
-    const tab: TextTab = {
-      id: tabId,
-      type: "text",
+    const tab = makeTextTab({
       textid: args.textid,
       seq: args.seq,
       pinned: false,
-      readMode: state.openMode === "sticky"
-        ? (sourceText?.pinned ? state.readMode : sourceText?.readMode ?? state.readMode)
-        : state.openMode,
-      lineMode: sourceText?.pinned
-        ? state.readPrefs.lineMode
-        : sourceText?.lineMode ?? state.readPrefs.lineMode,
-    };
+      sourceText,
+    });
     const pane = paneForOpenTab(tab);
-    const focusedPaneId = leafIdForTab(pane, tabId);
+    const focusedPaneId = leafIdForTab(pane, tab.id);
     state = {
       ...state,
       activeTextid: args.textid,
       activeSeq: args.seq,
       focusedPaneId,
+      selectedTranslation: tab.selectedTranslation ?? null,
       selection: null,
       currentPage: null,
       pane,
-      activity: "texts",
+      activity: textActivity(tab),
       pendingHighlight: highlight,
     };
     rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
