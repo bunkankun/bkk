@@ -23,7 +23,7 @@ const DEFAULT_GENERATION_PARAMS: JuanParallelsGenerationParams = {
   maxLength: null,
   minOccurrences: 2,
   maxPostings: 500,
-  maxEdits: 0,
+  maxEdits: 4,
   context: 20,
   includeContained: false,
 };

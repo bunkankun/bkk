@@ -641,7 +641,7 @@ let state: WorkspaceState = {
     translationSort: "textid",
     translationFilters: { lang: null, category: null, type: null, dateBefore: null, dateAfter: null },
     parallelResponse: null,
-    parallelOptions: { bucket: "body", minLength: 12, minOccurrences: 2, maxEdits: 0, sort: "frequency" },
+    parallelOptions: { bucket: "body", minLength: 12, minOccurrences: 2, maxEdits: 4, sort: "frequency" },
   },
   searchHistory: [],
   textHistory: [],
