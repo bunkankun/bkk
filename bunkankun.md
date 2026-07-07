@@ -238,6 +238,8 @@ The reason enumeration is intended to be stable: new categorical reasons that ge
 The first version of the replacement list has landed, derived from 
 - Jung, Y., and J. Lee. 2025. “A Variant Character Dataset for Historical Narratives of Middle and Late Imperial China | Journal of Open Humanities Data.” Journal of Open Humanities Data 11 (May), May: 33. doi:https://doi.org/10.5334/johd.325.
 - 通用规范汉字表 (GB2013), appendix 1
+- [異體字字典](https://dict.variants.moe.edu.tw/)
+
 
 #### Voices
 

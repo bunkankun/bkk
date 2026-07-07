@@ -26,6 +26,7 @@ This references the same span under these conditions:
 - `+86` means length 86, matching the explicit `length: 86` field.
 - Omitting `@0+86` selects the whole default bucket, so `1h4/1` selects juan 1 body.
 - The slash before `@` is required when the bucket is omitted.
+- In addition to the location, the reference also needs to point to the correct version. So the complete reference will include a version tag at the end: `1h4/1/@0+86/v1` but again, we will assume v1 if the tag is ommitted.
 
 ## some questions and observations:
 - This makes sense as recipe authoring shorthand if the recipe loader normalizes it into explicit `textid` plus `selection`.
