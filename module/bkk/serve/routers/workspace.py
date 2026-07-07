@@ -14,7 +14,7 @@ from ..state import UserSession
 
 router = APIRouter(prefix="/workspace", tags=["workspace"])
 
-ALLOWED_ROOTS = ("settings/", "notes/", "searches/", "lists/")
+ALLOWED_ROOTS = ("settings/", "notes/", "searches/", "lists/", "locations/")
 
 
 def _session(request: Request) -> UserSession:

@@ -936,6 +936,10 @@ export function TextViewer({
       if (ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT" || ae.isContentEditable)) {
         return;
       }
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !containerRef.current) return;
+      const range = sel.getRangeAt(0);
+      if (!containerRef.current.contains(range.commonAncestorContainer)) return;
       if (timer != null) window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         timer = null;

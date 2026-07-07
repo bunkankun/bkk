@@ -5,10 +5,19 @@ import {
   getManifest,
   getSegmentTranslations,
   patchContributionCuration,
+  putWorkspaceFile,
   subscribeCoreRecordSaved,
 } from "../../api/client";
 import type { Annotation, SegmentTranslationEntry } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
+import {
+  locationFilePath,
+  selectionContentPreview,
+  selectionLocationRef,
+  serializeSavedLocation,
+  subLocationOffset,
+  type SavedSubLocation,
+} from "../../lib/namedLocations";
 import { AnnotationCompose } from "./AnnotationCompose";
 import { ContribCompose } from "./ContribCompose";
 import { CoreTargetPicker } from "./CoreTargetPicker";
@@ -138,6 +147,13 @@ function SegTransCard({ entry, textid }: { entry: SegmentTranslationEntry; texti
   );
 }
 
+function randomLocationId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `loc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function AnnotationsTab() {
   const textid = useWorkspace((s) => s.activeTextid);
   const seq = useWorkspace((s) => s.activeSeq);
@@ -155,6 +171,16 @@ export function AnnotationsTab() {
   const [segTranslations, setSegTranslations] = useState<SegmentTranslationEntry[] | null>(null);
   const [segError, setSegError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [locTitle, setLocTitle] = useState("");
+  const [locTags, setLocTags] = useState("");
+  const [locNote, setLocNote] = useState("");
+  const [subNote, setSubNote] = useState("");
+  const [subDraft, setSubDraft] = useState<SavedSubLocation | null>(null);
+  const [subLocations, setSubLocations] = useState<SavedSubLocation[]>([]);
+  const [locSaving, setLocSaving] = useState(false);
+  const [locSavedPath, setLocSavedPath] = useState<string | null>(null);
+  const [locError, setLocError] = useState<string | null>(null);
+  const subTextRef = useRef<HTMLDivElement | null>(null);
   const labelStore = useLabelStore(new Map());
 
   useEffect(() => {
@@ -241,6 +267,18 @@ export function AnnotationsTab() {
     };
   }, [selectedAnnId, anns]);
 
+  useEffect(() => {
+    setLocTitle("");
+    setLocTags("");
+    setLocNote("");
+    setSubNote("");
+    setSubDraft(null);
+    setSubLocations([]);
+    setLocSaving(false);
+    setLocSavedPath(null);
+    setLocError(null);
+  }, [sel]);
+
   if (textid == null || seq == null) {
     return <div className="rc empty">Open a juan to see annotations.</div>;
   }
@@ -290,6 +328,85 @@ export function AnnotationsTab() {
     if (!sel) return;
     workspace.setSearchQuery(sel.chars.join(""));
     void workspace.runSearch();
+  };
+
+  const onSubTextMouseUp = () => {
+    if (!sel || !subTextRef.current) return;
+    const winSel = window.getSelection();
+    if (!winSel || winSel.isCollapsed) {
+      setSubDraft(null);
+      return;
+    }
+    const range = winSel.getRangeAt(0);
+    if (!subTextRef.current.contains(range.commonAncestorContainer)) return;
+    const indexes: number[] = [];
+    subTextRef.current.querySelectorAll<HTMLElement>("[data-sub-index]").forEach((span) => {
+      if (!range.intersectsNode(span)) return;
+      const index = Number(span.dataset.subIndex);
+      if (Number.isNaN(index)) return;
+      indexes.push(index);
+    });
+    if (indexes.length === 0) {
+      setSubDraft(null);
+      return;
+    }
+    indexes.sort((a, b) => a - b);
+    const start = indexes[0];
+    const end = indexes[indexes.length - 1] + 1;
+    setSubDraft({
+      offset: subLocationOffset(start, end),
+      note: subNote.trim() || undefined,
+      content: sel.chars.slice(start, end).join(""),
+    });
+  };
+
+  const addSubLocation = () => {
+    if (!subDraft) return;
+    const next = {
+      ...subDraft,
+      note: subNote.trim() || subDraft.note,
+    };
+    setSubLocations((prev) => [...prev, next]);
+    setSubDraft(null);
+    setSubNote("");
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const removeSubLocation = (index: number) => {
+    setSubLocations((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const saveNamedLocation = async () => {
+    if (!sel || authUser == null || locSaving) return;
+    setLocSaving(true);
+    setLocError(null);
+    setLocSavedPath(null);
+    const now = new Date();
+    const path = locationFilePath(now);
+    const tags = locTags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+    try {
+      await putWorkspaceFile({
+        path,
+        content: serializeSavedLocation({
+          id: randomLocationId(),
+          location: selectionLocationRef(sel),
+          date: now.toISOString(),
+          content: selectionContentPreview(sel.chars),
+          title: locTitle.trim() || undefined,
+          tags,
+          note: locNote.trim() || undefined,
+          sub: subLocations,
+        }),
+      });
+      setLocSavedPath(path);
+    } catch (e) {
+      setLocError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLocSaving(false);
+    }
   };
 
   const showSegment =
@@ -382,6 +499,93 @@ export function AnnotationsTab() {
             </button>
             <button className="sel-action" onClick={onSearchSelection}>
               Search this
+            </button>
+          </div>
+          <div className="loc-save">
+            <div className="loc-save-head">
+              <span>Save location</span>
+              {authUser == null && <span className="loc-save-status">login required</span>}
+              {locSavedPath && <span className="loc-save-status">saved {locSavedPath}</span>}
+            </div>
+            <input
+              className="loc-input"
+              value={locTitle}
+              onChange={(ev) => setLocTitle(ev.currentTarget.value)}
+              placeholder="Title"
+              disabled={authUser == null || locSaving}
+            />
+            <input
+              className="loc-input"
+              value={locTags}
+              onChange={(ev) => setLocTags(ev.currentTarget.value)}
+              placeholder="Tags"
+              disabled={authUser == null || locSaving}
+            />
+            <textarea
+              className="loc-note"
+              value={locNote}
+              onChange={(ev) => setLocNote(ev.currentTarget.value)}
+              placeholder="Note"
+              disabled={authUser == null || locSaving}
+            />
+            <div
+              ref={subTextRef}
+              className="loc-subtext"
+              onMouseUp={onSubTextMouseUp}
+              title="Select text here to add a sub-selection"
+            >
+              {sel.chars.map((ch, index) => (
+                <span key={index} data-sub-index={index}>{ch}</span>
+              ))}
+            </div>
+            <div className="loc-subrow">
+              <input
+                className="loc-input"
+                value={subNote}
+                onChange={(ev) => {
+                  const note = ev.currentTarget.value;
+                  setSubNote(note);
+                  setSubDraft((draft) =>
+                    draft ? { ...draft, note: note.trim() || undefined } : draft,
+                  );
+                }}
+                placeholder="Sub-selection note"
+                disabled={authUser == null || locSaving}
+              />
+              <button
+                type="button"
+                className="sel-action loc-sub-add"
+                onClick={addSubLocation}
+                disabled={authUser == null || locSaving || subDraft == null}
+              >
+                Add sub
+              </button>
+            </div>
+            {subDraft && (
+              <div className="loc-draft">
+                {subDraft.offset} {subDraft.content}
+              </div>
+            )}
+            {subLocations.length > 0 && (
+              <div className="loc-sublist">
+                {subLocations.map((item, index) => (
+                  <div className="loc-subitem" key={`${item.offset}-${index}`}>
+                    <span>{item.offset}</span>
+                    <span>{item.content}</span>
+                    <span>{item.note ?? ""}</span>
+                    <button type="button" onClick={() => removeSubLocation(index)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {locError && <div className="loc-error">{locError}</div>}
+            <button
+              type="button"
+              className="sel-action loc-save-btn"
+              onClick={saveNamedLocation}
+              disabled={authUser == null || locSaving}
+            >
+              {locSaving ? "Saving..." : "Save location"}
             </button>
           </div>
           <CoreTargetPicker selection={sel} edition={edition} />

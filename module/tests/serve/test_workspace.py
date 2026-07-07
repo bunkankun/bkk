@@ -43,6 +43,10 @@ def test_workspace_path_validation_allows_workspace_roots():
     assert workspace_router._normalize_workspace_path("notes/n1.md") == "notes/n1.md"
     assert workspace_router._normalize_workspace_path("searches/s1.json") == "searches/s1.json"
     assert workspace_router._normalize_workspace_path("lists/favorites.txt") == "lists/favorites.txt"
+    assert (
+        workspace_router._normalize_workspace_path("locations/20260707T120000000.yaml")
+        == "locations/20260707T120000000.yaml"
+    )
 
 
 def test_workspace_read_uses_user_repo_and_branch(client, monkeypatch):
