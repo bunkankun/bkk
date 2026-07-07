@@ -135,7 +135,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
                 key={t.id}
                 className={`tab${isActive ? " on" : ""}`}
                 title={`duplication row #${t.rowId}`}
-                onClick={() => workspace.focusPane(pane.id)}
+                onClick={() => workspace.activateTab(pane.id, t.id)}
               >
                 <span className="tab-title">dup #{t.rowId}</span>
                 <span
@@ -165,7 +165,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
                 key={t.id}
                 className={`tab${isActive ? " on" : ""}`}
                 title={`${t.collection}/${t.uuid}`}
-                onClick={() => workspace.focusPane(pane.id)}
+                onClick={() => workspace.activateTab(pane.id, t.id)}
               >
                 <span className="tab-title">
                   {t.collection} · {t.uuid.slice(0, 8)}
@@ -200,7 +200,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
               key={t.id}
               className={`tab${isActive ? " on" : ""}`}
               title={`${titles[t.textid] ?? t.textid} · ${t.textid} · 卷 ${t.seq}`}
-              onClick={() => workspace.focusPane(pane.id)}
+              onClick={() => workspace.activateTab(pane.id, t.id)}
             >
               {isActive && (prevSeq !== null || nextSeq !== null) && (
                 <span

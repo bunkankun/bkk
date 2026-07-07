@@ -28,11 +28,13 @@ export function planOpenTextLocation(
       return { kind: "focus", leafId: leaf.id };
     }
   }
-  for (const leaf of leaves(pane)) {
-    if (leaf.id === sourceLeafId) continue;
-    const active = activeTab(leaf);
+  const source = sourceLeafId
+    ? leaves(pane).find((leaf) => leaf.id === sourceLeafId) ?? null
+    : null;
+  if (source) {
+    const active = activeTab(source);
     if (active && active.type === "text" && !active.pinned) {
-      return { kind: "replace", leafId: leaf.id, oldTabId: active.id, existing: active };
+      return { kind: "replace", leafId: source.id, oldTabId: active.id, existing: active };
     }
   }
   return { kind: "open" };

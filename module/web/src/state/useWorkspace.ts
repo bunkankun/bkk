@@ -736,10 +736,15 @@ function removePaneLeaf(node: PaneNode, paneId: string): PaneNode {
 function paneForOpenTab(
   tab: PaneTab,
 ): PaneNode {
+  const existingLeafId = leafIdForTab(state.pane, tab.id);
+  if (existingLeafId != null) {
+    return mapPaneLeaves(state.pane, (leaf) =>
+      leaf.id === existingLeafId ? { ...leaf, activeTabId: tab.id } : leaf,
+    );
+  }
   const target = activePaneLeaf(state.pane);
-  const activeTab = target?.tabs.find((item) => item.id === target.activeTabId) ?? target?.tabs[0];
-  if (activeTab?.pinned) {
-    if (tab.id === activeTab.id) return state.pane;
+  const active = activeTabForLeaf(target);
+  if (target && active?.pinned) {
     const nextLeaf = leafWithTab(nextPaneId(), tab);
     return state.pane.kind === "split"
       ? { ...state.pane, children: [...state.pane.children, nextLeaf] }
@@ -751,7 +756,9 @@ function paneForOpenTab(
         };
   }
   if (target) {
-    return mapPaneLeaves(state.pane, (leaf) => (leaf.id === target.id ? leafWithTab(leaf.id, tab) : leaf));
+    return mapPaneLeaves(state.pane, (leaf) =>
+      leaf.id === target.id ? leafWithTab(leaf.id, tab) : leaf,
+    );
   }
   return leafWithTab("root", tab);
 }
@@ -2021,6 +2028,31 @@ export const workspace = {
     };
     notify();
   },
+  activateTab(paneId: string, tabId: string) {
+    const leaf = paneLeaves(state.pane).find((item) => item.id === paneId);
+    const current = activeTabForLeaf(leaf ?? null);
+    if (
+      current?.type === "text" &&
+      current.readMode === "edit" &&
+      current.id !== tabId &&
+      !confirmDiscardBundleEditor()
+    ) return;
+    const tab = leaf?.tabs.find((item) => item.id === tabId) ?? null;
+    if (!leaf || !tab) return;
+    const textTab = isTextTab(tab) ? tab : null;
+    state = {
+      ...state,
+      focusedPaneId: paneId,
+      activeTextid: textTab?.textid ?? state.activeTextid,
+      activeSeq: textTab?.seq ?? state.activeSeq,
+      selectedTranslation: textTab ? textTab.selectedTranslation ?? null : state.selectedTranslation,
+      pane: mapPaneLeaves(state.pane, (leaf) =>
+        leaf.id === paneId ? { ...leaf, activeTabId: tabId } : leaf,
+      ),
+    };
+    notify();
+    scheduleSessionSave();
+  },
   setCurrentPage(p: CurrentPage | null) {
     const cur = state.currentPage;
     if (
@@ -2885,9 +2917,9 @@ export const workspace = {
       offset: args.offset,
       length: Math.max(1, args.length),
     };
-    // Avoid splitting the workspace: prefer reusing an existing tab for the
-    // target juan, then fall back to replacing a non-pinned text tab
-    // elsewhere in the tree. See planOpenTextLocation for the decision rules.
+    // Keep text panes visible side by side: reuse an existing visible target,
+    // replace the focused unpinned text pane, or split from a pinned pane.
+    // See planOpenTextLocation for the decision rules.
     const plan = planOpenTextLocation(state.pane, target?.id ?? null, tabId);
     const keepSelection =
       state.parallelsSource != null &&
@@ -2931,11 +2963,7 @@ export const workspace = {
       });
       const nextPane = mapPaneLeaves(state.pane, (leaf) => {
         if (leaf.id !== plan.leafId) return leaf;
-        return {
-          ...leaf,
-          tabs: leaf.tabs.map((t) => (t.id === plan.oldTabId ? newTab : t)),
-          activeTabId: newTab.id,
-        };
+        return leafWithTab(leaf.id, newTab);
       });
       state = {
         ...state,
