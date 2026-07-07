@@ -29,7 +29,6 @@ export function TranslationSidecar({ paneId, tabId, textid, seq, translationId }
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLElement>());
   const syncingFromTextRef = useRef(false);
-  const lastTextSyncKeyRef = useRef<string>("");
   const lastTranslationSyncKeyRef = useRef<string>("");
   const [syncedCorresp, setSyncedCorresp] = useState<string | null>(null);
 
@@ -142,6 +141,7 @@ export function TranslationSidecar({ paneId, tabId, textid, seq, translationId }
         seq?: number;
         bucket?: string;
         offset?: number;
+        anchorTop?: number;
       }>).detail;
       if (
         detail?.paneId !== paneId ||
@@ -156,16 +156,26 @@ export function TranslationSidecar({ paneId, tabId, textid, seq, translationId }
       const row = rowForOffset(detail.offset);
       if (!row) return;
       const key = rowKey(row);
-      if (key === lastTextSyncKeyRef.current) return;
-      lastTextSyncKeyRef.current = key;
       setSyncedCorresp(row.corresp);
       const el = rowRefs.current.get(key);
       if (!el || !containerRef.current) return;
       const rootRect = containerRef.current.getBoundingClientRect();
       const rowRect = el.getBoundingClientRect();
-      if (rowRect.top >= rootRect.top && rowRect.bottom <= rootRect.bottom) return;
+      const anchorTop =
+        typeof detail.anchorTop === "number"
+          ? Math.max(0, Math.min(detail.anchorTop, Math.max(0, rootRect.height - 24)))
+          : Math.min(80, Math.max(16, rootRect.height * 0.12));
+      const delta = rowRect.top - rootRect.top - anchorTop;
+      if (
+        Math.abs(delta) < 8 &&
+        rowRect.top >= rootRect.top &&
+        rowRect.bottom <= rootRect.bottom
+      ) return;
       syncingFromTextRef.current = true;
-      el.scrollIntoView({ block: "nearest" });
+      const maxTop = containerRef.current.scrollHeight - containerRef.current.clientHeight;
+      containerRef.current.scrollTo({
+        top: Math.max(0, Math.min(maxTop, containerRef.current.scrollTop + delta)),
+      });
       window.setTimeout(() => {
         syncingFromTextRef.current = false;
       }, 250);
@@ -201,18 +211,27 @@ export function TranslationSidecar({ paneId, tabId, textid, seq, translationId }
       }
       if (!best) return;
       const key = rowKey(best);
-      if (key === lastTranslationSyncKeyRef.current) return;
-      lastTranslationSyncKeyRef.current = key;
+      const el = rowRefs.current.get(key);
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const anchorTop = rect.top - rootRect.top;
+      const syncKey = `${key}:${Math.round(anchorTop)}`;
+      if (syncKey === lastTranslationSyncKeyRef.current) return;
+      lastTranslationSyncKeyRef.current = syncKey;
       setSyncedCorresp(best.corresp);
-      workspace.highlightTextLocation({
-        textid,
-        seq,
-        bucket: "body",
-        offset: best.source_offset,
-        length: Math.max(1, best.source_end - best.source_offset),
-        markerId: best.source_marker_id,
-        flash: false,
-      });
+      window.dispatchEvent(
+        new CustomEvent("bkk:translation-scroll-sync", {
+          detail: {
+            paneId,
+            tabId,
+            textid,
+            seq,
+            bucket: "body",
+            offset: best.source_offset,
+            anchorTop,
+          },
+        }),
+      );
     };
     const schedule = () => {
       if (raf) return;
@@ -224,7 +243,7 @@ export function TranslationSidecar({ paneId, tabId, textid, seq, translationId }
       root.removeEventListener("scroll", schedule);
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [alignment, textid, seq]);
+  }, [alignment, paneId, tabId, textid, seq]);
 
   if (!translationId) {
     return (

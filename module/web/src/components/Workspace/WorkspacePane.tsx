@@ -74,6 +74,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
     !showEdit &&
     (activeTextTab.showImage === true || readMode === "inspect");
   const selectedTranslation = activeTextTab?.selectedTranslation ?? null;
+  const effectiveLineMode = showTranslation ? "phrase" : lineMode;
 
   useEffect(() => {
     let cancelled = false;
@@ -292,7 +293,8 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
                 tabId={activeTextTab.id}
                 textid={activeTextTab.textid}
                 seq={activeTextTab.seq}
-                lineMode={lineMode}
+                lineMode={effectiveLineMode}
+                translationAlign={showTranslation}
               />
             </div>
             {(showTranslation || showImage) && (

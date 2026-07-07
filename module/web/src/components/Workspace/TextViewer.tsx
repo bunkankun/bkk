@@ -380,9 +380,17 @@ interface Props {
   textid: string;
   seq: number;
   lineMode: LineMode;
+  translationAlign?: boolean;
 }
 
-export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
+export function TextViewer({
+  paneId,
+  tabId,
+  textid,
+  seq,
+  lineMode,
+  translationAlign = false,
+}: Props) {
   const rightTab = useWorkspace((s) => s.rightTab);
   const showPageBreaks = useWorkspace((s) => s.readPrefs.showPageBreaks);
   const lineBreakDisplay = useWorkspace((s) => s.readPrefs.lineBreakDisplay);
@@ -413,6 +421,7 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
   // without scheduling a second scroll/flash for the same target.
   const lastFlashedRef = useRef<typeof pending>(null);
   const lastScrollSyncRef = useRef<string>("");
+  const syncingFromTranslationRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -586,26 +595,29 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
     let raf = 0;
     const emit = () => {
       raf = 0;
+      if (syncingFromTranslationRef.current) return;
       const rootRect = root.getBoundingClientRect();
       const anchorY = rootRect.top + Math.min(80, Math.max(16, rootRect.height * 0.12));
-      const spans = container.querySelectorAll<HTMLElement>("span[data-offset][data-bucket]");
-      let best: { bucket: string; offset: number; distance: number } | null = null;
-      for (const sp of spans) {
-        const bucket = sp.dataset.bucket;
-        const offset = Number(sp.dataset.offset);
+      let best: { bucket: string; offset: number; distance: number; anchorTop: number } | null = null;
+      const candidates = translationAlign
+        ? container.querySelectorAll<HTMLElement>(".tv-block[data-block-start][data-bucket]")
+        : container.querySelectorAll<HTMLElement>("span[data-offset][data-bucket]");
+      for (const el of candidates) {
+        const bucket = el.dataset.bucket;
+        const offset = Number(translationAlign ? el.dataset.blockStart : el.dataset.offset);
         if (!bucket || Number.isNaN(offset)) continue;
-        const rect = sp.getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
         if (rect.bottom < rootRect.top || rect.top > rootRect.bottom) continue;
         const distance =
           rect.top <= anchorY && rect.bottom >= anchorY
             ? 0
             : Math.min(Math.abs(rect.top - anchorY), Math.abs(rect.bottom - anchorY));
         if (best == null || distance < best.distance) {
-          best = { bucket, offset, distance };
+          best = { bucket, offset, distance, anchorTop: rect.top - rootRect.top };
         }
       }
       if (best == null) return;
-      const key = `${best.bucket}:${best.offset}`;
+      const key = `${best.bucket}:${best.offset}:${Math.round(best.anchorTop)}`;
       if (key === lastScrollSyncRef.current) return;
       lastScrollSyncRef.current = key;
       window.dispatchEvent(new CustomEvent("bkk:source-scroll-sync", {
@@ -616,6 +628,7 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
           seq,
           bucket: best.bucket,
           offset: best.offset,
+          anchorTop: best.anchorTop,
         },
       }));
     };
@@ -629,7 +642,75 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
       root.removeEventListener("scroll", schedule);
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [blocks, visibleBlocks, paneId, tabId, textid, seq]);
+  }, [blocks, visibleBlocks, paneId, tabId, textid, seq, translationAlign]);
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    const container = containerRef.current;
+    if (!root || !container || blocks.length === 0) return;
+    const onTranslationScroll = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        paneId?: string;
+        tabId?: string;
+        textid?: string;
+        seq?: number;
+        bucket?: string;
+        offset?: number;
+        anchorTop?: number;
+      }>).detail;
+      if (
+        detail?.paneId !== paneId ||
+        detail.tabId !== tabId ||
+        detail.textid !== textid ||
+        detail.seq !== seq ||
+        !isBucketName(detail.bucket) ||
+        typeof detail.offset !== "number"
+      ) return;
+      const offset = detail.offset;
+      const targetIdx = blocks.findIndex(
+        (block) =>
+          block.bucket === detail.bucket &&
+          offset >= block.startOffset &&
+          offset < block.endOffset,
+      );
+      if (targetIdx < 0) return;
+      setVisibleBlocks((prev) => {
+        let changed = false;
+        const next = new Set(prev);
+        for (let i = 0; i <= targetIdx; i++) {
+          if (!next.has(i)) {
+            next.add(i);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+      window.requestAnimationFrame(() => {
+        const block = blocks[targetIdx];
+        const el = container.querySelector<HTMLElement>(
+          `.tv-block[data-bucket="${block.bucket}"][data-block-start="${block.startOffset}"]`,
+        );
+        if (!el) return;
+        const rootRect = root.getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        const anchorTop =
+          typeof detail.anchorTop === "number"
+            ? Math.max(0, Math.min(detail.anchorTop, Math.max(0, rootRect.height - 24)))
+            : Math.min(80, Math.max(16, rootRect.height * 0.12));
+        const delta = rect.top - rootRect.top - anchorTop;
+        if (Math.abs(delta) < 8) return;
+        syncingFromTranslationRef.current = true;
+        root.scrollTo({
+          top: Math.max(0, Math.min(root.scrollHeight - root.clientHeight, root.scrollTop + delta)),
+        });
+        window.setTimeout(() => {
+          syncingFromTranslationRef.current = false;
+        }, 250);
+      });
+    };
+    window.addEventListener("bkk:translation-scroll-sync", onTranslationScroll);
+    return () => window.removeEventListener("bkk:translation-scroll-sync", onTranslationScroll);
+  }, [blocks, paneId, tabId, textid, seq]);
 
   // Page-anchor observer: tracks the topmost page-break anchor in the upper
   // ~15% of the scroll viewport and reports it as currentPage. Distinct from
@@ -868,6 +949,32 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
     };
   }, [handleMouseUp]);
 
+  const syncSourceBlock = useCallback(
+    (block: Block) => {
+      if (!translationAlign || block.bucket !== "body") return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      const root = scrollRef.current;
+      if (!root) return;
+      const rootRect = root.getBoundingClientRect();
+      const anchorTop = Math.min(72, Math.max(40, rootRect.height * 0.16));
+      window.dispatchEvent(
+        new CustomEvent("bkk:source-scroll-sync", {
+          detail: {
+            paneId,
+            tabId,
+            textid,
+            seq,
+            bucket: block.bucket,
+            offset: block.startOffset,
+            anchorTop,
+          },
+        }),
+      );
+    },
+    [translationAlign, paneId, tabId, textid, seq],
+  );
+
   if (error) {
     return <div className="empty-pane">Failed to load: {error}</div>;
   }
@@ -926,7 +1033,7 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
         </h2>
       </div>
       <div
-        className={`tv-body tv-body-${lineMode}${showPageBreaks ? " tv-show-pb" : ""} tv-lb-${lineBreakDisplay}`}
+        className={`tv-body tv-body-${lineMode}${translationAlign && lineMode === "phrase" ? " tv-body-translation-align" : ""}${showPageBreaks ? " tv-show-pb" : ""} tv-lb-${lineBreakDisplay}`}
         ref={containerRef}
       >
         {blocksByBucket.map((view) => (
@@ -952,6 +1059,7 @@ export function TextViewer({ paneId, tabId, textid, seq, lineMode }: Props) {
                   resolveAnchor={resolveAnchor}
                   lineBreakDisplay={lineBreakDisplay}
                   activeEdition={activeEdition}
+                  onAlignClick={translationAlign ? syncSourceBlock : undefined}
                 />
               );
             })}
@@ -979,6 +1087,7 @@ interface BlockViewProps {
   ) => { anchorMarkerId: string | null; anchorOffset: number };
   lineBreakDisplay: LineBreakDisplay;
   activeEdition: string | null;
+  onAlignClick?: (block: Block) => void;
 }
 
 function BlockView({
@@ -995,6 +1104,7 @@ function BlockView({
   resolveAnchor,
   lineBreakDisplay,
   activeEdition,
+  onAlignClick,
 }: BlockViewProps) {
   const Tag = block.tagName;
 
@@ -1011,8 +1121,10 @@ function BlockView({
     <Tag
       className="tv-block"
       data-block-idx={blockIdx}
+      data-bucket={block.bucket}
       data-block-start={block.startOffset}
       data-block-end={block.endOffset}
+      onClick={() => onAlignClick?.(block)}
     >
       {block.chars.map((rc, i) => {
         if (rc.pageAnchor) {

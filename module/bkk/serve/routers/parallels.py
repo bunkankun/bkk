@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field, model_validator
 
 from .. import errors
 from ..state import AppState, UserSession
-from .. import selection
 from bkk.index.parallel import _align_ops, discover_parallel_passages
 from bkk.index.parallel_assets import (
     assert_index_unchanged,
@@ -35,6 +34,7 @@ _REF_RE = re.compile(
 _BUCKET_ORDER = {"front": 0, "body": 1, "back": 2}
 _CONTEXT = 20
 _GENERATION_LOCK = threading.Lock()
+_PARALLEL_CACHE_LIMIT = 512
 
 
 class ParallelPassageOut(BaseModel):
@@ -153,6 +153,24 @@ def _parse_ref(ref: Any) -> tuple[str, int, str, int, int] | None:
     )
 
 
+def _path_signature(path: Path) -> tuple[str, int, int]:
+    stat = path.stat()
+    return str(path), stat.st_mtime_ns, stat.st_size
+
+
+def _asset_signature(paths: list[Path]) -> tuple[tuple[str, int, int], ...]:
+    return tuple(_path_signature(path) for path in paths)
+
+
+def _cache_set_bounded(
+    cache: dict[Any, Any], key: Any, value: Any,
+    *, limit: int = _PARALLEL_CACHE_LIMIT,
+) -> None:
+    cache[key] = value
+    while len(cache) > limit:
+        cache.pop(next(iter(cache)))
+
+
 def _asset_paths(
     state: AppState, textid: str, seq: int,
 ) -> tuple[list[Path], list[Literal["corpus", "bundle"]]]:
@@ -175,8 +193,21 @@ def _asset_paths(
 
 
 def _load_markers(
-    paths: list[Path], textid: str, seq: int,
+    state: AppState, paths: list[Path], textid: str, seq: int,
 ) -> list[dict[str, Any]]:
+    cache_key = (textid, seq)
+    try:
+        signature = _asset_signature(paths)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"cannot inspect parallel assets for {textid}/{seq}: {exc}",
+        ) from exc
+    with state._parallel_cache_lock:
+        cached = state._parallel_marker_cache.get(cache_key)
+        if cached is not None and cached.get("signature") == signature:
+            return [dict(row) for row in cached["rows"]]
+
     markers: list[dict[str, Any]] = []
     for path in paths:
         try:
@@ -245,7 +276,13 @@ def _load_markers(
         row["offset"],
         row["source"],
     ))
-    return markers
+    with state._parallel_cache_lock:
+        _cache_set_bounded(
+            state._parallel_marker_cache,
+            cache_key,
+            {"signature": signature, "rows": [dict(row) for row in markers]},
+        )
+    return [dict(row) for row in markers]
 
 
 def _load_titles(state: AppState, textids: list[str]) -> dict[str, str | None]:
@@ -270,6 +307,134 @@ def _load_titles(state: AppState, textids: list[str]) -> dict[str, str | None]:
         rec = state.lookup_bundle(textid)
         title_cache[textid] = rec.title if rec is not None else None
     return title_cache
+
+
+def _typed_file_signature(kind: str, path: Path) -> tuple[str, str, int, int]:
+    stat = path.stat()
+    return kind, str(path), stat.st_mtime_ns, stat.st_size
+
+
+def _index_signature(state: AppState) -> tuple[str, str, int, int] | None:
+    try:
+        if state.index_path.exists():
+            return _typed_file_signature("index", state.index_path)
+    except OSError:
+        return None
+    return None
+
+
+def _source_juan_path(rec: Any, seq: int) -> Path | None:
+    parts = (rec.manifest.get("assets") or {}).get("parts") or []
+    entry = next(
+        (part for part in parts if isinstance(part, dict) and part.get("seq") == seq),
+        None,
+    )
+    filename = entry.get("filename") if isinstance(entry, dict) else None
+    return rec.bundle_dir / filename if isinstance(filename, str) else None
+
+
+def _cached_bucket_text_is_valid(
+    cached: dict[str, Any],
+    index_sig: tuple[str, str, int, int] | None,
+) -> bool:
+    signature = cached.get("signature")
+    if signature == index_sig:
+        return True
+    if not (
+        isinstance(signature, tuple)
+        and len(signature) == 4
+        and signature[0] == "source"
+        and isinstance(signature[1], str)
+    ):
+        return False
+    try:
+        return _typed_file_signature("source", Path(signature[1])) == signature
+    except OSError:
+        return False
+
+
+def _load_bucket_text_from_source(
+    state: AppState, textid: str, seq: int, bucket: str,
+) -> tuple[str | None, tuple[str, str, int, int] | None]:
+    rec = state.lookup_bundle(textid)
+    if rec is None:
+        return None, None
+    juan_path = _source_juan_path(rec, seq)
+    if juan_path is None or not juan_path.exists():
+        return None, None
+    try:
+        signature = _typed_file_signature("source", juan_path)
+        juan = yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return None, None
+    bucket_obj = juan.get(bucket) if isinstance(juan, dict) else None
+    text = bucket_obj.get("text") if isinstance(bucket_obj, dict) else None
+    return text if isinstance(text, str) else None, signature
+
+
+def _load_bucket_texts(
+    state: AppState, keys: list[tuple[str, int, str]],
+) -> dict[tuple[str, int, str], str | None]:
+    unique_keys = list(dict.fromkeys(keys))
+    index_sig = _index_signature(state)
+    text_cache: dict[tuple[str, int, str], str | None] = {}
+    missing: list[tuple[str, int, str]] = []
+
+    with state._parallel_cache_lock:
+        for key in unique_keys:
+            cached = state._parallel_bucket_text_cache.get(key)
+            if cached is not None and _cached_bucket_text_is_valid(cached, index_sig):
+                text_cache[key] = cached.get("text")
+            else:
+                missing.append(key)
+
+    found_from_index: set[tuple[str, int, str]] = set()
+    if missing and index_sig is not None:
+        placeholders = ",".join("(?, ?, ?)" for _ in missing)
+        params = [value for key in missing for value in key]
+        try:
+            conn = sqlite3.connect(
+                f"file:{state.index_path}?mode=ro", uri=True,
+            )
+            try:
+                found = conn.execute(
+                    "SELECT j.textid, j.seq, b.kind, b.text "
+                    "FROM bucket b JOIN juan j ON b.juan_id = j.juan_id "
+                    f"WHERE (j.textid, j.seq, b.kind) IN ({placeholders})",
+                    params,
+                ).fetchall()
+            finally:
+                conn.close()
+            with state._parallel_cache_lock:
+                for found_textid, found_seq, found_bucket, found_text in found:
+                    key = (found_textid, found_seq, found_bucket)
+                    text_cache[key] = found_text
+                    found_from_index.add(key)
+                    _cache_set_bounded(
+                        state._parallel_bucket_text_cache,
+                        key,
+                        {"signature": index_sig, "text": found_text},
+                    )
+        except sqlite3.DatabaseError:
+            # Source-file hydration below remains a correct, if slower,
+            # fallback for deployments without a readable merged index.
+            pass
+
+    for key in missing:
+        if key in found_from_index or key in text_cache:
+            continue
+        textid, seq, bucket = key
+        text, signature = _load_bucket_text_from_source(state, textid, seq, bucket)
+        text_cache[key] = text
+        if signature is not None:
+            with state._parallel_cache_lock:
+                _cache_set_bounded(
+                    state._parallel_bucket_text_cache,
+                    key,
+                    {"signature": signature, "text": text},
+                )
+
+    return text_cache
 
 
 def _remote_group_key(row: dict[str, Any]) -> tuple[str, int, str]:
@@ -326,7 +491,6 @@ def _attach_gaps(rows: list[dict[str, Any]]) -> None:
 def _hydrate_page(
     state: AppState, rows: list[dict[str, Any]],
 ) -> list[ParallelPassageOut]:
-    text_cache: dict[tuple[str, int, str], str | None] = {}
     title_cache = _load_titles(state, sorted({row["textid"] for row in rows}))
     keys = sorted(
         {
@@ -337,48 +501,7 @@ def _hydrate_page(
             for row in rows
         }
     )
-    if keys and state.index_path.exists():
-        placeholders = ",".join("(?, ?, ?)" for _ in keys)
-        params = [value for key in keys for value in key]
-        try:
-            conn = sqlite3.connect(
-                f"file:{state.index_path}?mode=ro", uri=True,
-            )
-            try:
-                found = conn.execute(
-                    "SELECT j.textid, j.seq, b.kind, b.text "
-                    "FROM bucket b JOIN juan j ON b.juan_id = j.juan_id "
-                    f"WHERE (j.textid, j.seq, b.kind) IN ({placeholders})",
-                    params,
-                ).fetchall()
-            finally:
-                conn.close()
-            for found_textid, found_seq, found_bucket, found_text in found:
-                text_cache[(found_textid, found_seq, found_bucket)] = found_text
-        except sqlite3.DatabaseError:
-            # Source-file hydration below remains a correct, if slower,
-            # fallback for deployments without a readable merged index.
-            pass
-
-    for textid, seq, bucket in keys:
-        key = (textid, seq, bucket)
-        if key in text_cache:
-            continue
-        rec = state.lookup_bundle(textid)
-        if textid not in title_cache:
-            title_cache[textid] = rec.title if rec is not None else None
-        if rec is None:
-            text_cache[key] = None
-            continue
-        try:
-            juan = selection.load_juan_file(
-                rec.bundle_dir, rec.manifest, textid, seq,
-            )
-            bucket_obj = juan.get(bucket)
-            text = bucket_obj.get("text") if isinstance(bucket_obj, dict) else None
-            text_cache[key] = text if isinstance(text, str) else None
-        except HTTPException:
-            text_cache[key] = None
+    text_cache = _load_bucket_texts(state, keys)
 
     out: list[ParallelPassageOut] = []
     for row in rows:
@@ -388,7 +511,7 @@ def _hydrate_page(
         local_key = (row["source_textid"], row["source_seq"], row["local_bucket"])
         key = (textid, seq, bucket)
         local_text = text_cache.get(local_key)
-        remote_text = text_cache[key]
+        remote_text = text_cache.get(key)
         local_start = row["local_offset"]
         local_end = local_start + row["local_length"]
         start = row["offset"]
@@ -444,17 +567,13 @@ def _remote_text_options(
 
 
 def _source_char_count(state: AppState, textid: str, seq: int) -> int:
-    rec = state.lookup_bundle(textid)
-    if rec is None:
-        return 0
-    try:
-        juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, textid, seq)
-    except HTTPException:
-        return 0
+    texts = _load_bucket_texts(
+        state,
+        [(textid, seq, bucket) for bucket in ("front", "body", "back")],
+    )
     total = 0
     for bucket in ("front", "body", "back"):
-        bucket_obj = juan.get(bucket)
-        text = bucket_obj.get("text") if isinstance(bucket_obj, dict) else None
+        text = texts.get((textid, seq, bucket))
         if isinstance(text, str):
             total += len(text)
     return total
@@ -468,7 +587,7 @@ def _parallel_status(
         textid=textid,
         juan_seq=seq,
         has_assets=bool(paths),
-        has_parallels=bool(_load_markers(paths, textid, seq)),
+        has_parallels=bool(_load_markers(state, paths, textid, seq)),
         sources=sources,
         can_generate=state.index_path.is_file() or state.corpus_root.is_dir(),
     )
@@ -636,7 +755,7 @@ def get_juan_parallels(
         remote_textid = None
 
     paths, _sources = _asset_paths(state, textid, seq)
-    rows = _load_markers(paths, textid, seq)
+    rows = _load_markers(state, paths, textid, seq)
     if bucket is not None:
         rows = [row for row in rows if row["local_bucket"] == bucket]
     if start is not None and end is not None:

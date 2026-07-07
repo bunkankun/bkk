@@ -1133,6 +1133,8 @@ button {
   border-right: 1px solid var(--bdr);
   font-family: inherit;
   min-width: 0;
+  flex: 1 1 auto;
+  max-width: 100%;
 }
 .tab.on {
   background: var(--bg-ed);
@@ -1191,14 +1193,17 @@ button {
   cursor: default;
 }
 .pane-close {
-  flex: 0 0 auto;
+  position: sticky;
+  right: 0;
+  z-index: 5;
+  flex: 0 0 24px;
   margin-left: auto;
-  margin-right: 4px;
-  width: 20px;
+  margin-right: 0;
+  width: 24px;
   height: 20px;
   border: none;
   border-radius: 3px;
-  background: transparent;
+  background: var(--bg-tab);
   color: var(--t3);
   font-size: 14px;
   line-height: 1;
@@ -1354,6 +1359,22 @@ button {
 .tv-body-phrase .tv-block {
   display: block;
   margin-bottom: 0.15em;
+}
+.tv-body-translation-align {
+  line-height: 1.65;
+  letter-spacing: 0.02em;
+}
+.tv-body-translation-align.tv-body-phrase .tv-block {
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--bdr-l);
+  background: var(--bg-ed);
+}
+.tv-body-translation-align.tv-body-phrase .tv-block:first-child {
+  border-top: 1px solid var(--bdr);
+}
+.tv-body-translation-align.tv-body-phrase .tv-block:hover {
+  background: var(--hov);
 }
 .tv-block-placeholder {
   background: linear-gradient(

@@ -236,6 +236,15 @@ class AppState:
         default_factory=dict, repr=False
     )
     _user_text_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _parallel_cache_lock: threading.Lock = field(
+        default_factory=threading.Lock, repr=False
+    )
+    _parallel_marker_cache: dict[tuple[str, int], dict[str, Any]] = field(
+        default_factory=dict, repr=False
+    )
+    _parallel_bucket_text_cache: dict[tuple[str, int, str], dict[str, Any]] = field(
+        default_factory=dict, repr=False
+    )
 
     @property
     def corpus_root(self) -> Path:

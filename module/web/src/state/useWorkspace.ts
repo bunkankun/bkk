@@ -824,6 +824,7 @@ function makeTextTab(args: {
     args.selectedTranslation?.source_textid === args.textid
       ? args.selectedTranslation
       : inherited.selectedTranslation ?? pendingTranslation;
+  const showTranslation = args.showTranslation ?? (inherited.showTranslation || pendingTranslation != null);
   return {
     id: `${args.textid}:${args.seq}`,
     type: "text",
@@ -832,12 +833,13 @@ function makeTextTab(args: {
     pinned: args.pinned === true,
     readMode: "read",
     lineMode:
-      args.lineMode ??
-      (args.sourceText?.pinned
-        ? state.readPrefs.lineMode
-        : args.sourceText?.lineMode ?? state.readPrefs.lineMode),
-    showTranslation:
-      args.showTranslation ?? (inherited.showTranslation || pendingTranslation != null),
+      showTranslation
+        ? "phrase"
+        : args.lineMode ??
+          (args.sourceText?.pinned
+            ? state.readPrefs.lineMode
+            : args.sourceText?.lineMode ?? state.readPrefs.lineMode),
+    showTranslation,
     showImage: args.showImage ?? inherited.showImage,
     selectedTranslation,
   };
@@ -1807,6 +1809,7 @@ export const workspace = {
                 ? {
                     ...tab,
                     readMode: normalizedReadMode,
+                    ...(readMode === "trans" ? { lineMode: "phrase" as const } : {}),
                     ...(nextShowTranslation != null
                       ? { showTranslation: nextShowTranslation }
                       : {}),
@@ -1853,6 +1856,7 @@ export const workspace = {
                     ...tab,
                     readMode: "read",
                     showTranslation: true,
+                    lineMode: "phrase",
                     selectedTranslation: translation,
                   }
                 : tab,
@@ -1888,7 +1892,12 @@ export const workspace = {
           ...leaf,
           tabs: leaf.tabs.map((tab) =>
             tab.id === leaf.activeTabId && tab.type === "text"
-              ? { ...tab, readMode: "read", showTranslation: nextShow }
+              ? {
+                  ...tab,
+                  readMode: "read",
+                  showTranslation: nextShow,
+                  ...(nextShow ? { lineMode: "phrase" as const } : {}),
+                }
               : tab,
           ),
         };
@@ -2128,7 +2137,7 @@ export const workspace = {
       sourceText: sourceTextTab,
       showTranslation: true,
       selectedTranslation: summary,
-      lineMode: sourceTextTab?.lineMode ?? state.readPrefs.lineMode,
+      lineMode: "phrase",
     });
     const pane = paneForOpenTab(tab);
     const focusedPaneId = leafIdForTab(pane, tab.id);
