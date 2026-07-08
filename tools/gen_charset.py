@@ -19,7 +19,7 @@ inclusion_blocks:
 - {name: CJK Unified Ideographs Ext B, range: [U+20000, U+2A6DF]}
 - {name: CJK Unified Ideographs Ext C-F, range: [U+2A700, U+2EBEF]}
 - {name: CJK Compatibility Ideographs, range: [U+F900, U+FAFF]}
-- {name: BKK PUA, range: [U+105000, U+105FFF]}
+- {name: BKK PUA, range: [U+105000, U+108FFF]}
 excluded:
 """
 

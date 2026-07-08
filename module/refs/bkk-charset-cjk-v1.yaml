@@ -6,7 +6,7 @@ inclusion_blocks:
 - {name: CJK Unified Ideographs Ext B, range: [U+20000, U+2A6DF]}
 - {name: CJK Unified Ideographs Ext C-F, range: [U+2A700, U+2EBEF]}
 - {name: CJK Compatibility Ideographs, range: [U+F900, U+FAFF]}
-- {name: BKK PUA, range: [U+105000, U+105FFF]}
+- {name: BKK PUA, range: [U+105000, U+108FFF]}
 excluded:
 - {cp: U+248E5, char: 𤣥, reason: tw-edu-var, replaced_by: U+7384}
 - {cp: U+3479, char: 㑹, reason: tw-edu-var, replaced_by: U+6703}
@@ -20850,4 +20850,4 @@ excluded:
 - {cp: U+9304, char: 錄, reason: 'twjp-vardb,tw,reversed', replaced_by: U+9332}
 - {cp: U+95B1, char: 閱, reason: 'twjp-vardb,tw,reversed', replaced_by: U+95B2}
 - {cp: U+9839, char: 頹, reason: 'twjp-vardb,tw,reversed', replaced_by: U+983D}
-hash: sha256:37995e65f5e6cdc8cfbc980fea50ec86663e3e7de950809f7e37f003754b3227
+hash: sha256:80d2d927b8deb12efb4a2db45a88623d21d8eb0caa5df4e1fce34edd8ec300b3

@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 
 PUA_BASE = 0x105000
-PUA_END = 0x106000
+PUA_END = 0x109000
 
 _ENTITY_RE = re.compile(r"&KR(\d+);")
 
