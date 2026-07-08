@@ -36,6 +36,9 @@ from .refs import DEFAULT_REFS_DIR, load_context
 from .run import run_canonicalize, run_revert
 
 
+DEFAULT_UNMAPPED_REPORT = Path("chars-unmapped-report.tsv")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk chars")
     sub = p.add_subparsers(dest="op", required=True)
@@ -77,9 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--unmapped-report", "--failed-chars-report",
         dest="unmapped_report",
         type=Path,
-        default=None,
+        default=DEFAULT_UNMAPPED_REPORT,
         help="write a TSV report of unmapped characters that caused bundle "
-             "writes to be skipped",
+             f"writes to be skipped (default: {DEFAULT_UNMAPPED_REPORT})",
     )
     pc.add_argument(
         "--abort-on-error", dest="abort_on_error", action="store_true",

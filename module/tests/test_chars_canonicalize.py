@@ -540,6 +540,69 @@ def test_run_canonicalize_writes_unmapped_report(tmp_path: Path):
     ]
 
 
+def test_run_canonicalize_skips_bundle_with_existing_substitution(tmp_path: Path):
+    text_id = "KR0chr09"
+    bundle_dir = tmp_path / text_id
+    bundle_dir.mkdir()
+
+    src = chr(0x5434)
+    repl = chr(0x5449)
+    original = "周" + src + "易"
+    juan_name = f"{text_id}_001.yaml"
+    juan = {
+        "canonical_identifier": f"bkk:krp/{text_id}/bkk/v1/juan/1",
+        "seq": 1,
+        "body": {
+            "text": original,
+            "hash": sha256_text(original),
+            "markers": [
+                marker_to_flow(
+                    {
+                        "type": "substitution",
+                        "offset": 1,
+                        "original": src,
+                        "replacement": repl,
+                        "reason": SUBSTITUTION_REASON,
+                    }
+                ),
+            ],
+        },
+        "metadata": {"title": "Already canonicalized", "edition": {"short": "bkk"}},
+        "hash": ZERO_HASH,
+    }
+    juan["hash"] = _self_hash(juan)
+    (bundle_dir / juan_name).write_text(dump(juan), encoding="utf-8")
+
+    manifest = {
+        "canonical_identifier": f"bkk:krp/{text_id}/v1",
+        "canonical_location": f"https://kanripo.org/bkk/{text_id}/v1",
+        "canonical_set": {
+            "identifier": "bkk:charset/test-v1",
+            "hash": "sha256:" + "2" * 64,
+        },
+        "assets": {
+            "parts": [
+                marker_to_flow({"seq": 1, "filename": juan_name, "hash": juan["hash"]}),
+            ],
+        },
+        "table_of_contents": [],
+        "metadata": {"title": "Already canonicalized", "edition": {"short": "bkk"}},
+        "hash": ZERO_HASH,
+    }
+    manifest["hash"] = manifest_hash(manifest)
+    (bundle_dir / f"{text_id}.manifest.yaml").write_text(dump(manifest), encoding="utf-8")
+
+    assert run_canonicalize(
+        tmp_path,
+        ctx=_toy_ctx(),
+        text_ids=[text_id],
+        log_file=None,
+    ) == 0
+
+    unchanged = yaml.safe_load((bundle_dir / juan_name).read_text(encoding="utf-8"))
+    assert unchanged["body"]["text"] == original
+
+
 def test_canonicalize_cli_forwards_jobs(tmp_path: Path, monkeypatch):
     from bkk.chars import cli
 
@@ -565,3 +628,24 @@ def test_canonicalize_cli_forwards_jobs(tmp_path: Path, monkeypatch):
     assert captured["out_root"] == tmp_path
     assert captured["jobs"] == 3
     assert captured["unmapped_report"] == tmp_path / "unmapped.tsv"
+
+
+def test_canonicalize_cli_defaults_unmapped_report(tmp_path: Path, monkeypatch):
+    from bkk.chars import cli
+
+    captured: dict = {}
+
+    def fake_run_canonicalize(out_root: Path, **kwargs):
+        captured["out_root"] = out_root
+        captured.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "load_context", lambda refs_dir: _toy_ctx())
+    monkeypatch.setattr(cli, "run_canonicalize", fake_run_canonicalize)
+
+    assert cli.run([
+        "canonicalize",
+        "--out-root",
+        str(tmp_path),
+    ]) == 0
+    assert captured["unmapped_report"] == cli.DEFAULT_UNMAPPED_REPORT

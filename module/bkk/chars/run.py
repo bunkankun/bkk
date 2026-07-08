@@ -137,14 +137,18 @@ def run_canonicalize(
         unmapped_bundles: list[str] = []
         unmapped_report_rows: list[dict[str, Any]] = []
         rewrote_bundles = 0
+        skipped_existing = 0
 
         def record_result(bundle_dir: Path, stats: dict[str, Any]) -> None:
             nonlocal total_subs, total_juans, total_unmapped, rewrote_bundles
+            nonlocal skipped_existing
             text_id = bundle_dir.name
             total_subs += stats["substitutions"]
             total_juans += stats["juans"]
             unmapped_report_rows.extend(stats.get("unmapped_report", []))
             bundle_unmapped = stats.get("unmapped", 0)
+            if stats.get("skipped_existing"):
+                skipped_existing += 1
             if bundle_unmapped:
                 total_unmapped += bundle_unmapped
                 unmapped_bundles.append(text_id)
@@ -207,6 +211,11 @@ def run_canonicalize(
             f"{verb} {total_subs} codepoint(s) across {total_juans} juan file(s) "
             f"in {rewrote_bundles}/{len(bundle_dirs)} bundle(s)"
         )
+        if skipped_existing:
+            print(
+                f"skipped {skipped_existing} bundle(s) that already have "
+                f"substitution markers"
+            )
         if total_unmapped:
             print(
                 f"{total_unmapped} unmapped codepoint occurrence(s) across "
@@ -628,13 +637,29 @@ def _process_bundle(
     pending_juans: list[tuple[Path, dict, str]] = []  # (path, juan_data, new_hash)
     used_mapping_indices: set[int] = set()
     unmapped_report_rows: list[dict[str, Any]] = []
+    loaded_juans: list[tuple[int, Path, dict]] = []
 
     for seq, juan_path in juan_entries:
         data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
-        data = hydrate_juan_markers(data, load_marker_asset(bundle_dir, manifest, seq))
+        marker_asset = load_marker_asset(bundle_dir, manifest, seq)
+        if _has_substitution_markers(data) or _has_substitution_markers(marker_asset):
+            lines.append("  already has substitution marker(s); skipped")
+            return {
+                "juans": 0,
+                "substitutions": 0,
+                "unmapped": 0,
+                "unmapped_report": [],
+                "skipped_existing": True,
+                "manifest_changed": False,
+                "lines": lines,
+            }
+        loaded_juans.append(
+            (seq, juan_path, hydrate_juan_markers(data, marker_asset))
+        )
 
+    for seq, juan_path, data in loaded_juans:
         juan_subs = 0
         juan_unmapped = 0
         for bucket_name in _BUCKETS:
@@ -720,6 +745,7 @@ def _process_bundle(
             "substitutions": total_subs,
             "unmapped": total_unmapped,
             "unmapped_report": unmapped_report_rows,
+            "skipped_existing": False,
             "manifest_changed": manifest_changed,
             "lines": lines,
         }
@@ -748,9 +774,20 @@ def _process_bundle(
         "substitutions": total_subs,
         "unmapped": total_unmapped,
         "unmapped_report": unmapped_report_rows,
+        "skipped_existing": False,
         "manifest_changed": manifest_changed,
         "lines": lines,
     }
+
+
+def _has_substitution_markers(node: Any) -> bool:
+    if isinstance(node, dict):
+        if node.get("type") == "substitution":
+            return True
+        return any(_has_substitution_markers(value) for value in node.values())
+    if isinstance(node, list):
+        return any(_has_substitution_markers(value) for value in node)
+    return False
 
 
 def _unmapped_report_rows(
