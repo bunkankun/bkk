@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from pathlib import Path
 
 import pytest
 import yaml
 
 from bkk.index import Index, build_index
+from bkk.index.cli import run as cli_run
 
 
 def _write_bundle(root: Path, textid: str, body_text: str,
@@ -46,6 +48,75 @@ def _write_bundle(root: Path, textid: str, body_text: str,
         encoding="utf-8",
     )
     return bundle_dir
+
+
+def _write_multipart_bundle(root: Path, textid: str) -> Path:
+    bundle_dir = root / textid
+    bundle_dir.mkdir(parents=True)
+    parts = [
+        (1, "alpha beta", []),
+        (2, "gamma delta", [
+            {"type": "variant", "offset": 0, "length": 1, "content": "g", "X": "G"},
+            {"type": "voice", "name": "root", "id": "v1", "offset": 0, "length": 5},
+        ]),
+    ]
+    for seq, text, markers in parts:
+        (bundle_dir / f"{textid}_{seq:03d}.yaml").write_text(
+            yaml.safe_dump({
+                "canonical_identifier": f"bkk:test/{textid}/v1/juan/{seq}",
+                "seq": seq,
+                "body": {
+                    "text": text,
+                    "hash": "sha256:0",
+                    "markers": markers,
+                },
+                "hash": "sha256:0",
+            }, allow_unicode=True),
+            encoding="utf-8",
+        )
+    (bundle_dir / f"{textid}.manifest.yaml").write_text(
+        yaml.safe_dump({
+            "canonical_identifier": f"bkk:test/{textid}/v1",
+            "editions": [{"short": "X", "label": "x"}],
+            "assets": {"parts": [
+                {"seq": 1, "filename": f"{textid}_001.yaml", "hash": "sha256:0"},
+                {"seq": 2, "filename": f"{textid}_002.yaml", "hash": "sha256:0"},
+            ]},
+            "table_of_contents": [
+                {"ref": {"seq": 1, "marker_id": f"{textid}_001-1a",
+                         "span": ["body", 0, len("alpha beta")]},
+                 "label": "part one"},
+                {"ref": {"seq": 2, "marker_id": f"{textid}_002-1a",
+                         "span": ["body", 0, len("gamma delta")]},
+                 "label": "part two"},
+            ],
+        }, allow_unicode=True),
+        encoding="utf-8",
+    )
+    return bundle_dir
+
+
+def test_cli_build_jobs_uses_worker_path(tmp_path, monkeypatch):
+    bundle = _write_multipart_bundle(tmp_path, "TEST_JOBS")
+    out = tmp_path / "jobs.bkkx"
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+
+    rc = cli_run(["build", str(bundle), "--out", str(out), "--jobs", "2"])
+
+    assert rc == 0
+    with Index(out) as ix:
+        hits = list(ix.search("gamma"))
+    assert len(hits) == 1
+    assert hits[0].toc_label == "part two"
+
+    conn = sqlite3.connect(out)
+    try:
+        voice_rows = conn.execute("SELECT name, voice_id FROM voice_range").fetchall()
+        witness_rows = conn.execute("SELECT label, text FROM witness").fetchall()
+    finally:
+        conn.close()
+    assert voice_rows == [("root", "v1")]
+    assert witness_rows == [("X", "Gamma delta")]
 
 
 def test_master_substring_match(tmp_path):

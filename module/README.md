@@ -175,11 +175,12 @@ the browser to drive static-site search.
 ### Per-bundle build
 
 ```
-python -m bkk.index build <bundle_dir> [--out PATH]
+python -m bkk.index build <bundle_dir> [--out PATH] [--jobs N]
 ```
 
 Walks `<bundle_dir>/<textid>_NNN.yaml` plus the manifest and writes
-`<bundle_dir>/<textid>.bkkx` (or `--out PATH`).
+`<bundle_dir>/<textid>.bkkx` (or `--out PATH`). `--jobs` parallelizes
+juan parsing and witness-row derivation; SQLite writes remain centralized.
 
 ### Corpus-level merge
 

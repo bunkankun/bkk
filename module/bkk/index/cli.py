@@ -2,7 +2,7 @@
 
 Subcommands::
 
-    python -m bkk.index build <bundle_dir> [--out PATH]
+    python -m bkk.index build <bundle_dir> [--out PATH] [--jobs N]
     python -m bkk.index catalog <corpus> [--csv PATH] [--out PATH]
                                          [--prefix KR3a]
     python -m bkk.index translations <corpus> [--out PATH]
@@ -52,6 +52,8 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("bundle_dir", type=Path)
     pb.add_argument("--out", type=Path, default=None,
                     help="output path (default: <bundle_dir>/<textid>.bkkx)")
+    pb.add_argument("--jobs", type=int, default=1,
+                    help="worker processes for parsing juan files (default: 1)")
 
     pm = sub.add_parser("merge", help="merge per-bundle indices under a corpus")
     pm.add_argument("corpus", type=Path, nargs="?", default=None,
@@ -353,7 +355,9 @@ def run(argv: list[str] | None = None) -> int:
             )
 
     if args.cmd == "build":
-        path = build_index(args.bundle_dir, args.out)
+        if args.jobs < 1:
+            parser.error("--jobs must be >= 1")
+        path = build_index(args.bundle_dir, args.out, jobs=args.jobs)
         print(f"wrote {path}")
         return 0
     if args.cmd == "merge":
