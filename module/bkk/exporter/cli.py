@@ -33,7 +33,9 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
+from bkk.cli_common import warn_deprecated
 from bkk.short_refs import text_id_arg
+from bkk.short_refs import text_prefix_arg
 
 from .recipe import Recipe, RecipeError, apply_overrides, load_recipe
 
@@ -64,6 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--text-id", dest="text_id", default=None, type=text_id_arg,
                    help="with --corpus: restrict to a single text id")
     p.add_argument("--section", default=None,
+                   help="with --corpus: restrict to text ids starting with "
+                        "this prefix (e.g. KR3a)")
+    p.add_argument("--text-prefix", dest="text_prefix", default=None,
+                   type=text_prefix_arg,
                    help="with --corpus: restrict to text ids starting with "
                         "this prefix (e.g. KR3a)")
     p.add_argument("--yes", action="store_true",
@@ -104,6 +110,13 @@ def run(argv: list[str] | None = None) -> int:
         print("error: --corpus and --bundle are mutually exclusive",
               file=sys.stderr)
         return 2
+    if args.section and args.text_prefix:
+        print("error: provide only one of --text-prefix or --section",
+              file=sys.stderr)
+        return 2
+    if args.section:
+        warn_deprecated("--section", "--text-prefix")
+        args.text_prefix = text_prefix_arg(args.section)
 
     try:
         template = load_recipe(args.recipe) if args.recipe is not None else None
@@ -153,7 +166,7 @@ def _run_corpus(args, template: Recipe | None) -> int:
         return 2
 
     bundles = list(_iter_bundle_dirs(
-        args.corpus, text_id=args.text_id, section=args.section,
+        args.corpus, text_id=args.text_id, section=args.text_prefix,
     ))
     if not bundles:
         print("error: no bundles found to export", file=sys.stderr)

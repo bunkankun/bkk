@@ -30,7 +30,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from bkk.short_refs import text_id_arg
+from bkk.cli_common import warn_deprecated
+from bkk.short_refs import text_id_arg, text_prefix_arg
 
 from .annotations import build_annotation_index
 from .build import build_index
@@ -65,6 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
     pm.add_argument("--prefix", default=None,
                     help="restrict to bundles whose textid starts with PREFIX "
                          "(e.g. KR3a)")
+    pm.add_argument("--text-prefix", dest="text_prefix", default=None,
+                    type=text_prefix_arg,
+                    help="restrict to bundles whose textid starts with PREFIX "
+                         "(e.g. KR3a)")
     pm.add_argument("--section", default=None,
                     help="restrict to a (sub)section like KR6 or KR6q; "
                          "filters by textid prefix and writes the output to "
@@ -87,6 +92,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="catalog .bkkc output path "
                          "(default: <corpus>/_catalog.bkkc)")
     pc.add_argument("--prefix", default=None,
+                    help="restrict to bundles whose textid starts with PREFIX "
+                         "(e.g. KR3a)")
+    pc.add_argument("--text-prefix", dest="text_prefix", default=None,
+                    type=text_prefix_arg,
                     help="restrict to bundles whose textid starts with PREFIX "
                          "(e.g. KR3a)")
     pc.add_argument("--csv-stub", type=Path, default=None, dest="csv_stub",
@@ -250,8 +259,10 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--witness", action="append", default=None,
                     help="restrict witness-side matches (repeatable); "
                          "master matches are always returned")
-    ps.add_argument("--textid", default=None, type=text_id_arg,
+    ps.add_argument("--text-id", dest="text_id", default=None, type=text_id_arg,
                     help="restrict to one bundle (corpus indices)")
+    ps.add_argument("--textid", dest="legacy_textid", default=None,
+                    type=text_id_arg, help=argparse.SUPPRESS)
     ps.add_argument("--voice", action="append", default=None,
                     help="restrict to hits fully contained in a voice range "
                          "of this name (repeatable; e.g. 'root', 'commentary'). "
@@ -278,19 +289,34 @@ def run(argv: list[str] | None = None) -> int:
         if args.corpus is None:
             parser.error("corpus is required (or set global.corpus in .bkkrc)")
     if args.cmd == "merge":
-        if args.section and args.prefix:
-            parser.error("--section and --prefix are mutually exclusive")
+        selected_prefixes = [
+            bool(args.section), bool(args.prefix), bool(args.text_prefix),
+        ]
+        if sum(selected_prefixes) > 1:
+            parser.error("--text-prefix, --section, and --prefix are mutually exclusive")
         default_out = Path(idx.get("out") or args.corpus / "_corpus.bkkx")
+        if args.prefix:
+            warn_deprecated("--prefix", "--text-prefix")
+            args.text_prefix = text_prefix_arg(args.prefix)
         if args.section:
-            args.prefix = args.section
+            warn_deprecated("--section", "--text-prefix")
+            args.prefix = text_prefix_arg(args.section)
             if args.out is None:
                 args.out = default_out.parent / f"_{args.section}.bkkx"
+        else:
+            args.prefix = args.text_prefix
         if args.out is None:
             args.out = default_out
     if args.cmd == "translations":
         if args.out is None:
             args.out = args.corpus / "_translations.bkkt"
     if args.cmd == "catalog":
+        if args.prefix and args.text_prefix:
+            parser.error("--text-prefix and --prefix are mutually exclusive")
+        if args.prefix:
+            warn_deprecated("--prefix", "--text-prefix")
+            args.text_prefix = text_prefix_arg(args.prefix)
+        args.prefix = args.text_prefix
         if args.out is None:
             args.out = args.corpus / "_catalog.bkkc"
         if args.csv_path is None:
@@ -580,6 +606,11 @@ def run(argv: list[str] | None = None) -> int:
             annotations_index=args.annotations_index,
         )
     if args.cmd == "search":
+        if args.text_id and args.legacy_textid:
+            parser.error("provide only one of --text-id or --textid")
+        if args.legacy_textid:
+            warn_deprecated("--textid", "--text-id")
+            args.text_id = args.legacy_textid
         with Index(args.index_path) as ix:
             wits = set(args.witness) if args.witness else None
             voices = set(args.voice) if args.voice else None
@@ -593,7 +624,7 @@ def run(argv: list[str] | None = None) -> int:
                     )
             hits = ix.search(
                 args.query, context=args.context,
-                witnesses=wits, textid=args.textid, voices=voices,
+                witnesses=wits, textid=args.text_id, voices=voices,
             )
             for hit in hits:
                 _print_hit(hit)

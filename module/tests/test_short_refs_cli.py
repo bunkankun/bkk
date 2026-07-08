@@ -10,6 +10,7 @@ from bkk.short_refs import (
     normalize_text_id,
     parse_text_juan_selector,
     text_id_arg,
+    text_prefix_arg,
 )
 
 
@@ -29,6 +30,20 @@ def test_normalize_text_id(value, expected):
 def test_text_only_argument_rejects_juan_selector():
     with pytest.raises(argparse.ArgumentTypeError, match="requires a complete text"):
         text_id_arg("1h4/1")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("6", "KR6"),
+        ("6q", "KR6q"),
+        ("KR6q", "KR6q"),
+        ("1h4", "KR1h0004"),
+        ("KR1h4", "KR1h0004"),
+    ],
+)
+def test_text_prefix_argument(value, expected):
+    assert text_prefix_arg(value) == expected
 
 
 @pytest.mark.parametrize(
@@ -72,17 +87,41 @@ def test_text_id_shortcut_is_wired_to_cli_parsers():
         ["--text-id", "1h4"]
     ).text_ids == ["KR1h0004"]
     assert annotations_parser().parse_args(
-        ["validate", "1h4"]
+        ["validate", "--text-id", "1h4"]
     ).text_id == "KR1h0004"
     assert index_parser().parse_args(
+        ["search", "index.bkkx", "term", "--text-id", "1h4"]
+    ).text_id == "KR1h0004"
+    assert voice_parser().parse_args(
+        ["remove", "--text-id", "1h4"]
+    ).text_id == "KR1h0004"
+    assert repair_parser().parse_args(
+        ["manifest", "--text-id", "1h4"]
+    ).text_id == "KR1h0004"
+    assert repo_parser().parse_args(
+        ["status", "--text-prefix", "1h4"]
+    ).text_prefix == "KR1h0004"
+
+
+def test_legacy_selector_forms_still_parse():
+    from bkk.annotations.cli import _build_parser as annotations_parser
+    from bkk.index.cli import build_parser as index_parser
+    from bkk.repair.cli import build_parser as repair_parser
+    from bkk.repo.cli import build_parser as repo_parser
+    from bkk.voice.cli import build_parser as voice_parser
+
+    assert annotations_parser().parse_args(
+        ["validate", "1h4"]
+    ).legacy_text_id == "KR1h0004"
+    assert index_parser().parse_args(
         ["search", "index.bkkx", "term", "--textid", "1h4"]
-    ).textid == "KR1h0004"
+    ).legacy_textid == "KR1h0004"
     assert voice_parser().parse_args(
         ["remove", "1h4"]
-    ).bundle == "KR1h0004"
+    ).legacy_bundle == "KR1h0004"
     assert repair_parser().parse_args(
         ["manifest", "1h4"]
-    ).bundle == "KR1h0004"
+    ).legacy_bundle == "KR1h0004"
     assert repo_parser().parse_args(
         ["status", "1h4"]
-    ).prefix == "KR1h0004"
+    ).legacy_prefix == "KR1h0004"

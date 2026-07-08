@@ -9,6 +9,7 @@ import os
 import sys
 from pathlib import Path
 
+from bkk.cli_common import warn_deprecated
 from bkk.config import load_rc
 from bkk.short_refs import text_id_arg
 
@@ -78,7 +79,10 @@ def _build_parser() -> argparse.ArgumentParser:
         ("repair",   "validate + rewrite records whose anchor can be shifted to a unique nearby match"),
     ):
         s = sub.add_parser(name, help=help_text)
-        s.add_argument("text_id", nargs="?", default=None, type=text_id_arg,
+        s.add_argument("legacy_text_id", nargs="?", default=None,
+                       type=text_id_arg, help=argparse.SUPPRESS)
+        s.add_argument("--text-id", dest="text_id", default=None,
+                       type=text_id_arg,
                        help="restrict to a single text id (default: scan whole archive)")
         s.add_argument("--annotations-root", type=Path, default=None,
                        help="archive root (default: [annotations].annotations_root or [serve].annotations_root)")
@@ -393,6 +397,14 @@ def _resolve_roots(args: argparse.Namespace) -> tuple[Path, Path] | int:
 
 
 def _cmd_validate_or_repair(args: argparse.Namespace, *, write: bool) -> int:
+    if args.text_id and args.legacy_text_id:
+        print("error: provide only one of --text-id or the legacy positional text id",
+              file=sys.stderr)
+        return 2
+    if args.legacy_text_id:
+        warn_deprecated("positional <text-id>", "--text-id <text-id>")
+        args.text_id = args.legacy_text_id
+
     roots = _resolve_roots(args)
     if isinstance(roots, int):
         return roots

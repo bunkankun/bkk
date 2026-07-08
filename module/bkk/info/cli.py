@@ -25,6 +25,7 @@ from pathlib import Path
 
 import yaml
 
+from bkk.cli_common import warn_deprecated
 from bkk.config import load_rc, rc_files
 from bkk.exporter.read_bundle import read_bundle
 from bkk.importer.charset import is_allowed_body_char
@@ -37,6 +38,7 @@ from bkk.importer.hashing import manifest_hash
 from bkk.importer.write.yaml_writer import dump as dump_bkk_yaml, marker_to_flow
 from bkk.marker_assets import effective_markers_for_bucket, load_marker_asset
 from bkk.short_refs import text_id_arg
+from bkk.short_refs import text_prefix_arg
 
 _INDEX_TABLES = (
     "bundle", "juan", "bucket", "witness", "variant", "voice_range",
@@ -61,6 +63,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bundles", action="store_true",
                    help="emit per-bundle table")
     p.add_argument("--prefix", default=None,
+                   help="restrict per-bundle table to textids starting with "
+                        "PREFIX (implies --bundles)")
+    p.add_argument("--text-prefix", default=None, dest="text_prefix",
+                   type=text_prefix_arg,
                    help="restrict per-bundle table to textids starting with "
                         "PREFIX (implies --bundles)")
     p.add_argument("--text-id", default=None, dest="text_id", type=text_id_arg,
@@ -116,6 +122,11 @@ def run(argv: list[str] | None = None) -> int:
         parser.error("--readme requires --text-id")
     if args.fix_editions and args.text_id is None:
         parser.error("--fix-editions requires --text-id")
+    if args.prefix and args.text_prefix:
+        parser.error("provide only one of --text-prefix or --prefix")
+    if args.prefix:
+        warn_deprecated("--prefix", "--text-prefix")
+        args.text_prefix = text_prefix_arg(args.prefix)
 
     corpus = args.corpus or info_rc.get("corpus") or g.get("corpus")
     if corpus is None:
@@ -139,7 +150,7 @@ def run(argv: list[str] | None = None) -> int:
             or corpus / "_catalog.bkkc"
         )
 
-    want_bundles = args.bundles or args.prefix is not None
+    want_bundles = args.bundles or args.text_prefix is not None
     try:
         report = collect_info_report(
             corpus=corpus,
@@ -147,7 +158,7 @@ def run(argv: list[str] | None = None) -> int:
             catalog_path=catalog_path,
             rc=rc,
             want_bundles=want_bundles,
-            prefix=args.prefix,
+            prefix=args.text_prefix,
             text_id=args.text_id,
         )
     except LookupError as exc:
@@ -167,7 +178,7 @@ def run(argv: list[str] | None = None) -> int:
             report = collect_info_report(
                 corpus=corpus, index_path=index_path,
                 catalog_path=catalog_path, rc=rc,
-                want_bundles=want_bundles, prefix=args.prefix,
+                want_bundles=want_bundles, prefix=args.text_prefix,
                 text_id=args.text_id,
             )
         else:

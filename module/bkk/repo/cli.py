@@ -7,7 +7,7 @@ gitignored; manifest + juan YAMLs are tracked.
 Actions: ``init``, ``clone``, ``reclone``, ``commit``, ``push``, ``pull``,
 ``status``, ``diff`` (compare local corpus to org, optionally sync the gap).
 
-Scope: a positional ``<prefix>`` (textid8/4/3, e.g. ``KR1a0001``, ``KR1a``)
+Scope: ``--text-prefix`` (textid8/4/3, e.g. ``KR1a0001``, ``KR1a``)
 or ``--all``. The prefix is forwarded to
 :func:`bkk.index.merge.discover_bundles`.
 
@@ -30,9 +30,10 @@ from pathlib import Path
 
 import yaml
 
+from bkk.cli_common import warn_deprecated
 from bkk.config import load_rc
 from bkk.index.merge import discover_bundles
-from bkk.short_refs import text_id_arg
+from bkk.short_refs import text_prefix_arg
 
 _GITIGNORE = """\
 *.bkkx
@@ -61,8 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     def _scope(sp: argparse.ArgumentParser) -> None:
         sp.add_argument(
-            "prefix", nargs="?", type=text_id_arg,
-            help="textid prefix (8/4/3 chars). Omit together with --all.",
+            "legacy_prefix", nargs="?", type=text_prefix_arg,
+            help=argparse.SUPPRESS,
+        )
+        sp.add_argument(
+            "--text-prefix", dest="text_prefix", default=None,
+            type=text_prefix_arg,
+            help="text-id prefix (8/4/3 chars). Omit together with --all.",
         )
         sp.add_argument(
             "--all", action="store_true", dest="all_flag",
@@ -89,7 +95,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_clone = sub.add_parser(
         "clone", help="clone bundles from the GitHub org into the corpus",
     )
-    p_clone.add_argument("prefix", nargs="?", type=text_id_arg)
+    p_clone.add_argument(
+        "legacy_prefix", nargs="?", type=text_prefix_arg,
+        help=argparse.SUPPRESS,
+    )
+    p_clone.add_argument(
+        "--text-prefix", dest="text_prefix", default=None,
+        type=text_prefix_arg,
+        help="text-id prefix (8/4/3 chars). Omit together with --all.",
+    )
     p_clone.add_argument("--all", action="store_true", dest="all_flag")
     p_clone.add_argument("--dry-run", action="store_true")
 
@@ -141,7 +155,15 @@ def build_parser() -> argparse.ArgumentParser:
             "list differences and optionally sync the gap"
         ),
     )
-    p_diff.add_argument("prefix", nargs="?", type=text_id_arg)
+    p_diff.add_argument(
+        "legacy_prefix", nargs="?", type=text_prefix_arg,
+        help=argparse.SUPPRESS,
+    )
+    p_diff.add_argument(
+        "--text-prefix", dest="text_prefix", default=None,
+        type=text_prefix_arg,
+        help="text-id prefix (8/4/3 chars). Omit together with --all.",
+    )
     p_diff.add_argument("--all", action="store_true", dest="all_flag")
     p_diff.add_argument("--dry-run", action="store_true")
     p_diff.add_argument(
@@ -162,6 +184,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     return p
+
+
+def _selected_prefix(args: argparse.Namespace) -> str | None:
+    if getattr(args, "text_prefix", None) and getattr(args, "legacy_prefix", None):
+        raise ValueError(
+            "provide only one of --text-prefix or the legacy positional prefix"
+        )
+    legacy = getattr(args, "legacy_prefix", None)
+    if legacy:
+        warn_deprecated("positional <prefix>", "--text-prefix <prefix>")
+    return getattr(args, "text_prefix", None) or legacy
 
 
 def _resolve_corpus(args: argparse.Namespace, rc: dict) -> Path:
@@ -929,6 +962,11 @@ def run(argv: list[str] | None = None) -> int:
     rc = load_rc()
     parser = build_parser()
     args = parser.parse_args(argv)
+    try:
+        args.prefix = _selected_prefix(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     corpus = _resolve_corpus(args, rc)
 
     repo_rc = rc.get("repo", {})

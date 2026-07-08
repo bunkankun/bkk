@@ -103,6 +103,8 @@ import sys
 from pathlib import Path
 
 from bkk.short_refs import text_id_arg
+from bkk.short_refs import text_prefix_arg
+from bkk.cli_common import warn_deprecated
 
 from .diverge import diff_trees, render_report
 from .read.tls import read_tls
@@ -292,9 +294,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--section", default=None,
                    help="krp: import every text under a corpus prefix "
                         "(e.g. KR3a); requires confirmation")
+    p.add_argument("--text-prefix", dest="text_prefix", default=None,
+                   type=text_prefix_arg,
+                   help="krp: import every text under a corpus prefix "
+                        "(e.g. KR3a); requires confirmation")
     p.add_argument("--exclude-section", dest="exclude_section", default=None,
                    help="krp: skip all texts whose id starts with this prefix "
                         "(e.g. KR6); applied after --section filtering")
+    p.add_argument("--exclude-text-prefix", dest="exclude_text_prefix",
+                   default=None, type=text_prefix_arg,
+                   help="krp: skip all texts whose id starts with this prefix "
+                        "(e.g. KR6); applied after --text-prefix filtering")
     p.add_argument("--by-section", dest="by_section", action="store_true",
                    default=False,
                    help="slice output by KR sub-section: bundles land under "
@@ -401,6 +411,18 @@ def run(argv: list[str] | None = None) -> int:
 
     if args.format is None:
         parser.error("--format is required (or set import.format in .bkkrc)")
+    if args.section and args.text_prefix:
+        parser.error("provide only one of --text-prefix or --section")
+    if args.exclude_section and args.exclude_text_prefix:
+        parser.error("provide only one of --exclude-text-prefix or --exclude-section")
+    if args.section:
+        warn_deprecated("--section", "--text-prefix")
+        args.text_prefix = text_prefix_arg(args.section)
+    if args.exclude_section:
+        warn_deprecated("--exclude-section", "--exclude-text-prefix")
+        args.exclude_text_prefix = text_prefix_arg(args.exclude_section)
+    args.section = args.text_prefix
+    args.exclude_section = args.exclude_text_prefix
 
     if args.format == "tls":
         return _run_tls(args)

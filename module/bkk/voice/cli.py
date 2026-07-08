@@ -2,13 +2,13 @@
 
 Exposes two operations:
 
-``add <bundle-dir-or-text-id>`` walks every juan file in the bundle
+``add (--bundle <dir> | --text-id <id>)`` walks every juan file in the bundle
 (master plus each documentary edition), derives ``voice`` range markers
 from the markers already on disk, writes them back into each juan's
 marker collection, and refreshes the juan and manifest hashes.
 
-    python -m bkk voice add <out-root>/<text-id>/
-    python -m bkk voice add <text-id>     # resolved via .bkkrc
+    python -m bkk voice add --bundle <out-root>/<text-id>/
+    python -m bkk voice add --text-id <text-id>     # resolved via .bkkrc
 
 Bare-id form resolves the bundle root against (in order)
 ``voice.out``, ``import.out``, ``global.corpus`` from ``.bkkrc``.
@@ -33,7 +33,7 @@ voice markers, so reruns are safe.
 
 ``--dry-run`` reports per-juan counts without writing.
 
-``remove <bundle-dir-or-text-id>`` strips every ``voice`` marker from
+``remove (--bundle <dir> | --text-id <id>)`` strips every ``voice`` marker from
 each juan in the bundle (master and every edition) and refreshes the
 affected juan and manifest hashes. It does not derive. Idempotent:
 juans with no voice markers are left untouched. Useful for undoing a
@@ -50,10 +50,11 @@ from pathlib import Path
 
 import yaml
 
+from bkk.cli_common import resolve_bundle_dir, resolve_rc_path, warn_deprecated
 from bkk.importer.hashing import manifest_hash, sha256_jcs, ZERO_HASH
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
 from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
-from bkk.short_refs import text_or_path_arg
+from bkk.short_refs import text_id_arg, text_or_path_arg
 
 from .derive import derive_voice_markers
 from .derive_indent import derive_voice_markers_from_indent
@@ -68,6 +69,24 @@ _JUAN_RE = re.compile(
 _BUCKETS = ("front", "body", "back")
 
 
+def _add_bundle_selector(sp: argparse.ArgumentParser) -> None:
+    sp.add_argument(
+        "legacy_bundle", nargs="?", type=text_or_path_arg,
+        help=argparse.SUPPRESS,
+    )
+    sp.add_argument("--bundle", dest="bundle", type=Path, default=None,
+                    help="bundle directory")
+    sp.add_argument(
+        "--text-id", dest="text_id", type=text_id_arg, default=None,
+        help="text id to resolve against voice.out / import.out / global.corpus",
+    )
+    sp.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help="bundle output root used to resolve --text-id "
+             "(overrides voice.out / import.out / global.corpus)",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk voice")
     sub = p.add_subparsers(dest="op", required=True)
@@ -76,16 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="derive voice markers from (...) punctuation pairs in each "
              "juan and write them back (master + every edition)",
     )
-    pa.add_argument(
-        "bundle", type=text_or_path_arg,
-        help="bundle directory, or a bare text-id resolved against "
-             "voice.out / import.out / global.corpus from .bkkrc",
-    )
-    pa.add_argument(
-        "--out", dest="out_root", type=Path, default=None,
-        help="bundle output root used to resolve a bare text-id "
-             "(overrides voice.out / import.out / global.corpus)",
-    )
+    _add_bundle_selector(pa)
     pa.add_argument(
         "--source", dest="source", choices=_VALID_SOURCES, default=None,
         help="derivation source: 'parens' (default; (…) pairs), "
@@ -106,16 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="strip every voice marker from each juan (master + every "
              "edition) and refresh juan and manifest hashes; does not derive",
     )
-    pr.add_argument(
-        "bundle", type=text_or_path_arg,
-        help="bundle directory, or a bare text-id resolved against "
-             "voice.out / import.out / global.corpus from .bkkrc",
-    )
-    pr.add_argument(
-        "--out", dest="out_root", type=Path, default=None,
-        help="bundle output root used to resolve a bare text-id "
-             "(overrides voice.out / import.out / global.corpus)",
-    )
+    _add_bundle_selector(pr)
     pr.add_argument(
         "--dry-run", dest="dry_run", action="store_true",
         help="report what would be removed without modifying files",
@@ -131,14 +132,21 @@ def run(argv: list[str] | None = None) -> int:
     if out_root is None:
         from bkk.config import load_rc
         rc = load_rc()
-        out_root = (
-            rc.get("voice", {}).get("out")
-            or rc.get("import", {}).get("out")
-            or rc.get("global", {}).get("corpus")
+        out_root = resolve_rc_path(
+            None, rc,
+            (("voice", "out"), ("import", "out"), ("global", "corpus")),
         )
 
+    try:
+        bundle, text_id = _selected_bundle_args(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     if args.op == "remove":
-        return _run_remove(args.bundle, out_root, dry_run=args.dry_run)
+        return _run_remove(
+            bundle, out_root, text_id=text_id, dry_run=args.dry_run,
+        )
 
     source = args.source
     if source is None:
@@ -154,29 +162,50 @@ def run(argv: list[str] | None = None) -> int:
             return 2
 
     return _run_add(
-        args.bundle, out_root, source=source,
+        bundle, out_root, text_id=text_id, source=source,
         force=args.force, dry_run=args.dry_run,
     )
 
 
-def _resolve_bundle_dir(bundle: str, out_root: Path | None) -> Path:
-    p = Path(bundle).expanduser()
-    if p.is_dir():
-        return p.resolve()
-    if out_root is not None and "/" not in bundle and "\\" not in bundle:
-        candidate = (Path(out_root).expanduser() / bundle).resolve()
-        if candidate.is_dir():
-            return candidate
-        raise FileNotFoundError(
-            f"bundle directory not found: tried {p} and {candidate}"
-        )
-    raise FileNotFoundError(f"bundle directory not found: {p}")
+def _selected_bundle_args(args: argparse.Namespace) -> tuple[str | Path | None, str | None]:
+    supplied = [
+        bool(getattr(args, "legacy_bundle", None)),
+        bool(getattr(args, "bundle", None)),
+        bool(getattr(args, "text_id", None)),
+    ]
+    if sum(supplied) != 1:
+        raise ValueError("provide exactly one of --bundle or --text-id")
+    if getattr(args, "legacy_bundle", None):
+        legacy = args.legacy_bundle
+        if "/" in legacy or "\\" in legacy or Path(legacy).is_dir():
+            warn_deprecated("positional <bundle>", "--bundle <dir>")
+            return legacy, None
+        warn_deprecated("positional <text-id>", "--text-id <text-id>")
+        return None, legacy
+    return args.bundle, args.text_id
 
 
-def _run_add(bundle: str, out_root, *, source: str, force: bool, dry_run: bool) -> int:
+def _resolve_bundle_dir(
+    bundle: str | Path | None,
+    out_root: Path | None,
+    *,
+    text_id: str | None = None,
+) -> Path:
+    return resolve_bundle_dir(bundle=bundle, text_id=text_id, root=out_root)
+
+
+def _run_add(
+    bundle: str | Path | None,
+    out_root,
+    *,
+    text_id: str | None = None,
+    source: str,
+    force: bool,
+    dry_run: bool,
+) -> int:
     try:
-        bundle_dir = _resolve_bundle_dir(bundle, out_root)
-    except FileNotFoundError as exc:
+        bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
@@ -355,10 +384,16 @@ def _process_one(
     }
 
 
-def _run_remove(bundle: str, out_root, *, dry_run: bool) -> int:
+def _run_remove(
+    bundle: str | Path | None,
+    out_root,
+    *,
+    text_id: str | None = None,
+    dry_run: bool,
+) -> int:
     try:
-        bundle_dir = _resolve_bundle_dir(bundle, out_root)
-    except FileNotFoundError as exc:
+        bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

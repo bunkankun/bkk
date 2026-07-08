@@ -112,6 +112,34 @@ def text_id_arg(value: str) -> str:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
+def text_prefix_arg(value: str) -> str:
+    """``argparse`` type for text-id prefix scopes.
+
+    Accepts the same compact full-text shortcuts as :func:`text_id_arg`
+    (``1h4`` -> ``KR1h0004``), plus shorter KR section prefixes such as
+    ``6`` and ``6q``. Non-KR prefixes pass through for callers that operate
+    on non-canonical bundle names.
+    """
+    prefix = value.strip()
+    if "/" in prefix or "\\" in prefix:
+        try:
+            parsed_textid, _selection = parse_short_ref(prefix)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(str(exc)) from exc
+        raise argparse.ArgumentTypeError(
+            f"{value!r} selects part of {parsed_textid}; "
+            "this argument requires a text-id prefix"
+        )
+    if re.fullmatch(r"[0-9]", prefix):
+        return f"KR{prefix}"
+    if re.fullmatch(r"[0-9][a-z]", prefix):
+        return f"KR{prefix}"
+    try:
+        return normalize_text_id(prefix)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 def text_or_path_arg(value: str) -> str:
     """Normalize a compact ID while preserving bundle-directory arguments."""
     expanded = str(value).strip()

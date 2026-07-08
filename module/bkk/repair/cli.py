@@ -3,7 +3,7 @@
 Exposes repair operations for manifests and marker storage.
 
     python -m bkk repair manifest <out-root>/<text-id>/
-    python -m bkk repair manifest <text-id>     # resolved via .bkkrc
+    python -m bkk repair manifest --text-id <text-id>     # resolved via .bkkrc
 
 For the bare-id form, the bundle root is resolved against (in order):
 ``repair.out``, ``import.out``, ``global.corpus`` from ``.bkkrc``. CLI
@@ -16,7 +16,33 @@ import argparse
 import sys
 from pathlib import Path
 
-from bkk.short_refs import text_or_path_arg
+from bkk.cli_common import resolve_bundle_dir, resolve_rc_path, warn_deprecated
+from bkk.short_refs import text_id_arg, text_or_path_arg, text_prefix_arg
+
+
+def _add_bundle_selector(sp: argparse.ArgumentParser, *, dry_run: bool = False) -> None:
+    sp.add_argument(
+        "legacy_bundle", nargs="?", type=text_or_path_arg,
+        help=argparse.SUPPRESS,
+    )
+    sp.add_argument(
+        "--bundle", dest="bundle", type=Path, default=None,
+        help="bundle directory",
+    )
+    sp.add_argument(
+        "--text-id", dest="text_id", type=text_id_arg, default=None,
+        help="text id to resolve against repair.out / import.out / global.corpus",
+    )
+    sp.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help="bundle output root used to resolve --text-id "
+             "(overrides repair.out / import.out / global.corpus)",
+    )
+    if dry_run:
+        sp.add_argument(
+            "--dry-run", action="store_true",
+            help="report the migration without writing juans, marker assets, or manifests",
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,35 +54,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="rebuild the master and edition manifests from the juan "
              "files on disk (use after a multi-XML-file TLS bulk import)",
     )
-    pm.add_argument(
-        "bundle", type=text_or_path_arg,
-        help="bundle directory, or a bare text-id resolved against "
-             "repair.out / import.out / global.corpus from .bkkrc",
-    )
-    pm.add_argument(
-        "--out", dest="out_root", type=Path, default=None,
-        help="bundle output root used to resolve a bare text-id "
-             "(overrides repair.out / import.out / global.corpus)",
-    )
+    _add_bundle_selector(pm)
 
     px = sub.add_parser(
         "externalize-markers",
         help="move bulky inline juan markers into per-juan assets/*.markers.yaml files",
     )
-    px.add_argument(
-        "bundle", type=text_or_path_arg,
-        help="bundle directory, or a bare text-id resolved against "
-             "repair.out / import.out / global.corpus from .bkkrc",
-    )
-    px.add_argument(
-        "--out", dest="out_root", type=Path, default=None,
-        help="bundle output root used to resolve a bare text-id "
-             "(overrides repair.out / import.out / global.corpus)",
-    )
-    px.add_argument(
-        "--dry-run", action="store_true",
-        help="report the migration without writing juans, marker assets, or manifests",
-    )
+    _add_bundle_selector(px, dry_run=True)
 
     pi = sub.add_parser(
         "ids-from-krp-titles",
@@ -64,8 +68,14 @@ def build_parser() -> argparse.ArgumentParser:
              "from catalog/krp-titles.txt for the bundles in --section",
     )
     pi.add_argument(
-        "--section", action="append", default=None, required=True,
+        "--section", action="append", default=None,
         help="KRP prefix (e.g. KR5, KR6, KR5a); repeatable. A bundle is "
+             "in scope iff its text-id starts with one of these prefixes.",
+    )
+    pi.add_argument(
+        "--text-prefix", action="append", default=None, dest="text_prefixes",
+        type=text_prefix_arg,
+        help="text-id prefix (e.g. KR5, KR6, KR5a); repeatable. A bundle is "
              "in scope iff its text-id starts with one of these prefixes.",
     )
     pi.add_argument(
@@ -87,8 +97,14 @@ def build_parser() -> argparse.ArgumentParser:
              "manifests except 'alt_id'",
     )
     pr.add_argument(
-        "--section", action="append", default=None, required=True,
+        "--section", action="append", default=None,
         help="KRP prefix (e.g. KR5, KR6, KR5a); repeatable. A bundle is "
+             "in scope iff its text-id starts with one of these prefixes.",
+    )
+    pr.add_argument(
+        "--text-prefix", action="append", default=None, dest="text_prefixes",
+        type=text_prefix_arg,
+        help="text-id prefix (e.g. KR5, KR6, KR5a); repeatable. A bundle is "
              "in scope iff its text-id starts with one of these prefixes.",
     )
     pr.add_argument(
@@ -113,53 +129,106 @@ def run(argv: list[str] | None = None) -> int:
         # so we resolve the fallback after parsing instead.
         from bkk.config import load_rc
         rc = load_rc()
-        out_root = (
-            rc.get("repair", {}).get("out")
-            or rc.get("import", {}).get("out")
-            or rc.get("global", {}).get("corpus")
+        out_root = resolve_rc_path(
+            None, rc,
+            (("repair", "out"), ("import", "out"), ("global", "corpus")),
         )
 
     if args.op == "manifest":
-        return _run_manifest(args.bundle, out_root)
+        try:
+            bundle, text_id = _selected_bundle_args(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        return _run_manifest(bundle, out_root, text_id=text_id)
     if args.op == "externalize-markers":
-        return _run_externalize_markers(args.bundle, out_root, dry_run=args.dry_run)
+        try:
+            bundle, text_id = _selected_bundle_args(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        return _run_externalize_markers(
+            bundle, out_root, text_id=text_id, dry_run=args.dry_run,
+        )
     if args.op == "ids-from-krp-titles":
+        try:
+            sections = _selected_prefixes(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if not sections:
+            print("error: provide at least one --text-prefix", file=sys.stderr)
+            return 2
         return _run_ids_from_krp_titles(
-            sections=args.section,
+            sections=sections,
             titles_path=args.titles_path,
             out_root=out_root,
             dry_run=args.dry_run,
         )
     if args.op == "remove-ids":
+        try:
+            sections = _selected_prefixes(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if not sections:
+            print("error: provide at least one --text-prefix", file=sys.stderr)
+            return 2
         return _run_remove_ids(
-            sections=args.section,
+            sections=sections,
             out_root=out_root,
             dry_run=args.dry_run,
         )
     return 2
 
 
-def _resolve_bundle_dir(bundle: str, out_root: Path | None) -> Path:
-    """Treat ``bundle`` as a path if it points at an existing directory;
-    otherwise resolve it as a text-id under ``out_root``."""
-    p = Path(bundle).expanduser()
-    if p.is_dir():
-        return p.resolve()
-    # Bare text-id (no path separators) → join against out_root.
-    if out_root is not None and "/" not in bundle and "\\" not in bundle:
-        candidate = (Path(out_root).expanduser() / bundle).resolve()
-        if candidate.is_dir():
-            return candidate
-        raise FileNotFoundError(
-            f"bundle directory not found: tried {p} and {candidate}"
-        )
-    raise FileNotFoundError(f"bundle directory not found: {p}")
+def _selected_bundle_args(args: argparse.Namespace) -> tuple[str | Path | None, str | None]:
+    supplied = [
+        bool(getattr(args, "legacy_bundle", None)),
+        bool(getattr(args, "bundle", None)),
+        bool(getattr(args, "text_id", None)),
+    ]
+    if sum(supplied) != 1:
+        raise ValueError("provide exactly one of --bundle or --text-id")
+    if getattr(args, "legacy_bundle", None):
+        legacy = args.legacy_bundle
+        if "/" in legacy or "\\" in legacy or Path(legacy).is_dir():
+            warn_deprecated("positional <bundle>", "--bundle <dir>")
+            return legacy, None
+        warn_deprecated("positional <text-id>", "--text-id <text-id>")
+        return None, legacy
+    return args.bundle, args.text_id
 
 
-def _run_manifest(bundle: str, out_root: Path | None) -> int:
+def _selected_prefixes(args: argparse.Namespace) -> list[str]:
+    legacy = getattr(args, "section", None) or []
+    current = getattr(args, "text_prefixes", None) or []
+    if legacy and current:
+        raise ValueError("provide only one of --text-prefix or --section")
+    if legacy:
+        warn_deprecated("--section", "--text-prefix")
+        return [text_prefix_arg(item) for item in legacy]
+    return current
+
+
+def _resolve_bundle_dir(
+    bundle: str | Path | None,
+    out_root: Path | None,
+    *,
+    text_id: str | None = None,
+) -> Path:
+    return resolve_bundle_dir(bundle=bundle, text_id=text_id, root=out_root)
+
+
+def _run_manifest(
+    bundle: str | Path | None,
+    out_root: Path | None,
+    *,
+    text_id: str | None = None,
+) -> int:
     try:
-        bundle_dir = _resolve_bundle_dir(bundle, out_root)
-    except FileNotFoundError as exc:
+        bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
@@ -181,11 +250,15 @@ def _run_manifest(bundle: str, out_root: Path | None) -> int:
 
 
 def _run_externalize_markers(
-    bundle: str, out_root: Path | None, *, dry_run: bool,
+    bundle: str | Path | None,
+    out_root: Path | None,
+    *,
+    text_id: str | None = None,
+    dry_run: bool,
 ) -> int:
     try:
-        bundle_dir = _resolve_bundle_dir(bundle, out_root)
-    except FileNotFoundError as exc:
+        bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
