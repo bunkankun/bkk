@@ -384,6 +384,24 @@ def test_cli_merge_corpus_from_global_rc(tmp_path, monkeypatch):
     assert (tmp_path / "_corpus.bkkx").is_file()
 
 
+def test_cli_merge_jobs_forwarded_to_per_bundle_builds(tmp_path, monkeypatch):
+    bundle = _write_bundle(tmp_path, "KR0a0001", "abc")
+    real_build_index = build_index
+    calls = []
+
+    def spy_build_index(bundle_dir, out_path=None, *, jobs=1):
+        calls.append((Path(bundle_dir).name, jobs))
+        return real_build_index(bundle_dir, out_path, jobs=jobs)
+
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    monkeypatch.setattr("bkk.index.merge.build_index", spy_build_index)
+
+    rc = cli_run(["merge", str(tmp_path), "--jobs", "2"])
+
+    assert rc == 0
+    assert calls == [(bundle.name, 2)]
+
+
 def test_progress_emits_per_bundle_lines(tmp_path, capsys):
     _write_bundle(tmp_path, "KR0a0001", "abc")
     _write_bundle(tmp_path, "KR0a0002", "def")

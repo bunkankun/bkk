@@ -9,7 +9,7 @@ Subcommands::
     python -m bkk.index annotations [annotations_root] [--out PATH]
     python -m bkk.index merge <corpus> [--out PATH] [--prefix KR3a]
                                        [--section KR6 | --section KR6q]
-                                       [--rebuild | --no-build]
+                                       [--rebuild | --no-build] [--jobs N]
     python -m bkk.index core <core_root> [--out PATH]
     python -m bkk.index parallel <bkkx_path> <seed> [--out PATH]
                                                 [--format jsonl|tsv]
@@ -74,6 +74,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="rebuild every per-bundle .bkkx, ignoring mtimes")
     grp.add_argument("--no-build", action="store_true",
                      help="error if any per-bundle .bkkx is missing or stale")
+    pm.add_argument("--jobs", type=int, default=1,
+                    help="worker processes for per-bundle rebuilds (default: 1)")
 
     pc = sub.add_parser("catalog", help="build a .bkkc catalog index for a corpus")
     pc.add_argument("corpus", type=Path, nargs="?", default=None,
@@ -361,10 +363,12 @@ def run(argv: list[str] | None = None) -> int:
         print(f"wrote {path}")
         return 0
     if args.cmd == "merge":
+        if args.jobs < 1:
+            parser.error("--jobs must be >= 1")
         path = merge_bundles(
             args.corpus, args.out,
             prefix=args.prefix, rebuild=args.rebuild, no_build=args.no_build,
-            progress=True,
+            jobs=args.jobs, progress=True,
         )
         print(f"wrote {path}")
         return 0

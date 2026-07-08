@@ -189,6 +189,7 @@ python -m bkk.index merge <corpus> [--out PATH]      # default: <corpus>/_corpus
                           [--prefix KR3a]   # restrict to one subgroup
                           [--rebuild]       # rebuild every per-bundle .bkkx
                           [--no-build]      # error if any per-bundle .bkkx is missing/stale
+                          [--jobs N]         # worker processes for per-bundle rebuilds
 ```
 
 `<corpus>` falls back to `index.corpus` / `global.corpus` from `.bkkrc`;

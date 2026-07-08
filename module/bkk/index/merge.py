@@ -123,15 +123,19 @@ def merge_bundles(
     prefix: str | None = None,
     rebuild: bool = False,
     no_build: bool = False,
+    jobs: int = 1,
     progress: bool = False,
 ) -> Path:
     """Build (if needed) and merge every bundle under ``corpus_root``.
 
     ``rebuild=True`` forces every per-bundle ``.bkkx`` to be rebuilt regardless
     of mtime. ``no_build=True`` errors instead of building when a per-bundle
-    ``.bkkx`` is missing or stale. ``progress=True`` writes one status line
-    per bundle to stderr for each pass (build, merge), plus a final summary.
+    ``.bkkx`` is missing or stale. ``jobs`` is forwarded to per-bundle index
+    builds. ``progress=True`` writes one status line per bundle to stderr for
+    each pass (build, merge), plus a final summary.
     """
+    if jobs < 1:
+        raise ValueError("jobs must be >= 1")
     corpus_root = Path(corpus_root)
     out_path = Path(out_path)
     if out_path.exists():
@@ -162,7 +166,7 @@ def merge_bundles(
             )
         try:
             if stale:
-                build_index(bundle_dir, bkkx)
+                build_index(bundle_dir, bkkx, jobs=jobs)
                 action = "built"
             else:
                 action = "cached"
