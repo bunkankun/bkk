@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 import threading
 
@@ -462,6 +463,83 @@ def test_run_canonicalize_rejects_nonpositive_jobs(tmp_path: Path, monkeypatch):
     ) == 2
 
 
+def test_run_canonicalize_writes_unmapped_report(tmp_path: Path):
+    text_id = "KR0chr08"
+    bundle_dir = tmp_path / text_id
+    bundle_dir.mkdir()
+
+    juan_name = f"{text_id}_001.yaml"
+    original = "周AA易B"
+    juan = {
+        "canonical_identifier": f"bkk:krp/{text_id}/bkk/v1/juan/1",
+        "seq": 1,
+        "body": {
+            "text": original,
+            "hash": sha256_text(original),
+        },
+        "metadata": {"title": "Unmapped report", "edition": {"short": "bkk"}},
+        "hash": ZERO_HASH,
+    }
+    juan["hash"] = _self_hash(juan)
+    (bundle_dir / juan_name).write_text(dump(juan), encoding="utf-8")
+
+    manifest = {
+        "canonical_identifier": f"bkk:krp/{text_id}/v1",
+        "canonical_location": f"https://kanripo.org/bkk/{text_id}/v1",
+        "canonical_set": {
+            "identifier": "bkk:charset/test-v1",
+            "hash": "sha256:" + "2" * 64,
+        },
+        "assets": {
+            "parts": [
+                marker_to_flow({"seq": 1, "filename": juan_name, "hash": juan["hash"]}),
+            ],
+        },
+        "table_of_contents": [],
+        "metadata": {"title": "Unmapped report", "edition": {"short": "bkk"}},
+        "hash": ZERO_HASH,
+    }
+    manifest["hash"] = manifest_hash(manifest)
+    (bundle_dir / f"{text_id}.manifest.yaml").write_text(dump(manifest), encoding="utf-8")
+
+    report_path = tmp_path / "unmapped.tsv"
+
+    assert run_canonicalize(
+        tmp_path,
+        ctx=_toy_ctx(),
+        text_ids=[text_id],
+        log_file=None,
+        unmapped_report=report_path,
+    ) == 1
+
+    unchanged = yaml.safe_load((bundle_dir / juan_name).read_text(encoding="utf-8"))
+    assert unchanged["body"]["text"] == original
+    with report_path.open(encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh, delimiter="\t"))
+    assert rows == [
+        {
+            "text_id": text_id,
+            "juan": "001",
+            "juan_file": juan_name,
+            "bucket": "body",
+            "codepoint": "U+0041",
+            "char": "A",
+            "count": "2",
+            "offsets": "1,2",
+        },
+        {
+            "text_id": text_id,
+            "juan": "001",
+            "juan_file": juan_name,
+            "bucket": "body",
+            "codepoint": "U+0042",
+            "char": "B",
+            "count": "1",
+            "offsets": "4",
+        },
+    ]
+
+
 def test_canonicalize_cli_forwards_jobs(tmp_path: Path, monkeypatch):
     from bkk.chars import cli
 
@@ -481,6 +559,9 @@ def test_canonicalize_cli_forwards_jobs(tmp_path: Path, monkeypatch):
         str(tmp_path),
         "--jobs",
         "3",
+        "--unmapped-report",
+        str(tmp_path / "unmapped.tsv"),
     ]) == 0
     assert captured["out_root"] == tmp_path
     assert captured["jobs"] == 3
+    assert captured["unmapped_report"] == tmp_path / "unmapped.tsv"

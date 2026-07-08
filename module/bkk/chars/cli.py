@@ -74,6 +74,14 @@ def build_parser() -> argparse.ArgumentParser:
              "chars-canonicalize.log in the current directory)",
     )
     pc.add_argument(
+        "--unmapped-report", "--failed-chars-report",
+        dest="unmapped_report",
+        type=Path,
+        default=None,
+        help="write a TSV report of unmapped characters that caused bundle "
+             "writes to be skipped",
+    )
+    pc.add_argument(
         "--abort-on-error", dest="abort_on_error", action="store_true",
         help="restore legacy behaviour: abort a bundle on the first "
              "unmapped codepoint instead of surveying the whole bundle",
@@ -187,6 +195,7 @@ def run(argv: list[str] | None = None) -> int:
             text_ids=args.text_ids,
             dry_run=args.dry_run,
             log_file=log_file,
+            unmapped_report=args.unmapped_report,
             abort_on_error=args.abort_on_error,
             jobs=args.jobs,
         )

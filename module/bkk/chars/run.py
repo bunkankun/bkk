@@ -8,6 +8,7 @@ reference-asset declarations.
 
 from __future__ import annotations
 
+import csv
 import copy
 import datetime
 import re
@@ -68,6 +69,17 @@ _JUAN_RE = re.compile(
     r"^(?P<text_id>.+?)_(?P<seq>\d{3})(?:-(?P<short>[A-Za-z0-9][A-Za-z0-9_-]*))?\.yaml$",
 )
 _BUCKETS = ("front", "body", "back")
+_BUCKET_ORDER = {name: i for i, name in enumerate(_BUCKETS)}
+_UNMAPPED_REPORT_FIELDS = (
+    "text_id",
+    "juan",
+    "juan_file",
+    "bucket",
+    "codepoint",
+    "char",
+    "count",
+    "offsets",
+)
 
 
 def run_canonicalize(
@@ -77,6 +89,7 @@ def run_canonicalize(
     text_ids: list[str] | None = None,
     dry_run: bool = False,
     log_file: Path | None = None,
+    unmapped_report: Path | None = None,
     abort_on_error: bool = False,
     jobs: int = 1,
 ) -> int:
@@ -122,6 +135,7 @@ def run_canonicalize(
         total_unmapped = 0
         failed: list[str] = []
         unmapped_bundles: list[str] = []
+        unmapped_report_rows: list[dict[str, Any]] = []
         rewrote_bundles = 0
 
         def record_result(bundle_dir: Path, stats: dict[str, Any]) -> None:
@@ -129,6 +143,7 @@ def run_canonicalize(
             text_id = bundle_dir.name
             total_subs += stats["substitutions"]
             total_juans += stats["juans"]
+            unmapped_report_rows.extend(stats.get("unmapped_report", []))
             bundle_unmapped = stats.get("unmapped", 0)
             if bundle_unmapped:
                 total_unmapped += bundle_unmapped
@@ -204,6 +219,13 @@ def run_canonicalize(
                 f"skipped {len(failed)} bundle(s) due to errors: "
                 f"{', '.join(failed)}",
             )
+        if unmapped_report is not None:
+            try:
+                _write_unmapped_report(unmapped_report, unmapped_report_rows)
+            except OSError as exc:
+                _emit_error(log_fh, f"error: failed to write unmapped report: {exc}")
+                return 2
+            print(f"unmapped report written: {unmapped_report}")
         if failed or unmapped_bundles:
             return 1
         return 0
@@ -605,6 +627,7 @@ def _process_bundle(
     total_unmapped = 0
     pending_juans: list[tuple[Path, dict, str]] = []  # (path, juan_data, new_hash)
     used_mapping_indices: set[int] = set()
+    unmapped_report_rows: list[dict[str, Any]] = []
 
     for seq, juan_path in juan_entries:
         data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
@@ -640,6 +663,15 @@ def _process_bundle(
                     f"[{text_id}] {juan_path.name} [{bucket_name}] "
                     f"offset {u.offset}: unmapped U+{u.codepoint:04X} {ch!r}",
                 )
+            unmapped_report_rows.extend(
+                _unmapped_report_rows(
+                    text_id=text_id,
+                    seq=seq,
+                    juan_file=juan_path.name,
+                    bucket=bucket_name,
+                    unmapped=bucket_unmapped,
+                )
+            )
             juan_unmapped += len(bucket_unmapped)
             if not new_markers:
                 continue
@@ -687,6 +719,7 @@ def _process_bundle(
             "juans": len(juan_entries),
             "substitutions": total_subs,
             "unmapped": total_unmapped,
+            "unmapped_report": unmapped_report_rows,
             "manifest_changed": manifest_changed,
             "lines": lines,
         }
@@ -714,9 +747,62 @@ def _process_bundle(
         "juans": len(juan_entries),
         "substitutions": total_subs,
         "unmapped": total_unmapped,
+        "unmapped_report": unmapped_report_rows,
         "manifest_changed": manifest_changed,
         "lines": lines,
     }
+
+
+def _unmapped_report_rows(
+    *,
+    text_id: str,
+    seq: int,
+    juan_file: str,
+    bucket: str,
+    unmapped: list[UnmappedCodepointError],
+) -> list[dict[str, Any]]:
+    offsets_by_cp: dict[int, list[int]] = {}
+    for issue in unmapped:
+        offsets_by_cp.setdefault(issue.codepoint, []).append(issue.offset)
+    rows: list[dict[str, Any]] = []
+    for cp in sorted(offsets_by_cp):
+        offsets = offsets_by_cp[cp]
+        rows.append(
+            {
+                "text_id": text_id,
+                "juan": f"{seq:03d}",
+                "juan_file": juan_file,
+                "bucket": bucket,
+                "codepoint": f"U+{cp:04X}",
+                "char": chr(cp),
+                "count": len(offsets),
+                "offsets": ",".join(str(offset) for offset in offsets),
+            }
+        )
+    return rows
+
+
+def _write_unmapped_report(path: Path, rows: list[dict[str, Any]]) -> None:
+    out_path = Path(path).expanduser().resolve()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    ordered = sorted(
+        rows,
+        key=lambda row: (
+            str(row["text_id"]),
+            str(row["juan"]),
+            _BUCKET_ORDER.get(str(row["bucket"]), len(_BUCKET_ORDER)),
+            str(row["codepoint"]),
+        ),
+    )
+    with out_path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(
+            fh,
+            fieldnames=_UNMAPPED_REPORT_FIELDS,
+            delimiter="\t",
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        writer.writerows(ordered)
 
 
 def _master_juan_entries(bundle_dir: Path, text_id: str) -> list[tuple[int, Path]]:
