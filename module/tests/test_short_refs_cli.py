@@ -125,3 +125,33 @@ def test_legacy_selector_forms_still_parse():
     assert repo_parser().parse_args(
         ["status", "1h4"]
     ).legacy_prefix == "KR1h0004"
+
+
+def test_canonical_and_legacy_selector_conflicts_are_rejected(capsys):
+    from bkk.annotations.cli import run as annotations_run
+    from bkk.index.cli import run as index_run
+    from bkk.repair.cli import run as repair_run
+    from bkk.repo.cli import run as repo_run
+    from bkk.voice.cli import run as voice_run
+
+    assert annotations_run(["validate", "1h4", "--text-id", "1h4"]) == 2
+    assert "provide only one" in capsys.readouterr().err
+
+    with pytest.raises(SystemExit) as exc:
+        index_run([
+            "search", "missing.bkkx", "term", "--textid", "1h4",
+            "--text-id", "1h4",
+        ])
+    assert exc.value.code == 2
+    assert "provide only one" in capsys.readouterr().err
+
+    assert repair_run(["manifest", "1h4", "--text-id", "1h4"]) == 2
+    assert "exactly one" in capsys.readouterr().err
+
+    assert voice_run(["remove", "1h4", "--text-id", "1h4"]) == 2
+    assert "exactly one" in capsys.readouterr().err
+
+    assert repo_run([
+        "--corpus", "/nonexistent", "status", "1h4", "--text-prefix", "1h4",
+    ]) == 2
+    assert "provide only one" in capsys.readouterr().err

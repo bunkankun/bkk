@@ -157,12 +157,48 @@ def test_cli_resolves_bare_text_id_via_rc(tmp_path: Path, monkeypatch):
     assert [p["seq"] for p in mf["assets"]["parts"]] == [1, 2]
 
 
+def test_cli_resolves_text_id_flag_via_rc(tmp_path: Path, monkeypatch):
+    """Canonical ``--text-id`` form resolves through the same rc fallback."""
+    bundle_dir = _stage_split_text_bug(tmp_path)
+    monkeypatch.setattr(
+        "bkk.config.load_rc",
+        lambda: {"import": {"out": tmp_path}},
+    )
+
+    rc = repair_run(["manifest", "--text-id", TEXT_ID])
+    assert rc == 0
+
+    mf = yaml.safe_load(
+        (bundle_dir / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    assert [p["seq"] for p in mf["assets"]["parts"]] == [1, 2]
+
+
 def test_cli_explicit_path_still_works(tmp_path: Path, monkeypatch):
     """A path argument bypasses the rc resolution."""
     bundle_dir = _stage_split_text_bug(tmp_path)
     monkeypatch.setattr("bkk.config.load_rc", lambda: {})
     rc = repair_run(["manifest", str(bundle_dir)])
     assert rc == 0
+
+
+def test_cli_bundle_flag_bypasses_rc(tmp_path: Path, monkeypatch):
+    bundle_dir = _stage_split_text_bug(tmp_path)
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+
+    rc = repair_run(["manifest", "--bundle", str(bundle_dir)])
+    assert rc == 0
+
+
+def test_cli_rejects_bundle_and_text_id_together(tmp_path: Path, monkeypatch, capsys):
+    bundle_dir = _stage_split_text_bug(tmp_path)
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+
+    rc = repair_run([
+        "manifest", "--bundle", str(bundle_dir), "--text-id", TEXT_ID,
+    ])
+    assert rc == 2
+    assert "exactly one" in capsys.readouterr().err
 
 
 def test_cli_bare_id_without_rc_errors(tmp_path: Path, monkeypatch, capsys):

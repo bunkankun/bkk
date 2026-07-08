@@ -16,6 +16,49 @@ def _bundle(root: Path, textid: str, *, nested: bool = False) -> Path:
     return path
 
 
+def test_run_status_accepts_text_prefix(tmp_path, monkeypatch, capsys):
+    corpus = tmp_path / "corpus"
+    _bundle(corpus, "KR1a0001")
+    _bundle(corpus, "KR1a0002")
+    _bundle(corpus, "KR2a0001")
+    monkeypatch.setattr(cli, "load_rc", lambda: {"repo": {"corpus": corpus}})
+
+    rc = cli.run(["status", "--text-prefix", "KR1a"])
+
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "KR1a0001  not a repo" in out.out
+    assert "KR1a0002  not a repo" in out.out
+    assert "KR2a0001" not in out.out
+    assert "deprecated" not in out.err
+
+
+def test_run_status_legacy_prefix_warns(tmp_path, monkeypatch, capsys):
+    corpus = tmp_path / "corpus"
+    _bundle(corpus, "KR1a0001")
+    monkeypatch.setattr(cli, "load_rc", lambda: {"repo": {"corpus": corpus}})
+
+    rc = cli.run(["status", "KR1a"])
+
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "KR1a0001  not a repo" in out.out
+    assert "positional <prefix> is deprecated" in out.err
+
+
+def test_run_rejects_text_prefix_and_legacy_prefix_together(
+    tmp_path, monkeypatch, capsys,
+):
+    corpus = tmp_path / "corpus"
+    _bundle(corpus, "KR1a0001")
+    monkeypatch.setattr(cli, "load_rc", lambda: {"repo": {"corpus": corpus}})
+
+    rc = cli.run(["status", "KR1a", "--text-prefix", "KR1a"])
+
+    assert rc == 2
+    assert "provide only one" in capsys.readouterr().err
+
+
 def test_reclone_replaces_only_local_bundles_that_exist_on_github(tmp_path, monkeypatch):
     corpus = tmp_path / "corpus"
     local_and_remote = _bundle(corpus, "KR1a0001")
