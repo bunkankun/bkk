@@ -14,11 +14,13 @@ hashes / marker assets.
     python -m bkk chars canonicalize
     python -m bkk chars canonicalize --text-id KR1a0001
     python -m bkk chars canonicalize --jobs 8
-    python -m bkk chars canonicalize --out-root /data/bkk/out --dry-run
+    python -m bkk chars canonicalize --corpus /data/bkk/corpus --dry-run
     python -m bkk chars revert --text-id KR1a0001
 
-The corpus root is resolved from ``chars.out`` → ``import.out`` →
-``global.corpus`` in ``.bkkrc``, mirroring ``bkk voice`` / ``bkk repair``.
+The corpus root is resolved from ``chars.corpus`` → ``info.corpus`` →
+``global.corpus`` in ``.bkkrc``, matching ``bkk info`` by default.
+Legacy ``chars.out`` / ``import.out`` are accepted only as deprecated
+fallbacks when no corpus setting exists.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from bkk.cli_common import warn_deprecated
 from bkk.short_refs import text_id_arg
 
 from .refs import DEFAULT_REFS_DIR, load_context
@@ -43,9 +46,13 @@ def build_parser() -> argparse.ArgumentParser:
              "set) to each master bundle and rewrite text + markers + hashes",
     )
     pc.add_argument(
-        "--out-root", dest="out_root", type=Path, default=None,
+        "--corpus", dest="corpus", type=Path, default=None,
         help="corpus root containing bundle dirs "
-             "(default: chars.out / import.out / global.corpus from .bkkrc)",
+             "(default: chars.corpus / info.corpus / global.corpus from .bkkrc)",
+    )
+    pc.add_argument(
+        "--out-root", dest="out_root", type=Path, default=None,
+        help="deprecated; use --corpus. Corpus root containing bundle dirs",
     )
     pc.add_argument(
         "--text-id", dest="text_ids", action="append", default=None,
@@ -83,9 +90,13 @@ def build_parser() -> argparse.ArgumentParser:
              "and remove substitution markers",
     )
     pr.add_argument(
-        "--out-root", dest="out_root", type=Path, default=None,
+        "--corpus", dest="corpus", type=Path, default=None,
         help="corpus root containing bundle dirs "
-             "(default: chars.out / import.out / global.corpus from .bkkrc)",
+             "(default: chars.corpus / info.corpus / global.corpus from .bkkrc)",
+    )
+    pr.add_argument(
+        "--out-root", dest="out_root", type=Path, default=None,
+        help="deprecated; use --corpus. Corpus root containing bundle dirs",
     )
     pr.add_argument(
         "--text-id", dest="text_ids", action="append", default=None,
@@ -109,27 +120,52 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _resolve_out_root(out_root: Path | str | None) -> Path | None:
-    if out_root is None:
-        from bkk.config import load_rc
-        rc = load_rc()
-        out_root = (
-            rc.get("chars", {}).get("out")
-            or rc.get("import", {}).get("out")
-            or rc.get("global", {}).get("corpus")
-        )
-    return Path(out_root) if out_root is not None else None
+def _resolve_corpus_root(
+    *,
+    corpus: Path | str | None,
+    out_root: Path | str | None,
+) -> Path | None:
+    if corpus is not None and out_root is not None:
+        raise ValueError("provide only one of --corpus or --out-root")
+    if corpus is not None:
+        return Path(corpus)
+    if out_root is not None:
+        warn_deprecated("--out-root", "--corpus")
+        return Path(out_root)
+
+    from bkk.config import load_rc
+    rc = load_rc()
+    selected = (
+        rc.get("chars", {}).get("corpus")
+        or rc.get("info", {}).get("corpus")
+        or rc.get("global", {}).get("corpus")
+    )
+    if selected is not None:
+        return Path(selected)
+
+    legacy = rc.get("chars", {}).get("out") or rc.get("import", {}).get("out")
+    if legacy is not None:
+        warn_deprecated("chars.out/import.out fallback", "chars.corpus or global.corpus")
+        return Path(legacy)
+    return None
 
 
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    out_root = _resolve_out_root(args.out_root)
-    if out_root is None:
+    try:
+        corpus_root = _resolve_corpus_root(
+            corpus=args.corpus,
+            out_root=args.out_root,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if corpus_root is None:
         print(
-            "error: no corpus root resolved; pass --out-root or set "
-            "chars.out / import.out / global.corpus in .bkkrc",
+            "error: no corpus root resolved; pass --corpus or set "
+            "chars.corpus / info.corpus / global.corpus in .bkkrc",
             file=sys.stderr,
         )
         return 2
@@ -146,7 +182,7 @@ def run(argv: list[str] | None = None) -> int:
             log_file = Path("chars-canonicalize.log")
 
         return run_canonicalize(
-            out_root,
+            corpus_root,
             ctx=ctx,
             text_ids=args.text_ids,
             dry_run=args.dry_run,
@@ -161,7 +197,7 @@ def run(argv: list[str] | None = None) -> int:
             log_file = Path("chars-revert.log")
 
         return run_revert(
-            out_root,
+            corpus_root,
             text_ids=args.text_ids,
             dry_run=args.dry_run,
             log_file=log_file,
