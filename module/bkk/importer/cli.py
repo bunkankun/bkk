@@ -24,7 +24,7 @@ KRP invocation::
     python -m bkk.importer --format krp --text-id KR3a0013 --out <out>
 
     # every text under a corpus prefix (prompts for confirmation; --yes skips)
-    python -m bkk.importer --format krp --in <root> --section KR3a --out <out>
+    python -m bkk.importer --format krp --in <root> --text-prefix KR3a --out <out>
 
     # every discoverable text under SOURCE (prompts for confirmation)
     python -m bkk.importer --format krp --in <root> --out <out>
@@ -292,15 +292,17 @@ def build_parser() -> argparse.ArgumentParser:
                    help="translation: filter to one BCP-47 language tag "
                         "(e.g. en, fr); applies only to --format translation")
     p.add_argument("--section", default=None,
-                   help="krp: import every text under a corpus prefix "
-                        "(e.g. KR3a); requires confirmation")
+                   help="deprecated; use --text-prefix. krp: import every "
+                        "text under a corpus prefix (e.g. KR3a); requires "
+                        "confirmation")
     p.add_argument("--text-prefix", dest="text_prefix", default=None,
                    type=text_prefix_arg,
                    help="krp: import every text under a corpus prefix "
                         "(e.g. KR3a); requires confirmation")
     p.add_argument("--exclude-section", dest="exclude_section", default=None,
-                   help="krp: skip all texts whose id starts with this prefix "
-                        "(e.g. KR6); applied after --section filtering")
+                   help="deprecated; use --exclude-text-prefix. krp: skip all "
+                        "texts whose id starts with this prefix (e.g. KR6); "
+                        "applied after --text-prefix filtering")
     p.add_argument("--exclude-text-prefix", dest="exclude_text_prefix",
                    default=None, type=text_prefix_arg,
                    help="krp: skip all texts whose id starts with this prefix "
@@ -1150,7 +1152,7 @@ def _run_krp(args) -> int:
               file=sys.stderr)
         return 2
     if args.text_id is not None and args.section is not None:
-        print("error: --text-id and --section are mutually exclusive",
+        print("error: --text-id and --text-prefix are mutually exclusive",
               file=sys.stderr)
         return 2
     if args.in_root is not None and args.github_user is not None:

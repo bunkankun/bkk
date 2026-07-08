@@ -19,11 +19,11 @@ Three invocation shapes:
 
 3. **Corpus walk** — iterate every bundle under a corpus root. The recipe
    (if any) is the template; per-bundle ``bundle`` and ``output_dir`` are
-   derived automatically. ``--text-id`` / ``--section`` narrow the slice;
+   derived automatically. ``--text-id`` / ``--text-prefix`` narrow the slice;
    ``--yes`` skips the confirmation prompt::
 
        python -m bkk.exporter --recipe <generic.yaml> \\
-           --corpus <corpus-root> --output-dir <out-parent> [--section KR3a]
+           --corpus <corpus-root> --output-dir <out-parent> [--text-prefix KR3a]
 """
 
 from __future__ import annotations
@@ -62,12 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="krp: split | concat (overrides recipe.mode)")
     p.add_argument("--corpus", type=Path, default=None,
                    help="corpus root containing bundle subdirs; iterate every "
-                        "bundle (filtered by --text-id / --section)")
+                        "bundle (filtered by --text-id / --text-prefix)")
     p.add_argument("--text-id", dest="text_id", default=None, type=text_id_arg,
                    help="with --corpus: restrict to a single text id")
     p.add_argument("--section", default=None,
-                   help="with --corpus: restrict to text ids starting with "
-                        "this prefix (e.g. KR3a)")
+                   help="deprecated; use --text-prefix. With --corpus: "
+                        "restrict to text ids starting with this prefix "
+                        "(e.g. KR3a)")
     p.add_argument("--text-prefix", dest="text_prefix", default=None,
                    type=text_prefix_arg,
                    help="with --corpus: restrict to text ids starting with "

@@ -4,11 +4,10 @@ Subcommands::
 
     python -m bkk.index build <bundle_dir> [--out PATH] [--jobs N]
     python -m bkk.index catalog <corpus> [--csv PATH] [--out PATH]
-                                         [--prefix KR3a]
+                                         [--text-prefix KR3a]
     python -m bkk.index translations <corpus> [--out PATH]
     python -m bkk.index annotations [annotations_root] [--out PATH]
-    python -m bkk.index merge <corpus> [--out PATH] [--prefix KR3a]
-                                       [--section KR6 | --section KR6q]
+    python -m bkk.index merge <corpus> [--out PATH] [--text-prefix KR3a]
                                        [--rebuild | --no-build] [--jobs N]
     python -m bkk.index core <core_root> [--out PATH]
     python -m bkk.index parallel <bkkx_path> <seed> [--out PATH]
@@ -64,14 +63,16 @@ def build_parser() -> argparse.ArgumentParser:
                          "(default: index.out from .bkkrc, "
                          "else <corpus>/_corpus.bkkx)")
     pm.add_argument("--prefix", default=None,
-                    help="restrict to bundles whose textid starts with PREFIX "
-                         "(e.g. KR3a)")
+                    help="deprecated; use --text-prefix. Restrict to bundles "
+                         "whose textid starts with PREFIX (e.g. KR3a)")
     pm.add_argument("--text-prefix", dest="text_prefix", default=None,
                     type=text_prefix_arg,
                     help="restrict to bundles whose textid starts with PREFIX "
                          "(e.g. KR3a)")
     pm.add_argument("--section", default=None,
-                    help="restrict to a (sub)section like KR6 or KR6q; "
+                    help="deprecated; use --text-prefix and pass --out if "
+                         "you need a section-named output. Restrict to a "
+                         "(sub)section like KR6 or KR6q; "
                          "filters by textid prefix and writes the output to "
                          "_<section>.bkkx alongside the full index")
     grp = pm.add_mutually_exclusive_group()
@@ -92,8 +93,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="catalog .bkkc output path "
                          "(default: <corpus>/_catalog.bkkc)")
     pc.add_argument("--prefix", default=None,
-                    help="restrict to bundles whose textid starts with PREFIX "
-                         "(e.g. KR3a)")
+                    help="deprecated; use --text-prefix. Restrict to bundles "
+                         "whose textid starts with PREFIX (e.g. KR3a)")
     pc.add_argument("--text-prefix", dest="text_prefix", default=None,
                     type=text_prefix_arg,
                     help="restrict to bundles whose textid starts with PREFIX "
@@ -299,7 +300,10 @@ def run(argv: list[str] | None = None) -> int:
             warn_deprecated("--prefix", "--text-prefix")
             args.text_prefix = text_prefix_arg(args.prefix)
         if args.section:
-            warn_deprecated("--section", "--text-prefix")
+            warn_deprecated(
+                "--section",
+                "--text-prefix (and --out if you need a section-named output)",
+            )
             args.prefix = text_prefix_arg(args.section)
             if args.out is None:
                 args.out = default_out.parent / f"_{args.section}.bkkx"

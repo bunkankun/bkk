@@ -65,12 +65,13 @@ def build_parser() -> argparse.ArgumentParser:
     pi = sub.add_parser(
         "ids-from-krp-titles",
         help="populate metadata.identifiers.alt_id on master manifests "
-             "from catalog/krp-titles.txt for the bundles in --section",
+             "from catalog/krp-titles.txt for the bundles in --text-prefix",
     )
     pi.add_argument(
         "--section", action="append", default=None,
-        help="KRP prefix (e.g. KR5, KR6, KR5a); repeatable. A bundle is "
-             "in scope iff its text-id starts with one of these prefixes.",
+        help="deprecated; use --text-prefix. KRP prefix (e.g. KR5, KR6, "
+             "KR5a); repeatable. A bundle is in scope iff its text-id "
+             "starts with one of these prefixes.",
     )
     pi.add_argument(
         "--text-prefix", action="append", default=None, dest="text_prefixes",
@@ -98,8 +99,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pr.add_argument(
         "--section", action="append", default=None,
-        help="KRP prefix (e.g. KR5, KR6, KR5a); repeatable. A bundle is "
-             "in scope iff its text-id starts with one of these prefixes.",
+        help="deprecated; use --text-prefix. KRP prefix (e.g. KR5, KR6, "
+             "KR5a); repeatable. A bundle is in scope iff its text-id "
+             "starts with one of these prefixes.",
     )
     pr.add_argument(
         "--text-prefix", action="append", default=None, dest="text_prefixes",

@@ -10,7 +10,7 @@ Reports three blocks of high-signal status:
 - **config**: which ``.bkkrc`` files were loaded and the merged values for the
   ``global``, ``index``, and ``info`` sections
 
-With ``--bundles`` (or ``--prefix``), a fourth per-bundle table is appended.
+With ``--bundles`` (or ``--text-prefix``), a fourth per-bundle table is appended.
 """
 
 from __future__ import annotations
@@ -63,8 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bundles", action="store_true",
                    help="emit per-bundle table")
     p.add_argument("--prefix", default=None,
-                   help="restrict per-bundle table to textids starting with "
-                        "PREFIX (implies --bundles)")
+                   help="deprecated; use --text-prefix. Restrict per-bundle "
+                        "table to textids starting with PREFIX "
+                        "(implies --bundles)")
     p.add_argument("--text-prefix", default=None, dest="text_prefix",
                    type=text_prefix_arg,
                    help="restrict per-bundle table to textids starting with "

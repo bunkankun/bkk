@@ -155,3 +155,35 @@ def test_canonical_and_legacy_selector_conflicts_are_rejected(capsys):
         "--corpus", "/nonexistent", "status", "1h4", "--text-prefix", "1h4",
     ]) == 2
     assert "provide only one" in capsys.readouterr().err
+
+
+def test_visible_deprecated_prefix_flags_are_labeled_in_help():
+    from bkk.exporter.cli import build_parser as exporter_parser
+    from bkk.importer.cli import build_parser as importer_parser
+    from bkk.index.cli import build_parser as index_parser
+    from bkk.info.cli import build_parser as info_parser
+    from bkk.repair.cli import build_parser as repair_parser
+
+    index_subparsers = index_parser()._subparsers._group_actions[0].choices
+    index_merge_help = index_subparsers["merge"].format_help()
+    assert "--prefix PREFIX" in index_merge_help
+    assert "deprecated; use --text-prefix" in index_merge_help
+    assert "--section SECTION" in index_merge_help
+    assert "deprecated; use --text-prefix and pass --out" in index_merge_help
+
+    index_catalog_help = index_subparsers["catalog"].format_help()
+    assert "--prefix PREFIX" in index_catalog_help
+    assert "deprecated; use --text-prefix" in index_catalog_help
+
+    assert "deprecated; use --text-prefix" in exporter_parser().format_help()
+    assert "deprecated; use --text-prefix" in importer_parser().format_help()
+    assert "deprecated; use --exclude-text-prefix" in importer_parser().format_help()
+    assert "deprecated; use --text-prefix" in info_parser().format_help()
+
+    repair_subparsers = repair_parser()._subparsers._group_actions[0].choices
+    assert "deprecated; use --text-prefix" in (
+        repair_subparsers["ids-from-krp-titles"].format_help()
+    )
+    assert "deprecated; use --text-prefix" in (
+        repair_subparsers["remove-ids"].format_help()
+    )
