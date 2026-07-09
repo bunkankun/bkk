@@ -78,7 +78,9 @@ CLI flags override env vars.
   `bkk chars canonicalize`, validates the bundle, and creates a private
   `<github-user>/<text-id>` repository. The text is readable and visible in
   that owner's Catalog immediately; its badge changes to `search ready` after
-  background indexing. Other users and anonymous requests receive 404.
+  background indexing. Other users and anonymous requests receive 404. To
+  remove a private text, delete its GitHub repository by hand and then use
+  Settings → Sync to prune the local cache and workspace registry.
 
 For lists:
 
@@ -130,7 +132,7 @@ The Menubar carries a search bar with two dropdowns:
   - `date` — order by the bundle's `metadata.composition_period` leading year (BCE markers `前` / `BC` / `BCE` parsed as negative). Bundles with no parseable date fall to the end.
   - `closeness` — greedy chain over pairwise KWIC character-overlap. Head = hit with the highest summed overlap to all others; each subsequent step appends the unvisited hit with the greatest character-overlap to the most recently appended hit. Adjacent rows share the most KWIC chars; outliers fall to the end. Query characters are excluded from the overlap set.
 
-The endpoint is `GET /search?q=…&sort=…` (see [module/bkk/serve/routers/search.py](module/bkk/serve/routers/search.py)); the response echoes the `sort` value that took effect. Hits are sorted over the **full** result list before the `offset:offset+limit` slice.
+The endpoint is `GET /search?q=…&sort=…` (see [module/bkk/serve/routers/search.py](module/bkk/serve/routers/search.py)); the response echoes the `sort` value that took effect and includes `query_mode` (`literal` or `regex`). Plain input is literal substring search. Slash-delimited input such as `/甲乙.丁/` runs Python-`re` regex search with optional `i`, `m`, and `s` flags; unanchored regexes must be narrowed by text/list/category scope. Hits are sorted over the **full** result list before the `offset:offset+limit` slice.
 
 Results render in a third right-panel tab (alongside Annot. and Chat) that appears once a search is in flight and remains for the session. Each row shows `toc_label · textid · juan` plus a KWIC line. The left context is anchored to the right edge via `display: flex; justify-content: flex-end`, so when it overflows the column its **leftmost** chars get clipped (those nearest the match stay visible). Phrase-boundary trim (`。！？；`) preserves clean breakpoints when sentence-enders are present, with an ellipsis chip marking elided text on either side. Hits whose match came from a non-master witness are flagged with an amber chip in the meta row naming the edition (e.g. `TKD`); when the witness provides context around the match (i.e. the variant reading is longer than its master span) a second, dimmer KWIC line renders below the master line, showing the witness's actual context around the query (`witness_left` / `matched_text` / `witness_right`) — useful when the master text was rewritten and so the master line's highlighted token is the replaced master string rather than the query itself. Clicking a row opens the juan in the workspace and triggers a 15s amber flash on the master span. Pagination uses prev/next over `offset` (page size 50). Repeated `textids` parameters restrict search to a list-scope; `GET /search/textids` returns all unique matched text ids with `hit_count` and `text_count` for saving search-derived lists.
 

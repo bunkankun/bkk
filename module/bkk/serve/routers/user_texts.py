@@ -783,6 +783,14 @@ def _sync_registered_texts(
             )
             results.append({"text_id": text_id, "status": "updated"})
         except Exception as exc:
+            if isinstance(exc, HTTPException) and _github_status(exc) == 404:
+                destination = state.user_text_dir(session.login, text_id)
+                if destination.exists():
+                    shutil.rmtree(destination)
+                _remove_registry_entry(session, text_id)
+                state.delete_user_text_status(session.login, text_id)
+                results.append({"text_id": text_id, "status": "removed"})
+                continue
             state.set_user_text_status(
                 session.login,
                 text_id,
@@ -987,50 +995,3 @@ def sync_user_texts(request: Request) -> dict[str, Any]:
     session = _session(request)
     state: AppState = request.app.state.bkk
     return {"results": _sync_registered_texts(state, session)}
-
-
-@router.delete("/{text_id}")
-def delete_user_text(
-    request: Request,
-    text_id: str,
-    confirm_github_delete: bool = False,
-) -> dict[str, Any]:
-    session = _session(request)
-    state: AppState = request.app.state.bkk
-    if not TEXT_ID_RE.fullmatch(text_id):
-        raise HTTPException(status_code=422, detail="invalid user text ID")
-    record = state.lookup_user_text(session.login, text_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail="user text not found")
-    if not confirm_github_delete:
-        raise HTTPException(
-            status_code=428,
-            detail="GitHub delete confirmation required",
-        )
-
-    try:
-        _github_json(
-            "DELETE",
-            f"/repos/{session.login}/{text_id}",
-            session.access_token,
-            expected_statuses={404},
-        )
-    except HTTPException as exc:
-        if _github_status(exc) != 404:
-            if _github_status(exc) == 403:
-                raise HTTPException(
-                    status_code=403,
-                    detail=(
-                        "GitHub repository delete requires the delete_repo OAuth "
-                        "scope. Log out and sign back in to refresh the token."
-                    ),
-                ) from exc
-            raise
-    _remove_registry_entry(session, text_id)
-    shutil.rmtree(record.bundle_dir)
-    state.delete_user_text_status(session.login, text_id)
-    return {
-        "text_id": text_id,
-        "deleted": True,
-        "github_deleted": True,
-    }

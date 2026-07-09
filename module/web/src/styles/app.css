@@ -756,6 +756,11 @@ button {
 .settings-select:focus {
   border-color: var(--amb);
 }
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .settings-divider {
   height: 1px;
   margin: 10px 0;
@@ -813,14 +818,6 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.settings-delete {
-  border-color: var(--red, #c44);
-  color: var(--red, #c44);
-}
-.settings-delete:hover {
-  border-color: var(--red, #c44);
-  background: color-mix(in srgb, var(--red, #c44) 12%, transparent);
 }
 .settings-error {
   color: var(--red, #c44);

@@ -235,6 +235,13 @@ restricts witness-side matches; master matches are always returned.
 KWIC line per hit, with any variant readings overlaid; the variant that
 contains the matched span is flagged with `*`.
 
+The HTTP `/search` endpoint also accepts slash-delimited regex queries in the
+same `q` parameter, e.g. `/甲乙.丁/` or `/foo/i`. Regex search uses Python `re`
+syntax with `i`, `m`, and `s` flags and returns the same KWIC hit shape as
+literal search. To avoid full-corpus scans, regex queries need either a literal
+run of at least two characters in the pattern or an explicit text/list/category
+scope.
+
 Example (variant query against a merged corpus):
 
 ```

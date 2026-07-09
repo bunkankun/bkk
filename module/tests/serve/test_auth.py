@@ -28,11 +28,12 @@ def test_auth_start_requires_github_config(client):
     assert "GitHub login is not configured" in r.json()["detail"]
 
 
-def test_auth_start_requests_delete_repo_scope(client, monkeypatch):
+def test_auth_start_requests_repo_scope_without_delete_repo(client, monkeypatch):
     monkeypatch.setattr(auth, "_require_github_config", lambda state: ("client-id", "client-secret"))
     r = client.get("/auth/github/start", follow_redirects=False)
     assert r.status_code == 302
-    assert "scope=repo+delete_repo+read%3Auser+read%3Aorg" in r.headers["location"]
+    assert "scope=repo+read%3Auser+read%3Aorg" in r.headers["location"]
+    assert "delete_repo" not in r.headers["location"]
 
 
 def test_auth_session_returns_public_user(client):

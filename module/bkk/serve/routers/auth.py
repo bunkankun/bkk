@@ -320,7 +320,7 @@ def github_start(request: Request) -> RedirectResponse:
         {
             "client_id": client_id,
             "redirect_uri": _callback_url(request),
-            "scope": "repo delete_repo read:user read:org",
+            "scope": "repo read:user read:org",
             "state": oauth_state,
         }
     )

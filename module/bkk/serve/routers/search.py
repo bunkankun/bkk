@@ -7,12 +7,13 @@ import sqlite3
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
-from typing import Iterable, Literal
+from typing import Any, Iterable, Literal
 
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
 
 from bkk.index.ir import Hit, IndexSummary
+from bkk.index.query import RegexZeroLengthError
 from bkk.index.parallel import (
     ParallelCluster,
     ParallelLocation,
@@ -42,6 +43,7 @@ def _request_owner(request: Request) -> str | None:
 
 
 Sort = Literal["match", "textid", "reverse_prematch", "date", "closeness"]
+QueryMode = Literal["literal", "regex"]
 
 
 @dataclass(frozen=True)
@@ -53,11 +55,139 @@ class _CatalogMeta:
     index_date: int | None = None
 
 
+@dataclass(frozen=True)
+class _ParsedQuery:
+    mode: QueryMode
+    literal: str
+    pattern: str | None = None
+    flags: int = 0
+    anchor: str | None = None
+
+
 _SECTION_RE = re.compile(r"^(KR\d+[a-z]+)")
+_REGEX_FLAGS = {"i": re.IGNORECASE, "m": re.MULTILINE, "s": re.DOTALL}
+_REGEX_NONLITERAL_ESCAPES = set("AbBdDsSwWZzG")
+_REGEX_BREAK_CHARS = set(".^$()|")
+_REGEX_OPTIONAL_QUANTIFIERS = set("*?{")
 
 
 def _nfc(s: str) -> str:
     return unicodedata.normalize("NFC", s)
+
+
+def _is_escaped(s: str, pos: int) -> bool:
+    count = 0
+    i = pos - 1
+    while i >= 0 and s[i] == "\\":
+        count += 1
+        i -= 1
+    return count % 2 == 1
+
+
+def _parse_search_query(q: str) -> _ParsedQuery:
+    q = _nfc(q)
+    if not q.startswith("/"):
+        return _ParsedQuery(mode="literal", literal=q)
+
+    last_slash = -1
+    for i in range(len(q) - 1, 0, -1):
+        if q[i] == "/" and not _is_escaped(q, i):
+            last_slash = i
+            break
+    if last_slash < 0:
+        raise errors.bad_request("invalid_regex", message="regex query is missing a closing slash")
+
+    pattern = q[1:last_slash]
+    raw_flags = q[last_slash + 1:]
+    unknown = sorted(set(raw_flags) - set(_REGEX_FLAGS))
+    if unknown:
+        raise errors.bad_request("invalid_regex", message="unknown regex flag(s)", flags=unknown)
+
+    flags = 0
+    for flag in raw_flags:
+        flags |= _REGEX_FLAGS[flag]
+    try:
+        compiled = re.compile(pattern, flags)
+    except re.error as exc:
+        raise errors.bad_request("invalid_regex", message=str(exc)) from exc
+    empty = compiled.search("")
+    if empty is not None and empty.start() == empty.end():
+        raise errors.bad_request("zero_length_regex", message="regex can match the empty string")
+
+    return _ParsedQuery(
+        mode="regex",
+        literal=q,
+        pattern=pattern,
+        flags=flags,
+        anchor=None if flags & re.IGNORECASE else _regex_anchor(pattern),
+    )
+
+
+def _regex_anchor(pattern: str) -> str | None:
+    runs: list[str] = []
+    cur: list[str] = []
+
+    def flush() -> None:
+        nonlocal cur
+        if cur:
+            runs.append("".join(cur))
+            cur = []
+
+    i = 0
+    while i < len(pattern):
+        ch = pattern[i]
+        if ch == "\\":
+            if i + 1 >= len(pattern):
+                flush()
+                break
+            nxt = pattern[i + 1]
+            if nxt in _REGEX_NONLITERAL_ESCAPES:
+                flush()
+            else:
+                cur.append(nxt)
+            i += 2
+            continue
+        if ch == "[":
+            flush()
+            i += 1
+            while i < len(pattern):
+                if pattern[i] == "\\":
+                    i += 2
+                    continue
+                if pattern[i] == "]":
+                    i += 1
+                    break
+                i += 1
+            continue
+        if ch in _REGEX_OPTIONAL_QUANTIFIERS:
+            if cur:
+                cur.pop()
+            flush()
+            if ch == "{":
+                i += 1
+                while i < len(pattern) and pattern[i] != "}":
+                    i += 1
+                if i < len(pattern):
+                    i += 1
+            else:
+                i += 1
+            continue
+        if ch == "+":
+            flush()
+            i += 1
+            continue
+        if ch in _REGEX_BREAK_CHARS:
+            flush()
+            i += 1
+            continue
+        cur.append(ch)
+        i += 1
+    flush()
+
+    anchors = [run for run in runs if len(run) >= 2]
+    if not anchors:
+        return None
+    return max(anchors, key=len)
 
 
 _YEAR_RE = re.compile(r"-?\d+")
@@ -245,6 +375,33 @@ def _category_matches(section: str | None, categories: set[str], descendants: bo
     if descendants:
         return any(section.startswith(c) for c in categories)
     return section in categories
+
+
+def _category_scope_textids(
+    meta: dict[str, _CatalogMeta],
+    *,
+    categories: set[str],
+    excluded_categories: set[str],
+    category_descendants: bool,
+    date_before: int | None,
+    date_after: int | None,
+) -> set[str]:
+    out: set[str] = set()
+    for textid, m in meta.items():
+        if not _category_matches(m.section_code, categories, category_descendants):
+            continue
+        if excluded_categories and _category_matches(
+            m.section_code,
+            excluded_categories,
+            category_descendants,
+        ):
+            continue
+        if date_before is not None and (m.index_date is None or m.index_date >= date_before):
+            continue
+        if date_after is not None and (m.index_date is None or m.index_date <= date_after):
+            continue
+        out.add(textid)
+    return out
 
 
 def _apply_hit_filters(
@@ -452,6 +609,7 @@ def _build_facets(
 def _overview_response(
     *,
     q: str,
+    query_mode: QueryMode,
     sort: "Sort",
     offset: int,
     limit: int,
@@ -542,6 +700,7 @@ def _overview_response(
     )
     return SearchResponse(
         query=q,
+        query_mode=query_mode,
         total=summary.total,
         offset=offset,
         limit=limit,
@@ -586,6 +745,7 @@ def _search_hits(
     master_only: bool = False,
     max_results: int | None = None,
 ) -> tuple[list[Hit], dict[str, _CatalogMeta], set[str] | None, set[str], set[str] | None, set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], CorpusSnapshot | None, IndexSummary | None]:
+    parsed = _parse_search_query(q)
     state = request.app.state.bkk
     primary = state.open_index()
     owner = _request_owner(request)
@@ -627,83 +787,147 @@ def _search_hits(
                 unknown=sorted(unknown),
                 available=sorted(available),
             )
+    regex_scope_textids: set[str] | None = None
+    if parsed.mode == "regex":
+        regex_scope_textids = set(scoped_textids) if scoped_textids else None
+        if parsed.anchor is None and regex_scope_textids is None and categories:
+            meta_for_scope = _catalog_meta(request, None)
+            regex_scope_textids = _category_scope_textids(
+                meta_for_scope,
+                categories=categories,
+                excluded_categories=excluded_categories,
+                category_descendants=category_descendants,
+                date_before=date_before,
+                date_after=date_after,
+            )
+        if parsed.anchor is None and regex_scope_textids is None:
+            for index in indexes:
+                index.close()
+            raise errors.bad_request(
+                "regex_requires_scope",
+                message=(
+                    "regex searches need a literal run of at least 2 characters "
+                    "or a text/list/category scope"
+                ),
+            )
     try:
-        prepared: list[tuple[Any, dict, IndexSummary]] = []
-        combined_textids: Counter[str] = Counter()
-        combined_witnesses: Counter[str] = Counter()
-        left_extensions: Counter[str] = Counter()
-        right_extensions: Counter[str] = Counter()
-        total = 0
-        for index in indexes:
-            candidates, _raw_total = index.candidates_and_total(q)
-            part_summary = index.summarise(
-                q,
-                candidates=candidates,
-                textids=scoped_textids or None,
-                witnesses=witnesses,
-                master_only=master_only,
-            )
-            prepared.append((index, candidates, part_summary))
-            total += part_summary.total
-            combined_textids.update(part_summary.by_textid)
-            combined_witnesses.update(part_summary.by_witness_label)
-            left_extensions.update(dict(part_summary.trigram_left))
-            right_extensions.update(dict(part_summary.trigram_right))
-        summary = IndexSummary(
-            total=total,
-            by_textid=dict(combined_textids),
-            by_witness_label=dict(combined_witnesses),
-            trigram_left=left_extensions.most_common(20),
-            trigram_right=right_extensions.most_common(20),
-        )
-        if total > cap:
-            empty_hits: list[Hit] = []
-            meta = _catalog_meta(request, None)
-            return (
-                empty_hits,
-                meta,
-                witnesses,
-                excluded_witnesses,
-                voices,
-                excluded_voices,
-                categories,
-                excluded_categories,
-                selected_left_char,
-                excluded_left_char,
-                selected_right_char,
-                excluded_right_char,
-                selected_left_bigram,
-                excluded_left_bigram,
-                selected_right_bigram,
-                excluded_right_bigram,
-                selected_around_binom,
-                excluded_around_binom,
-                scoped_textids,
-                excluded_textids,
-                None,
-                summary,
-            )
         all_hits: list[Hit] = []
-        for index, candidates, _part_summary in prepared:
-            if scoped_textids:
-                for tid in sorted(scoped_textids):
+        if parsed.mode == "literal":
+            prepared: list[tuple[Any, dict, IndexSummary]] = []
+            combined_textids: Counter[str] = Counter()
+            combined_witnesses: Counter[str] = Counter()
+            left_extensions: Counter[str] = Counter()
+            right_extensions: Counter[str] = Counter()
+            total = 0
+            for index in indexes:
+                candidates, _raw_total = index.candidates_and_total(q)
+                part_summary = index.summarise(
+                    q,
+                    candidates=candidates,
+                    textids=scoped_textids or None,
+                    witnesses=witnesses,
+                    master_only=master_only,
+                )
+                prepared.append((index, candidates, part_summary))
+                total += part_summary.total
+                combined_textids.update(part_summary.by_textid)
+                combined_witnesses.update(part_summary.by_witness_label)
+                left_extensions.update(dict(part_summary.trigram_left))
+                right_extensions.update(dict(part_summary.trigram_right))
+            summary = IndexSummary(
+                total=total,
+                by_textid=dict(combined_textids),
+                by_witness_label=dict(combined_witnesses),
+                trigram_left=left_extensions.most_common(20),
+                trigram_right=right_extensions.most_common(20),
+            )
+            if total > cap:
+                empty_hits: list[Hit] = []
+                meta = _catalog_meta(request, None)
+                return (
+                    empty_hits,
+                    meta,
+                    witnesses,
+                    excluded_witnesses,
+                    voices,
+                    excluded_voices,
+                    categories,
+                    excluded_categories,
+                    selected_left_char,
+                    excluded_left_char,
+                    selected_right_char,
+                    excluded_right_char,
+                    selected_left_bigram,
+                    excluded_left_bigram,
+                    selected_right_bigram,
+                    excluded_right_bigram,
+                    selected_around_binom,
+                    excluded_around_binom,
+                    scoped_textids,
+                    excluded_textids,
+                    None,
+                    summary,
+                )
+            for index, candidates, _part_summary in prepared:
+                if scoped_textids:
+                    for tid in sorted(scoped_textids):
+                        all_hits.extend(index.search(
+                            q,
+                            context=context,
+                            witnesses=witnesses,
+                            textid=tid,
+                            voices=voices,
+                            candidates=candidates,
+                        ))
+                else:
                     all_hits.extend(index.search(
                         q,
                         context=context,
                         witnesses=witnesses,
-                        textid=tid,
+                        textid=textid,
                         voices=voices,
                         candidates=candidates,
                     ))
-            else:
-                all_hits.extend(index.search(
-                    q,
-                    context=context,
-                    witnesses=witnesses,
-                    textid=textid,
-                    voices=voices,
-                    candidates=candidates,
-                ))
+        elif regex_scope_textids is not None and not regex_scope_textids:
+            all_hits = []
+        else:
+            assert parsed.pattern is not None
+            for index in indexes:
+                if regex_scope_textids is not None:
+                    for tid in sorted(regex_scope_textids):
+                        all_hits.extend(index.search_regex(
+                            parsed.pattern,
+                            parsed.flags,
+                            context=context,
+                            witnesses=witnesses,
+                            textid=tid,
+                            voices=voices,
+                            anchor=parsed.anchor,
+                        ))
+                        if len(all_hits) > cap:
+                            raise errors.bad_request(
+                                "regex_too_many_hits",
+                                threshold=cap,
+                                message="regex search produced too many hits; refine the pattern or scope",
+                            )
+                else:
+                    all_hits.extend(index.search_regex(
+                        parsed.pattern,
+                        parsed.flags,
+                        context=context,
+                        witnesses=witnesses,
+                        textid=textid,
+                        voices=voices,
+                        anchor=parsed.anchor,
+                    ))
+                    if len(all_hits) > cap:
+                        raise errors.bad_request(
+                            "regex_too_many_hits",
+                            threshold=cap,
+                            message="regex search produced too many hits; refine the pattern or scope",
+                        )
+    except RegexZeroLengthError as exc:
+        raise errors.bad_request("zero_length_regex", message=str(exc)) from exc
     finally:
         for index in indexes:
             index.close()
@@ -769,7 +993,7 @@ def search(
     q: str = Query(
         ...,
         min_length=1,
-        description="substring query (NFC-normalized server-side)",
+        description="substring query, or slash-delimited regex /pattern/flags",
         openapi_examples=ex.QUERY,
     ),
     textid: str | None = Query(
@@ -855,6 +1079,7 @@ def search(
                     "defaults to the server's max_search_hits",
     ),
 ) -> SearchResponse:
+    query_mode = _parse_search_query(q).mode
     (
         sorted_hits,
         meta,
@@ -919,6 +1144,7 @@ def search(
         )
         return _overview_response(
             q=q,
+            query_mode=query_mode,
             sort=sort,
             offset=offset,
             limit=limit,
@@ -969,6 +1195,7 @@ def search(
     page = sorted_hits[offset:offset + limit]
     return SearchResponse(
         query=q,
+        query_mode=query_mode,
         total=len(sorted_hits),
         offset=offset,
         limit=limit,

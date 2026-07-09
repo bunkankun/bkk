@@ -189,8 +189,9 @@ No CSS modules, no Tailwind. Components add classes directly; style rules live i
 **User texts** — `POST /api/user-texts/preview` stages and validates source;
 `POST /api/user-texts` publishes the confirmed private bundle and starts
 indexing; `POST /api/user-texts/sync` refreshes registered repositories after
-login. Private resolution, catalog records, and search indexes are keyed by
-the authenticated GitHub login and never merged into shared indexes.
+login and prunes entries whose private repositories were deleted by hand.
+Private resolution, catalog records, and search indexes are keyed by the
+authenticated GitHub login and never merged into shared indexes.
 
 **Search lifecycle** — `runSearch()` aborts any in-flight request via `searchAbort`, fires the new one, and writes status (`idle`/`loading`/`ok`/`error`) into `state.search`. List filters narrow the textid scope via `scopedListTextids()` before the request.
 

@@ -71,13 +71,6 @@ export interface UserTextListItem {
   sync_error?: string;
 }
 
-export interface UserTextDeleteResult {
-  text_id: string;
-  deleted: boolean;
-  github_deleted: boolean;
-  github_delete_error?: string | null;
-}
-
 export interface CatalogMatch {
   textid: string;
   canonical_identifier?: string | null;
@@ -532,6 +525,7 @@ export interface SearchOverview {
 
 export interface SearchResponse {
   query: string;
+  query_mode: "literal" | "regex";
   total: number;
   offset: number;
   limit: number;

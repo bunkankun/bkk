@@ -284,7 +284,7 @@ def test_create_is_owner_scoped_catalogued_readable_and_indexed(
     assert client.get("/catalog").json()["matches"] == []
 
 
-def test_delete_user_text_removes_local_bundle_and_registry(
+def test_delete_user_text_route_is_not_available(
     tmp_path: Path, monkeypatch,
 ):
     client = _client(tmp_path)
@@ -296,9 +296,11 @@ def test_delete_user_text_removes_local_bundle_and_registry(
 
     registry: dict[str, object] | None = None
     registry_sha: str | None = None
+    calls: list[tuple[str, str]] = []
 
     def fake_github(method, path, token, **kwargs):
         nonlocal registry, registry_sha
+        calls.append((method, path))
         if method == "POST" and path == "/user/repos":
             return {
                 "full_name": "alice/KR9a0002",
@@ -311,8 +313,6 @@ def test_delete_user_text_removes_local_bundle_and_registry(
         if method == "POST" and path.endswith("/git/commits"):
             return {"sha": "commit-sha"}
         if method == "POST" and path.endswith("/git/refs"):
-            return {}
-        if method == "DELETE" and path == "/repos/alice/KR9a0002":
             return {}
         if method == "GET" and "/contents/settings/user-texts.json" in path:
             if registry is None:
@@ -347,32 +347,32 @@ def test_delete_user_text_removes_local_bundle_and_registry(
     assert bundle_dir.exists()
     assert client.get("/user-texts").json()["texts"]
 
-    denied = client.delete("/user-texts/KR9a0002")
-    assert denied.status_code == 428
-
-    deleted = client.delete(
-        "/user-texts/KR9a0002",
-        params={"confirm_github_delete": "true"},
-    )
-    assert deleted.status_code == 200, deleted.text
-    assert deleted.json()["deleted"] is True
-    assert not bundle_dir.exists()
-    assert client.get("/user-texts").json()["texts"] == []
+    response = client.delete("/user-texts/KR9a0002")
+    assert response.status_code in {404, 405}
+    assert bundle_dir.exists()
+    assert client.get("/user-texts").json()["texts"]
     assert registry is not None
-    assert registry["texts"] == []
+    assert len(registry["texts"]) == 1
+    assert ("DELETE", "/repos/alice/KR9a0002") not in calls
 
 
-def test_delete_user_text_survives_github_permission_error(
+def test_sync_removes_user_text_after_manual_github_delete(
     tmp_path: Path, monkeypatch,
 ):
     client = _client(tmp_path)
     _login(client)
     preview = client.post(
         "/user-texts/preview",
-        json={"format": "krp", "paste": "#+TITLE: 權限測試\n甲乙丙丁¶"},
+        json={"format": "krp", "paste": "#+TITLE: 手動刪除\n甲乙丙丁¶"},
     ).json()
 
+    registry: dict[str, object] | None = None
+    registry_sha: str | None = None
+    calls: list[tuple[str, str]] = []
+
     def fake_github(method, path, token, **kwargs):
+        nonlocal registry, registry_sha
+        calls.append((method, path))
         if method == "POST" and path == "/user/repos":
             return {
                 "full_name": "alice/KR9a0003",
@@ -386,20 +386,27 @@ def test_delete_user_text_survives_github_permission_error(
             return {"sha": "commit-sha"}
         if method == "POST" and path.endswith("/git/refs"):
             return {}
-        if method == "DELETE" and path == "/repos/alice/KR9a0003":
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "github_status": 403,
-                    "body": {"message": "Must have admin rights to Repository."},
-                },
-            )
-        if method == "GET" and "/contents/settings/user-texts.json" in path:
+        if method == "GET" and path == "/repos/alice/KR9a0003/git/ref/heads/main":
             raise HTTPException(
                 status_code=502,
                 detail={"github_status": 404, "body": {"message": "Not Found"}},
             )
+        if method == "GET" and "/contents/settings/user-texts.json" in path:
+            if registry is None:
+                raise HTTPException(
+                    status_code=502,
+                    detail={"github_status": 404, "body": {"message": "Not Found"}},
+                )
+            return {
+                "sha": registry_sha,
+                "content": base64.b64encode(
+                    json.dumps(registry, ensure_ascii=False).encode("utf-8")
+                ).decode("ascii"),
+            }
         if method == "PUT" and "/contents/settings/user-texts.json" in path:
+            content = json.loads(base64.b64decode(kwargs["json"]["content"]).decode("utf-8"))
+            registry = content
+            registry_sha = "registry-sha"
             return {"content": {"sha": "registry-sha"}}
         raise AssertionError((method, path, kwargs))
 
@@ -409,17 +416,22 @@ def test_delete_user_text_survives_github_permission_error(
         json={
             "preview_token": preview["preview_token"],
             "text_id": "KR9a0003",
-            "title": "權限測試",
+            "title": "手動刪除",
         },
     )
     assert created.status_code == 201, created.text
-    deleted = client.delete(
-        "/user-texts/KR9a0003",
-        params={"confirm_github_delete": "true"},
-    )
-    assert deleted.status_code == 403, deleted.text
-    assert "delete_repo OAuth scope" in deleted.json()["detail"]
     assert client.get("/user-texts").json()["texts"]
+    bundle_dir = tmp_path / "user-texts" / "alice" / "KR9a0003"
+    assert bundle_dir.exists()
+
+    synced = client.post("/user-texts/sync")
+    assert synced.status_code == 200, synced.text
+    assert synced.json()["results"] == [{"text_id": "KR9a0003", "status": "removed"}]
+    assert not bundle_dir.exists()
+    assert client.get("/user-texts").json()["texts"] == []
+    assert registry is not None
+    assert registry["texts"] == []
+    assert ("DELETE", "/repos/alice/KR9a0003") not in calls
 
 
 def test_private_manifest_does_not_sync_before_serving(tmp_path: Path, monkeypatch):

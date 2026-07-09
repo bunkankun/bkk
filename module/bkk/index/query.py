@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import unicodedata
 from collections.abc import Iterator
@@ -19,6 +20,10 @@ from .witness import Segment, witness_to_master_span
 
 
 _SQLITE_VAR_LIMIT = 500  # SQLite default ?-binding cap is 999; keep margin.
+
+
+class RegexZeroLengthError(ValueError):
+    """Raised when a regex match has no span and cannot produce a KWIC hit."""
 
 
 class Index:
@@ -115,6 +120,48 @@ class Index:
                 query, kind, src_id, sorted(positions), context,
                 witnesses, textid, voices,
             )
+
+    def search_regex(
+        self,
+        pattern: str,
+        flags: int = 0,
+        context: int = 20,
+        witnesses: set[str] | None = None,
+        textid: str | None = None,
+        voices: set[str] | None = None,
+        anchor: str | None = None,
+    ) -> Iterator[Hit]:
+        """Yield :class:`Hit` for every regex match.
+
+        ``anchor``, when present, is a literal substring known to be required
+        by the regex. It narrows the source rows to scan via the existing
+        candidate machinery; the regex is still evaluated against each whole
+        source row so variable-length matches can start before or after the
+        anchor occurrence.
+        """
+        compiled = re.compile(self._prepare_query(pattern), flags)
+        source_keys: set[tuple[str, int]] | None = None
+        if anchor:
+            anchor = self._prepare_query(anchor)
+            source_keys = set(self._candidate_positions(anchor))
+            if not source_keys:
+                return
+
+        if source_keys is None:
+            yield from self._scan_regex_all_sources(
+                compiled, context, witnesses, textid, voices,
+            )
+            return
+
+        for kind, src_id in sorted(source_keys):
+            if kind == "bucket":
+                yield from self._regex_bucket_hits(
+                    compiled, src_id, context, textid, voices,
+                )
+            else:
+                yield from self._regex_witness_hits(
+                    compiled, src_id, context, witnesses, textid, voices,
+                )
 
     def candidates_and_total(
         self, query: str,
@@ -353,6 +400,151 @@ class Index:
             "SELECT source_kind, source_id, position FROM trigram WHERE gram = ?",
             (gram,),
         ).fetchall()
+
+    # -- regex source scans ---------------------------------------------------
+
+    def _scan_regex_all_sources(
+        self,
+        pattern: re.Pattern[str],
+        context: int,
+        witnesses: set[str] | None,
+        textid: str | None,
+        voices: set[str] | None,
+    ) -> Iterator[Hit]:
+        if textid is None:
+            bucket_rows = self._conn.execute(
+                "SELECT b.bucket_id "
+                "FROM bucket b JOIN juan j ON b.juan_id = j.juan_id"
+            ).fetchall()
+            witness_rows = self._conn.execute(
+                "SELECT w.witness_id "
+                "FROM witness w JOIN bucket b ON w.bucket_id = b.bucket_id "
+                "JOIN juan j ON b.juan_id = j.juan_id"
+            ).fetchall()
+        else:
+            bucket_rows = self._conn.execute(
+                "SELECT b.bucket_id "
+                "FROM bucket b JOIN juan j ON b.juan_id = j.juan_id "
+                "WHERE j.textid = ?",
+                (textid,),
+            ).fetchall()
+            witness_rows = self._conn.execute(
+                "SELECT w.witness_id "
+                "FROM witness w JOIN bucket b ON w.bucket_id = b.bucket_id "
+                "JOIN juan j ON b.juan_id = j.juan_id "
+                "WHERE j.textid = ?",
+                (textid,),
+            ).fetchall()
+        for row in bucket_rows:
+            yield from self._regex_bucket_hits(
+                pattern, row["bucket_id"], context, textid, voices,
+            )
+        for row in witness_rows:
+            yield from self._regex_witness_hits(
+                pattern, row["witness_id"], context, witnesses, textid, voices,
+            )
+
+    def _regex_bucket_hits(
+        self,
+        pattern: re.Pattern[str],
+        src_id: int,
+        context: int,
+        textid: str | None,
+        voices: set[str] | None,
+    ) -> Iterator[Hit]:
+        row = self._conn.execute(
+            "SELECT b.bucket_id, b.text, b.kind, j.seq, j.textid "
+            "FROM bucket b JOIN juan j ON b.juan_id = j.juan_id "
+            "WHERE b.bucket_id = ?",
+            (src_id,),
+        ).fetchone()
+        if row is None:
+            return
+        if textid is not None and row["textid"] != textid:
+            return
+        for match in pattern.finditer(row["text"]):
+            pos, end = match.span()
+            if end == pos:
+                raise RegexZeroLengthError("regex produced a zero-length match")
+            matched_text = row["text"][pos:end]
+            hit = self._make_hit(
+                row["textid"], row["seq"], row["kind"], row["bucket_id"],
+                row["text"], pos, end - pos, "master", matched_text, context,
+                witness_text=matched_text,
+            )
+            if _passes_voice_filter(hit, voices):
+                yield hit
+
+    def _regex_witness_hits(
+        self,
+        pattern: re.Pattern[str],
+        src_id: int,
+        context: int,
+        witnesses: set[str] | None,
+        textid: str | None,
+        voices: set[str] | None,
+    ) -> Iterator[Hit]:
+        row = self._conn.execute(
+            "SELECT w.witness_id, w.text AS wtext, w.label, w.segments, "
+            "b.bucket_id, b.text AS btext, b.kind, j.seq, j.textid "
+            "FROM witness w JOIN bucket b ON w.bucket_id = b.bucket_id "
+            "JOIN juan j ON b.juan_id = j.juan_id WHERE w.witness_id = ?",
+            (src_id,),
+        ).fetchone()
+        if row is None:
+            return
+        if textid is not None and row["textid"] != textid:
+            return
+        label = row["label"]
+        if witnesses is not None and label not in witnesses:
+            return
+        wtext = row["wtext"]
+        btext = row["btext"]
+        segments = _decode_segments(row["segments"])
+        for match in pattern.finditer(wtext):
+            pos, end = match.span()
+            if end == pos:
+                raise RegexZeroLengthError("regex produced a zero-length match")
+            matched_text = wtext[pos:end]
+            m_off, m_len = witness_to_master_span(segments, pos, end)
+            if btext[m_off:m_off + m_len] == matched_text:
+                continue
+            w_lo = max(0, pos - context)
+            w_hi = end + context
+            ANCHOR_PAD = 6
+            v_left_w_start = None
+            v_right_w_end = None
+            for seg in segments:
+                if seg.is_variant and seg.w_start < end and seg.w_end > pos:
+                    if v_left_w_start is None or seg.w_start < v_left_w_start:
+                        v_left_w_start = seg.w_start
+                    if v_right_w_end is None or seg.w_end > v_right_w_end:
+                        v_right_w_end = seg.w_end
+            if v_left_w_start is not None:
+                w_lo = min(w_lo, max(0, v_left_w_start - ANCHOR_PAD))
+            if v_right_w_end is not None:
+                w_hi = max(w_hi, min(len(wtext), v_right_w_end + ANCHOR_PAD))
+            witness_left = wtext[w_lo:pos]
+            witness_right = wtext[end:w_hi]
+            if v_left_w_start is not None:
+                w_left_var_off = max(0, v_left_w_start - w_lo)
+            else:
+                w_left_var_off = 0
+            if v_right_w_end is not None:
+                w_right_var_end = max(0, min(len(witness_right), v_right_w_end - end))
+            else:
+                w_right_var_end = len(witness_right)
+            hit = self._make_hit(
+                row["textid"], row["seq"], row["kind"], row["bucket_id"],
+                btext, m_off, m_len, label, matched_text, context,
+                witness_text=matched_text,
+                witness_left=witness_left,
+                witness_right=witness_right,
+                witness_left_variant_offset=w_left_var_off,
+                witness_right_variant_end=w_right_var_end,
+            )
+            if _passes_voice_filter(hit, voices):
+                yield hit
 
     # -- verification + emission ---------------------------------------------
 

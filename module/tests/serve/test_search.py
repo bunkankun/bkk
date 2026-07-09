@@ -21,12 +21,68 @@ def test_search_master_hit(client):
     assert r.status_code == 200
     body = r.json()
     assert body["query"] == "丙丁"
+    assert body["query_mode"] == "literal"
     assert body["total"] >= 1
     hit = body["hits"][0]
     assert hit["textid"] == "TEST0001"
     assert hit["bucket"] == "body"
     assert hit["match"] == "丙丁"
     assert hit["matched_via"] == "master"
+
+
+def test_search_regex_master_hit(client):
+    r = client.get("/search", params={"q": "/甲乙.丁/"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query_mode"] == "regex"
+    assert body["total"] == 1
+    hit = body["hits"][0]
+    assert hit["match"] == "甲乙丙丁"
+    assert hit["matched_text"] == "甲乙丙丁"
+    assert hit["matched_via"] == "master"
+
+
+def test_search_regex_witness_hit(tmp_path: Path):
+    write_bundle(
+        tmp_path,
+        "TESTVAR",
+        "abcXdef",
+        editions=[{"short": "SBCK", "label": "SBCK"}],
+        variants=[{"offset": 3, "length": 1, "content": "X", "SBCK": "Y"}],
+    )
+    config = ServeConfig(corpus_root=tmp_path, index_path=tmp_path / "_corpus.bkkx")
+    client = TestClient(create_app(config))
+
+    r = client.get("/search", params={"q": "/Yd./"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query_mode"] == "regex"
+    assert body["total"] == 1
+    hit = body["hits"][0]
+    assert hit["matched_via"] == "SBCK"
+    assert hit["matched_text"] == "Yde"
+    assert hit["match"] == "Xde"
+
+
+def test_search_regex_requires_anchor_or_scope(client):
+    r = client.get("/search", params={"q": "/甲.丁/"})
+    assert r.status_code == 400
+    assert r.json()["error"] == "regex_requires_scope"
+
+    scoped = client.get("/search", params={"q": "/甲..丁/", "textid": "TEST0001"})
+    assert scoped.status_code == 200
+    assert scoped.json()["query_mode"] == "regex"
+    assert scoped.json()["total"] == 1
+
+
+def test_search_regex_rejects_invalid_and_zero_length(client):
+    bad = client.get("/search", params={"q": "/甲(/"})
+    assert bad.status_code == 400
+    assert bad.json()["error"] == "invalid_regex"
+
+    zero = client.get("/search", params={"q": "/甲*/"})
+    assert zero.status_code == 400
+    assert zero.json()["error"] == "zero_length_regex"
 
 
 def test_search_no_match(client):

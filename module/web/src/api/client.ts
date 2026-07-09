@@ -77,7 +77,6 @@ import type {
   WorkspaceDeleteResult,
   WorkspaceWriteResult,
   UserTextCreateResult,
-  UserTextDeleteResult,
   UserTextFormat,
   UserTextListItem,
   UserTextPreview,
@@ -231,19 +230,6 @@ export async function syncUserTexts(): Promise<void> {
 
 export async function listUserTexts(): Promise<{ texts: UserTextListItem[] }> {
   return fetchJson<{ texts: UserTextListItem[] }>(`${apiBase}/user-texts`);
-}
-
-export async function deleteUserText(
-  textid: string,
-  confirmGithubDelete = false,
-): Promise<UserTextDeleteResult> {
-  const q = new URLSearchParams();
-  if (confirmGithubDelete) q.set("confirm_github_delete", "true");
-  const qs = q.toString();
-  return fetchJson<UserTextDeleteResult>(
-    `${apiBase}/user-texts/${encodeURIComponent(textid)}${qs ? `?${qs}` : ""}`,
-    { method: "DELETE" },
-  );
 }
 
 // ---------- admin ----------

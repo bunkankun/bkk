@@ -1180,6 +1180,9 @@ export function SearchTab() {
             : `${start}–${end} of ${response.total} for “${response.query}”`}
         </span>
         <span className="kwic-sort">· {response.sort}</span>
+        {response.query_mode === "regex" ? (
+          <span className="kwic-sort">· regex</span>
+        ) : null}
         {listFilterMode !== "off" ? (
           <span className="kwic-sort">· lists: {listFilterMode}</span>
         ) : null}

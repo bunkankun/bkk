@@ -161,6 +161,7 @@ class SearchOverview(BaseModel):
 
 class SearchResponse(BaseModel):
     query: str
+    query_mode: str = "literal"
     total: int
     offset: int
     limit: int
