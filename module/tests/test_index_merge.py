@@ -402,6 +402,38 @@ def test_cli_merge_jobs_forwarded_to_per_bundle_builds(tmp_path, monkeypatch):
     assert calls == [(bundle.name, 2)]
 
 
+def test_cli_build_all_builds_per_bundle_indices(tmp_path, monkeypatch):
+    _write_bundle(tmp_path / "KR0a", "KR0a0001", "abc")
+    _write_bundle(tmp_path / "KR0a", "KR0a0002", "def")
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+
+    rc = cli_run(["build", "--all", str(tmp_path), "--jobs", "2"])
+
+    assert rc == 0
+    assert (tmp_path / "KR0a" / "KR0a0001" / "KR0a0001.bkkx").is_file()
+    assert (tmp_path / "KR0a" / "KR0a0002" / "KR0a0002.bkkx").is_file()
+
+
+def test_cli_build_text_id_resolves_from_configured_corpus(tmp_path, monkeypatch):
+    _write_bundle(tmp_path / "KR0a", "KR0a0001", "abc")
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {"global": {"corpus": tmp_path}})
+
+    rc = cli_run(["build", "--text-id", "KR0a0001"])
+
+    assert rc == 0
+    assert (tmp_path / "KR0a" / "KR0a0001" / "KR0a0001.bkkx").is_file()
+
+
+def test_cli_build_selector_conflicts_are_rejected(tmp_path, monkeypatch):
+    bundle = _write_bundle(tmp_path, "KR0a0001", "abc")
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+
+    with pytest.raises(SystemExit):
+        cli_run(["build", str(bundle), "--text-id", "KR0a0001"])
+    with pytest.raises(SystemExit):
+        cli_run(["build", "--all", str(tmp_path), "--out", str(tmp_path / "x.bkkx")])
+
+
 def test_progress_emits_per_bundle_lines(tmp_path, capsys):
     _write_bundle(tmp_path, "KR0a0001", "abc")
     _write_bundle(tmp_path, "KR0a0002", "def")

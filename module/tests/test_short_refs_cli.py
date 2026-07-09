@@ -92,6 +92,9 @@ def test_text_id_shortcut_is_wired_to_cli_parsers():
     assert index_parser().parse_args(
         ["search", "index.bkkx", "term", "--text-id", "1h4"]
     ).text_id == "KR1h0004"
+    assert index_parser().parse_args(
+        ["build", "--text-id", "1h4"]
+    ).text_id == "KR1h0004"
     assert voice_parser().parse_args(
         ["remove", "--text-id", "1h4"]
     ).text_id == "KR1h0004"

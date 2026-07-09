@@ -3,6 +3,8 @@
 Subcommands::
 
     python -m bkk.index build <bundle_dir> [--out PATH] [--jobs N]
+    python -m bkk.index build --text-id KR1h0004 [--corpus PATH] [--jobs N]
+    python -m bkk.index build --all [<corpus>] [--jobs N]
     python -m bkk.index catalog <corpus> [--csv PATH] [--out PATH]
                                          [--text-prefix KR3a]
     python -m bkk.index translations <corpus> [--out PATH]
@@ -27,6 +29,8 @@ Subcommands::
 from __future__ import annotations
 
 import argparse
+import sys
+import time
 from pathlib import Path
 
 from bkk.cli_common import warn_deprecated
@@ -37,7 +41,7 @@ from .build import build_index
 from .catalog import build_catalog_index, default_catalog_csv
 from .core import build_core_index
 from .ir import Hit
-from .merge import merge_bundles
+from .merge import discover_bundles, find_bundle, is_stale, merge_bundles
 from .parallel import discover_parallel_passages, write_parallel_report
 from .parallel_scan import discover_parallel_passages_scan
 from .query import Index
@@ -48,10 +52,31 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk.index")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    pb = sub.add_parser("build", help="build a .bkkx index from a bundle directory")
-    pb.add_argument("bundle_dir", type=Path)
+    pb = sub.add_parser("build", help="build per-bundle .bkkx index files")
+    pb.add_argument(
+        "bundle_dir",
+        type=Path,
+        nargs="?",
+        default=None,
+        help="bundle directory, or corpus directory with --all",
+    )
+    pb.add_argument(
+        "--corpus", type=Path, default=None,
+        help="corpus root used by --all or to resolve --text-id "
+             "(default: index.corpus / global.corpus from .bkkrc)",
+    )
+    pb.add_argument(
+        "--text-id", dest="text_id", default=None, type=text_id_arg,
+        help="build the bundle for this text id, resolved under --corpus "
+             "or configured corpus",
+    )
+    pb.add_argument(
+        "--all", action="store_true", dest="all_flag",
+        help="build missing/stale per-bundle indexes for every bundle in the corpus",
+    )
     pb.add_argument("--out", type=Path, default=None,
-                    help="output path (default: <bundle_dir>/<textid>.bkkx)")
+                    help="single-bundle output path "
+                         "(default: <bundle_dir>/<textid>.bkkx)")
     pb.add_argument("--jobs", type=int, default=1,
                     help="worker processes for parsing juan files (default: 1)")
 
@@ -389,7 +414,42 @@ def run(argv: list[str] | None = None) -> int:
     if args.cmd == "build":
         if args.jobs < 1:
             parser.error("--jobs must be >= 1")
-        path = build_index(args.bundle_dir, args.out, jobs=args.jobs)
+        if args.all_flag:
+            if args.text_id:
+                parser.error("--all and --text-id are mutually exclusive")
+        elif bool(args.text_id) == bool(args.bundle_dir):
+            parser.error("provide exactly one of <bundle_dir>, --text-id, or --all")
+        configured_corpus = args.corpus or idx.get("corpus") or g.get("corpus")
+        if args.all_flag:
+            if args.out is not None:
+                parser.error("--out is only valid for a single bundle build")
+            corpus = args.bundle_dir or configured_corpus
+            if corpus is None:
+                parser.error(
+                    "corpus is required for --all "
+                    "(or set index.corpus/global.corpus in .bkkrc)"
+                )
+            try:
+                count, failures = _build_all_bundles(Path(corpus), jobs=args.jobs)
+            except (FileNotFoundError, ValueError) as exc:
+                parser.error(str(exc))
+            print(f"built/checked {count} bundle index(es)")
+            return 1 if failures else 0
+        if args.text_id:
+            if configured_corpus is None:
+                parser.error(
+                    "--text-id requires --corpus or index.corpus/global.corpus "
+                    "in .bkkrc"
+                )
+            bundle_dir = find_bundle(Path(configured_corpus), args.text_id)
+            if bundle_dir is None:
+                parser.error(
+                    f"bundle dir not found for {args.text_id!r} under "
+                    f"{Path(configured_corpus)}"
+                )
+        else:
+            bundle_dir = args.bundle_dir
+        path = build_index(bundle_dir, args.out, jobs=args.jobs)
         print(f"wrote {path}")
         return 0
     if args.cmd == "merge":
@@ -449,7 +509,6 @@ def run(argv: list[str] | None = None) -> int:
                 parser.error(
                     "--text-id is incompatible with " + ", ".join(incompatible)
                 )
-            from .merge import find_bundle
             from .parallel_assets import (
                 assert_index_unchanged,
                 capture_index_snapshot,
@@ -634,6 +693,42 @@ def run(argv: list[str] | None = None) -> int:
                 _print_hit(hit)
         return 0
     return 2
+
+
+def _build_all_bundles(corpus: Path, *, jobs: int) -> tuple[int, list[tuple[str, str]]]:
+    if jobs < 1:
+        raise ValueError("jobs must be >= 1")
+    corpus = Path(corpus)
+    if not corpus.is_dir():
+        raise FileNotFoundError(f"corpus directory not found: {corpus}")
+    bundles = discover_bundles(corpus)
+    if not bundles:
+        raise FileNotFoundError(f"no bundles found under {corpus}")
+
+    failures: list[tuple[str, str]] = []
+    total = len(bundles)
+    for i, bundle_dir in enumerate(bundles, 1):
+        textid = bundle_dir.name
+        bkkx = bundle_dir / f"{textid}.bkkx"
+        t0 = time.monotonic()
+        try:
+            if is_stale(bundle_dir, bkkx):
+                build_index(bundle_dir, bkkx, jobs=jobs)
+                action = "built"
+            else:
+                action = "cached"
+        except Exception as exc:
+            failures.append((textid, str(exc)))
+            print(f"[build {i}/{total}] {textid} SKIPPED ({exc})", file=sys.stderr)
+            continue
+        elapsed = time.monotonic() - t0
+        print(f"[build {i}/{total}] {textid} {action} ({elapsed:.2f}s)", file=sys.stderr)
+
+    if failures:
+        print(f"\nskipped {len(failures)} bundle(s):", file=sys.stderr)
+        for textid, reason in failures:
+            print(f"  {textid}: {reason}", file=sys.stderr)
+    return total, failures
 
 
 def _is_corpus_index(path: Path) -> bool:
