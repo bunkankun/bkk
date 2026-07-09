@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useState } from "react";
 import { getServerInfo } from "./api/client";
 import { ActivityBar } from "./components/ActivityBar";
 import { Admin } from "./components/LeftPanel/Admin";
@@ -61,6 +62,7 @@ function ResizeHandle({ side }: { side: "left" | "right" }) {
 function LeftPanel() {
   const activity = useWorkspace((s) => s.activity);
   const width = useWorkspace((s) => s.panelWidths.left);
+  const [catalogTotalCount, setCatalogTotalCount] = useState<number | null>(null);
   const title = activity === "timeline"
     ? "Timeline"
     : activity === "overlays"
@@ -80,14 +82,18 @@ function LeftPanel() {
     : activity === "catalog"
       ? "Catalog"
       : "Contents";
+  const showCatalogCount = activity === "catalog" && catalogTotalCount != null;
   return (
     <div className="lp" style={{ width }}>
       <div className="ph">
         <span>{title}</span>
+        {showCatalogCount ? (
+          <span className="ph-count">{catalogTotalCount.toLocaleString()} bundles</span>
+        ) : null}
       </div>
       <div className="lp-body">
         {activity === "timeline" ? (
-          <Catalog mode="timeline" />
+          <Catalog mode="timeline" onTotalBundleCountChange={setCatalogTotalCount} />
         ) : activity === "overlays" ? (
           <Translations />
         ) : activity === "lists" ? (
@@ -103,7 +109,10 @@ function LeftPanel() {
         ) : activity === "core" ? (
           <Core />
         ) : activity === "catalog" ? (
-          <Catalog mode="categories" />
+          <Catalog
+            mode="categories"
+            onTotalBundleCountChange={setCatalogTotalCount}
+          />
         ) : (
           <Toc />
         )}

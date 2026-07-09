@@ -258,11 +258,14 @@ def test_duplications_cli_writes_tsv(tmp_path):
     _write_bundle(tmp_path, "KR0a0002", f"ccc{shared}ddd")
     out = _merge(tmp_path)
     report = tmp_path / "dups.tsv"
+    work_db = tmp_path / "dups-work.sqlite3"
 
     rc = cli_run([
         "duplications",
         str(out),
         "--out", str(report),
+        "--work-db", str(work_db),
+        "--jobs", "2",
         "--min-length", "200",
         "--min-pair-chars", "100",
         "--quiet",
@@ -273,9 +276,22 @@ def test_duplications_cli_writes_tsv(tmp_path):
     assert lines[0] == f"# bkk-duplications version={REPORT_VERSION}"
     assert lines[1].split("\t")[0] == "textid_a"
     assert len(lines) == 3
+    assert work_db.exists()
     fields = lines[2].split("\t")
     textids = {fields[0], fields[3]}
     assert textids == {"KR0a0001", "KR0a0002"}
+
+
+def test_duplications_cli_rejects_nonpositive_jobs(tmp_path):
+    _write_bundle(tmp_path, "KR0a0001", "abcdef")
+    out = _merge(tmp_path)
+
+    try:
+        cli_run(["duplications", str(out), "--jobs", "0"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("expected --jobs 0 to be rejected")
 
 
 def test_read_duplications_report_roundtrip(tmp_path):

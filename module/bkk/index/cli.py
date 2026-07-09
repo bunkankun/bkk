@@ -16,10 +16,10 @@ Subcommands::
                                                 [--format jsonl|tsv]
     python -m bkk.index parallel [<bkkx_path>] --text-id KR1h0004[/1]
     python -m bkk.index parallel-scan <bkkx_path> [--out PATH]
-                                                     [--work-dir DIR]
+                                                     [--work-dir DIR] [--jobs N]
     python -m bkk.index duplications <bkkx_path> [--out PATH]
                                                  [--min-length N]
-                                                 [--min-pair-chars N]
+                                                 [--min-pair-chars N] [--jobs N]
     python -m bkk.index search <bkkx_path> <query> [--context N]
                                                    [--witness LABEL]...
                                                    [--textid ID]
@@ -211,6 +211,12 @@ def build_parser() -> argparse.ArgumentParser:
     pps.add_argument("--work-dir", type=Path, default=None,
                      help="directory for temporary partition/work files "
                           "(default: next to the index)")
+    pps.add_argument("--work-db", type=Path, default=None,
+                     help="persistent candidate-span work DB to create or reuse")
+    pps.add_argument("--force-work-db", action="store_true",
+                     help="replace an existing stale or incomplete --work-db")
+    pps.add_argument("--jobs", type=int, default=1,
+                     help="worker processes for partition processing (default: 1)")
     pps.add_argument("--bucket", choices=["front", "body", "back", "all"],
                      default="body",
                      help="bucket kind to scan (default: body)")
@@ -243,6 +249,12 @@ def build_parser() -> argparse.ArgumentParser:
     pd.add_argument("--work-dir", type=Path, default=None,
                     help="directory for temporary partition/work files "
                          "(default: next to the index)")
+    pd.add_argument("--work-db", type=Path, default=None,
+                    help="persistent candidate-span work DB to create or reuse")
+    pd.add_argument("--force-work-db", action="store_true",
+                    help="replace an existing stale or incomplete --work-db")
+    pd.add_argument("--jobs", type=int, default=1,
+                    help="worker processes for partition processing (default: 1)")
     pd.add_argument("--bucket", choices=["front", "body", "back", "all"],
                     default="body",
                     help="bucket kind to scan (default: body)")
@@ -620,19 +632,27 @@ def run(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "parallel-scan":
         import sys
-        clusters, _stats = discover_parallel_passages_scan(
-            args.index_path,
-            bucket=args.bucket,
-            min_length=args.min_length,
-            anchor_length=args.anchor_length,
-            min_occurrences=args.min_occurrences,
-            max_anchor_occurrences=args.max_anchor_occurrences,
-            partitions=args.partitions,
-            work_dir=args.work_dir,
-            include_contained=args.include_contained,
-            context=args.context,
-            progress=None if args.quiet else sys.stderr,
-        )
+        if args.jobs < 1:
+            parser.error("--jobs must be >= 1")
+        try:
+            clusters, _stats = discover_parallel_passages_scan(
+                args.index_path,
+                bucket=args.bucket,
+                min_length=args.min_length,
+                anchor_length=args.anchor_length,
+                min_occurrences=args.min_occurrences,
+                max_anchor_occurrences=args.max_anchor_occurrences,
+                partitions=args.partitions,
+                work_dir=args.work_dir,
+                work_db=args.work_db,
+                force_work_db=args.force_work_db,
+                jobs=args.jobs,
+                include_contained=args.include_contained,
+                context=args.context,
+                progress=None if args.quiet else sys.stderr,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
         if args.out is None:
             write_parallel_report(clusters, sys.stdout, format=args.format)
         else:
@@ -642,18 +662,26 @@ def run(argv: list[str] | None = None) -> int:
     if args.cmd == "duplications":
         import sys
         from .duplications import find_duplicated_juan, write_duplications_report
-        rows = find_duplicated_juan(
-            args.index_path,
-            bucket=args.bucket,
-            min_length=args.min_length,
-            anchor_length=args.anchor_length,
-            min_occurrences=args.min_occurrences,
-            max_anchor_occurrences=args.max_anchor_occurrences,
-            partitions=args.partitions,
-            work_dir=args.work_dir,
-            min_pair_chars=args.min_pair_chars,
-            progress=None if args.quiet else sys.stderr,
-        )
+        if args.jobs < 1:
+            parser.error("--jobs must be >= 1")
+        try:
+            rows = find_duplicated_juan(
+                args.index_path,
+                bucket=args.bucket,
+                min_length=args.min_length,
+                anchor_length=args.anchor_length,
+                min_occurrences=args.min_occurrences,
+                max_anchor_occurrences=args.max_anchor_occurrences,
+                partitions=args.partitions,
+                work_dir=args.work_dir,
+                work_db=args.work_db,
+                force_work_db=args.force_work_db,
+                jobs=args.jobs,
+                min_pair_chars=args.min_pair_chars,
+                progress=None if args.quiet else sys.stderr,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
         if args.out is None:
             write_duplications_report(rows, sys.stdout, format=args.format)
         else:

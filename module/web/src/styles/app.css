@@ -439,6 +439,13 @@ button {
   color: var(--t3);
   flex-shrink: 0;
 }
+.ph-count {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
 
 /* TOC + lists ---------------------------------------------------- */
 .lp-body {
@@ -1281,12 +1288,6 @@ button {
 .tv-parallels-btn.has-parallels {
   border-color: color-mix(in srgb, var(--grn) 50%, var(--bdr));
   color: var(--grn);
-}
-.tv-parallels-btn.no-parallels {
-  border-style: dashed;
-  border-color: var(--amb);
-  background: var(--amb-d);
-  color: var(--amb);
 }
 .tv-alt-ids {
   color: var(--t3);

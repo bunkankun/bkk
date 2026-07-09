@@ -27,7 +27,13 @@ type SubLoadState =
 
 type CatalogMode = "categories" | "timeline";
 
-export function Catalog({ mode }: { mode: CatalogMode }) {
+export function Catalog({
+  mode,
+  onTotalBundleCountChange,
+}: {
+  mode: CatalogMode;
+  onTotalBundleCountChange?: (count: number | null) => void;
+}) {
   const [cats, setCats] = useState<CategoriesResponse | null>(null);
   const [catsError, setCatsError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineResponse | null>(null);
@@ -55,6 +61,22 @@ export function Catalog({ mode }: { mode: CatalogMode }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (mode !== "categories") {
+      onTotalBundleCountChange?.(null);
+      return;
+    }
+    if (!cats) {
+      onTotalBundleCountChange?.(null);
+      return;
+    }
+    const total = cats.categories.reduce(
+      (sum, category) => sum + category.bundle_count,
+      0,
+    );
+    onTotalBundleCountChange?.(total);
+  }, [cats, mode, onTotalBundleCountChange]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {

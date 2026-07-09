@@ -19,8 +19,9 @@ The pipeline runs in three phases:
 
 1. **Fingerprint** every bucket; partition fingerprints across 256 files on
    disk by hash.
-2. **Process one partition at a time**: group fingerprints by hash, enumerate
-   pairs within each group, extend each pair to its maximal exact match.
+2. **Process partitions**: group fingerprints by hash, enumerate pairs within
+   each group, extend each pair to its maximal exact match. This phase can run
+   multiple partitions concurrently with `--jobs`.
 3. **Cluster** identical extended spans into one `ParallelCluster` per repeated
    passage.
 
@@ -71,7 +72,10 @@ For each of the partition files:
    `candidate_span` work table.
 
 After this phase every long-enough exact repeat in the corpus is represented
-as one or more pairwise span records.
+as one or more pairwise span records. With `--work-db PATH`, those records are
+kept in a reusable SQLite work database; later runs with the same index and
+scan-defining parameters can skip phases 1 and 2 and recluster from
+`candidate_span`.
 
 ## Phase 3 — cluster the pairs
 
@@ -109,12 +113,30 @@ Function:
 | `--min-occurrences` | 2 | minimum locations per cluster |
 | `--max-anchor-occurrences` | 200 | drop fingerprint groups bigger than this (stop-phrase guard) |
 | `--partitions` | 256 | number of on-disk anchor partitions |
+| `--jobs` | 1 | worker processes for processing partitions |
+| `--work-db` | unset | persistent SQLite DB for reusable candidate spans |
+| `--force-work-db` | off | replace an existing stale/incomplete work DB |
 | `--bucket` | `body` | restrict to `front` / `body` / `back`, or `all` |
 | `--include-contained` | off | keep clusters wholly inside longer ones |
 
 Larger `min_length` means a wider winnow window, fewer fingerprints, and a
 faster scan. Lowering `max_anchor_occurrences` skips highly repetitive
 boilerplate (formulaic chapter openings, common honorifics) cheaply.
+
+`--jobs` helps when phase 2 dominates. Workers use private temporary SQLite
+databases and the parent merges their `candidate_span` rows with
+`INSERT OR IGNORE`, so results and ordering stay identical to a serial run.
+Progress is reported as partitions complete, and long-running worker phases
+emit heartbeat lines with completed/running partition counts, skipped groups,
+span counts, and elapsed time. Serial scans also report partition loading and
+long-running hash-group/pair-enumeration heartbeats.
+
+`--work-db` reuse is intentionally strict. The scanner records the index
+signature/hash, schema version, scanner version, bucket, `min_length`,
+`anchor_length`, `max_anchor_occurrences`, and `partitions`; a mismatch is
+rejected unless `--force-work-db` is passed. Output-only options such as
+`--min-occurrences`, `--include-contained`, and `--context` can be changed when
+reusing a completed work DB.
 
 ## Downstream: `bkk index duplications`
 

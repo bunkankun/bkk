@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import io
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ import yaml
 
 from bkk.index import build_index, merge_bundles
 from bkk.index import parallel_assets
+import bkk.index.parallel_scan as parallel_scan
 from bkk.index.build import compute_bkkx_hash
 from bkk.index.cli import run as cli_run
 from bkk.index.parallel import discover_parallel_passages
@@ -106,6 +108,28 @@ def _merge(root: Path) -> Path:
     out = root / "_corpus.bkkx"
     merge_bundles(root, out)
     return out
+
+
+def _cluster_signature(clusters):
+    return [
+        (
+            cluster.text,
+            cluster.length,
+            cluster.occurrence_count,
+            [
+                (
+                    loc.textid,
+                    loc.juan_seq,
+                    loc.bucket,
+                    loc.bucket_id,
+                    loc.start,
+                    loc.end,
+                )
+                for loc in cluster.locations
+            ],
+        )
+        for cluster in clusters
+    ]
 
 
 def test_parallel_finds_repeated_passage_across_texts(tmp_path):
@@ -562,6 +586,159 @@ def test_parallel_scan_partitioned_matches_unpartitioned(tmp_path):
     ]
 
 
+def test_parallel_scan_jobs_matches_serial(tmp_path):
+    first = "JOBS-PASSAGE-ALPHA"
+    second = "JOBS-PASSAGE-BETA"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{first}bb{second}cc")
+    _write_bundle(tmp_path, "KR0a0002", f"dd{first}ee")
+    _write_bundle(tmp_path, "KR0a0003", f"ff{second}gg{first}hh")
+    out = _merge(tmp_path)
+
+    serial, serial_stats = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=7,
+        work_dir=tmp_path,
+    )
+    parallel, parallel_stats = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=7,
+        jobs=2,
+        work_dir=tmp_path,
+    )
+
+    assert _cluster_signature(parallel) == _cluster_signature(serial)
+    assert parallel_stats.candidate_spans == serial_stats.candidate_spans
+    assert parallel_stats.skipped_anchor_groups == serial_stats.skipped_anchor_groups
+
+
+def test_parallel_scan_work_db_reuses_candidate_spans(tmp_path):
+    shared = "WORK-DB-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    work_db = tmp_path / "scan-work.sqlite3"
+    first_progress = io.StringIO()
+    second_progress = io.StringIO()
+
+    first, first_stats = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=3,
+        work_dir=tmp_path,
+        work_db=work_db,
+        progress=first_progress,
+    )
+    second, second_stats = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=3,
+        work_dir=tmp_path,
+        work_db=work_db,
+        progress=second_progress,
+    )
+
+    assert work_db.exists()
+    assert _cluster_signature(second) == _cluster_signature(first)
+    assert second_stats.anchors_written == first_stats.anchors_written
+    assert second_stats.candidate_spans == first_stats.candidate_spans
+    assert second_stats.anchor_seconds == 0.0
+    assert "anchors written" in first_progress.getvalue()
+    assert "reusing work DB" in second_progress.getvalue()
+
+
+def test_parallel_scan_work_db_rejects_mismatch_unless_forced(tmp_path):
+    shared = "WORK-DB-MISMATCH"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    work_db = tmp_path / "scan-work.sqlite3"
+    discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=3,
+        work_dir=tmp_path,
+        work_db=work_db,
+    )
+
+    with pytest.raises(ValueError, match="metadata mismatch"):
+        discover_parallel_passages_scan(
+            out,
+            min_length=11,
+            anchor_length=5,
+            partitions=3,
+            work_dir=tmp_path,
+            work_db=work_db,
+        )
+
+    clusters, _stats = discover_parallel_passages_scan(
+        out,
+        min_length=11,
+        anchor_length=5,
+        partitions=3,
+        work_dir=tmp_path,
+        work_db=work_db,
+        force_work_db=True,
+    )
+    assert [cluster.text for cluster in clusters] == [shared]
+
+
+def test_parallel_scan_stats_and_progress_include_timings(tmp_path):
+    shared = "TIMING-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    progress = io.StringIO()
+
+    _clusters, stats = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=3,
+        work_dir=tmp_path,
+        progress=progress,
+    )
+
+    assert stats.anchor_seconds >= 0.0
+    assert stats.partition_seconds >= 0.0
+    assert stats.cluster_seconds >= 0.0
+    assert stats.total_seconds >= 0.0
+    log = progress.getvalue()
+    assert "anchors written" in log
+    assert ": loading" in log
+    assert "partition processing" in log
+
+
+def test_parallel_scan_emits_heartbeat_inside_large_groups(
+    tmp_path, monkeypatch,
+):
+    shared = "HEARTBEAT-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    _write_bundle(tmp_path, "KR0a0003", f"ee{shared}ff")
+    out = _merge(tmp_path)
+    progress = io.StringIO()
+    monkeypatch.setattr(parallel_scan, "_GROUP_HEARTBEAT_SECONDS", 0.0)
+    monkeypatch.setattr(parallel_scan, "_PAIR_HEARTBEAT_CHECK_INTERVAL", 1)
+
+    discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=1,
+        work_dir=tmp_path,
+        progress=progress,
+    )
+
+    assert "heartbeat:" in progress.getvalue()
+
+
 def test_parallel_scan_cli_writes_jsonl_and_progress(tmp_path, capsys):
     shared = "CLI-SCAN-PASSAGE"
     _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
@@ -582,14 +759,27 @@ def test_parallel_scan_cli_writes_jsonl_and_progress(tmp_path, capsys):
         "5",
         "--partitions",
         "3",
+        "--jobs",
+        "2",
     ])
 
     captured = capsys.readouterr()
     assert rc == 0
     assert "anchors written" in captured.err
+    assert "partition workers:" in captured.err
     rows = [json.loads(line) for line in report.read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 1
     assert rows[0]["text"] == shared
+
+
+def test_parallel_scan_cli_rejects_nonpositive_jobs(tmp_path):
+    _write_bundle(tmp_path, "KR0a0001", "abcdef")
+    out = _merge(tmp_path)
+
+    with pytest.raises(SystemExit) as exc:
+        cli_run(["parallel-scan", str(out), "--jobs", "0"])
+
+    assert exc.value.code == 2
 
 
 def test_parallel_full_scan_disabled_for_corpus_index(tmp_path):

@@ -1013,24 +1013,16 @@ export function TextViewer({
             {textid}
           </a>
           {editionShort ? ` · ${editionShort}` : ""} · 卷 {seq}
-          <button
-            type="button"
-            className={`tv-parallels-btn ${
-              hasParallels === true
-                ? "has-parallels"
-                : hasParallels === false
-                  ? "no-parallels"
-                  : "unknown"
-            }`}
-            title={
-              hasParallels === false
-                ? "No stored parallels; find them on demand"
-                : "Load parallel passages for this juan"
-            }
-            onClick={() => workspace.openParallelsPanel(textid, seq)}
-          >
-            {hasParallels === false ? "Find parallels" : "Parallels"}
-          </button>
+          {hasParallels !== false ? (
+            <button
+              type="button"
+              className={`tv-parallels-btn ${hasParallels === true ? "has-parallels" : "unknown"}`}
+              title="Load parallel passages for this juan"
+              onClick={() => workspace.openParallelsPanel(textid, seq)}
+            >
+              Parallels
+            </button>
+          ) : null}
           {altIds.length > 0 ? (
             <span className="tv-alt-ids"> {altIds.join(" ")}</span>
           ) : null}
