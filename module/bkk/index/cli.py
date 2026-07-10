@@ -17,6 +17,8 @@ Subcommands::
     python -m bkk.index parallel [<bkkx_path>] --text-id KR1h0004[/1]
     python -m bkk.index parallel-scan <bkkx_path> [--out PATH]
                                                      [--work-dir DIR] [--jobs N]
+    python -m bkk.index parallel-fuzzy-from-scan <bkkx_path> <scan.jsonl>
+                                                 [--max-edits N] [--out PATH]
     python -m bkk.index duplications <bkkx_path> [--out PATH]
                                                  [--min-length N]
                                                  [--min-pair-chars N] [--jobs N]
@@ -43,6 +45,7 @@ from .core import build_core_index
 from .ir import Hit
 from .merge import discover_bundles, find_bundle, is_stale, merge_bundles
 from .parallel import discover_parallel_passages, write_parallel_report
+from .parallel_fuzzy_from_scan import discover_fuzzy_from_scan
 from .parallel_scan import discover_parallel_passages_scan
 from .query import Index
 from .translation import build_translation_index, merge_translations
@@ -237,6 +240,30 @@ def build_parser() -> argparse.ArgumentParser:
     pps.add_argument("--include-contained", action="store_true",
                      help="include clusters wholly contained in longer clusters")
     pps.add_argument("--quiet", action="store_true",
+                     help="suppress progress logging")
+
+    pfs = sub.add_parser(
+        "parallel-fuzzy-from-scan",
+        help="refine parallel-scan JSONL candidates with fuzzy extension",
+    )
+    pfs.add_argument("index_path", type=Path)
+    pfs.add_argument("scan_path", type=Path,
+                     help="parallel-scan JSONL report")
+    pfs.add_argument("--out", type=Path, default=None,
+                     help="output path (default: stdout)")
+    pfs.add_argument("--max-edits", type=int, default=1,
+                     help="maximum edits per side extension budget (0-4, default: 1)")
+    pfs.add_argument("--min-length", type=int, default=24,
+                     help="minimum reported representative length (default: 24)")
+    pfs.add_argument("--min-occurrences", type=int, default=2,
+                     help="minimum locations per cluster (default: 2)")
+    pfs.add_argument("--format", choices=["jsonl", "tsv"], default="jsonl",
+                     help="report format (default: jsonl)")
+    pfs.add_argument("--context", type=int, default=20,
+                     help="snippet context around each occurrence (default: 20)")
+    pfs.add_argument("--include-contained", action="store_true",
+                     help="include clusters wholly contained in longer clusters")
+    pfs.add_argument("--quiet", action="store_true",
                      help="suppress progress logging")
 
     pd = sub.add_parser(
@@ -647,6 +674,27 @@ def run(argv: list[str] | None = None) -> int:
                 work_db=args.work_db,
                 force_work_db=args.force_work_db,
                 jobs=args.jobs,
+                include_contained=args.include_contained,
+                context=args.context,
+                progress=None if args.quiet else sys.stderr,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        if args.out is None:
+            write_parallel_report(clusters, sys.stdout, format=args.format)
+        else:
+            write_parallel_report(clusters, args.out, format=args.format)
+            print(f"wrote {args.out}")
+        return 0
+    if args.cmd == "parallel-fuzzy-from-scan":
+        import sys
+        try:
+            clusters = discover_fuzzy_from_scan(
+                args.index_path,
+                args.scan_path,
+                max_edits=args.max_edits,
+                min_length=args.min_length,
+                min_occurrences=args.min_occurrences,
                 include_contained=args.include_contained,
                 context=args.context,
                 progress=None if args.quiet else sys.stderr,

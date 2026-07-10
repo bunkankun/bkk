@@ -15,7 +15,8 @@ from bkk.index import parallel_assets
 import bkk.index.parallel_scan as parallel_scan
 from bkk.index.build import compute_bkkx_hash
 from bkk.index.cli import run as cli_run
-from bkk.index.parallel import discover_parallel_passages
+from bkk.index.parallel import discover_parallel_passages, write_parallel_report
+from bkk.index.parallel_fuzzy_from_scan import discover_fuzzy_from_scan
 from bkk.index.parallel_scan import discover_parallel_passages_scan
 
 
@@ -892,6 +893,65 @@ def test_parallel_fuzzy_cli_emits_edit_distance(tmp_path):
 
     assert rc == 0
     rows = [json.loads(line) for line in report.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["representative_edits"] == 1
+    assert {loc["edit_distance"] for loc in rows[0]["locations"]} == {0, 1}
+
+
+def test_parallel_fuzzy_from_scan_extends_jsonl_candidates(tmp_path):
+    _write_bundle(tmp_path, "KR0a0001", "qqABCDEFGKEY1234X678ww")
+    _write_bundle(tmp_path, "KR0a0002", "rrABCDEFGKEY1234Y678ee")
+    out = _merge(tmp_path)
+    exact_report = tmp_path / "exact.jsonl"
+    exact_clusters, _stats = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=3,
+        work_dir=tmp_path,
+    )
+    write_parallel_report(exact_clusters, exact_report, format="jsonl")
+
+    fuzzy = discover_fuzzy_from_scan(
+        out,
+        exact_report,
+        max_edits=1,
+        min_length=16,
+    )
+
+    assert len(fuzzy) == 1
+    assert fuzzy[0].representative_edits == 1
+    assert {loc.edit_distance for loc in fuzzy[0].locations} == {0, 1}
+    assert fuzzy[0].length == 18
+
+
+def test_parallel_fuzzy_from_scan_cli_writes_jsonl(tmp_path):
+    _write_bundle(tmp_path, "KR0a0001", "qqABCDEFGKEY1234X678ww")
+    _write_bundle(tmp_path, "KR0a0002", "rrABCDEFGKEY1234Y678ee")
+    out = _merge(tmp_path)
+    exact_report = tmp_path / "exact.jsonl"
+    fuzzy_report = tmp_path / "fuzzy-from-scan.jsonl"
+    exact_clusters, _stats = discover_parallel_passages_scan(
+        out,
+        min_length=10,
+        anchor_length=5,
+        partitions=3,
+        work_dir=tmp_path,
+    )
+    write_parallel_report(exact_clusters, exact_report, format="jsonl")
+
+    rc = cli_run([
+        "parallel-fuzzy-from-scan",
+        str(out),
+        str(exact_report),
+        "--out", str(fuzzy_report),
+        "--max-edits", "1",
+        "--min-length", "16",
+        "--quiet",
+    ])
+
+    assert rc == 0
+    rows = [json.loads(line) for line in fuzzy_report.read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 1
     assert rows[0]["representative_edits"] == 1
     assert {loc["edit_distance"] for loc in rows[0]["locations"]} == {0, 1}

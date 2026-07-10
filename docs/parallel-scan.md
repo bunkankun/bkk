@@ -146,3 +146,23 @@ post-processor over this scan. It runs the scan with a high default
 (juan_a, juan_b), merging overlapping spans into unique covered positions per
 side so a juan that shares a 1000-char block with another juan rises to the
 top of the report.
+
+## Downstream: `bkk index parallel-fuzzy-from-scan`
+
+`bkk index parallel-fuzzy-from-scan <index.bkkx> <scan.jsonl>` reads the JSONL
+clusters produced by `parallel-scan` as a candidate map, resolves each location
+back to the `.bkkx` bucket text, and extends those exact anchors with the same
+bounded edit-distance machinery used by seeded `bkk index parallel
+--max-edits`.
+
+Example:
+
+```sh
+bkk index parallel-scan _corpus.bkkx --out exact.jsonl --jobs 8
+bkk index parallel-fuzzy-from-scan _corpus.bkkx exact.jsonl \
+  --max-edits 1 --min-length 24 --out fuzzy.jsonl
+```
+
+This is a refinement pass, not a complete fuzzy corpus discovery algorithm:
+it can only find fuzzy parallels around anchors already present in the exact
+scan JSONL.
