@@ -12,6 +12,7 @@ export function Settings() {
   const theme = useWorkspace((s) => s.uiPrefs.theme);
   const masterOnly = useWorkspace((s) => s.searchPrefs.masterOnly);
   const maxResults = useWorkspace((s) => s.searchPrefs.maxResults);
+  const searchDistance = useWorkspace((s) => s.searchPrefs.searchDistance);
   const authenticated = useWorkspace((s) => s.auth.session?.authenticated === true);
   const [newTextOpen, setNewTextOpen] = useState(false);
   const [userTexts, setUserTexts] = useState<UserTextListItem[]>([]);
@@ -112,6 +113,23 @@ export function Settings() {
           onChange={(e) => {
             const n = Number(e.target.value);
             if (Number.isFinite(n)) workspace.setMaxResults(n);
+          }}
+        />
+      </label>
+      <label className="settings-row">
+        <span className="settings-label">Search: NEAR/NOT distance</span>
+        <input
+          className="settings-select"
+          type="number"
+          min={0}
+          max={1000}
+          step={1}
+          value={searchDistance}
+          title="Maximum character gap for TERM NEAR/NOT TERM searches"
+          aria-label="NEAR and NOT search distance"
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n)) workspace.setSearchDistance(n);
           }}
         />
       </label>

@@ -423,10 +423,17 @@ export async function getManifest(textid: string): Promise<Manifest> {
 export async function getBundleSearch(
   textid: string,
   q: string,
-  opts: { signal?: AbortSignal; context?: number; limit?: number; masterOnly?: boolean } = {},
+  opts: {
+    signal?: AbortSignal;
+    context?: number;
+    searchDistance?: number;
+    limit?: number;
+    masterOnly?: boolean;
+  } = {},
 ): Promise<BundleSearchResponse> {
   const params = new URLSearchParams({ q });
   if (opts.context != null) params.set("context", String(opts.context));
+  if (opts.searchDistance != null) params.set("search_distance", String(opts.searchDistance));
   if (opts.limit != null) params.set("limit", String(opts.limit));
   if (opts.masterOnly) params.set("master_only", "true");
   return fetchJson<BundleSearchResponse>(
@@ -814,6 +821,7 @@ export async function searchCorpus(params: {
   aroundBinom?: string[];
   aroundBinomNot?: string[];
   context?: number;
+  searchDistance?: number;
   limit?: number;
   offset?: number;
   facetLimit?: number;
@@ -850,6 +858,7 @@ export async function searchCorpus(params: {
   if (params.aroundBinom) for (const v of params.aroundBinom) q.append("around_binom", v);
   if (params.aroundBinomNot) for (const v of params.aroundBinomNot) q.append("around_binom_not", v);
   if (params.context != null) q.set("context", String(params.context));
+  if (params.searchDistance != null) q.set("search_distance", String(params.searchDistance));
   if (params.limit != null) q.set("limit", String(params.limit));
   if (params.offset != null) q.set("offset", String(params.offset));
   if (params.facetLimit != null) q.set("facet_limit", String(params.facetLimit));
@@ -1155,6 +1164,7 @@ export async function searchTextids(params: {
   aroundBinom?: string[];
   aroundBinomNot?: string[];
   context?: number;
+  searchDistance?: number;
 }): Promise<SearchTextidsResponse> {
   const q = new URLSearchParams();
   q.set("q", params.q);
@@ -1184,5 +1194,6 @@ export async function searchTextids(params: {
   if (params.aroundBinom) for (const v of params.aroundBinom) q.append("around_binom", v);
   if (params.aroundBinomNot) for (const v of params.aroundBinomNot) q.append("around_binom_not", v);
   if (params.context != null) q.set("context", String(params.context));
+  if (params.searchDistance != null) q.set("search_distance", String(params.searchDistance));
   return fetchJson<SearchTextidsResponse>(`${apiBase}/search/textids?${q.toString()}`);
 }

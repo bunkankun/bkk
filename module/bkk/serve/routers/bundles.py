@@ -26,6 +26,7 @@ from ..schemas import (
 from ..state import AppState
 from .. import selection
 from .auth import SESSION_COOKIE
+from .search import _parse_compound_literal
 
 router = APIRouter(prefix="/bundles", tags=["bundles"])
 
@@ -117,6 +118,12 @@ def bundle_search(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     q: str = Query(..., min_length=1, description="substring query (NFC-normalised server-side)"),
     context: int = Query(7, ge=0, le=200, description="KWIC context window each side"),
+    search_distance: int = Query(
+        20,
+        ge=0,
+        le=1000,
+        description="max character gap for TERM NEAR/NOT TERM compound searches",
+    ),
     limit: int = Query(200, ge=1, le=2000),
     master_only: bool = Query(
         False,
@@ -146,12 +153,24 @@ def bundle_search(
         raise errors.index_unavailable(state._index_error or "index not built")
     cap = state.config.max_search_hits
     try:
-        cand, total = ix.candidates_and_total(q)
+        parsed = _parse_compound_literal(q)
+        if parsed is None:
+            search_term = q
+            cand, total = ix.candidates_and_total(search_term)
+        else:
+            assert parsed.right is not None
+            search_term = parsed.literal
+            cand, total = ix.compound_candidates_and_total(
+                parsed.literal,
+                parsed.mode,
+                parsed.right,
+                search_distance,
+            )
         # Iterate hits up to cap+1; the textid filter in ix.search guarantees
         # we only materialise master/witness rows from this bundle, so even on
         # the corpus-index fallback we bound the work to this text.
         hits = []
-        for h in ix.search(q, context=context, textid=textid, candidates=cand):
+        for h in ix.search(search_term, context=context, textid=textid, candidates=cand):
             if master_only and h.matched_via != "master":
                 continue
             hits.append(h)

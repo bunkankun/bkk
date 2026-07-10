@@ -525,7 +525,7 @@ export interface SearchOverview {
 
 export interface SearchResponse {
   query: string;
-  query_mode: "literal" | "regex";
+  query_mode: "literal" | "regex" | "near" | "not";
   total: number;
   offset: number;
   limit: number;

@@ -137,6 +137,26 @@ def test_bundle_search_hits_in_text_order(client):
     assert hit["master_offset"] == 2
 
 
+def test_bundle_search_supports_compound_keywords(client):
+    r = client.get(
+        "/bundles/TEST0001/search",
+        params={"q": "甲 NEAR 丁", "search_distance": 2},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query"] == "甲 NEAR 丁"
+    assert body["capped"] is False
+    assert body["total"] == 1
+    assert body["hits"][0]["match"] == "甲"
+
+    too_far = client.get(
+        "/bundles/TEST0001/search",
+        params={"q": "甲 NEAR 丁", "search_distance": 1},
+    )
+    assert too_far.status_code == 200
+    assert too_far.json()["total"] == 0
+
+
 def test_bundle_search_scopes_to_one_textid(client):
     # 'A' appears in TEST0002 only; querying TEST0001 must return zero.
     r = client.get("/bundles/TEST0001/search?q=A")

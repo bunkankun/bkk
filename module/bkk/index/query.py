@@ -8,6 +8,7 @@ import sqlite3
 import unicodedata
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Literal
 
 from collections import Counter
 
@@ -24,6 +25,9 @@ _SQLITE_VAR_LIMIT = 500  # SQLite default ?-binding cap is 999; keep margin.
 
 class RegexZeroLengthError(ValueError):
     """Raised when a regex match has no span and cannot produce a KWIC hit."""
+
+
+CompoundOperator = Literal["near", "not"]
 
 
 class Index:
@@ -121,6 +125,55 @@ class Index:
                 witnesses, textid, voices,
             )
 
+    def compound_candidates_and_total(
+        self,
+        left: str,
+        operator: CompoundOperator,
+        right: str,
+        distance: int,
+    ) -> tuple[dict[tuple[str, int], set[int]], int]:
+        """Return left-term candidates filtered by proximity to the right term.
+
+        ``distance`` is the unordered character gap between two spans in the
+        same indexed source row. Adjacent or overlapping spans have gap 0.
+        ``operator`` is ``"near"`` or ``"not"``.
+        """
+        left = self._prepare_query(left)
+        right = self._prepare_query(right)
+        if not left or not right:
+            return {}, 0
+        left_candidates = self._candidate_positions(left)
+        right_candidates = self._candidate_positions(right)
+        filtered = self._filter_compound_candidates(
+            left, left_candidates, right, right_candidates, operator, distance,
+        )
+        return filtered, sum(len(v) for v in filtered.values())
+
+    def summarise_candidates(
+        self,
+        query: str,
+        *,
+        candidates: dict[tuple[str, int], set[int]],
+        textids: set[str] | None = None,
+        witnesses: set[str] | None = None,
+        master_only: bool = False,
+        max_extensions: int = 20,
+        include_extensions: bool = True,
+    ) -> IndexSummary:
+        """Summarise an already-prepared candidate map for ``query``."""
+        query = self._prepare_query(query)
+        if not query:
+            return IndexSummary(total=0)
+        return self._summarise_prepared(
+            query,
+            candidates,
+            textids=textids,
+            witnesses=witnesses,
+            master_only=master_only,
+            max_extensions=max_extensions,
+            include_extensions=include_extensions,
+        )
+
     def search_regex(
         self,
         pattern: str,
@@ -206,7 +259,27 @@ class Index:
             return IndexSummary(total=0)
         if candidates is None:
             candidates = self._candidate_positions(query)
+        return self._summarise_prepared(
+            query,
+            candidates,
+            textids=textids,
+            witnesses=witnesses,
+            master_only=master_only,
+            max_extensions=max_extensions,
+            include_extensions=True,
+        )
 
+    def _summarise_prepared(
+        self,
+        query: str,
+        candidates: dict[tuple[str, int], set[int]],
+        *,
+        textids: set[str] | None,
+        witnesses: set[str] | None,
+        master_only: bool,
+        max_extensions: int,
+        include_extensions: bool,
+    ) -> IndexSummary:
         bucket_counts: dict[int, int] = {}
         witness_counts: dict[int, int] = {}
         for (kind, src_id), positions in candidates.items():
@@ -254,6 +327,13 @@ class Index:
                     c = witness_counts[row["witness_id"]]
                     by_textid[tid] += c
                     by_witness_label[label] += c
+
+        if not include_extensions:
+            return IndexSummary(
+                total=sum(by_witness_label.values()),
+                by_textid=dict(by_textid),
+                by_witness_label=dict(by_witness_label),
+            )
 
         # Trigram extensions: rather than scanning the trigram table with
         # ``gram LIKE '_xy'`` (unindexable, full-scan over billions of
@@ -400,6 +480,55 @@ class Index:
             "SELECT source_kind, source_id, position FROM trigram WHERE gram = ?",
             (gram,),
         ).fetchall()
+
+    def _filter_compound_candidates(
+        self,
+        left: str,
+        left_candidates: dict[tuple[str, int], set[int]],
+        right: str,
+        right_candidates: dict[tuple[str, int], set[int]],
+        operator: CompoundOperator,
+        distance: int,
+    ) -> dict[tuple[str, int], set[int]]:
+        out: dict[tuple[str, int], set[int]] = {}
+        left_len = len(left)
+        right_len = len(right)
+        for key, left_positions in left_candidates.items():
+            right_positions = right_candidates.get(key, set())
+            if not left_positions:
+                continue
+            text = self._source_text(*key)
+            verified_left = [
+                pos for pos in sorted(left_positions)
+                if text[pos:pos + left_len] == left
+            ]
+            if not verified_left:
+                continue
+            verified_right = [
+                pos for pos in sorted(right_positions)
+                if text[pos:pos + right_len] == right
+            ]
+            keep: set[int] = set()
+            for pos in verified_left:
+                near = _has_nearby_span(pos, left_len, verified_right, right_len, distance)
+                if (operator == "near" and near) or (operator == "not" and not near):
+                    keep.add(pos)
+            if keep:
+                out[key] = keep
+        return out
+
+    def _source_text(self, kind: str, src_id: int) -> str:
+        if kind == "bucket":
+            row = self._conn.execute(
+                "SELECT text FROM bucket WHERE bucket_id = ?",
+                (src_id,),
+            ).fetchone()
+        else:
+            row = self._conn.execute(
+                "SELECT text FROM witness WHERE witness_id = ?",
+                (src_id,),
+            ).fetchone()
+        return row["text"] if row is not None else ""
 
     # -- regex source scans ---------------------------------------------------
 
@@ -772,3 +901,24 @@ def _find_all(text: str, needle: str) -> list[int]:
             return out
         out.append(i)
         start = i + 1
+
+
+def _has_nearby_span(
+    left_start: int,
+    left_len: int,
+    right_starts: list[int],
+    right_len: int,
+    distance: int,
+) -> bool:
+    left_end = left_start + left_len
+    for right_start in right_starts:
+        right_end = right_start + right_len
+        if right_end < left_start:
+            gap = left_start - right_end
+        elif left_end < right_start:
+            gap = right_start - left_end
+        else:
+            gap = 0
+        if gap <= distance:
+            return True
+    return False

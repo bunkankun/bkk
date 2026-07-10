@@ -40,6 +40,7 @@ function buildItems(manifest: Manifest): JuanItem[] {
 export function Toc() {
   const activeTextid = useWorkspace((s) => s.activeTextid);
   const activeSeq = useWorkspace((s) => s.activeSeq);
+  const searchDistance = useWorkspace((s) => s.searchPrefs.searchDistance);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -86,7 +87,10 @@ export function Toc() {
     const controller = new AbortController();
     setSearchLoad({ status: "loading" });
     setTab("results");
-    getBundleSearch(activeTextid, debouncedQuery, { signal: controller.signal })
+    getBundleSearch(activeTextid, debouncedQuery, {
+      signal: controller.signal,
+      searchDistance,
+    })
       .then((response) => {
         if (!controller.signal.aborted) {
           setSearchLoad({ status: "ok", response });
@@ -97,7 +101,7 @@ export function Toc() {
         setSearchLoad({ status: "error", error: String(e) });
       });
     return () => controller.abort();
-  }, [activeTextid, debouncedQuery]);
+  }, [activeTextid, debouncedQuery, searchDistance]);
 
   if (!activeTextid) {
     return (

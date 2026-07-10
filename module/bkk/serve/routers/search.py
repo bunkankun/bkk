@@ -43,7 +43,7 @@ def _request_owner(request: Request) -> str | None:
 
 
 Sort = Literal["match", "textid", "reverse_prematch", "date", "closeness"]
-QueryMode = Literal["literal", "regex"]
+QueryMode = Literal["literal", "regex", "near", "not"]
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,7 @@ class _ParsedQuery:
     pattern: str | None = None
     flags: int = 0
     anchor: str | None = None
+    right: str | None = None
 
 
 _SECTION_RE = re.compile(r"^(KR\d+[a-z]+)")
@@ -87,6 +88,9 @@ def _is_escaped(s: str, pos: int) -> bool:
 def _parse_search_query(q: str) -> _ParsedQuery:
     q = _nfc(q)
     if not q.startswith("/"):
+        compound = _parse_compound_literal(q)
+        if compound is not None:
+            return compound
         return _ParsedQuery(mode="literal", literal=q)
 
     last_slash = -1
@@ -120,6 +124,29 @@ def _parse_search_query(q: str) -> _ParsedQuery:
         pattern=pattern,
         flags=flags,
         anchor=None if flags & re.IGNORECASE else _regex_anchor(pattern),
+    )
+
+
+def _parse_compound_literal(q: str) -> _ParsedQuery | None:
+    tokens = q.split()
+    operators = [i for i, token in enumerate(tokens) if token in {"NEAR", "NOT"}]
+    if not operators:
+        return None
+    if len(operators) != 1 or len(tokens) != 3 or operators[0] != 1:
+        raise errors.bad_request(
+            "invalid_compound_query",
+            message="compound search must be exactly TERM NEAR TERM or TERM NOT TERM",
+        )
+    left, op, right = tokens
+    if not left or not right:
+        raise errors.bad_request(
+            "invalid_compound_query",
+            message="compound search terms cannot be empty",
+        )
+    return _ParsedQuery(
+        mode="near" if op == "NEAR" else "not",
+        literal=left,
+        right=right,
     )
 
 
@@ -692,7 +719,7 @@ def _overview_response(
         ),
     )
     overview = SearchOverview(
-        approximate=len(q) > 2,
+        approximate=query_mode == "literal" and len(q) > 2,
         threshold=cap,
         trigram_left=[TrigramExtension(gram=g, count=c) for g, c in summary.trigram_left],
         trigram_right=[TrigramExtension(gram=g, count=c) for g, c in summary.trigram_right],
@@ -742,6 +769,7 @@ def _search_hits(
     around_binom_not: list[str] | None = None,
     sort: Sort = "match",
     context: int = 20,
+    search_distance: int = 20,
     master_only: bool = False,
     max_results: int | None = None,
 ) -> tuple[list[Hit], dict[str, _CatalogMeta], set[str] | None, set[str], set[str] | None, set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], set[str], CorpusSnapshot | None, IndexSummary | None]:
@@ -812,7 +840,7 @@ def _search_hits(
             )
     try:
         all_hits: list[Hit] = []
-        if parsed.mode == "literal":
+        if parsed.mode in {"literal", "near", "not"}:
             prepared: list[tuple[Any, dict, IndexSummary]] = []
             combined_textids: Counter[str] = Counter()
             combined_witnesses: Counter[str] = Counter()
@@ -820,14 +848,31 @@ def _search_hits(
             right_extensions: Counter[str] = Counter()
             total = 0
             for index in indexes:
-                candidates, _raw_total = index.candidates_and_total(q)
-                part_summary = index.summarise(
-                    q,
-                    candidates=candidates,
-                    textids=scoped_textids or None,
-                    witnesses=witnesses,
-                    master_only=master_only,
-                )
+                if parsed.mode == "literal":
+                    candidates, _raw_total = index.candidates_and_total(parsed.literal)
+                    part_summary = index.summarise(
+                        parsed.literal,
+                        candidates=candidates,
+                        textids=scoped_textids or None,
+                        witnesses=witnesses,
+                        master_only=master_only,
+                    )
+                else:
+                    assert parsed.right is not None
+                    candidates, _raw_total = index.compound_candidates_and_total(
+                        parsed.literal,
+                        parsed.mode,
+                        parsed.right,
+                        search_distance,
+                    )
+                    part_summary = index.summarise_candidates(
+                        parsed.literal,
+                        candidates=candidates,
+                        textids=scoped_textids or None,
+                        witnesses=witnesses,
+                        master_only=master_only,
+                        include_extensions=False,
+                    )
                 prepared.append((index, candidates, part_summary))
                 total += part_summary.total
                 combined_textids.update(part_summary.by_textid)
@@ -872,7 +917,7 @@ def _search_hits(
                 if scoped_textids:
                     for tid in sorted(scoped_textids):
                         all_hits.extend(index.search(
-                            q,
+                            parsed.literal,
                             context=context,
                             witnesses=witnesses,
                             textid=tid,
@@ -881,7 +926,7 @@ def _search_hits(
                         ))
                 else:
                     all_hits.extend(index.search(
-                        q,
+                        parsed.literal,
                         context=context,
                         witnesses=witnesses,
                         textid=textid,
@@ -960,7 +1005,7 @@ def _search_hits(
         around_binom=selected_around_binom,
         around_binom_exclude=excluded_around_binom,
     )
-    sorted_hits = _sort_hits(filtered_hits, sort, q, meta)
+    sorted_hits = _sort_hits(filtered_hits, sort, parsed.literal, meta)
     return (
         sorted_hits,
         meta,
@@ -1064,6 +1109,12 @@ def search(
         ),
     ),
     context: int = Query(20, ge=0, le=200, description="KWIC context window each side"),
+    search_distance: int = Query(
+        20,
+        ge=0,
+        le=1000,
+        description="max character gap for TERM NEAR/NOT TERM compound searches",
+    ),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     facet_limit: int = Query(12, ge=1, le=200),
@@ -1130,6 +1181,7 @@ def search(
         around_binom_not=around_binom_not,
         sort=sort,
         context=context,
+        search_distance=search_distance,
         master_only=master_only,
         max_results=max_results,
     )
@@ -1237,6 +1289,7 @@ def search_textids(
     around_binom_not: list[str] | None = Query(None),
     sort: Sort = Query("textid"),
     context: int = Query(20, ge=0, le=200),
+    search_distance: int = Query(20, ge=0, le=1000),
 ) -> SearchTextidsResponse:
     sorted_hits, meta, *_ = _search_hits(
         request,
@@ -1265,6 +1318,7 @@ def search_textids(
         around_binom_not=around_binom_not,
         sort=sort,
         context=context,
+        search_distance=search_distance,
     )
     ids, counts = _textids_by_hit_count(sorted_hits)
     return SearchTextidsResponse(

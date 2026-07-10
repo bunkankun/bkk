@@ -390,19 +390,28 @@ function saveReadPrefs(prefs: ReadPrefs): void {
   }
 }
 
-type SearchPrefs = { masterOnly: boolean; maxResults: number };
+type SearchPrefs = { masterOnly: boolean; maxResults: number; searchDistance: number };
 
 const DEFAULT_SEARCH_PREFS: SearchPrefs = {
   masterOnly: true,
   maxResults: 20000,
+  searchDistance: 20,
 };
 const SEARCH_MAX_RESULTS_MIN = 100;
 const SEARCH_MAX_RESULTS_MAX = 200000;
+const SEARCH_DISTANCE_MIN = 0;
+const SEARCH_DISTANCE_MAX = 1000;
 
 function coerceMaxResults(value: unknown): number {
   const n = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : NaN;
   if (Number.isNaN(n)) return DEFAULT_SEARCH_PREFS.maxResults;
   return Math.max(SEARCH_MAX_RESULTS_MIN, Math.min(SEARCH_MAX_RESULTS_MAX, n));
+}
+
+function coerceSearchDistance(value: unknown): number {
+  const n = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : NaN;
+  if (Number.isNaN(n)) return DEFAULT_SEARCH_PREFS.searchDistance;
+  return Math.max(SEARCH_DISTANCE_MIN, Math.min(SEARCH_DISTANCE_MAX, n));
 }
 
 function loadSearchPrefs(): SearchPrefs {
@@ -414,6 +423,7 @@ function loadSearchPrefs(): SearchPrefs {
     return {
       masterOnly: parsed?.masterOnly !== false,
       maxResults: coerceMaxResults(parsed?.maxResults),
+      searchDistance: coerceSearchDistance(parsed?.searchDistance),
     };
   } catch {
     return { ...DEFAULT_SEARCH_PREFS };
@@ -994,6 +1004,7 @@ async function runSearchInternal(offset: number): Promise<void> {
       facetLimit: state.search.facetLimit,
       masterOnly: state.searchPrefs.masterOnly,
       maxResults: state.searchPrefs.maxResults,
+      searchDistance: state.searchPrefs.searchDistance,
       signal: controller.signal,
     });
     if (runId !== searchRunId) return;
@@ -1236,6 +1247,7 @@ function searchParamsForLists() {
     rightBigramNot: filters.rightBigramExclude,
     aroundBinom: filters.aroundBinom,
     aroundBinomNot: filters.aroundBinomExclude,
+    searchDistance: state.searchPrefs.searchDistance,
   };
 }
 
@@ -1564,7 +1576,11 @@ async function loadWorkspacePersistence(): Promise<void> {
         : state.readPrefs;
       const sessionSearchPrefs =
         typeof sessionDoc.searchPrefs === "object" && sessionDoc.searchPrefs != null
-          ? (sessionDoc.searchPrefs as { masterOnly?: unknown; maxResults?: unknown })
+          ? (sessionDoc.searchPrefs as {
+              masterOnly?: unknown;
+              maxResults?: unknown;
+              searchDistance?: unknown;
+            })
           : null;
       const searchPrefs = sessionSearchPrefs
         ? {
@@ -1576,6 +1592,10 @@ async function loadWorkspacePersistence(): Promise<void> {
               typeof sessionSearchPrefs.maxResults === "number"
                 ? coerceMaxResults(sessionSearchPrefs.maxResults)
                 : state.searchPrefs.maxResults,
+            searchDistance:
+              typeof sessionSearchPrefs.searchDistance === "number"
+                ? coerceSearchDistance(sessionSearchPrefs.searchDistance)
+                : state.searchPrefs.searchDistance,
           }
         : state.searchPrefs;
       const sessionUiPrefs =
@@ -3072,6 +3092,16 @@ export const workspace = {
     const next = coerceMaxResults(value);
     if (state.searchPrefs.maxResults === next) return;
     const searchPrefs = { ...state.searchPrefs, maxResults: next };
+    state = { ...state, searchPrefs };
+    saveSearchPrefs(searchPrefs);
+    notify();
+    scheduleSessionSave();
+    if (state.search.query.trim()) void runSearchInternal(0);
+  },
+  setSearchDistance(value: number) {
+    const next = coerceSearchDistance(value);
+    if (state.searchPrefs.searchDistance === next) return;
+    const searchPrefs = { ...state.searchPrefs, searchDistance: next };
     state = { ...state, searchPrefs };
     saveSearchPrefs(searchPrefs);
     notify();

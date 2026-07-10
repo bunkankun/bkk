@@ -93,6 +93,76 @@ def test_search_no_match(client):
     assert body["hits"] == []
 
 
+def test_search_near_uses_unordered_gap_distance(client):
+    r = client.get("/search", params={"q": "甲 NEAR 丁", "search_distance": 2})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query_mode"] == "near"
+    assert body["total"] == 1
+    assert body["hits"][0]["match"] == "甲"
+
+    too_far = client.get("/search", params={"q": "甲 NEAR 丁", "search_distance": 1})
+    assert too_far.status_code == 200
+    assert too_far.json()["total"] == 0
+
+    reversed_terms = client.get("/search", params={"q": "丁 NEAR 甲", "search_distance": 2})
+    assert reversed_terms.status_code == 200
+    assert reversed_terms.json()["total"] == 1
+    assert reversed_terms.json()["hits"][0]["match"] == "丁"
+
+
+def test_search_not_excludes_only_nearby_right_term(tmp_path: Path):
+    write_bundle(tmp_path, "NEAR0001", "甲乙丁甲戊己")
+    config = ServeConfig(corpus_root=tmp_path, index_path=tmp_path / "_corpus.bkkx")
+    client = TestClient(create_app(config))
+
+    r = client.get("/search", params={"q": "甲 NOT 丁", "search_distance": 0})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query_mode"] == "not"
+    assert body["total"] == 1
+    assert body["hits"][0]["master_offset"] == 0
+
+
+def test_search_compound_textids_endpoint(client):
+    r = client.get("/search/textids", params={"q": "甲 NEAR 丁", "search_distance": 2})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query"] == "甲 NEAR 丁"
+    assert body["hit_count"] == 1
+    assert body["textids"] == ["TEST0001"]
+
+
+def test_search_compound_witness_proximity(tmp_path: Path):
+    write_bundle(
+        tmp_path,
+        "TESTVAR",
+        "abcXdef",
+        editions=[{"short": "SBCK", "label": "SBCK"}],
+        variants=[{"offset": 3, "length": 1, "content": "X", "SBCK": "Y"}],
+    )
+    config = ServeConfig(corpus_root=tmp_path, index_path=tmp_path / "_corpus.bkkx")
+    client = TestClient(create_app(config))
+
+    r = client.get("/search", params={"q": "Y NEAR d", "search_distance": 0})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query_mode"] == "near"
+    assert body["total"] == 1
+    assert body["hits"][0]["matched_via"] == "SBCK"
+    assert body["hits"][0]["matched_text"] == "Y"
+
+
+def test_search_compound_rejects_malformed(client):
+    r = client.get("/search", params={"q": "甲 NEAR 丁 NOT 戊"})
+    assert r.status_code == 400
+    assert r.json()["error"] == "invalid_compound_query"
+
+    lower = client.get("/search", params={"q": "甲 near 丁"})
+    assert lower.status_code == 200
+    assert lower.json()["query_mode"] == "literal"
+
+
 def test_search_textid_scope(client):
     # Substring exists in TEST0002 but we restrict to TEST0001.
     r = client.get("/search", params={"q": "DEF", "textid": "TEST0001"})
