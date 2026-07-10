@@ -4,14 +4,14 @@ Exposes two operations:
 
 ``add (--bundle <dir> | --text-id <id>)`` walks every juan file in the bundle
 (master plus each documentary edition), derives ``voice`` range markers
-from the markers already on disk, writes them back into each juan's
-marker collection, and refreshes the juan and manifest hashes.
+from the markers already on disk, writes the derived markers into each
+juan's marker asset, and refreshes marker-asset and manifest hashes.
 
     python -m bkk voice add --bundle <out-root>/<text-id>/
     python -m bkk voice add --text-id <text-id>     # resolved via .bkkrc
 
-Bare-id form resolves the bundle root against (in order)
-``voice.out``, ``import.out``, ``global.corpus`` from ``.bkkrc``.
+Bare-id form resolves the bundle root against ``global.corpus`` from
+``.bkkrc`` unless ``--out`` is passed.
 
 ``--source`` selects the derivation:
 
@@ -53,7 +53,17 @@ import yaml
 from bkk.cli_common import resolve_bundle_dir, resolve_rc_path, warn_deprecated
 from bkk.importer.hashing import manifest_hash, sha256_jcs, ZERO_HASH
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
-from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
+from bkk.marker_assets import (
+    VALID_BUCKETS,
+    build_marker_asset,
+    effective_markers_for_bucket,
+    external_markers_for_bucket,
+    hydrate_juan_markers,
+    inline_markers_for_bucket,
+    load_marker_asset,
+    marker_asset_entry_for_seq,
+    marker_asset_filename,
+)
 from bkk.short_refs import text_id_arg, text_or_path_arg
 
 from .derive import derive_voice_markers
@@ -78,12 +88,12 @@ def _add_bundle_selector(sp: argparse.ArgumentParser) -> None:
                     help="bundle directory")
     sp.add_argument(
         "--text-id", dest="text_id", type=text_id_arg, default=None,
-        help="text id to resolve against voice.out / import.out / global.corpus",
+        help="text id to resolve against global.corpus",
     )
     sp.add_argument(
         "--out", dest="out_root", type=Path, default=None,
         help="bundle output root used to resolve --text-id "
-             "(overrides voice.out / import.out / global.corpus)",
+             "(overrides global.corpus)",
     )
 
 
@@ -134,7 +144,7 @@ def run(argv: list[str] | None = None) -> int:
         rc = load_rc()
         out_root = resolve_rc_path(
             None, rc,
-            (("voice", "out"), ("import", "out"), ("global", "corpus")),
+            (("global", "corpus"),),
         )
 
     try:
@@ -259,9 +269,6 @@ def _run_add(
     if failed:
         print(f"skipped {len(failed)} scope(s) due to errors: {', '.join(failed)}", file=sys.stderr)
         return 1
-    if not dry_run and overall_by_name:
-        from bkk.repair.markers import externalize_markers
-        externalize_markers(bundle_dir, dry_run=False)
     return 0
 
 
@@ -301,15 +308,16 @@ def _process_one(
     total_by_name: dict[str, int] = {}
     # First pass: derive everything in memory. If any juan/bucket fails, we
     # abort the scope without having written a single file.
-    pending: list[tuple[Path, dict, str]] = []  # (path, juan_data, new_hash)
+    pending_juans: list[tuple[Path, dict, str]] = []
+    pending_assets: list[tuple[Path, dict, str, str]] = []
 
     for seq, juan_path in juan_entries:
         data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
-        data = hydrate_juan_markers(data, load_marker_asset(juan_dir, manifest, seq))
+        marker_asset = load_marker_asset(juan_dir, manifest, seq)
 
-        existing = _existing_voice_count(data)
+        existing = _existing_voice_count(data, marker_asset)
         if existing and not force:
             raise RuntimeError(
                 f"{juan_path.name}: {existing} voice marker(s) already present "
@@ -317,15 +325,43 @@ def _process_one(
             )
 
         juan_by_name: dict[str, int] = {}
+        juan_changed = False
+        asset_changed = False
+        asset_markers_by_bucket = {
+            bucket_name: [
+                dict(m)
+                for m in external_markers_for_bucket(marker_asset, bucket_name)
+            ]
+            for bucket_name in VALID_BUCKETS
+        }
         for bucket_name in _BUCKETS:
             bucket = data.get(bucket_name)
             if not isinstance(bucket, dict):
                 continue
             text = bucket.get("text") or ""
-            markers = bucket.get("markers")
-            if not isinstance(markers, list):
-                continue
+            markers = effective_markers_for_bucket(data, bucket_name, marker_asset)
             if force and existing:
+                inline_markers = inline_markers_for_bucket(data, bucket_name)
+                new_inline = [
+                    m for m in inline_markers
+                    if not (isinstance(m, dict) and m.get("type") == "voice")
+                ]
+                if len(new_inline) != len(inline_markers):
+                    if new_inline:
+                        bucket["markers"] = [marker_to_flow(m) for m in new_inline]
+                    else:
+                        bucket.pop("markers", None)
+                    juan_changed = True
+
+                external_markers = asset_markers_by_bucket.get(bucket_name, [])
+                new_external = [
+                    m for m in external_markers
+                    if not (isinstance(m, dict) and m.get("type") == "voice")
+                ]
+                if len(new_external) != len(external_markers):
+                    asset_markers_by_bucket[bucket_name] = new_external
+                    asset_changed = True
+
                 markers = [
                     m for m in markers
                     if not (isinstance(m, dict) and m.get("type") == "voice")
@@ -339,43 +375,72 @@ def _process_one(
                     new_voices, juan_path.name, bucket_name,
                 )
             if not new_voices:
-                if force and existing:
-                    bucket["markers"] = [marker_to_flow(m) for m in markers]
                 continue
             for v in new_voices:
                 name = v["name"]
                 juan_by_name[name] = juan_by_name.get(name, 0) + 1
-            # Append voice markers then re-sort by (offset, original index)
-            # — same rule the writer uses in importer.write.bundle.
-            combined = list(markers) + new_voices
-            indexed = list(enumerate(combined))
-            indexed.sort(key=lambda p: (p[1]["offset"], p[0]))
-            bucket["markers"] = [marker_to_flow(m) for _, m in indexed]
+            existing_external = asset_markers_by_bucket.setdefault(bucket_name, [])
+            asset_markers_by_bucket[bucket_name] = _sorted_marker_flows(
+                list(existing_external) + new_voices,
+            )
+            asset_changed = True
 
-        if not juan_by_name:
+        forced_cleanup = force and existing and (juan_changed or asset_changed)
+        if not juan_by_name and not forced_cleanup:
             lines.append(f"  juan {seq:03d}: no voice signal; left as-is")
             continue
 
         for name, count in juan_by_name.items():
             total_by_name[name] = total_by_name.get(name, 0) + count
-        lines.append(
-            f"  juan {seq:03d}: {_format_voice_counts(juan_by_name)}"
-        )
+        if juan_by_name:
+            lines.append(
+                f"  juan {seq:03d}: {_format_voice_counts(juan_by_name)}"
+            )
+        else:
+            lines.append(f"  juan {seq:03d}: removed existing voice marker(s)")
 
-        new_hash = _juan_self_hash(data)
-        data["hash"] = new_hash
-        pending.append((juan_path, data, new_hash))
+        if juan_changed:
+            new_hash = _juan_self_hash(data)
+            data["hash"] = new_hash
+            pending_juans.append((juan_path, data, new_hash))
+        if asset_changed:
+            new_asset = build_marker_asset(
+                text_id, seq, short, asset_markers_by_bucket,
+            )
+            marker_entry = marker_asset_entry_for_seq(manifest, seq)
+            marker_filename = (
+                marker_entry.get("filename")
+                if isinstance(marker_entry, dict)
+                and isinstance(marker_entry.get("filename"), str)
+                else marker_asset_filename(text_id, seq, short)
+            )
+            pending_assets.append((
+                juan_dir / marker_filename,
+                new_asset,
+                marker_filename,
+                new_asset["hash"],
+            ))
 
     # Second pass: writes only run once every juan in the scope has been
     # successfully derived and re-hashed.
-    if not dry_run and pending:
-        for juan_path, data, _ in pending:
+    if not dry_run and (pending_juans or pending_assets):
+        for juan_path, data, _ in pending_juans:
             juan_path.write_text(dump(data), encoding="utf-8")
+        for marker_path, asset, _, _ in pending_assets:
+            marker_path.parent.mkdir(parents=True, exist_ok=True)
+            marker_path.write_text(dump(asset), encoding="utf-8")
         new_hashes = {
             int(_JUAN_RE.match(p.name).group("seq")): h
-            for p, _, h in pending
+            for p, _, h in pending_juans
         }
-        _update_manifest(manifest_path, new_hashes)
+        marker_hashes = {
+            int(asset["seq"]): (filename, hash_value)
+            for _, asset, filename, hash_value in pending_assets
+            if isinstance(asset.get("seq"), int)
+        }
+        _update_manifest_for_voice_add(
+            manifest_path, new_hashes, marker_hashes,
+        )
 
     return {
         "juans": len(juan_entries),
@@ -552,6 +617,13 @@ def _format_voice_counts(by_name: dict[str, int]) -> str:
     return f"{inner} span(s)"
 
 
+def _sorted_marker_flows(markers: list[dict]) -> list[dict]:
+    """Sort markers by offset while preserving original order for ties."""
+    indexed = list(enumerate(markers))
+    indexed.sort(key=lambda p: (p[1].get("offset", 0), p[0]))
+    return [marker_to_flow(m) for _, m in indexed]
+
+
 def _derive_for_bucket(
     source: str, text_len: int, markers: list,
 ) -> list[dict]:
@@ -603,13 +675,12 @@ def _warn_voice_overlaps(
             )
 
 
-def _existing_voice_count(juan_data: dict) -> int:
+def _existing_voice_count(
+    juan_data: dict, marker_asset: dict | None = None,
+) -> int:
     n = 0
     for bucket_name in _BUCKETS:
-        bucket = juan_data.get(bucket_name)
-        if not isinstance(bucket, dict):
-            continue
-        for m in bucket.get("markers") or []:
+        for m in effective_markers_for_bucket(juan_data, bucket_name, marker_asset):
             if isinstance(m, dict) and m.get("type") == "voice":
                 n += 1
     return n
@@ -645,10 +716,67 @@ def _update_manifest(manifest_path: Path, new_hashes: dict[int, str]) -> None:
             entry["hash"] = new_hashes[seq]
         new_parts.append(marker_to_flow(entry))
     data["assets"]["parts"] = new_parts
-    # Voice operations hydrate external markers into the physical juan before
-    # editing. Clear stale marker-asset declarations; the follow-up
-    # externalize pass rebuilds them from the edited effective marker lists.
+    # Remove hydrates external markers into the physical juan before editing.
+    # Clear stale marker-asset declarations; its follow-up externalize pass
+    # rebuilds them from the edited effective marker lists.
     data["assets"].pop("markers", None)
+    data["hash"] = manifest_hash(data)
+    manifest_path.write_text(dump(data), encoding="utf-8")
+
+
+def _update_manifest_for_voice_add(
+    manifest_path: Path,
+    new_part_hashes: dict[int, str],
+    marker_hashes: dict[int, tuple[str, str]],
+) -> None:
+    """Patch changed juan and marker-asset hashes after direct voice writes."""
+    data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{manifest_path.name}: not a mapping")
+    assets = data.get("assets")
+    if not isinstance(assets, dict):
+        raise RuntimeError(f"{manifest_path.name}: missing assets block")
+    parts = assets.get("parts")
+    if not isinstance(parts, list):
+        raise RuntimeError(f"{manifest_path.name}: assets.parts missing or not a list")
+
+    new_parts: list = []
+    for entry in parts:
+        if not isinstance(entry, dict):
+            new_parts.append(entry)
+            continue
+        seq = entry.get("seq")
+        if isinstance(seq, int) and seq in new_part_hashes:
+            entry = dict(entry)
+            entry["hash"] = new_part_hashes[seq]
+        new_parts.append(marker_to_flow(entry))
+    assets["parts"] = new_parts
+
+    existing_markers = assets.get("markers") or []
+    markers_by_seq: dict[int, dict] = {}
+    passthrough: list = []
+    for entry in existing_markers:
+        if not isinstance(entry, dict):
+            passthrough.append(entry)
+            continue
+        seq = entry.get("seq")
+        if isinstance(seq, int):
+            markers_by_seq[seq] = dict(entry)
+        else:
+            passthrough.append(entry)
+    for seq, (filename, hash_value) in marker_hashes.items():
+        entry = markers_by_seq.get(seq, {"seq": seq, "role": "markers"})
+        entry["filename"] = filename
+        entry["hash"] = hash_value
+        markers_by_seq[seq] = entry
+    if markers_by_seq or passthrough:
+        assets["markers"] = passthrough + [
+            marker_to_flow(markers_by_seq[seq])
+            for seq in sorted(markers_by_seq)
+        ]
+    else:
+        assets.pop("markers", None)
+
     data["hash"] = manifest_hash(data)
     manifest_path.write_text(dump(data), encoding="utf-8")
 

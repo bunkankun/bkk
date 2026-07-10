@@ -160,6 +160,35 @@ def test_canonical_and_legacy_selector_conflicts_are_rejected(capsys):
     assert "provide only one" in capsys.readouterr().err
 
 
+def test_voice_text_id_defaults_to_global_corpus_only(tmp_path, monkeypatch):
+    from bkk import config
+    from bkk.voice import cli as voice_cli
+
+    global_corpus = tmp_path / "global-corpus"
+    legacy_voice_out = tmp_path / "voice-out"
+    captured = {}
+
+    monkeypatch.setattr(
+        config,
+        "load_rc",
+        lambda: {
+            "global": {"corpus": global_corpus},
+            "voice": {"out": legacy_voice_out},
+            "import": {"out": tmp_path / "import-out"},
+        },
+    )
+
+    def fake_run_remove(bundle, out_root, *, text_id, dry_run):
+        captured["out_root"] = out_root
+        captured["text_id"] = text_id
+        return 0
+
+    monkeypatch.setattr(voice_cli, "_run_remove", fake_run_remove)
+
+    assert voice_cli.run(["remove", "--text-id", "1h4"]) == 0
+    assert captured == {"out_root": global_corpus, "text_id": "KR1h0004"}
+
+
 def test_visible_deprecated_prefix_flags_are_labeled_in_help():
     from bkk.exporter.cli import build_parser as exporter_parser
     from bkk.importer.cli import build_parser as importer_parser
