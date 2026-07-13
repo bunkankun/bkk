@@ -6,6 +6,7 @@ import yaml
 from fastapi.testclient import TestClient
 
 from bkk.index import merge_bundles
+from bkk.repair.parallels import append_stale_record
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
 
@@ -54,6 +55,28 @@ def test_unconfigured_parallels_returns_empty(corpus: Path):
     response = client.get("/api/bundles/TEST0001/juan/1/parallels")
     assert response.status_code == 200
     assert response.json()["total"] == 0
+
+
+def test_parallel_status_reports_pending_stale_record(corpus: Path, tmp_path: Path):
+    root = tmp_path / "parallels"
+    append_stale_record(
+        root,
+        textid="TEST0001",
+        seq=1,
+        bucket="body",
+        base_commit_sha="base",
+        result_commit_sha="commit",
+        text_splices=[{"start": 1, "delete_count": 0, "insert": "新"}],
+        login="alice",
+        kind="commit",
+    )
+    client = _client(corpus, root)
+
+    status = client.get(
+        "/api/bundles/TEST0001/juan/1/parallels/status",
+    ).json()
+
+    assert status["stale"] is True
 
 
 def test_parallels_are_loaded_from_bundle_when_corpus_root_has_none(tmp_path: Path):

@@ -117,6 +117,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true",
         help="report planned changes without writing manifests",
     )
+
+    ppi = sub.add_parser(
+        "parallel-index",
+        help="build a SQLite index over stored parallel-passage assets",
+    )
+    ppi.add_argument(
+        "--parallels-root", type=Path, default=None,
+        help="root containing <textid>/<textid>_NNN.<name>.parallels.yaml files",
+    )
+    ppi.add_argument(
+        "--corpus", type=Path, default=None,
+        help="corpus root whose bundle-local parallels/ directories should also be indexed",
+    )
+
+    ppr = sub.add_parser(
+        "parallels",
+        help="repair pending stale parallel-passage assets",
+    )
+    ppr.add_argument(
+        "--parallels-root", type=Path, default=None,
+        help="root containing the parallel stale ledger and optional shared assets",
+    )
+    ppr.add_argument(
+        "--corpus", type=Path, default=None,
+        help="corpus root for bundle-local parallel assets",
+    )
+    ppr.add_argument(
+        "--rebuild-index", action="store_true",
+        help="rebuild the parallel asset index before repairing pending stale records",
+    )
     return p
 
 
@@ -124,7 +154,7 @@ def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    out_root = args.out_root
+    out_root = getattr(args, "out_root", None)
     if out_root is None:
         # Defaults come from .bkkrc only when --out wasn't given.
         # `set_defaults` on the parent parser doesn't reach the subparser,
@@ -180,6 +210,17 @@ def run(argv: list[str] | None = None) -> int:
             sections=sections,
             out_root=out_root,
             dry_run=args.dry_run,
+        )
+    if args.op == "parallel-index":
+        return _run_parallel_index(
+            parallels_root=args.parallels_root,
+            corpus_root=args.corpus,
+        )
+    if args.op == "parallels":
+        return _run_parallel_repair(
+            parallels_root=args.parallels_root,
+            corpus_root=args.corpus,
+            rebuild_index=args.rebuild_index,
         )
     return 2
 
@@ -412,6 +453,87 @@ def _run_remove_ids(
     print(
         f"{prefix}{n_changed} changed, {n_unchanged} unchanged "
         f"(scanned {len(bundles)} bundles in sections {list(sections)})"
+    )
+    return 0
+
+
+def _configured_parallel_roots(
+    *,
+    parallels_root: Path | None,
+    corpus_root: Path | None,
+) -> tuple[Path | None, Path | None, Path]:
+    from bkk.config import load_rc
+    from .parallels import default_state_root
+
+    rc = load_rc()
+    if parallels_root is None:
+        raw = (rc.get("serve") or {}).get("parallels_root") if isinstance(rc.get("serve"), dict) else None
+        parallels_root = Path(raw).expanduser().resolve() if isinstance(raw, (str, Path)) else None
+    if corpus_root is None:
+        raw = (rc.get("global") or {}).get("corpus") if isinstance(rc.get("global"), dict) else None
+        corpus_root = Path(raw).expanduser().resolve() if isinstance(raw, (str, Path)) else None
+    if parallels_root is not None:
+        parallels_root = parallels_root.expanduser().resolve()
+    if corpus_root is not None:
+        corpus_root = corpus_root.expanduser().resolve()
+    state_root = default_state_root(parallels_root, corpus_root)
+    return parallels_root, corpus_root, state_root
+
+
+def _run_parallel_index(
+    *,
+    parallels_root: Path | None,
+    corpus_root: Path | None,
+) -> int:
+    try:
+        parallels_root, corpus_root, state_root = _configured_parallel_roots(
+            parallels_root=parallels_root,
+            corpus_root=corpus_root,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    from .parallels import build_parallel_asset_index
+
+    summary = build_parallel_asset_index(
+        state_root,
+        parallels_root=parallels_root,
+        corpus_root=corpus_root,
+    )
+    print(
+        f"indexed {summary['markers']} parallel markers from "
+        f"{summary['assets']} assets into {summary['index_path']}"
+    )
+    return 0
+
+
+def _run_parallel_repair(
+    *,
+    parallels_root: Path | None,
+    corpus_root: Path | None,
+    rebuild_index: bool,
+) -> int:
+    try:
+        parallels_root, corpus_root, state_root = _configured_parallel_roots(
+            parallels_root=parallels_root,
+            corpus_root=corpus_root,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    from .parallels import repair_pending_parallel_stale
+
+    summary = repair_pending_parallel_stale(
+        state_root,
+        parallels_root=parallels_root,
+        corpus_root=corpus_root,
+        rebuild_index=rebuild_index,
+    )
+    print(
+        f"repaired {summary['records_repaired']} stale records; "
+        f"changed {summary['files_changed']} files; "
+        f"shifted {summary['links_shifted']} links; "
+        f"dropped {summary['links_dropped']} overlapping links"
     )
     return 0
 

@@ -4,4 +4,7 @@ So far the only entry points are in :mod:`bkk.edit.sections`, which the
 duplications editor calls to excise a juan bucket or a list of spans
 within a bucket. Each operation rewrites the affected juan YAML, updates
 the manifest's part / marker / TOC entries, and recomputes hashes.
+
+The package also carries shared offset-rebase helpers used by edit surfaces
+that need to keep external anchors aligned with changed bundle text.
 """

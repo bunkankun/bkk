@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import base64
 import copy
+from dataclasses import replace
+from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 import yaml
 
 from bkk.importer.hashing import manifest_hash, sha256_jcs, sha256_text
 from bkk.importer.idassigner import allocate_marker_ids
 from bkk.marker_assets import marker_asset_hash
+from bkk.repair.parallels import read_stale_records
 from bkk.serve.routers import bundle_edit
 
 
@@ -182,6 +187,162 @@ def test_prepare_files_creates_external_marker_asset():
     assert asset["markers"]["body"][0]["type"] == "punctuation"
 
 
+def _install_core_root(client, core_root: Path) -> None:
+    state = client.app.state.bkk
+    state.config = replace(
+        state.config,
+        core_root=core_root,
+        core_upstream_repo="bunkankun/bkk-core",
+    )
+
+
+def _write_word_relation(core_root: Path, uuid: str, *, offset: int, range_: int) -> Path:
+    path = core_root / "word-relations" / uuid[0] / f"{uuid}.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "uuid": uuid,
+                "type": "word-relation",
+                "rel_type": "Conv",
+                "left": {
+                    "text": "乙",
+                    "attestation": {
+                        "line_id": "TEST0001_X_001-head",
+                        "offset": offset,
+                        "range": range_,
+                    },
+                },
+                "right": {"text": "丙"},
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_core_attestation_repair_shifts_offset_and_renamed_marker(client, tmp_path):
+    core_root = tmp_path / "core"
+    uuid = "10000000-0000-0000-0000-000000000001"
+    _write_word_relation(core_root, uuid, offset=2, range_=1)
+    _install_core_root(client, core_root)
+
+    repairs = bundle_edit._prepare_core_attestation_repairs(
+        client.app.state.bkk,
+        SimpleNamespace(is_editor=True),
+        _remote(),
+        "TEST0001",
+        1,
+        _request(),
+    )
+
+    assert len(repairs) == 1
+    att = repairs[0].data["left"]["attestation"]
+    assert att["line_id"] == "TEST0001_X_001-renamed"
+    assert att["offset"] == 3
+    assert att["range"] == 1
+
+
+def test_core_attestation_repair_blocks_overlapping_edit(client, tmp_path):
+    core_root = tmp_path / "core"
+    uuid = "10000000-0000-0000-0000-000000000002"
+    _write_word_relation(core_root, uuid, offset=0, range_=4)
+    _install_core_root(client, core_root)
+
+    with pytest.raises(Exception) as excinfo:
+        bundle_edit._prepare_core_attestation_repairs(
+            client.app.state.bkk,
+            SimpleNamespace(is_editor=True),
+            _remote(),
+            "TEST0001",
+            1,
+            _request(),
+        )
+    assert getattr(excinfo.value, "status_code", None) == 422
+    assert "core-attestation-overlap" in str(getattr(excinfo.value, "detail", ""))
+
+
+def test_prepare_repairs_skips_offset_surfaces_when_text_unchanged(client, monkeypatch):
+    state = client.app.state.bkk
+    called = []
+
+    monkeypatch.setattr(
+        bundle_edit,
+        "_prepare_core_attestation_repairs",
+        lambda *args, **kwargs: called.append("core") or [],
+    )
+
+    request = _request(
+        text="甲乙丙丁",
+        markers=[{"type": "head", "offset": 0, "content": "Head", "id": "TEST0001_X_001-head"}],
+        text_splices=[],
+        renamed_marker_ids={},
+    )
+    repairs = bundle_edit._prepare_repairs(
+        state,
+        SimpleNamespace(is_admin=True, is_editor=True),
+        _remote(),
+        "TEST0001",
+        1,
+        request,
+    )
+
+    assert repairs == bundle_edit.PreparedRepairs()
+    assert called == []
+
+
+def test_prepare_repairs_allows_marker_rename_without_parallel_scan(client, monkeypatch):
+    state = client.app.state.bkk
+    called = []
+
+    monkeypatch.setattr(
+        bundle_edit,
+        "_prepare_core_attestation_repairs",
+        lambda *args, **kwargs: called.append("core") or [],
+    )
+
+    request = _request(
+        text="甲乙丙丁",
+        markers=[{"type": "head", "offset": 0, "content": "Head", "id": "TEST0001_X_001-renamed"}],
+        text_splices=[],
+    )
+    bundle_edit._prepare_repairs(
+        state,
+        SimpleNamespace(is_admin=True, is_editor=True),
+        _remote(),
+        "TEST0001",
+        1,
+        request,
+    )
+
+    assert called == ["core"]
+
+
+def test_prepare_repairs_skips_parallel_surfaces_when_text_changes(client, monkeypatch):
+    state = client.app.state.bkk
+    called = []
+
+    monkeypatch.setattr(
+        bundle_edit,
+        "_prepare_core_attestation_repairs",
+        lambda *args, **kwargs: called.append("core") or [],
+    )
+
+    repairs = bundle_edit._prepare_repairs(
+        state,
+        SimpleNamespace(is_admin=True, is_editor=True),
+        _remote(),
+        "TEST0001",
+        1,
+        _request(renamed_marker_ids={}),
+    )
+
+    assert repairs == bundle_edit.PreparedRepairs()
+    assert called == ["core"]
+
+
 def _login(client, *, admin: bool):
     session = client.app.state.bkk.sessions.create(
         login="alice",
@@ -302,8 +463,16 @@ def test_admin_save_commits_directly(client, monkeypatch):
         json=_request().model_dump(),
     )
     assert response.status_code == 200
-    assert response.json()["kind"] == "commit"
-    assert response.json()["commit_sha"] == "commit123"
+    body = response.json()
+    assert body["kind"] == "commit"
+    assert body["commit_sha"] == "commit123"
+    assert body["parallel_stale"] is True
+    assert body["parallel_stale_id"]
+    assert body["repaired_parallel_assets"] == 0
+    stale = read_stale_records(client.app.state.bkk.corpus_root)
+    assert len(stale) == 1
+    assert stale[0]["textid"] == "TEST0001"
+    assert stale[0]["result_commit_sha"] == "commit123"
     assert calls[0][1]["create_branch"] is False
 
 
@@ -332,13 +501,45 @@ def test_non_admin_save_opens_pull_request(client, monkeypatch):
         json=_request().model_dump(),
     )
     assert response.status_code == 200
-    assert response.json() == {
-        "kind": "pull_request",
-        "commit_sha": "commit456",
-        "url": "https://github.test/pr/7",
-        "pull_request_number": 7,
-        "removed_toc_marker_ids": [],
-    }
+    body = response.json()
+    assert body["kind"] == "pull_request"
+    assert body["commit_sha"] == "commit456"
+    assert body["url"] == "https://github.test/pr/7"
+    assert body["pull_request_number"] == 7
+    assert body["removed_toc_marker_ids"] == []
+    assert body["repaired_core_records"] == 0
+    assert body["repaired_parallel_assets"] == 0
+    assert body["parallel_stale"] is True
+    assert body["parallel_stale_id"]
+
+
+def test_marker_only_save_creates_no_parallel_stale_record(client, monkeypatch):
+    _login(client, admin=True)
+    monkeypatch.setattr(bundle_edit, "_branch", lambda *args: "main")
+    monkeypatch.setattr(bundle_edit, "_head_sha", lambda *args: "base")
+    monkeypatch.setattr(bundle_edit, "_load_remote", lambda *args, **kwargs: _remote())
+    monkeypatch.setattr(
+        bundle_edit, "_prepare_files",
+        lambda *args: ({"TEST0001_001.yaml": "new"}, []),
+    )
+    monkeypatch.setattr(bundle_edit, "_commit_files", lambda *args, **kwargs: "commit123")
+
+    request = _request(
+        text="甲乙丙丁",
+        text_splices=[],
+        renamed_marker_ids={},
+        markers=[{"type": "head", "offset": 0, "content": "Head", "id": "TEST0001_X_001-head"}],
+    )
+    response = client.post(
+        "/bundles/TEST0001/juan/1/edit",
+        json=request.model_dump(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["parallel_stale"] is False
+    assert body["parallel_stale_id"] is None
+    assert read_stale_records(client.app.state.bkk.corpus_root) == []
 
 
 def test_save_rejects_stale_base(client, monkeypatch):

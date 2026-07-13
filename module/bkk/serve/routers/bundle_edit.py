@@ -5,9 +5,12 @@ from __future__ import annotations
 import base64
 import binascii
 import copy
+import logging
 import re
 import time
 import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -15,6 +18,11 @@ import yaml
 from fastapi import APIRouter, HTTPException, Path as PathParam, Request
 from pydantic import BaseModel, Field
 
+from bkk.edit.offsets import (
+    OffsetRebaseConflict,
+    map_structural_span,
+    rebase_content_span,
+)
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
 from bkk.importer.idassigner import allocate_marker_ids
 from bkk.importer.write.yaml_writer import dump, marker_to_flow, reflow_manifest
@@ -28,11 +36,16 @@ from bkk.marker_assets import (
     split_inline_external_markers,
     toc_marker_ids,
 )
+from bkk.repair.parallels import append_stale_record, default_state_root
+from bkk.serialize.yaml_io import dumps_record, load_record, loads_record
 
 from ..state import AppState, UserSession
 from .auth import SESSION_COOKIE, _github_json, _github_status
 
 router = APIRouter(prefix="/bundles", tags=["bundles"])
+log = logging.getLogger("bkk.serve.bundle_edit")
+
+_MARKER_ID_RE = re.compile(r"_(?P<edition>[^_]+)_(?P<seq>\d{3})-")
 
 
 class TextSplice(BaseModel):
@@ -58,6 +71,24 @@ class MarkerIdAllocationRequest(BaseModel):
     bucket: Literal["front", "body", "back"]
     marker_types: list[str] = Field(min_length=1, max_length=1000)
     occupied_ids: list[str] = Field(default_factory=list, max_length=100_000)
+
+
+@dataclass
+class CoreRepair:
+    rel_path: str
+    data: dict[str, Any]
+    original_attestations: dict[str, dict[str, Any]]
+
+
+@dataclass
+class CoreRepairResult:
+    paths: list[str] = field(default_factory=list)
+    commit_shas: list[str] = field(default_factory=list)
+
+
+@dataclass
+class PreparedRepairs:
+    core_repairs: list[CoreRepair] = field(default_factory=list)
 
 
 def _session(request: Request) -> UserSession:
@@ -243,21 +274,6 @@ def _replay_splices(original: str, splices: list[TextSplice]) -> str:
     return text
 
 
-def _map_position(position: int, edit: TextSplice, *, right: bool) -> int:
-    start = edit.start
-    end = start + edit.delete_count
-    delta = len(edit.insert) - edit.delete_count
-    if position < start:
-        return position
-    if position > end:
-        return position + delta
-    if edit.delete_count == 0 and position == start:
-        return start + (len(edit.insert) if right else 0)
-    if position == end:
-        return start + len(edit.insert)
-    return start + (len(edit.insert) if right else 0)
-
-
 def _rebase_toc_spans(
     manifest: dict[str, Any], seq: int, bucket: str, edits: list[TextSplice],
 ) -> None:
@@ -273,10 +289,7 @@ def _rebase_toc_spans(
             and isinstance(span[1], int) and isinstance(span[2], int)
         ):
             continue
-        start, end = span[1], span[2]
-        for edit in edits:
-            start = _map_position(start, edit, right=False)
-            end = _map_position(end, edit, right=True)
+        start, end = map_structural_span(span[1], span[2], edits)
         ref["span"] = [bucket, start, max(start, end)]
 
 
@@ -318,6 +331,212 @@ def _cascade_toc_marker_ids(
         kept.append(entry)
     manifest["table_of_contents"] = kept
     return removed
+
+
+def _marker_offsets(markers: list[dict[str, Any]]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for marker in markers:
+        marker_id = marker.get("id")
+        offset = marker.get("offset")
+        if isinstance(marker_id, str) and marker_id and isinstance(offset, int):
+            out[marker_id] = offset
+    return out
+
+
+def _marker_buckets(juan: dict[str, Any], marker_asset: dict[str, Any] | None) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for bucket in VALID_BUCKETS:
+        for marker in effective_markers_for_bucket(juan, bucket, marker_asset):
+            marker_id = marker.get("id")
+            if isinstance(marker_id, str) and marker_id:
+                out[marker_id] = bucket
+    return out
+
+
+def _parse_marker_id(marker_id: str) -> tuple[str, int] | None:
+    match = _MARKER_ID_RE.search(marker_id)
+    if match is None:
+        return None
+    return match.group("edition"), int(match.group("seq"))
+
+
+def _attestation_key(rel_path: str, side: str) -> str:
+    return f"{rel_path}:{side}"
+
+
+def _iter_word_relation_records(core_root: Path) -> list[tuple[str, dict[str, Any]]]:
+    root = core_root / "word-relations"
+    if not root.is_dir():
+        return []
+    rows: list[tuple[str, dict[str, Any]]] = []
+    for shard in sorted(root.iterdir()):
+        if not shard.is_dir():
+            continue
+        for path in sorted(shard.glob("*.yml")):
+            try:
+                data = load_record(path)
+            except OSError as exc:
+                log.warning("cannot read core word relation %s: %s", path, exc)
+                continue
+            if isinstance(data, dict):
+                rows.append((path.relative_to(core_root).as_posix(), data))
+    return rows
+
+
+def _prepare_core_attestation_repairs(
+    state: AppState,
+    session: UserSession,
+    remote: dict[str, Any],
+    textid: str,
+    seq: int,
+    request: BundleEditRequest,
+) -> list[CoreRepair]:
+    if state.core_root is None:
+        return []
+
+    original_markers = effective_markers_for_bucket(
+        remote["juan"], request.bucket, remote["marker_asset"],
+    )
+    old_offsets = _marker_offsets(original_markers)
+    new_offsets = _marker_offsets(request.markers)
+    original_buckets = _marker_buckets(remote["juan"], remote["marker_asset"])
+    repairs: list[CoreRepair] = []
+    conflicts: list[dict[str, Any]] = []
+
+    for rel_path, data in _iter_word_relation_records(state.core_root):
+        changed = False
+        next_data = copy.deepcopy(data)
+        originals: dict[str, dict[str, Any]] = {}
+        for side in ("left", "right"):
+            item = next_data.get(side)
+            if not isinstance(item, dict):
+                continue
+            att = item.get("attestation")
+            if not isinstance(att, dict):
+                continue
+            line_id = att.get("line_id")
+            if not isinstance(line_id, str) or not line_id.startswith(f"{textid}_"):
+                continue
+            parsed = _parse_marker_id(line_id)
+            if parsed is None or parsed[1] != seq:
+                continue
+            marker_bucket = original_buckets.get(line_id)
+            if marker_bucket != request.bucket:
+                continue
+            offset = att.get("offset", 0)
+            span_length = att.get("range", 1)
+            if (
+                isinstance(offset, bool)
+                or not isinstance(offset, int)
+                or offset < 0
+                or isinstance(span_length, bool)
+                or not isinstance(span_length, int)
+                or span_length < 1
+            ):
+                conflicts.append({
+                    "kind": "core-attestation-invalid",
+                    "path": rel_path,
+                    "side": side,
+                    "line_id": line_id,
+                })
+                continue
+
+            new_line_id = request.renamed_marker_ids.get(line_id, line_id)
+            if new_line_id not in new_offsets:
+                conflicts.append({
+                    "kind": "core-attestation-marker-missing",
+                    "path": rel_path,
+                    "side": side,
+                    "line_id": line_id,
+                    "new_line_id": new_line_id,
+                })
+                continue
+            old_marker_offset = old_offsets.get(line_id)
+            if old_marker_offset is None:
+                conflicts.append({
+                    "kind": "core-attestation-marker-missing",
+                    "path": rel_path,
+                    "side": side,
+                    "line_id": line_id,
+                })
+                continue
+            absolute_start = old_marker_offset + offset
+            try:
+                rebased = rebase_content_span(
+                    absolute_start, span_length, request.text_splices,
+                )
+            except OffsetRebaseConflict:
+                conflicts.append({
+                    "kind": "core-attestation-overlap",
+                    "path": rel_path,
+                    "side": side,
+                    "line_id": line_id,
+                    "start": absolute_start,
+                    "length": span_length,
+                })
+                continue
+            new_local_offset = rebased.start - new_offsets[new_line_id]
+            if new_local_offset < 0:
+                conflicts.append({
+                    "kind": "core-attestation-before-marker",
+                    "path": rel_path,
+                    "side": side,
+                    "line_id": line_id,
+                    "new_line_id": new_line_id,
+                })
+                continue
+            key = _attestation_key(rel_path, side)
+            originals[key] = dict(att)
+            if att.get("line_id") != new_line_id:
+                att["line_id"] = new_line_id
+                changed = True
+            if att.get("offset") != new_local_offset:
+                att["offset"] = new_local_offset
+                changed = True
+            if att.get("range") != rebased.length:
+                att["range"] = rebased.length
+                changed = True
+
+        if changed:
+            repairs.append(CoreRepair(rel_path=rel_path, data=next_data, original_attestations=originals))
+
+    if conflicts:
+        raise HTTPException(status_code=422, detail={"message": "core attestation conflicts", "conflicts": conflicts})
+    if repairs and not session.is_editor:
+        raise HTTPException(
+            status_code=403,
+            detail="Editor role required to repair core attestations for this bundle edit",
+        )
+    if repairs and not state.config.core_upstream_repo:
+        raise HTTPException(
+            status_code=503,
+            detail="core editing is not configured; cannot repair core attestations",
+        )
+    return repairs
+
+
+def _prepare_repairs(
+    state: AppState,
+    session: UserSession,
+    remote: dict[str, Any],
+    textid: str,
+    seq: int,
+    request: BundleEditRequest,
+) -> PreparedRepairs:
+    if not request.text_splices and not request.renamed_marker_ids:
+        return PreparedRepairs()
+    core_repairs = _prepare_core_attestation_repairs(
+        state, session, remote, textid, seq, request,
+    )
+    if core_repairs and not session.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Direct bundle commit permission is required to repair core "
+                "attestations"
+            ),
+        )
+    return PreparedRepairs(core_repairs=core_repairs)
 
 
 def _patch_self_hash(obj: dict[str, Any]) -> str:
@@ -490,6 +709,121 @@ def _commit_files(
     return commit_sha
 
 
+def _core_attestation_values(att: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: att.get(key)
+        for key in ("line_id", "offset", "range")
+        if key in att
+    }
+
+
+def _apply_core_repairs(
+    state: AppState,
+    session: UserSession,
+    repairs: list[CoreRepair],
+    *,
+    message: str,
+) -> CoreRepairResult:
+    if not repairs:
+        return CoreRepairResult()
+    from . import core_edit
+
+    upstream = state.config.core_upstream_repo
+    if not upstream:
+        raise HTTPException(
+            status_code=503,
+            detail="core editing is not configured; cannot repair core attestations",
+        )
+    branch = state.config.core_pr_base
+    result = CoreRepairResult()
+    for repair in repairs:
+        payload = core_edit._fetch_file(
+            session.access_token, upstream, repair.rel_path, branch,
+        )
+        if payload is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"core file {repair.rel_path} not found on {upstream}@{branch}",
+            )
+        parent_sha = payload.get("sha")
+        if not isinstance(parent_sha, str):
+            raise HTTPException(
+                status_code=502,
+                detail=f"core file {repair.rel_path} response has no sha",
+            )
+        upstream_record = loads_record(core_edit._decode_file(payload))
+        for side in ("left", "right"):
+            key = _attestation_key(repair.rel_path, side)
+            original = repair.original_attestations.get(key)
+            if original is None:
+                continue
+            upstream_item = upstream_record.get(side)
+            repair_item = repair.data.get(side)
+            if not isinstance(upstream_item, dict) or not isinstance(repair_item, dict):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"core file {repair.rel_path} changed before attestation repair",
+                )
+            upstream_att = upstream_item.get("attestation")
+            repair_att = repair_item.get("attestation")
+            if not isinstance(upstream_att, dict) or not isinstance(repair_att, dict):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"core file {repair.rel_path} changed before attestation repair",
+                )
+            if _core_attestation_values(upstream_att) != _core_attestation_values(original):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"core file {repair.rel_path} changed before attestation repair",
+                )
+            upstream_att.update(_core_attestation_values(repair_att))
+        text = dumps_record(upstream_record)
+        _blob_sha, commit_sha, _commit_url = core_edit._put_file(
+            token=session.access_token,
+            repo=upstream,
+            rel_path=repair.rel_path,
+            branch=branch,
+            text=text,
+            message=f"{message} (repair {repair.rel_path})",
+            parent_sha=parent_sha,
+        )
+        core_edit._local_apply_upsert(state, repair.rel_path, text)
+        result.paths.append(repair.rel_path)
+        result.commit_shas.append(commit_sha)
+    return result
+
+
+def _record_parallel_stale(
+    state: AppState,
+    session: UserSession,
+    payload: BundleEditRequest,
+    textid: str,
+    seq: int,
+    *,
+    result_commit_sha: str | None,
+    kind: str,
+) -> tuple[bool, str | None, str | None]:
+    if not payload.text_splices:
+        return False, None, None
+    try:
+        root = default_state_root(state.parallels_root, state.corpus_root)
+        record = append_stale_record(
+            root,
+            textid=textid,
+            seq=seq,
+            bucket=payload.bucket,
+            base_commit_sha=payload.base_commit_sha,
+            result_commit_sha=result_commit_sha,
+            text_splices=payload.text_splices,
+            login=session.login,
+            kind=kind,
+        )
+        return True, str(record.get("id")), None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("failed to record stale parallel change for %s/%s: %s", textid, seq, exc)
+        return False, None, f"{type(exc).__name__}: {exc}"
+
+
 def _ensure_fork(token: str, upstream: str, login: str, textid: str) -> str:
     fork = f"{login}/{textid}"
     try:
@@ -618,6 +952,7 @@ def save_bundle_edit(
         session.access_token, upstream, branch, textid, seq, ref=payload.base_commit_sha,
     )
     files, removed_toc = _prepare_files(remote, textid, seq, payload)
+    repairs = _prepare_repairs(state, session, remote, textid, seq, payload)
     message = payload.message or f"Edit {textid} juan {seq}"
 
     if session.is_admin:
@@ -630,11 +965,32 @@ def save_bundle_edit(
             files,
             create_branch=False,
         )
+        core_repair = _apply_core_repairs(
+            state, session, repairs.core_repairs, message=message,
+        )
+        parallel_stale, parallel_stale_id, parallel_stale_error = _record_parallel_stale(
+            state,
+            session,
+            payload,
+            textid,
+            seq,
+            result_commit_sha=commit_sha,
+            kind="commit",
+        )
         return {
             "kind": "commit",
             "commit_sha": commit_sha,
             "url": f"https://github.com/{upstream}/commit/{commit_sha}",
             "removed_toc_marker_ids": removed_toc,
+            "repaired_core_records": len(core_repair.paths),
+            "core_repair_paths": core_repair.paths,
+            "core_repair_commit_shas": core_repair.commit_shas,
+            "repaired_parallel_assets": 0,
+            "parallel_repair_bundle_paths": [],
+            "parallel_repair_corpus_paths": [],
+            "parallel_stale": parallel_stale,
+            "parallel_stale_id": parallel_stale_id,
+            "parallel_stale_error": parallel_stale_error,
         }
 
     fork = _ensure_fork(session.access_token, upstream, session.login, textid)
@@ -661,10 +1017,28 @@ def save_bundle_edit(
     pr_number = (pr or {}).get("number")
     if not isinstance(pr_url, str):
         raise HTTPException(status_code=502, detail="GitHub pull request response has no URL")
+    parallel_stale, parallel_stale_id, parallel_stale_error = _record_parallel_stale(
+        state,
+        session,
+        payload,
+        textid,
+        seq,
+        result_commit_sha=commit_sha,
+        kind="pull_request",
+    )
     return {
         "kind": "pull_request",
         "commit_sha": commit_sha,
         "url": pr_url,
         "pull_request_number": pr_number,
         "removed_toc_marker_ids": removed_toc,
+        "repaired_core_records": 0,
+        "core_repair_paths": [],
+        "core_repair_commit_shas": [],
+        "repaired_parallel_assets": 0,
+        "parallel_repair_bundle_paths": [],
+        "parallel_repair_corpus_paths": [],
+        "parallel_stale": parallel_stale,
+        "parallel_stale_id": parallel_stale_id,
+        "parallel_stale_error": parallel_stale_error,
     }

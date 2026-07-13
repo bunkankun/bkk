@@ -28,6 +28,12 @@ from bkk.index import (
 )
 from bkk.index.catalog import default_catalog_csv
 from bkk.index.core import build_core_index
+from bkk.repair.parallels import (
+    build_parallel_asset_index,
+    default_state_root,
+    pending_stale_records,
+    repair_pending_parallel_stale,
+)
 from bkk.validator import validate_bundle
 
 from fastapi import HTTPException
@@ -105,6 +111,46 @@ def _run_annotation_index(jobs: JobRegistry, job_id: str, annotations_root, out_
     try:
         out = build_annotation_index(annotations_root, out_path)
         jobs.mark_done(job_id, {"annotations_index_path": str(out)})
+    except Exception as exc:
+        jobs.mark_error(job_id, exc)
+
+
+def _run_parallel_asset_index(
+    jobs: JobRegistry,
+    job_id: str,
+    state_root,
+    parallels_root,
+    corpus_root,
+):
+    jobs.mark_running(job_id)
+    try:
+        out = build_parallel_asset_index(
+            state_root,
+            parallels_root=parallels_root,
+            corpus_root=corpus_root,
+        )
+        jobs.mark_done(job_id, out)
+    except Exception as exc:
+        jobs.mark_error(job_id, exc)
+
+
+def _run_parallel_repair(
+    jobs: JobRegistry,
+    job_id: str,
+    state: AppState,
+):
+    jobs.mark_running(job_id)
+    try:
+        state_root = default_state_root(state.parallels_root, state.corpus_root)
+        out = repair_pending_parallel_stale(
+            state_root,
+            parallels_root=state.parallels_root,
+            corpus_root=state.corpus_root,
+        )
+        with state._parallel_cache_lock:
+            state._parallel_marker_cache.clear()
+            state._parallel_bucket_text_cache.clear()
+        jobs.mark_done(job_id, out)
     except Exception as exc:
         jobs.mark_error(job_id, exc)
 
@@ -310,6 +356,42 @@ def post_annotation_index(
 
 
 @router.post(
+    "/parallels/index",
+    summary="Rebuild the stored parallel-passage asset index",
+)
+def post_parallel_asset_index(
+    request: Request,
+    background: BackgroundTasks,
+    state: AppState = Depends(_require_admin),
+) -> JSONResponse:
+    state_root = default_state_root(state.parallels_root, state.corpus_root)
+    job = state.jobs.create(kind="parallel_asset_index", target=None)
+    background.add_task(
+        _run_parallel_asset_index,
+        state.jobs,
+        job.id,
+        state_root,
+        state.parallels_root,
+        state.corpus_root,
+    )
+    return _accepted(job)
+
+
+@router.post(
+    "/parallels/repair",
+    summary="Repair pending stale parallel-passage assets",
+)
+def post_parallel_repair(
+    request: Request,
+    background: BackgroundTasks,
+    state: AppState = Depends(_require_admin),
+) -> JSONResponse:
+    job = state.jobs.create(kind="parallel_repair", target=None)
+    background.add_task(_run_parallel_repair, state.jobs, job.id, state)
+    return _accepted(job)
+
+
+@router.post(
     "/core/sync",
     summary="Fast-forward the local bkk-core clone from upstream and rebuild its index",
 )
@@ -465,4 +547,13 @@ def get_admin_info(
         if state.annotations_index_path is not None
         else None
     )
+    try:
+        parallel_root = default_state_root(state.parallels_root, state.corpus_root)
+        pending = pending_stale_records(parallel_root)
+        report["parallels"] = {
+            "state_root": str(parallel_root),
+            "pending_stale": len(pending),
+        }
+    except Exception:
+        report["parallels"] = None
     return report

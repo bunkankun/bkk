@@ -21,6 +21,7 @@ from bkk.index.parallel_assets import (
     derive_index_name,
     write_target_parallel_assets,
 )
+from bkk.repair.parallels import default_state_root, has_pending_stale_for
 from .auth import SESSION_COOKIE
 
 
@@ -91,6 +92,7 @@ class JuanParallelsStatus(BaseModel):
     has_parallels: bool
     sources: list[Literal["corpus", "bundle"]]
     can_generate: bool
+    stale: bool = False
 
 
 class JuanParallelsGeneration(BaseModel):
@@ -583,6 +585,14 @@ def _parallel_status(
     state: AppState, textid: str, seq: int,
 ) -> JuanParallelsStatus:
     paths, sources = _asset_paths(state, textid, seq)
+    try:
+        stale = has_pending_stale_for(
+            default_state_root(state.parallels_root, state.corpus_root),
+            textid,
+            seq,
+        )
+    except Exception:
+        stale = False
     return JuanParallelsStatus(
         textid=textid,
         juan_seq=seq,
@@ -590,6 +600,7 @@ def _parallel_status(
         has_parallels=bool(_load_markers(state, paths, textid, seq)),
         sources=sources,
         can_generate=state.index_path.is_file() or state.corpus_root.is_dir(),
+        stale=stale,
     )
 
 
