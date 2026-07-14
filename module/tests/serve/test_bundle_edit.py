@@ -187,6 +187,64 @@ def test_prepare_files_creates_external_marker_asset():
     assert asset["markers"]["body"][0]["type"] == "punctuation"
 
 
+def test_prepare_files_creates_external_marker_asset_in_edition_scope():
+    remote = _remote()
+    remote["manifest_path"] = "editions/Z/TEST0001-Z.manifest.yaml"
+    remote["juan_path"] = "editions/Z/TEST0001_001-Z.yaml"
+    remote["marker_path"] = None
+    remote["marker_asset"] = None
+    remote["scope_prefix"] = "editions/Z/"
+    remote["manifest"]["assets"].pop("markers")
+    remote["juan"]["metadata"]["edition"]["short"] = "Z"
+    remote["juan"]["body"]["markers"] = []
+    request = _request(
+        markers=[{"type": "punctuation", "offset": 3, "content": "。", "id": ""}],
+        renamed_marker_ids={},
+        acknowledge_toc_deletions=True,
+    )
+
+    files, _removed = bundle_edit._prepare_files(remote, "TEST0001", 1, request)
+
+    marker_filename = "assets/TEST0001_001-Z.markers.yaml"
+    marker_path = f"editions/Z/{marker_filename}"
+    assert marker_path in files
+    manifest = yaml.safe_load(files["editions/Z/TEST0001-Z.manifest.yaml"])
+    assert manifest["assets"]["markers"][0]["filename"] == marker_filename
+    asset = yaml.safe_load(files[marker_path])
+    assert asset["markers"]["body"][0]["type"] == "punctuation"
+
+
+def test_load_remote_loads_edition_scope(monkeypatch):
+    manifest = {
+        "assets": {
+            "parts": [{"seq": 1, "filename": "TEST0001_001-Z.yaml"}],
+            "markers": [{"seq": 1, "filename": "assets/TEST0001_001-Z.markers.yaml"}],
+        },
+    }
+    juan = {"seq": 1, "body": {"text": "甲", "markers": []}}
+    marker_asset = {"seq": 1, "markers": {"body": []}}
+    files = {
+        "editions/Z/TEST0001-Z.manifest.yaml": yaml.safe_dump(manifest),
+        "editions/Z/TEST0001_001-Z.yaml": yaml.safe_dump(juan),
+        "editions/Z/assets/TEST0001_001-Z.markers.yaml": yaml.safe_dump(marker_asset),
+    }
+
+    monkeypatch.setattr(bundle_edit, "_head_sha", lambda *args: "base")
+    monkeypatch.setattr(
+        bundle_edit,
+        "_fetch_file",
+        lambda _token, _repo, path, _ref: ({}, files[path]),
+    )
+
+    remote = bundle_edit._load_remote("token", "org/TEST0001", "main", "TEST0001", 1, edition="Z")
+
+    assert remote["manifest_path"] == "editions/Z/TEST0001-Z.manifest.yaml"
+    assert remote["juan_path"] == "editions/Z/TEST0001_001-Z.yaml"
+    assert remote["marker_path"] == "editions/Z/assets/TEST0001_001-Z.markers.yaml"
+    assert remote["scope_prefix"] == "editions/Z/"
+    assert remote["marker_asset"] == marker_asset
+
+
 def _install_core_root(client, core_root: Path) -> None:
     state = client.app.state.bkk
     state.config = replace(

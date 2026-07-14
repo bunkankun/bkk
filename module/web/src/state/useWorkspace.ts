@@ -81,6 +81,7 @@ export interface BundleEditTarget {
   markerId: string;
   offset: number;
   length: number;
+  edition?: string | null;
 }
 export type SearchFacetKind =
   | "category"
@@ -2945,6 +2946,7 @@ export const workspace = {
     offset: number;
     length: number;
     markerId: string;
+    edition?: string | null;
   }) {
     const tabId = `${args.textid}:${args.seq}`;
     const target = activePaneLeaf(state.pane);
@@ -2959,7 +2961,8 @@ export const workspace = {
       bucket: args.bucket,
       markerId: args.markerId,
       offset: args.offset,
-      length: Math.max(1, args.length),
+      length: args.length,
+      edition: args.edition ?? null,
     };
     const highlight = {
       textid: args.textid,

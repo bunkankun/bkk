@@ -20,6 +20,7 @@ import { setBundleEditorDirty } from "../../lib/editorDirty";
 import type { BundleEditTarget } from "../../state/useWorkspace";
 import {
   canonicalSelectionFromDom,
+  canonicalOffsetAt,
   editorPositionAt,
   markerDomSelection,
   parsePunctuatedText,
@@ -36,8 +37,11 @@ type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; document: BundleEditDocument };
+type ValidationProblem = { message: string; markerKey?: string };
 
 let nextMarkerKey = 1;
+
+const ADDABLE_MARKER_TYPES = ["voice", "voice:problem"];
 
 function newMarkerKey(): string {
   return `marker-${nextMarkerKey++}`;
@@ -50,6 +54,25 @@ function editableMarkers(markers: JuanMarker[]): EditableMarker[] {
     originalId: typeof data.id === "string" && data.id ? data.id : null,
     unresolved: false,
   }));
+}
+
+function markerOffset(marker: EditableMarker): number | null {
+  const offset = marker.data.offset;
+  return typeof offset === "number" && Number.isFinite(offset) ? offset : null;
+}
+
+function scrollTextareaToPosition(textarea: HTMLTextAreaElement, position: number) {
+  const maxScroll = textarea.scrollHeight - textarea.clientHeight;
+  if (maxScroll <= 0) return;
+  const ratio = Math.max(0, Math.min(position, textarea.value.length)) /
+    Math.max(1, textarea.value.length);
+  const target = ratio * textarea.scrollHeight - textarea.clientHeight * 0.35;
+  textarea.scrollTop = Math.max(0, Math.min(maxScroll, target));
+}
+
+function markerIdHasValidShape(id: string, textid: string): boolean {
+  const parts = id.split("_", 3);
+  return parts.length === 3 && parts[0] === textid && parts[2].length > 0;
 }
 
 function valueKind(value: unknown): "string" | "number" | "boolean" | "json" | "null" {
@@ -167,6 +190,7 @@ export function BundleEditor({
   onCursorInfoChange?: (info: EditorPosition) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const markerListRef = useRef<HTMLDivElement>(null);
   const focusedEditTargetRef = useRef<string | null>(null);
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
   const [bucket, setBucket] = useState<BucketName>("body");
@@ -182,6 +206,11 @@ export function BundleEditor({
   const [saved, setSaved] = useState<BundleEditSaveResponse | null>(null);
   const [tocDeleteAcknowledged, setTocDeleteAcknowledged] = useState(false);
   const [punctuationSet, setPunctuationSet] = useState<string | null>(null);
+  const [showLayoutMarkers, setShowLayoutMarkers] = useState(false);
+  const [idFind, setIdFind] = useState("");
+  const [idReplace, setIdReplace] = useState("");
+  const [offsetTarget, setOffsetTarget] = useState("");
+  const editEdition = editTarget?.edition ?? null;
 
   const installBucket = (
     document: BundleEditDocument,
@@ -205,11 +234,15 @@ export function BundleEditor({
     setError(null);
     setTocDeleteAcknowledged(false);
     setPunctuationSet(null);
+    setShowLayoutMarkers(false);
+    setIdFind("");
+    setIdReplace("");
+    setOffsetTarget("");
   };
 
   const reload = () => {
     setLoad({ status: "loading" });
-    getBundleEdit(textid, seq)
+    getBundleEdit(textid, seq, editEdition)
       .then((document) => {
         setLoad({ status: "ready", document });
         const initialBucket: BucketName =
@@ -227,7 +260,7 @@ export function BundleEditor({
       });
   };
 
-  useEffect(reload, [textid, seq]);
+  useEffect(reload, [textid, seq, editEdition]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (!dirty) return;
@@ -243,7 +276,12 @@ export function BundleEditor({
   }, [dirty]);
 
   const categories = useMemo(
-    () => [...new Set(markers.map((marker) => marker.data.type).filter(Boolean))].sort(),
+    () => [
+      ...new Set([
+        ...markers.map((marker) => marker.data.type).filter(Boolean),
+        ...ADDABLE_MARKER_TYPES,
+      ]),
+    ].sort(),
     [markers],
   );
   const visibleMarkers = useMemo(
@@ -256,20 +294,26 @@ export function BundleEditor({
     [markers],
   );
   const editorView = useMemo(
-    () => renderEditorText(text, markers, punctuationSet),
-    [markers, punctuationSet, text],
+    () => renderEditorText(text, markers, punctuationSet, showLayoutMarkers),
+    [markers, punctuationSet, showLayoutMarkers, text],
   );
   const unresolvedCount = markers.filter((marker) => marker.unresolved).length;
-  const validationError = useMemo(() => {
+  const idReplaceCount = useMemo(() => {
+    if (!idFind) return 0;
+    return markers.filter((marker) =>
+      typeof marker.data.id === "string" && marker.data.id.includes(idFind)
+    ).length;
+  }, [idFind, markers]);
+  const validationProblem = useMemo((): ValidationProblem | null => {
     const textLength = codepoints(text).length;
-    const ids = new Set<string>();
+    const ids = new Map<string, string>();
     for (const [index, marker] of markers.entries()) {
       if (typeof marker.data.type !== "string" || !marker.data.type) {
-        return `Marker ${index + 1} needs a type.`;
+        return { message: `Marker ${index + 1} needs a type.`, markerKey: marker.key };
       }
       const offset = marker.data.offset;
       if (!Number.isInteger(offset) || Number(offset) < 0 || Number(offset) > textLength) {
-        return `Marker ${index + 1} has an invalid offset.`;
+        return { message: `Marker ${index + 1} has an invalid offset.`, markerKey: marker.key };
       }
       if (marker.data.length != null) {
         const length = marker.data.length;
@@ -277,7 +321,7 @@ export function BundleEditor({
           !Number.isInteger(length) ||
           Number(length) < 0 ||
           Number(offset) + Number(length) > textLength
-        ) return `Marker ${index + 1} has an invalid length.`;
+        ) return { message: `Marker ${index + 1} has an invalid length.`, markerKey: marker.key };
       }
       const id = marker.data.id;
       if (
@@ -286,17 +330,144 @@ export function BundleEditor({
         marker.data.type !== "tls:div-start" &&
         marker.data.type !== "tls:div-end"
       ) {
-        if (ids.has(id)) return `Marker ID ${id} is duplicated.`;
-        ids.add(id);
+        const previousKey = ids.get(id);
+        if (previousKey) {
+          return { message: `Marker ID ${id} is duplicated.`, markerKey: marker.key };
+        }
+        ids.set(id, marker.key);
+      }
+      if (
+        typeof id === "string" &&
+        id &&
+        marker.data.type !== "tls:ann" &&
+        marker.data.type !== "voice" &&
+        !markerIdHasValidShape(id, textid)
+      ) {
+        return {
+          message: `Marker ${index + 1} has malformed ID ${id}; expected ${textid}_<edition>_<location>.`,
+          markerKey: marker.key,
+        };
       }
     }
     return null;
-  }, [markers, text]);
+  }, [markers, text, textid]);
+  const validationError = validationProblem?.message ?? null;
 
   const reportCursor = () => {
     const textarea = textareaRef.current;
     if (!textarea || !onCursorInfoChange) return;
     onCursorInfoChange(editorPositionAt(editorView, textarea.selectionStart));
+  };
+
+  const scrollMarkerButtonIntoView = (key: string) => {
+    requestAnimationFrame(() => {
+      const list = markerListRef.current;
+      const button = list?.querySelector<HTMLButtonElement>(`[data-marker-key="${key}"]`);
+      button?.scrollIntoView({ block: "nearest" });
+    });
+  };
+
+  const focusMarkerInTextarea = (marker: EditableMarker) => {
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const selection = markerDomSelection(editorView, marker);
+      textarea.focus();
+      textarea.setSelectionRange(selection.start, selection.end);
+      scrollTextareaToPosition(textarea, selection.start);
+      reportCursor();
+    });
+  };
+
+  const chooseClosestMarker = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const candidates = visibleMarkers.length > 0 ? visibleMarkers : markers;
+    if (candidates.length === 0) return;
+    const offset = canonicalOffsetAt(editorView, textarea.selectionStart);
+    const best = closestMarkerToOffset(offset, candidates);
+    if (!best) return;
+    setSelectedKey(best.key);
+    scrollMarkerButtonIntoView(best.key);
+  };
+
+  const closestMarkerToOffset = (
+    offset: number,
+    candidates: EditableMarker[],
+  ): EditableMarker | null => {
+    let best: EditableMarker | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const marker of candidates) {
+      const markerAt = markerOffset(marker);
+      if (markerAt == null) continue;
+      const distance = Math.abs(markerAt - offset);
+      if (
+        distance < bestDistance ||
+        (
+          distance === bestDistance &&
+          best != null &&
+          markerAt <= (markerOffset(best) ?? Number.POSITIVE_INFINITY)
+        )
+      ) {
+        best = marker;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  };
+
+  const jumpToOffset = () => {
+    const parsed = Number(offsetTarget);
+    const textLength = codepoints(text).length;
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed >= textLength) {
+      setError(`Offset must be an integer from 0 to ${Math.max(0, textLength - 1)}.`);
+      return;
+    }
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = editorView.charStart[parsed] ?? editorView.text.length;
+    const end = editorView.caretBefore[parsed + 1] ?? start;
+    textarea.focus();
+    textarea.setSelectionRange(start, Math.max(start, end));
+    scrollTextareaToPosition(textarea, start);
+    reportCursor();
+    setError(null);
+    const candidates = visibleMarkers.length > 0 ? visibleMarkers : markers;
+    const best = closestMarkerToOffset(parsed, candidates);
+    if (!best) return;
+    setSelectedKey(best.key);
+    scrollMarkerButtonIntoView(best.key);
+  };
+
+  const focusProblemMarker = (problem: ValidationProblem | null) => {
+    if (!problem?.markerKey) return;
+    const marker = markers.find((item) => item.key === problem.markerKey);
+    if (!marker) return;
+    setCategory("*");
+    setSelectedKey(marker.key);
+    scrollMarkerButtonIntoView(marker.key);
+    focusMarkerInTextarea(marker);
+  };
+
+  const replaceMarkerIds = () => {
+    if (!idFind) return;
+    let changed = 0;
+    const nextMarkers = markers.map((marker) => {
+      const id = marker.data.id;
+      if (typeof id !== "string" || !id.includes(idFind)) return marker;
+      changed += 1;
+      return {
+        ...marker,
+        data: {
+          ...marker.data,
+          id: id.split(idFind).join(idReplace),
+        },
+      };
+    });
+    if (changed === 0) return;
+    setMarkers(nextMarkers);
+    setDirty(true);
+    setSaved(null);
   };
 
   useEffect(() => {
@@ -308,7 +479,7 @@ export function BundleEditor({
 
   useEffect(() => {
     if (load.status !== "ready" || editTarget == null) return;
-    const targetKey = `${textid}:${seq}:${editTarget.bucket}:${editTarget.markerId}`;
+    const targetKey = `${textid}:${seq}:${editEdition ?? ""}:${editTarget.bucket}:${editTarget.markerId}`;
     if (bucket !== editTarget.bucket) {
       focusedEditTargetRef.current = null;
       installBucket(load.document, editTarget.bucket, editTarget);
@@ -319,17 +490,12 @@ export function BundleEditor({
     focusedEditTargetRef.current = targetKey;
     setCategory("*");
     setSelectedKey(marker.key);
-    requestAnimationFrame(() => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      const selection = markerDomSelection(editorView, marker);
-      textarea.focus();
-      textarea.setSelectionRange(selection.start, selection.end);
-      reportCursor();
-    });
+    scrollMarkerButtonIntoView(marker.key);
+    focusMarkerInTextarea(marker);
   }, [
     bucket,
     editTarget,
+    editEdition,
     editorView,
     load,
     markers,
@@ -363,7 +529,7 @@ export function BundleEditor({
           const id = marker.data.id;
           return typeof id === "string" && id ? [id] : [];
         }),
-      });
+      }, editEdition);
       return response.ids;
     } finally {
       setAllocatingIds((count) => Math.max(0, count - 1));
@@ -386,6 +552,10 @@ export function BundleEditor({
   };
 
   const changeEditorText = (nextText: string) => {
+    if (showLayoutMarkers) {
+      setError("Turn off layout markers before editing text.");
+      return;
+    }
     if (punctuationSet == null) {
       changeText(nextText);
       return;
@@ -487,14 +657,8 @@ export function BundleEditor({
 
   const selectMarker = (marker: EditableMarker) => {
     setSelectedKey(marker.key);
-    const selection = markerDomSelection(editorView, marker);
-    requestAnimationFrame(() => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      textarea.focus();
-      textarea.setSelectionRange(selection.start, selection.end);
-      reportCursor();
-    });
+    scrollMarkerButtonIntoView(marker.key);
+    focusMarkerInTextarea(marker);
   };
 
   const addMarker = async () => {
@@ -598,13 +762,13 @@ export function BundleEditor({
         renamed_marker_ids: renamed,
         acknowledge_toc_deletions: tocDeleteAcknowledged,
         unresolved_marker_indexes: [],
-      });
+      }, editEdition);
       setSaved(result);
       setDirty(false);
       if (result.kind === "pull_request") return;
       setLoad({ status: "loading" });
       try {
-        const refreshed = await getBundleEdit(textid, seq);
+        const refreshed = await getBundleEdit(textid, seq, editEdition);
         setLoad({ status: "ready", document: refreshed });
         installBucket(refreshed, bucket);
         setSaved(result);
@@ -639,11 +803,49 @@ export function BundleEditor({
             Add
           </button>
         </div>
-        <div className="be-marker-list">
+        <form
+          className="be-offset-jump"
+          onSubmit={(event) => {
+            event.preventDefault();
+            jumpToOffset();
+          }}
+        >
+          <input
+            value={offsetTarget}
+            inputMode="numeric"
+            aria-label="Scroll to canonical offset"
+            placeholder="Offset"
+            onChange={(event) => setOffsetTarget(event.target.value)}
+          />
+          <button type="submit" disabled={!offsetTarget}>Go</button>
+        </form>
+        <div className="be-id-replace">
+          <input
+            value={idFind}
+            aria-label="Find in marker IDs"
+            placeholder="Find ID text"
+            onChange={(event) => setIdFind(event.target.value)}
+          />
+          <input
+            value={idReplace}
+            aria-label="Replacement marker ID text"
+            placeholder="Replace with"
+            onChange={(event) => setIdReplace(event.target.value)}
+          />
+          <button
+            type="button"
+            disabled={!idFind || idReplaceCount === 0}
+            onClick={replaceMarkerIds}
+          >
+            Replace IDs{ idFind ? ` (${idReplaceCount})` : "" }
+          </button>
+        </div>
+        <div className="be-marker-list" ref={markerListRef}>
           {visibleMarkers.map((marker) => (
             <button
               type="button"
               key={marker.key}
+              data-marker-key={marker.key}
               className={`${marker.key === selectedKey ? "on " : ""}${marker.unresolved ? "unresolved" : ""}`}
               onClick={() => selectMarker(marker)}
             >
@@ -657,7 +859,11 @@ export function BundleEditor({
               )}
             </button>
           ))}
-          {visibleMarkers.length === 0 && <div className="be-list-empty">No markers</div>}
+          {visibleMarkers.length === 0 && (
+            <div className="be-list-empty">
+              No markers found. Did you commit and push the changes?
+            </div>
+          )}
         </div>
         {selected && (
           <div className="be-marker-form">
@@ -720,9 +926,29 @@ export function BundleEditor({
               ))}
             </select>
           </label>
+          <label className="be-punctuation-select">
+            <input
+              type="checkbox"
+              checked={showLayoutMarkers}
+              onChange={(event) => {
+                setShowLayoutMarkers(event.target.checked);
+                setError(null);
+              }}
+            />
+            Layout
+          </label>
           <span>{codepoints(text).length.toLocaleString()} characters</span>
           {unresolvedCount > 0 && <span className="be-unresolved-count">{unresolvedCount} unresolved</span>}
-          {validationError && <span className="be-unresolved-count">{validationError}</span>}
+          {validationError && (
+            <button
+              type="button"
+              className="be-validation-jump"
+              onClick={() => focusProblemMarker(validationProblem)}
+              disabled={!validationProblem?.markerKey}
+            >
+              {validationError}
+            </button>
+          )}
           <span className="be-grow" />
           <button
             type="button"
@@ -756,6 +982,7 @@ export function BundleEditor({
           onSelect={reportCursor}
           onKeyUp={reportCursor}
           onClick={reportCursor}
+          onDoubleClick={chooseClosestMarker}
         />
       </main>
     </div>

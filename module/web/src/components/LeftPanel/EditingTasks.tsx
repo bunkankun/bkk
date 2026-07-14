@@ -84,6 +84,7 @@ function VoiceProblemsTask() {
       offset: item.offset,
       length: item.length,
       markerId: item.marker_id,
+      edition: item.edition ?? null,
     });
   };
 
@@ -172,7 +173,7 @@ function VoiceProblemRow({
           <span>{label}</span>
         </div>
         <div className="list-sub">
-          juan {item.seq} · {item.bucket} @{item.offset}
+          {item.edition ? `${item.edition} · ` : ""}juan {item.seq} · {item.bucket} @{item.offset}
           {item.source ? ` · ${item.source}` : ""}
         </div>
         <div className="list-sub">{item.message}</div>

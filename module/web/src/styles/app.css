@@ -3837,6 +3837,29 @@ button {
 }
 .be-toolbar select { min-width: 130px; }
 .be-grow { flex: 1; }
+.be-offset-jump {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--bdr);
+}
+.be-offset-jump input {
+  min-width: 0;
+}
+.be-id-replace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 5px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--bdr);
+}
+.be-id-replace input {
+  min-width: 0;
+}
+.be-id-replace button {
+  white-space: nowrap;
+}
 .be-marker-list {
   flex: 1;
   min-height: 100px;
@@ -3908,6 +3931,13 @@ button {
 }
 .be-form-actions .danger { color: var(--red, #c44); }
 .be-unresolved-count { color: var(--red, #c44); }
+.be-validation-jump {
+  color: var(--red, #c44);
+  max-width: min(560px, 45vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .be-punctuation-select {
   display: flex;
   align-items: center;

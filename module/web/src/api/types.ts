@@ -259,6 +259,7 @@ export interface BundleMarkerIdAllocationResponse {
 export interface VoiceProblemItem {
   textid: string;
   title?: string | null;
+  edition?: string | null;
   seq: number;
   bucket: "front" | "body" | "back";
   offset: number;

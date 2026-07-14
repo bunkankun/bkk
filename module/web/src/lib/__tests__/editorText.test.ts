@@ -53,6 +53,30 @@ describe("renderEditorText", () => {
       length: 2,
     });
   });
+
+  it("can include layout markers with punctuation display", () => {
+    const lineBreak = marker("lb", { type: "line-break", offset: 1, id: "line-id" });
+    const view = renderEditorText(
+      "甲乙",
+      [
+        lineBreak,
+        marker("indent", { type: "indent", offset: 1, content: "　" }),
+        marker("comma", { type: "punctuation", offset: 1, content: "，" }),
+      ],
+      DEFAULT_PUNCTUATION_SET,
+      true,
+    );
+
+    expect(view.text).toBe("甲\n　，乙");
+    expect(markerDomSelection(view, lineBreak)).toEqual({ start: 1, end: 2 });
+    expect(view.units.map((unit) => unit.kind)).toEqual([
+      "text",
+      "layout",
+      "layout",
+      "punctuation",
+      "text",
+    ]);
+  });
 });
 
 describe("parsePunctuatedText", () => {

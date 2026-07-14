@@ -41,6 +41,26 @@ def test_multiple_paren_pairs_increment_ids():
     ]
 
 
+def test_touching_pairs_same_offset_merge_into_one_note():
+    markers = [
+        _paren(2, "("), _paren(8, ")"),
+        _paren(8, "("), _paren(12, ")"),
+    ]
+    assert derive_voice_markers(20, markers) == [
+        {"type": "voice", "offset": 2, "length": 10, "name": "note", "id": "n1"},
+    ]
+
+
+def test_touching_pairs_same_offset_merge_regardless_of_tie_order():
+    markers = [
+        _paren(2, "("), _paren(8, "("),
+        _paren(8, ")"), _paren(12, ")"),
+    ]
+    assert derive_voice_markers(20, markers) == [
+        {"type": "voice", "offset": 2, "length": 10, "name": "note", "id": "n1"},
+    ]
+
+
 def test_no_root_emitted_even_with_long_unparen_runs():
     # 50 codepoints of text with a single paren pair near the end should
     # still produce only the note marker — no root span for the

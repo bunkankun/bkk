@@ -456,9 +456,11 @@ export async function getJuan(textid: string, seq: number): Promise<Juan> {
 export async function getBundleEdit(
   textid: string,
   seq: number,
+  edition?: string | null,
 ): Promise<BundleEditDocument> {
+  const q = edition ? `?edition=${encodeURIComponent(edition)}` : "";
   return fetchJson<BundleEditDocument>(
-    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit`,
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit${q}`,
   );
 }
 
@@ -466,9 +468,11 @@ export async function saveBundleEdit(
   textid: string,
   seq: number,
   payload: BundleEditSaveRequest,
+  edition?: string | null,
 ): Promise<BundleEditSaveResponse> {
+  const q = edition ? `?edition=${encodeURIComponent(edition)}` : "";
   return fetchJson<BundleEditSaveResponse>(
-    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit`,
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit${q}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -481,9 +485,11 @@ export async function allocateBundleMarkerIds(
   textid: string,
   seq: number,
   payload: BundleMarkerIdAllocationRequest,
+  edition?: string | null,
 ): Promise<BundleMarkerIdAllocationResponse> {
+  const q = edition ? `?edition=${encodeURIComponent(edition)}` : "";
   return fetchJson<BundleMarkerIdAllocationResponse>(
-    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit/marker-ids`,
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit/marker-ids${q}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

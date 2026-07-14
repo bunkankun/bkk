@@ -10,7 +10,7 @@ export interface RenderedEditorUnit {
   start: number;
   end: number;
   canonicalOffset: number;
-  kind: "text" | "punctuation";
+  kind: "text" | "punctuation" | "layout";
   markerKey?: string;
 }
 
@@ -67,29 +67,38 @@ export function punctuationSets(markers: EditableMarker[]): string[] {
   return [DEFAULT_PUNCTUATION_SET, ...[...named].sort()];
 }
 
+function layoutMarkerContent(marker: JuanMarker): string | null {
+  if (marker.type === "line-break") return "\n";
+  if (marker.type === "indent") {
+    const content = marker.content;
+    return typeof content === "string" && content ? content : "\u3000";
+  }
+  return null;
+}
+
 export function renderEditorText(
   canonicalText: string,
   markers: EditableMarker[],
   punctuationSet: string | null,
+  showLayoutMarkers = false,
 ): RenderedEditorText {
   const canonical = Array.from(canonicalText);
   const atOffset = new Map<number, EditableMarker[]>();
-  if (punctuationSet != null) {
-    for (const marker of markers) {
-      if (punctuationSetOf(marker.data) !== punctuationSet) continue;
-      const offset = marker.data.offset;
-      const content = marker.data.content;
-      if (
-        typeof offset !== "number" ||
-        offset < 0 ||
-        offset > canonical.length ||
-        typeof content !== "string" ||
-        !content
-      ) continue;
-      const list = atOffset.get(offset) ?? [];
-      list.push(marker);
-      atOffset.set(offset, list);
-    }
+  for (const marker of markers) {
+    const offset = marker.data.offset;
+    if (
+      typeof offset !== "number" ||
+      offset < 0 ||
+      offset > canonical.length
+    ) continue;
+    const isVisiblePunctuation =
+      punctuationSet != null && punctuationSetOf(marker.data) === punctuationSet;
+    const isVisibleLayout =
+      showLayoutMarkers && layoutMarkerContent(marker.data) != null;
+    if (!isVisiblePunctuation && !isVisibleLayout) continue;
+    const list = atOffset.get(offset) ?? [];
+    list.push(marker);
+    atOffset.set(offset, list);
   }
 
   const parts: string[] = [];
@@ -113,9 +122,14 @@ export function renderEditorText(
   for (let offset = 0; offset <= canonical.length; offset += 1) {
     caretBefore[offset] = utf16;
     for (const marker of atOffset.get(offset) ?? []) {
+      const isLayout = showLayoutMarkers && layoutMarkerContent(marker.data) != null;
+      const content = isLayout
+        ? layoutMarkerContent(marker.data)
+        : String(marker.data.content ?? "");
+      if (!content) continue;
       const start = utf16;
-      for (const ch of Array.from(String(marker.data.content ?? ""))) {
-        append(ch, offset, "punctuation", marker.key);
+      for (const ch of Array.from(content)) {
+        append(ch, offset, isLayout ? "layout" : "punctuation", marker.key);
       }
       markerSpans.set(marker.key, { start, end: utf16 });
     }
