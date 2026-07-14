@@ -15,7 +15,7 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 import yaml
-from fastapi import APIRouter, HTTPException, Path as PathParam, Request
+from fastapi import APIRouter, HTTPException, Path as PathParam, Query, Request
 from pydantic import BaseModel, Field
 
 from bkk.edit.offsets import (
@@ -46,6 +46,7 @@ router = APIRouter(prefix="/bundles", tags=["bundles"])
 log = logging.getLogger("bkk.serve.bundle_edit")
 
 _MARKER_ID_RE = re.compile(r"_(?P<edition>[^_]+)_(?P<seq>\d{3})-")
+_EDITION_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 class TextSplice(BaseModel):
@@ -180,10 +181,24 @@ def _head_sha(token: str, repo: str, branch: str) -> str:
 
 
 def _load_remote(
-    token: str, repo: str, branch: str, textid: str, seq: int, *, ref: str | None = None,
+    token: str,
+    repo: str,
+    branch: str,
+    textid: str,
+    seq: int,
+    *,
+    ref: str | None = None,
+    edition: str | None = None,
 ) -> dict[str, Any]:
+    if edition is not None and not _EDITION_RE.fullmatch(edition):
+        raise HTTPException(status_code=400, detail="invalid edition short")
     base_sha = ref or _head_sha(token, repo, branch)
-    manifest_path = f"{textid}.manifest.yaml"
+    scope_prefix = f"editions/{edition}/" if edition else ""
+    manifest_path = (
+        f"{scope_prefix}{textid}-{edition}.manifest.yaml"
+        if edition
+        else f"{textid}.manifest.yaml"
+    )
     _manifest_payload, manifest_text = _fetch_file(token, repo, manifest_path, base_sha)
     manifest = yaml.safe_load(manifest_text) or {}
     if not isinstance(manifest, dict):
@@ -194,7 +209,7 @@ def _load_remote(
     )
     if part is None or not isinstance(part.get("filename"), str):
         raise HTTPException(status_code=404, detail=f"{textid} juan {seq} not found")
-    juan_path = part["filename"]
+    juan_path = f"{scope_prefix}{part['filename']}"
     _juan_payload, juan_text = _fetch_file(token, repo, juan_path, base_sha)
     juan = yaml.safe_load(juan_text) or {}
     if not isinstance(juan, dict):
@@ -204,7 +219,7 @@ def _load_remote(
     marker_asset: dict[str, Any] | None = None
     marker_entry = marker_asset_entry_for_seq(manifest, seq)
     if marker_entry is not None and isinstance(marker_entry.get("filename"), str):
-        marker_path = marker_entry["filename"]
+        marker_path = f"{scope_prefix}{marker_entry['filename']}"
         _marker_payload, marker_text = _fetch_file(token, repo, marker_path, base_sha)
         parsed = yaml.safe_load(marker_text) or {}
         if not isinstance(parsed, dict):
@@ -218,39 +233,53 @@ def _load_remote(
         "juan": juan,
         "marker_path": marker_path,
         "marker_asset": marker_asset,
+        "scope_prefix": scope_prefix,
     }
 
 
 def _validate_markers(
     markers: list[dict[str, Any]], text_len: int, textid: str,
 ) -> None:
+    def label(index: int, marker: dict[str, Any]) -> str:
+        marker_type = marker.get("type")
+        marker_id = marker.get("id")
+        offset = marker.get("offset")
+        bits = [f"marker {index}"]
+        if isinstance(marker_type, str) and marker_type:
+            bits.append(f"type={marker_type}")
+        if isinstance(marker_id, str) and marker_id:
+            bits.append(f"id={marker_id}")
+        if isinstance(offset, int):
+            bits.append(f"offset={offset}")
+        return " (".join([bits[0], ", ".join(bits[1:]) + ")"]) if len(bits) > 1 else bits[0]
+
     seen_ids: set[str] = set()
     last_offset = -1
     for index, marker in enumerate(markers):
         marker_type = marker.get("type")
         offset = marker.get("offset")
         if not isinstance(marker_type, str) or not marker_type:
-            raise HTTPException(status_code=422, detail=f"marker {index}: type is required")
+            raise HTTPException(status_code=422, detail=f"{label(index, marker)}: type is required")
         if not isinstance(offset, int) or isinstance(offset, bool):
-            raise HTTPException(status_code=422, detail=f"marker {index}: offset must be an integer")
+            raise HTTPException(status_code=422, detail=f"{label(index, marker)}: offset must be an integer")
         if not 0 <= offset <= text_len:
             raise HTTPException(
                 status_code=422,
-                detail=f"marker {index}: offset {offset} outside [0, {text_len}]",
+                detail=f"{label(index, marker)}: offset {offset} outside [0, {text_len}]",
             )
         if offset < last_offset:
-            raise HTTPException(status_code=422, detail="markers must be ordered by offset")
+            raise HTTPException(status_code=422, detail=f"{label(index, marker)}: markers must be ordered by offset")
         last_offset = offset
         length = marker.get("length")
         if length is not None:
             if not isinstance(length, int) or isinstance(length, bool) or length < 0:
-                raise HTTPException(status_code=422, detail=f"marker {index}: length must be non-negative")
+                raise HTTPException(status_code=422, detail=f"{label(index, marker)}: length must be non-negative")
             if offset + length > text_len:
-                raise HTTPException(status_code=422, detail=f"marker {index}: span exceeds text")
+                raise HTTPException(status_code=422, detail=f"{label(index, marker)}: span exceeds text")
         marker_id = marker.get("id")
         if isinstance(marker_id, str) and marker_id:
             if marker_id in seen_ids and marker_type not in ("tls:div-start", "tls:div-end"):
-                raise HTTPException(status_code=422, detail=f"duplicate marker id {marker_id}")
+                raise HTTPException(status_code=422, detail=f"{label(index, marker)}: duplicate marker id {marker_id}")
             seen_ids.add(marker_id)
             if marker_type not in ("tls:ann", "voice"):
                 parts = marker_id.split("_", 2)
@@ -258,7 +287,7 @@ def _validate_markers(
                     raise HTTPException(
                         status_code=422,
                         detail=(
-                            f"marker {index}: id must match "
+                            f"{label(index, marker)}: id must match "
                             f"{textid}_<edition>_<location>"
                         ),
                     )
@@ -581,12 +610,13 @@ def _prepare_files(
             edition = ((juan.get("metadata") or {}).get("edition") or {}).get("short")
             edition = edition if isinstance(edition, str) else None
             marker_asset = build_marker_asset(textid, seq, edition, {})
-            marker_path = marker_asset_filename(textid, seq, edition)
+            marker_filename = marker_asset_filename(textid, seq, edition)
+            marker_path = f"{remote.get('scope_prefix', '')}{marker_filename}"
             marker_entries = [
                 entry for entry in marker_entries
                 if not (isinstance(entry, dict) and entry.get("seq") == seq)
             ]
-            marker_entries.append({"seq": seq, "filename": marker_path, "hash": ZERO_HASH})
+            marker_entries.append({"seq": seq, "filename": marker_filename, "hash": ZERO_HASH})
             marker_entries.sort(key=lambda entry: entry.get("seq", 0))
             assets["markers"] = marker_entries
         markers_obj = marker_asset.setdefault("markers", {})
@@ -852,12 +882,13 @@ def get_bundle_edit(
     request: Request,
     textid: str = PathParam(...),
     seq: int = PathParam(..., ge=0),
+    edition: str | None = Query(None, description="optional edition subdirectory short"),
 ) -> dict[str, Any]:
     session = _session(request)
     state: AppState = request.app.state.bkk
     repo = _repo(state, textid)
     branch = _branch(state, session.access_token, repo)
-    remote = _load_remote(session.access_token, repo, branch, textid, seq)
+    remote = _load_remote(session.access_token, repo, branch, textid, seq, edition=edition)
     edition = ((remote["juan"].get("metadata") or {}).get("edition") or {}).get("short")
     if not isinstance(edition, str) or not edition:
         edition = ""
@@ -892,6 +923,7 @@ def allocate_bundle_marker_ids(
     payload: MarkerIdAllocationRequest,
     textid: str = PathParam(...),
     seq: int = PathParam(..., ge=0),
+    edition: str | None = Query(None, description="optional edition subdirectory short"),
 ) -> dict[str, list[str]]:
     session = _session(request)
     state: AppState = request.app.state.bkk
@@ -901,7 +933,9 @@ def allocate_bundle_marker_ids(
     if current_sha != payload.base_commit_sha:
         raise HTTPException(status_code=409, detail="bundle changed; reload and retry")
     remote = _load_remote(
-        session.access_token, repo, branch, textid, seq, ref=payload.base_commit_sha,
+        session.access_token, repo, branch, textid, seq,
+        ref=payload.base_commit_sha,
+        edition=edition,
     )
     if not isinstance(remote["juan"].get(payload.bucket), dict):
         raise HTTPException(status_code=404, detail=f"bucket {payload.bucket} not found")
@@ -940,6 +974,7 @@ def save_bundle_edit(
     payload: BundleEditRequest,
     textid: str = PathParam(...),
     seq: int = PathParam(..., ge=0),
+    edition: str | None = Query(None, description="optional edition subdirectory short"),
 ) -> dict[str, Any]:
     session = _session(request)
     state: AppState = request.app.state.bkk
@@ -949,7 +984,9 @@ def save_bundle_edit(
     if current_sha != payload.base_commit_sha:
         raise HTTPException(status_code=409, detail="bundle changed; reload and retry")
     remote = _load_remote(
-        session.access_token, upstream, branch, textid, seq, ref=payload.base_commit_sha,
+        session.access_token, upstream, branch, textid, seq,
+        ref=payload.base_commit_sha,
+        edition=edition,
     )
     files, removed_toc = _prepare_files(remote, textid, seq, payload)
     repairs = _prepare_repairs(state, session, remote, textid, seq, payload)

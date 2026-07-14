@@ -49,16 +49,18 @@ def derive_voice_markers(
 
     Each ``(...)`` pair produces a single ``voice`` marker with
     ``name="note"`` covering the offsets from the opener through the
-    closer (inclusive of both). Ids are assigned per-bucket as ``n1``,
-    ``n2``, ….
+    closer (inclusive of both). If a close paren and the next open paren
+    share the same offset, the touching runs are treated as one continuous
+    note rather than two adjacent notes. Ids are assigned per-bucket as
+    ``n1``, ``n2``, ….
 
     Returns an empty list when the bucket carries no ``(`` punctuation
     marker.
 
     Raises :class:`ValueError` if the ``(``/``)`` pairing is malformed.
     """
-    parens: list[tuple[int, str]] = []
-    for m in markers:
+    parens: list[tuple[int, str, int]] = []
+    for index, m in enumerate(markers):
         if not isinstance(m, dict):
             continue
         if m.get("type") != "punctuation":
@@ -73,47 +75,65 @@ def derive_voice_markers(
                 f"punctuation marker missing integer offset: {m}",
                 offset=0,
             )
-        parens.append((off, ch))
+        parens.append((off, ch, index))
 
     if not parens:
         return []
 
-    parens.sort(key=lambda p: p[0])
+    parens.sort(key=lambda p: (p[0], p[2]))
+
+    groups: list[tuple[int, list[str]]] = []
+    for off, ch, _ in parens:
+        if groups and groups[-1][0] == off:
+            groups[-1][1].append(ch)
+        else:
+            groups.append((off, [ch]))
 
     spans: list[tuple[int, int]] = []
-    i = 0
-    n = len(parens)
-    while i < n:
-        o_off, o_ch = parens[i]
-        if o_ch != "(":
-            raise VoiceDerivationProblem(
-                "stray-close",
-                f"unexpected ')' at offset {o_off} with no matching '('",
-                offset=o_off,
-            )
-        if i + 1 >= n:
-            raise VoiceDerivationProblem(
-                "unmatched-open",
-                f"unmatched '(' at offset {o_off}",
-                offset=o_off,
-            )
-        c_off, c_ch = parens[i + 1]
-        if c_ch != ")":
+    open_off: int | None = None
+    for group_index, (off, chars) in enumerate(groups):
+        has_open = "(" in chars
+        has_close = ")" in chars
+        if open_off is None:
+            if has_close and not has_open:
+                raise VoiceDerivationProblem(
+                    "stray-close",
+                    f"unexpected ')' at offset {off} with no matching '('",
+                    offset=off,
+                )
+            if has_open and has_close:
+                spans.append((off, off))
+                continue
+            open_off = off
+            continue
+
+        if has_close and has_open:
+            if _has_later_close(groups, group_index):
+                continue
+            spans.append((open_off, off))
+            open_off = off
+            continue
+
+        if has_close:
+            spans.append((open_off, off))
+            open_off = None
+            continue
+
+        if has_open:
             raise VoiceDerivationProblem(
                 "expected-close",
-                f"expected ')' after '(' at offset {o_off}, "
-                f"got '{c_ch}' at offset {c_off}",
-                offset=o_off,
-                length=max(0, c_off - o_off),
+                f"expected ')' after '(' at offset {open_off}, "
+                f"got '(' at offset {off}",
+                offset=open_off,
+                length=max(0, off - open_off),
             )
-        if c_off < o_off:
-            raise VoiceDerivationProblem(
-                "close-before-open",
-                f"')' offset {c_off} precedes '(' offset {o_off}",
-                offset=c_off,
-            )
-        spans.append((o_off, c_off))
-        i += 2
+
+    if open_off is not None:
+        raise VoiceDerivationProblem(
+            "unmatched-open",
+            f"unmatched '(' at offset {open_off}",
+            offset=open_off,
+        )
 
     out: list[dict] = []
     for i, (o_open, o_close) in enumerate(spans, 1):
@@ -125,3 +145,7 @@ def derive_voice_markers(
             "id": f"n{i}",
         })
     return out
+
+
+def _has_later_close(groups: list[tuple[int, list[str]]], group_index: int) -> bool:
+    return any(")" in chars for _, chars in groups[group_index + 1:])
