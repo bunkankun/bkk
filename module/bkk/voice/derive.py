@@ -20,6 +20,24 @@ that consults external context.
 from __future__ import annotations
 
 
+class VoiceDerivationProblem(ValueError):
+    """Location-aware problem that blocks voice derivation for a bucket."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        offset: int,
+        length: int = 0,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.offset = offset
+        self.length = length
+        self.message = message
+
+
 def derive_voice_markers(
     text_len: int, markers: list[dict],
 ) -> list[dict]:
@@ -50,7 +68,11 @@ def derive_voice_markers(
             continue
         off = m.get("offset")
         if not isinstance(off, int):
-            raise ValueError(f"punctuation marker missing integer offset: {m}")
+            raise VoiceDerivationProblem(
+                "punctuation-offset",
+                f"punctuation marker missing integer offset: {m}",
+                offset=0,
+            )
         parens.append((off, ch))
 
     if not parens:
@@ -64,20 +86,31 @@ def derive_voice_markers(
     while i < n:
         o_off, o_ch = parens[i]
         if o_ch != "(":
-            raise ValueError(
-                f"unexpected ')' at offset {o_off} with no matching '('"
+            raise VoiceDerivationProblem(
+                "stray-close",
+                f"unexpected ')' at offset {o_off} with no matching '('",
+                offset=o_off,
             )
         if i + 1 >= n:
-            raise ValueError(f"unmatched '(' at offset {o_off}")
+            raise VoiceDerivationProblem(
+                "unmatched-open",
+                f"unmatched '(' at offset {o_off}",
+                offset=o_off,
+            )
         c_off, c_ch = parens[i + 1]
         if c_ch != ")":
-            raise ValueError(
+            raise VoiceDerivationProblem(
+                "expected-close",
                 f"expected ')' after '(' at offset {o_off}, "
-                f"got '{c_ch}' at offset {c_off}"
+                f"got '{c_ch}' at offset {c_off}",
+                offset=o_off,
+                length=max(0, c_off - o_off),
             )
         if c_off < o_off:
-            raise ValueError(
-                f"')' offset {c_off} precedes '(' offset {o_off}"
+            raise VoiceDerivationProblem(
+                "close-before-open",
+                f"')' offset {c_off} precedes '(' offset {o_off}",
+                offset=c_off,
             )
         spans.append((o_off, c_off))
         i += 2

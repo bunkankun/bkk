@@ -282,6 +282,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
             key={`${activeTextTab.textid}:${activeTextTab.seq}`}
             textid={activeTextTab.textid}
             seq={activeTextTab.seq}
+            editTarget={activeTextTab.editTarget ?? null}
             onCursorInfoChange={setEditCursor}
           />
         ) : (

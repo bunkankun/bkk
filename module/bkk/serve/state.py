@@ -295,6 +295,10 @@ class AppState:
         return self.config.duplications_report_path
 
     @property
+    def voice_problems_report_path(self) -> Path | None:
+        return self.config.voice_problems_report_path
+
+    @property
     def cache(self) -> CorpusCache:
         if self._cache is None:
             self._cache = CorpusCache(self.corpus_root)

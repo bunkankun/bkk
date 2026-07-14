@@ -52,6 +52,7 @@ import yaml
 
 from bkk.cli_common import resolve_bundle_dir, resolve_rc_path, warn_deprecated
 from bkk.importer.hashing import manifest_hash, sha256_jcs, ZERO_HASH
+from bkk.importer.idassigner import allocate_marker_ids
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
 from bkk.marker_assets import (
     VALID_BUCKETS,
@@ -66,11 +67,18 @@ from bkk.marker_assets import (
 )
 from bkk.short_refs import text_id_arg, text_or_path_arg
 
-from .derive import derive_voice_markers
+from .derive import VoiceDerivationProblem, derive_voice_markers
 from .derive_indent import derive_voice_markers_from_indent
+from .problems import (
+    VoiceProblemReportError,
+    find_voice_problems,
+    update_voice_problems_report,
+    write_voice_problems_report,
+)
 
 
 _VALID_SOURCES = ("parens", "indent", "all")
+_VOICE_PROBLEM_TYPE = "voice:problem"
 
 
 _JUAN_RE = re.compile(
@@ -131,6 +139,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", dest="dry_run", action="store_true",
         help="report what would be removed without modifying files",
     )
+    pp = sub.add_parser(
+        "problems",
+        help="write a precomputed report of persisted voice:problem markers",
+    )
+    pp.add_argument(
+        "legacy_corpus", nargs="?", type=Path,
+        help=argparse.SUPPRESS,
+    )
+    pp.add_argument(
+        "--corpus", dest="corpus", type=Path, default=None,
+        help="corpus root to scan (defaults to global.corpus)",
+    )
+    pp.add_argument(
+        "--text-id", dest="text_id", type=text_id_arg, default=None,
+        help="restrict the report to one bundle under the corpus root",
+    )
+    pp.add_argument(
+        "--out", dest="report", type=Path, default=None,
+        help="report path (defaults to [voice].report or BKK_VOICE_PROBLEMS_REPORT)",
+    )
     return p
 
 
@@ -138,7 +166,7 @@ def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    out_root = args.out_root
+    out_root = getattr(args, "out_root", None)
     if out_root is None:
         from bkk.config import load_rc
         rc = load_rc()
@@ -146,6 +174,9 @@ def run(argv: list[str] | None = None) -> int:
             None, rc,
             (("global", "corpus"),),
         )
+
+    if args.op == "problems":
+        return _run_problems(args, out_root)
 
     try:
         bundle, text_id = _selected_bundle_args(args)
@@ -243,6 +274,8 @@ def _run_add(
 
     overall_juans = 0
     overall_by_name: dict[str, int] = {}
+    overall_problems = 0
+    problem_rows: list[dict] = []
     failed: list[str] = []
     for juan_dir, manifest_path, short in targets:
         scope = "master" if short is None else f"edition {short}"
@@ -258,6 +291,8 @@ def _run_add(
             failed.append(scope)
             continue
         overall_juans += stats["juans"]
+        overall_problems += stats.get("problems", 0)
+        problem_rows.extend(stats.get("problem_rows", []))
         for name, count in stats["by_name"].items():
             overall_by_name[name] = overall_by_name.get(name, 0) + count
         for line in stats["lines"]:
@@ -266,10 +301,78 @@ def _run_add(
     verb = "would derive" if dry_run else "derived"
     summary = _format_voice_counts(overall_by_name) or "0 voice marker(s)"
     print(f"{verb} {summary} across {overall_juans} juan file(s)")
+    if overall_problems:
+        problem_verb = "would mark" if dry_run else "marked"
+        print(
+            f"{problem_verb} {overall_problems} unresolved voice problem(s)",
+            file=sys.stderr,
+        )
     if failed:
         print(f"skipped {len(failed)} scope(s) due to errors: {', '.join(failed)}", file=sys.stderr)
         return 1
+    if not dry_run:
+        report_path = _configured_voice_report_path()
+        if report_path is not None:
+            try:
+                update_voice_problems_report(
+                    report_path, text_id=text_id, rows=problem_rows,
+                )
+            except (OSError, VoiceProblemReportError) as exc:
+                print(
+                    f"error: could not update voice problem report {report_path}: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
+            print(f"updated voice problem report: {report_path}")
+    if overall_problems:
+        return 1
     return 0
+
+
+def _run_problems(args: argparse.Namespace, out_root: Path | None) -> int:
+    corpus = args.corpus or args.legacy_corpus or out_root
+    if corpus is None:
+        print(
+            "error: corpus root is required: pass --corpus or configure global.corpus",
+            file=sys.stderr,
+        )
+        return 2
+    corpus = Path(corpus)
+    if not corpus.is_dir():
+        print(f"error: corpus root not found: {corpus}", file=sys.stderr)
+        return 2
+
+    report_path = args.report or _configured_voice_report_path()
+    if report_path is None:
+        print(
+            "error: report path is required: pass --out, set [voice].report, "
+            "or set BKK_VOICE_PROBLEMS_REPORT",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        rows = find_voice_problems(corpus, text_id=args.text_id)
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    write_voice_problems_report(rows, report_path)
+    print(f"wrote {len(rows)} voice problem(s) to {report_path}")
+    return 0
+
+
+def _configured_voice_report_path() -> Path | None:
+    import os
+
+    env = os.environ.get("BKK_VOICE_PROBLEMS_REPORT")
+    if env:
+        return Path(env).resolve()
+    from bkk.config import load_rc
+    rc = load_rc()
+    report = (rc.get("voice") or {}).get("report")
+    if report:
+        return Path(report).resolve()
+    return None
 
 
 def _process_one(
@@ -303,13 +406,18 @@ def _process_one(
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
     if not isinstance(manifest, dict):
         raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
+    title = ((manifest.get("metadata") or {}).get("title"))
+    title = title if isinstance(title, str) else None
 
     lines: list[str] = []
     total_by_name: dict[str, int] = {}
+    total_problems = 0
+    problem_rows: list[dict] = []
     # First pass: derive everything in memory. If any juan/bucket fails, we
-    # abort the scope without having written a single file.
+    # record a location marker and keep processing the rest of the scope.
     pending_juans: list[tuple[Path, dict, str]] = []
     pending_assets: list[tuple[Path, dict, str, str]] = []
+    occupied_ids = _occupied_marker_ids(juan_dir, manifest, juan_entries)
 
     for seq, juan_path in juan_entries:
         data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
@@ -325,6 +433,7 @@ def _process_one(
             )
 
         juan_by_name: dict[str, int] = {}
+        juan_problems = 0
         juan_changed = False
         asset_changed = False
         asset_markers_by_bucket = {
@@ -366,8 +475,45 @@ def _process_one(
                     m for m in markers
                     if not (isinstance(m, dict) and m.get("type") == "voice")
                 ]
+            external_markers = asset_markers_by_bucket.get(bucket_name, [])
+            new_external = [
+                m for m in external_markers
+                if not _is_stale_voice_problem(m, source)
+            ]
+            if len(new_external) != len(external_markers):
+                asset_markers_by_bucket[bucket_name] = new_external
+                asset_changed = True
+                markers = [
+                    m for m in markers
+                    if not _is_stale_voice_problem(m, source)
+                ]
             try:
                 new_voices = _derive_for_bucket(source, len(text), markers)
+            except VoiceDerivationProblem as exc:
+                problem = _voice_problem_marker(
+                    exc, text_id, seq, short, bucket_name, source, len(text),
+                    occupied_ids,
+                )
+                problem_rows.append(_voice_problem_report_row(
+                    text_id=text_id,
+                    title=title,
+                    short=short,
+                    seq=seq,
+                    bucket_name=bucket_name,
+                    marker=problem,
+                ))
+                asset_markers_by_bucket.setdefault(bucket_name, []).append(problem)
+                asset_markers_by_bucket[bucket_name] = _sorted_marker_flows(
+                    asset_markers_by_bucket[bucket_name],
+                )
+                asset_changed = True
+                juan_problems += 1
+                total_problems += 1
+                lines.append(
+                    f"  juan {seq:03d} [{bucket_name}]: "
+                    f"marked {exc.code}: {exc.message}"
+                )
+                continue
             except ValueError as exc:
                 raise ValueError(f"{juan_path.name} [{bucket_name}]: {exc}") from exc
             if source == "all":
@@ -383,10 +529,15 @@ def _process_one(
             asset_markers_by_bucket[bucket_name] = _sorted_marker_flows(
                 list(existing_external) + new_voices,
             )
+            for v in new_voices:
+                mid = v.get("id")
+                if isinstance(mid, str) and mid:
+                    occupied_ids.add(mid)
             asset_changed = True
 
         forced_cleanup = force and existing and (juan_changed or asset_changed)
-        if not juan_by_name and not forced_cleanup:
+        problem_cleanup = asset_changed and not juan_by_name and not forced_cleanup
+        if not juan_by_name and not forced_cleanup and not problem_cleanup:
             lines.append(f"  juan {seq:03d}: no voice signal; left as-is")
             continue
 
@@ -396,8 +547,10 @@ def _process_one(
             lines.append(
                 f"  juan {seq:03d}: {_format_voice_counts(juan_by_name)}"
             )
-        else:
+        elif forced_cleanup:
             lines.append(f"  juan {seq:03d}: removed existing voice marker(s)")
+        elif juan_problems == 0:
+            lines.append(f"  juan {seq:03d}: cleared stale voice problem marker(s)")
 
         if juan_changed:
             new_hash = _juan_self_hash(data)
@@ -445,6 +598,8 @@ def _process_one(
     return {
         "juans": len(juan_entries),
         "by_name": total_by_name,
+        "problems": total_problems,
+        "problem_rows": problem_rows,
         "lines": lines,
     }
 
@@ -603,6 +758,90 @@ def _process_one_remove(
         "juans": len(juan_entries),
         "removed": total_removed,
         "lines": lines,
+    }
+
+
+def _occupied_marker_ids(
+    juan_dir: Path,
+    manifest: dict,
+    juan_entries: list[tuple[int, Path]],
+) -> set[str]:
+    occupied: set[str] = set()
+    for seq, juan_path in juan_entries:
+        data = yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(data, dict):
+            continue
+        marker_asset = load_marker_asset(juan_dir, manifest, seq)
+        for bucket_name in _BUCKETS:
+            for marker in effective_markers_for_bucket(data, bucket_name, marker_asset):
+                mid = marker.get("id") if isinstance(marker, dict) else None
+                if isinstance(mid, str) and mid:
+                    occupied.add(mid)
+    return occupied
+
+
+def _is_stale_voice_problem(marker: object, source: str) -> bool:
+    return (
+        isinstance(marker, dict)
+        and marker.get("type") == _VOICE_PROBLEM_TYPE
+        and marker.get("source") == source
+    )
+
+
+def _voice_problem_marker(
+    problem: VoiceDerivationProblem,
+    text_id: str,
+    seq: int,
+    short: str | None,
+    bucket_name: str,
+    source: str,
+    text_len: int,
+    occupied_ids: set[str],
+) -> dict:
+    offset = min(max(problem.offset, 0), text_len)
+    length = min(max(problem.length, 0), max(0, text_len - offset))
+    [marker_id] = allocate_marker_ids(
+        [_VOICE_PROBLEM_TYPE],
+        text_id=text_id,
+        edition=short or "bkk",
+        juan_label=f"{seq:03d}",
+        occupied_ids=occupied_ids,
+    )
+    occupied_ids.add(marker_id)
+    return marker_to_flow({
+        "type": _VOICE_PROBLEM_TYPE,
+        "offset": offset,
+        "length": length,
+        "id": marker_id,
+        "source": source,
+        "bucket": bucket_name,
+        "code": problem.code,
+        "message": problem.message,
+    })
+
+
+def _voice_problem_report_row(
+    *,
+    text_id: str,
+    title: str | None,
+    short: str | None,
+    seq: int,
+    bucket_name: str,
+    marker: dict,
+) -> dict:
+    return {
+        "id": 0,
+        "textid": text_id,
+        "title": title,
+        "edition": short,
+        "seq": seq,
+        "bucket": bucket_name,
+        "offset": marker.get("offset") if isinstance(marker.get("offset"), int) else 0,
+        "length": marker.get("length") if isinstance(marker.get("length"), int) else 0,
+        "marker_id": marker.get("id") if isinstance(marker.get("id"), str) else "",
+        "source": marker.get("source") if isinstance(marker.get("source"), str) else None,
+        "code": marker.get("code") if isinstance(marker.get("code"), str) else None,
+        "message": marker.get("message") if isinstance(marker.get("message"), str) else "",
     }
 
 

@@ -256,6 +256,25 @@ export interface BundleMarkerIdAllocationResponse {
   ids: string[];
 }
 
+export interface VoiceProblemItem {
+  textid: string;
+  title?: string | null;
+  seq: number;
+  bucket: "front" | "body" | "back";
+  offset: number;
+  length: number;
+  marker_id: string;
+  source?: string | null;
+  code?: string | null;
+  message: string;
+}
+
+export interface VoiceProblemsResponse {
+  items: VoiceProblemItem[];
+  total: number;
+  capped: boolean;
+}
+
 // Annotations
 export interface AnnotationForm {
   orig?: string;

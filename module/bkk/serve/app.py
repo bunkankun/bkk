@@ -32,6 +32,7 @@ from .routers import redirects as redirects_router
 from .routers import search as search_router
 from .routers import texts as texts_router
 from .routers import translations as translations_router
+from .routers import voice as voice_router
 from .routers import workspace as workspace_router
 from .routers import user_texts as user_texts_router
 from .state import AppState
@@ -112,6 +113,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             {"name": "core", "description": "Browse the bkk-core knowledge layer (concepts, graphs, words, …)."},
             {"name": "search", "description": "Variant-aware KWIC search across the corpus."},
             {"name": "translations", "description": "Translation overlay discovery and alignment."},
+            {"name": "voice", "description": "Voice derivation maintenance diagnostics."},
             {"name": "parallels", "description": "Per-juan links to parallel passages."},
             {"name": "recipes", "description": "Recipe-as-request: assemble pinned slices."},
             {"name": "auth", "description": "GitHub login and per-user BKK workspace setup."},
@@ -147,6 +149,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(annotations_write_router.router, prefix="/api")
     app.include_router(contributions_router.router, prefix="/api")
     app.include_router(translations_router.router, prefix="/api")
+    app.include_router(voice_router.router, prefix="/api")
     app.include_router(parallels_router.router, prefix="/api")
     app.include_router(bundle_edit_router.router, prefix="/api")
     app.include_router(bundles_router.router, prefix="/api")

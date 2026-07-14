@@ -13,7 +13,7 @@ from bkk.marker_assets import (
 
 KNOWN_MARKER_TYPES = {
     "page-break", "line-break", "indent", "punctuation", "paragraph-break",
-    "comment", "head", "variant", "voice", "substitution",
+    "comment", "head", "variant", "voice", "voice:problem", "substitution",
     "kr:org-directive", "kr:non-cjk", "kr:newline",
     "tls:head", "tls:seg", "tls:ann",
     "tls:div-start", "tls:div-end",

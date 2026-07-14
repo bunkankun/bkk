@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   acceptSyntacticFunctionWarning,
   getSyntacticFunctionUsage,
+  getVoiceProblems,
   lintSyntacticFunctions,
   subscribeCoreRecordSaved,
 } from "../../api/client";
@@ -10,6 +11,8 @@ import type {
   SyntacticFunctionLintResponse,
   SyntacticFunctionUsageItem,
   SyntacticFunctionUsageResponse,
+  VoiceProblemItem,
+  VoiceProblemsResponse,
 } from "../../api/types";
 import { workspace } from "../../state/useWorkspace";
 
@@ -20,6 +23,9 @@ export function EditingTasks() {
     <div className="lists-panel" style={{ display: "flex", flexDirection: "column" }}>
       <SectionHeader>Lint syntactic functions</SectionHeader>
       <LintSyntacticFunctionsTask />
+      <div style={{ borderTop: "1px solid var(--border, #ddd)", margin: "8px 0" }} />
+      <SectionHeader>Voice derivation problems</SectionHeader>
+      <VoiceProblemsTask />
       <div style={{ borderTop: "1px solid var(--border, #ddd)", margin: "8px 0" }} />
       <SectionHeader>Unused / seldom-used syntactic functions</SectionHeader>
       <SyntacticFunctionUsageTask />
@@ -40,6 +46,137 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+    </div>
+  );
+}
+
+// ---------- Voice problems task --------------------------------------------
+
+type VoiceProblemState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ok"; report: VoiceProblemsResponse }
+  | { status: "error"; error: string };
+
+function VoiceProblemsTask() {
+  const [state, setState] = useState<VoiceProblemState>({ status: "idle" });
+  const [showAll, setShowAll] = useState(false);
+
+  const refresh = async () => {
+    setState({ status: "loading" });
+    setShowAll(false);
+    try {
+      const report = await getVoiceProblems();
+      setState({ status: "ok", report });
+    } catch (err) {
+      setState({
+        status: "error",
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const openProblem = (item: VoiceProblemItem) => {
+    workspace.openBundleEditorAtMarker({
+      textid: item.textid,
+      seq: item.seq,
+      bucket: item.bucket,
+      offset: item.offset,
+      length: item.length,
+      markerId: item.marker_id,
+    });
+  };
+
+  const visible =
+    state.status === "ok"
+      ? showAll ? state.report.items : state.report.items.slice(0, CUTOFF)
+      : [];
+  const hidden = state.status === "ok" ? state.report.items.length - visible.length : 0;
+
+  return (
+    <div>
+      <div className="lists-toolbar">
+        <button type="button" onClick={refresh} disabled={state.status === "loading"}>
+          {state.status === "loading"
+            ? "Loading…"
+            : state.status === "ok"
+              ? "Refresh"
+              : "Find voice problems"}
+        </button>
+      </div>
+      <div className="lists-list">
+        {state.status === "idle" && (
+          <div className="empty">Find unresolved voice derivation markers.</div>
+        )}
+        {state.status === "loading" && <div className="empty">Loading…</div>}
+        {state.status === "error" && <div className="empty">Failed: {state.error}</div>}
+        {state.status === "ok" && (
+          <>
+            <div className="list-sub" style={{ padding: "6px 14px" }}>
+              {state.report.total} problem{state.report.total === 1 ? "" : "s"}
+              {state.report.capped ? " · capped" : ""}
+            </div>
+            {visible.length === 0 ? (
+              <div className="empty">No voice problems.</div>
+            ) : (
+              visible.map((item) => (
+                <VoiceProblemRow
+                  key={`${item.textid}:${item.seq}:${item.bucket}:${item.marker_id}`}
+                  item={item}
+                  onOpen={openProblem}
+                />
+              ))
+            )}
+            {hidden > 0 && (
+              <div style={{ padding: "8px 14px" }}>
+                <button type="button" onClick={() => setShowAll(true)}>
+                  Show all ({state.report.total})
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VoiceProblemRow({
+  item,
+  onOpen,
+}: {
+  item: VoiceProblemItem;
+  onOpen: (item: VoiceProblemItem) => void;
+}) {
+  const label = item.title ? `${item.textid} · ${item.title}` : item.textid;
+  return (
+    <div
+      className="list-item"
+      style={{ paddingLeft: 14, alignItems: "flex-start" }}
+      onClick={() => onOpen(item)}
+      title={item.message}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 12,
+            color: "var(--t1)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          <span style={{ opacity: 0.7, marginRight: 6 }}>
+            {item.code ?? "voice-problem"}
+          </span>
+          <span>{label}</span>
+        </div>
+        <div className="list-sub">
+          juan {item.seq} · {item.bucket} @{item.offset}
+          {item.source ? ` · ${item.source}` : ""}
+        </div>
+        <div className="list-sub">{item.message}</div>
+      </div>
     </div>
   );
 }

@@ -111,10 +111,11 @@ def run(argv: list[str] | None = None) -> int:
     rc_serve = {**rc.get("global", {}), **rc.get("serve", {}), **rc.get("annotations", {})}
     rc_core = rc.get("core", {})
     rc_duplications = rc.get("duplications", {})
+    rc_voice = rc.get("voice", {})
 
     base = ServeConfig.from_env(
         corpus_root=args.corpus, rc=rc_serve, core_rc=rc_core,
-        duplications_rc=rc_duplications,
+        duplications_rc=rc_duplications, voice_rc=rc_voice,
     )
     config = base.merge_cli(
         corpus_root=args.corpus,

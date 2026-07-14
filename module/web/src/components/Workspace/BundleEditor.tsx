@@ -17,6 +17,7 @@ import {
   type EditableMarker,
 } from "../../lib/editSplices";
 import { setBundleEditorDirty } from "../../lib/editorDirty";
+import type { BundleEditTarget } from "../../state/useWorkspace";
 import {
   canonicalSelectionFromDom,
   editorPositionAt,
@@ -157,13 +158,16 @@ function PropertyRow({
 export function BundleEditor({
   textid,
   seq,
+  editTarget,
   onCursorInfoChange,
 }: {
   textid: string;
   seq: number;
+  editTarget?: BundleEditTarget | null;
   onCursorInfoChange?: (info: EditorPosition) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const focusedEditTargetRef = useRef<string | null>(null);
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
   const [bucket, setBucket] = useState<BucketName>("body");
   const [text, setText] = useState("");
@@ -179,14 +183,21 @@ export function BundleEditor({
   const [tocDeleteAcknowledged, setTocDeleteAcknowledged] = useState(false);
   const [punctuationSet, setPunctuationSet] = useState<string | null>(null);
 
-  const installBucket = (document: BundleEditDocument, nextBucket: BucketName) => {
+  const installBucket = (
+    document: BundleEditDocument,
+    nextBucket: BucketName,
+    target: BundleEditTarget | null = editTarget ?? null,
+  ) => {
     const value = document.buckets[nextBucket];
     if (!value) return;
     setBucket(nextBucket);
     setText(value.text);
     const nextMarkers = editableMarkers(value.markers);
     setMarkers(nextMarkers);
-    setSelectedKey(nextMarkers[0]?.key ?? null);
+    const targetMarker = target?.bucket === nextBucket
+      ? nextMarkers.find((marker) => marker.data.id === target.markerId) ?? null
+      : null;
+    setSelectedKey(targetMarker?.key ?? nextMarkers[0]?.key ?? null);
     setSplices([]);
     setCategory("*");
     setDirty(false);
@@ -202,10 +213,11 @@ export function BundleEditor({
       .then((document) => {
         setLoad({ status: "ready", document });
         const initialBucket: BucketName =
-          document.buckets.body ? "body"
+          editTarget?.bucket && document.buckets[editTarget.bucket] ? editTarget.bucket
+            : document.buckets.body ? "body"
             : document.buckets.front ? "front"
               : "back";
-        installBucket(document, initialBucket);
+        installBucket(document, initialBucket, editTarget ?? null);
       })
       .catch((reason) => {
         setLoad({
@@ -293,6 +305,37 @@ export function BundleEditor({
     const position = textarea?.selectionStart ?? 0;
     onCursorInfoChange(editorPositionAt(editorView, position));
   }, [editorView, load.status, onCursorInfoChange]);
+
+  useEffect(() => {
+    if (load.status !== "ready" || editTarget == null) return;
+    const targetKey = `${textid}:${seq}:${editTarget.bucket}:${editTarget.markerId}`;
+    if (bucket !== editTarget.bucket) {
+      focusedEditTargetRef.current = null;
+      installBucket(load.document, editTarget.bucket, editTarget);
+      return;
+    }
+    const marker = markers.find((item) => item.data.id === editTarget.markerId);
+    if (!marker || focusedEditTargetRef.current === targetKey) return;
+    focusedEditTargetRef.current = targetKey;
+    setCategory("*");
+    setSelectedKey(marker.key);
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const selection = markerDomSelection(editorView, marker);
+      textarea.focus();
+      textarea.setSelectionRange(selection.start, selection.end);
+      reportCursor();
+    });
+  }, [
+    bucket,
+    editTarget,
+    editorView,
+    load,
+    markers,
+    seq,
+    textid,
+  ]);
 
   if (load.status === "loading") return <div className="be-empty">Loading editable bundle from GitHub…</div>;
   if (load.status === "error") {

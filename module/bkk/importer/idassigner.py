@@ -26,6 +26,7 @@ _TYPE_SHORT: dict[str, str] = {
     "punctuation": "pn",
     "variant": "var",
     "voice": "vc",
+    "voice:problem": "vprob",
     "tls:seg": "sg",
     "tls:seg-end": "sge",
     "tls:head": "th",

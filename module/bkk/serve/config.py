@@ -56,6 +56,7 @@ class ServeConfig:
     source_branch: str = "master"
     max_search_hits: int = 20000
     duplications_report_path: Path | None = None
+    voice_problems_report_path: Path | None = None
 
     def __post_init__(self) -> None:
         if self.catalog_path is None:
@@ -85,6 +86,7 @@ class ServeConfig:
         rc: dict | None = None,
         core_rc: dict | None = None,
         duplications_rc: dict | None = None,
+        voice_rc: dict | None = None,
     ) -> "ServeConfig":
         """Build config from defaults < rc file < env vars.
 
@@ -347,6 +349,15 @@ class ServeConfig:
         else:
             duplications_report_path = None
 
+        voice_rc = voice_rc or {}
+        env_voice_report = os.environ.get("BKK_VOICE_PROBLEMS_REPORT")
+        if env_voice_report:
+            voice_problems_report_path: Path | None = Path(env_voice_report).resolve()
+        elif voice_rc.get("report"):
+            voice_problems_report_path = Path(voice_rc["report"]).resolve()
+        else:
+            voice_problems_report_path = None
+
         env_workspace_repo_name = os.environ.get("BKK_WORKSPACE_REPO_NAME")
         workspace_repo_name = (
             env_workspace_repo_name
@@ -406,6 +417,7 @@ class ServeConfig:
             user_text_upload_limit=user_text_upload_limit,
             max_search_hits=max_search_hits,
             duplications_report_path=duplications_report_path,
+            voice_problems_report_path=voice_problems_report_path,
         )
 
     def merge_cli(

@@ -71,6 +71,7 @@ import type {
   TranslationListResponse,
   TranslationSearchResponse,
   TranslationSort,
+  VoiceProblemsResponse,
   SegmentTranslationsResponse,
   WorkspaceFile,
   WorkspaceFileList,
@@ -489,6 +490,10 @@ export async function allocateBundleMarkerIds(
       body: JSON.stringify(payload),
     },
   );
+}
+
+export async function getVoiceProblems(): Promise<VoiceProblemsResponse> {
+  return fetchJson<VoiceProblemsResponse>(`${apiBase}/voice/problems`);
 }
 
 const annotationsCache = new Map<string, Promise<Annotation[]>>();

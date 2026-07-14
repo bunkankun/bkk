@@ -76,6 +76,12 @@ export type LineMode = "paragraph" | "phrase";
 export type LineBreakDisplay = "off" | "glyph" | "br";
 export type Theme = "current" | "dark" | "light";
 export type ListFilterMode = "off" | "any" | "all";
+export interface BundleEditTarget {
+  bucket: "front" | "body" | "back";
+  markerId: string;
+  offset: number;
+  length: number;
+}
 export type SearchFacetKind =
   | "category"
   | "witness"
@@ -225,6 +231,7 @@ export interface TextTab {
   selectedTranslation?: TranslationSummary | null;
   readMode?: ReadMode;
   lineMode?: LineMode;
+  editTarget?: BundleEditTarget | null;
   hoverChar?: string | null;
   hoverCodepoint?: number | null;
 }
@@ -824,6 +831,8 @@ function makeTextTab(args: {
   showImage?: boolean;
   selectedTranslation?: TranslationSummary | null;
   lineMode?: LineMode;
+  readMode?: ReadMode;
+  editTarget?: BundleEditTarget | null;
 }): TextTab {
   const inherited = inheritedTextViewState(args.sourceText ?? null, args.textid);
   const pendingTranslation =
@@ -841,7 +850,7 @@ function makeTextTab(args: {
     textid: args.textid,
     seq: args.seq,
     pinned: args.pinned === true,
-    readMode: "read",
+    readMode: args.readMode ?? "read",
     lineMode:
       showTranslation
         ? "phrase"
@@ -852,6 +861,7 @@ function makeTextTab(args: {
     showTranslation,
     showImage: args.showImage ?? inherited.showImage,
     selectedTranslation,
+    editTarget: args.editTarget ?? null,
   };
 }
 
@@ -2927,6 +2937,124 @@ export const workspace = {
       offset: loc.offset,
       length: loc.length ?? 1,
     });
+  },
+  openBundleEditorAtMarker(args: {
+    textid: string;
+    seq: number;
+    bucket: "front" | "body" | "back";
+    offset: number;
+    length: number;
+    markerId: string;
+  }) {
+    const tabId = `${args.textid}:${args.seq}`;
+    const target = activePaneLeaf(state.pane);
+    const sourceTab = activeTabForLeaf(target);
+    const sourceText = isTextTab(sourceTab) ? sourceTab : null;
+    if (
+      sourceText?.readMode === "edit" &&
+      sourceText.id !== tabId &&
+      !confirmDiscardBundleEditor()
+    ) return;
+    const editTarget: BundleEditTarget = {
+      bucket: args.bucket,
+      markerId: args.markerId,
+      offset: args.offset,
+      length: Math.max(1, args.length),
+    };
+    const highlight = {
+      textid: args.textid,
+      seq: args.seq,
+      bucket: args.bucket,
+      offset: args.offset,
+      length: Math.max(1, args.length),
+    };
+    const plan = planOpenTextLocation(state.pane, target?.id ?? null, tabId);
+    if (plan.kind === "focus") {
+      const nextPane = mapPaneLeaves(state.pane, (leaf) =>
+        leaf.id === plan.leafId
+          ? {
+              ...leaf,
+              activeTabId: tabId,
+              tabs: leaf.tabs.map((tab) =>
+                tab.id === tabId && tab.type === "text"
+                  ? { ...tab, readMode: "edit", editTarget }
+                  : tab,
+              ),
+            }
+          : leaf,
+      );
+      state = {
+        ...state,
+        activeTextid: args.textid,
+        activeSeq: args.seq,
+        focusedPaneId: plan.leafId,
+        selection: null,
+        currentPage: null,
+        pane: nextPane,
+        activity: "edit",
+        pendingHighlight: highlight,
+      };
+      rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
+      notify();
+      scheduleSessionSave();
+      return;
+    }
+    if (plan.kind === "replace") {
+      const newTab = makeTextTab({
+        textid: args.textid,
+        seq: args.seq,
+        pinned: false,
+        sourceText: plan.existing,
+        lineMode: plan.existing.lineMode ?? state.readPrefs.lineMode,
+        readMode: "edit",
+        editTarget,
+      });
+      const nextPane = mapPaneLeaves(state.pane, (leaf) => {
+        if (leaf.id !== plan.leafId) return leaf;
+        return leafWithTab(leaf.id, newTab);
+      });
+      state = {
+        ...state,
+        activeTextid: args.textid,
+        activeSeq: args.seq,
+        focusedPaneId: plan.leafId,
+        selectedTranslation: newTab.selectedTranslation ?? null,
+        selection: null,
+        currentPage: null,
+        pane: nextPane,
+        activity: "edit",
+        pendingHighlight: highlight,
+      };
+      rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
+      notify();
+      scheduleSessionSave();
+      return;
+    }
+    const tab = makeTextTab({
+      textid: args.textid,
+      seq: args.seq,
+      pinned: false,
+      sourceText,
+      readMode: "edit",
+      editTarget,
+    });
+    const pane = paneForOpenTab(tab);
+    const focusedPaneId = leafIdForTab(pane, tab.id);
+    state = {
+      ...state,
+      activeTextid: args.textid,
+      activeSeq: args.seq,
+      focusedPaneId,
+      selectedTranslation: tab.selectedTranslation ?? null,
+      selection: null,
+      currentPage: null,
+      pane,
+      activity: "edit",
+      pendingHighlight: highlight,
+    };
+    rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
+    notify();
+    scheduleSessionSave();
   },
   openTextLocation(args: {
     textid: string;
