@@ -15,17 +15,18 @@ Bare-id form resolves the bundle root against ``global.corpus`` from
 
 ``--source`` selects the derivation:
 
-- ``parens`` (default) — from ``(`` / ``)`` punctuation marker pairs,
-  emits ``note`` voice spans for paren-bounded text. The deriver makes
-  no claim about whether the paren span is commentary, gloss, or
-  alternate reading — only that it's bracketed.
+- ``parens`` (default) — from source punctuation marker pairs, emits
+  ``note`` spans for ``(``…``)`` text and ``emphasis`` spans for
+  ``▲``…``)`` text. The deriver makes no claim about whether a note span
+  is commentary, gloss, or alternate reading — only that it's bracketed.
 - ``indent`` — from ``line-break``/``indent`` markers, emits
   ``root``/``commentary``/``head``/``attribution`` for sources whose
   layout indents each textual layer differently.
 - ``all`` — both derivers, concatenated. The two derivers use disjoint
-  voice names (paren → ``note``; indent → ``root``/``commentary``/…),
-  so same-name overlaps are impossible by construction; heterogeneous
-  overlaps are written through with a per-juan stderr warning.
+  voice names (parens → ``note``/``emphasis``; indent →
+  ``root``/``commentary``/…), so same-name overlaps are impossible by
+  construction; heterogeneous overlaps are written through with a
+  per-juan stderr warning.
 
 ``--force`` strips any pre-existing ``voice`` markers and rederives;
 without it the command refuses to touch a bundle that already carries
@@ -110,13 +111,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="op", required=True)
     pa = sub.add_parser(
         "add",
-        help="derive voice markers from (...) punctuation pairs in each "
+        help="derive voice markers from source punctuation pairs in each "
              "juan and write them back (master + every edition)",
     )
     _add_bundle_selector(pa)
     pa.add_argument(
         "--source", dest="source", choices=_VALID_SOURCES, default=None,
-        help="derivation source: 'parens' (default; (…) pairs), "
+        help="derivation source: 'parens' (default; punctuation pairs), "
              "'indent' (layout indentation), or 'all' (both, merged). "
              "Falls back to voice.source in .bkkrc; otherwise 'parens'.",
     )
@@ -869,10 +870,10 @@ def _derive_for_bucket(
     """Dispatch to the requested deriver(s) and return their merged output.
 
     For ``--source all`` the two derivers' outputs are simply concatenated.
-    Their voice-name spaces are disjoint (paren → ``note``; indent →
-    ``root``/``commentary``/``head``/``attribution``), so same-name
-    overlaps are impossible by construction and their id prefixes
-    (``n`` vs ``r``/``c``/``h``/``a``) don't collide either.
+    Their voice-name spaces are disjoint (parens → ``note``/``emphasis``;
+    indent → ``root``/``commentary``/``head``/``attribution``), so
+    same-name overlaps are impossible by construction and their id prefixes
+    (``n``/``e`` vs ``r``/``c``/``h``/``a``) don't collide either.
     """
     if source == "parens":
         return derive_voice_markers(text_len, markers)

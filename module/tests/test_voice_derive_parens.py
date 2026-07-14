@@ -28,6 +28,26 @@ def test_single_paren_pair_one_note():
     ]
 
 
+def test_triangle_open_close_paren_one_emphasis():
+    markers = [_paren(2, "▲"), _paren(8, ")")]
+    assert derive_voice_markers(20, markers) == [
+        {"type": "voice", "offset": 2, "length": 6, "name": "emphasis", "id": "e1"},
+    ]
+
+
+def test_note_and_emphasis_have_separate_id_counters():
+    markers = [
+        _paren(0, "("), _paren(3, ")"),
+        _paren(5, "▲"), _paren(9, ")"),
+        _paren(12, "("), _paren(18, ")"),
+    ]
+    assert derive_voice_markers(20, markers) == [
+        {"type": "voice", "offset": 0, "length": 3, "name": "note", "id": "n1"},
+        {"type": "voice", "offset": 5, "length": 4, "name": "emphasis", "id": "e1"},
+        {"type": "voice", "offset": 12, "length": 6, "name": "note", "id": "n2"},
+    ]
+
+
 def test_multiple_paren_pairs_increment_ids():
     markers = [
         _paren(0, "("), _paren(3, ")"),
@@ -58,6 +78,17 @@ def test_touching_pairs_same_offset_merge_regardless_of_tie_order():
     ]
     assert derive_voice_markers(20, markers) == [
         {"type": "voice", "offset": 2, "length": 10, "name": "note", "id": "n1"},
+    ]
+
+
+def test_close_triangle_same_offset_starts_separate_emphasis():
+    markers = [
+        _paren(2, "("), _paren(8, ")"),
+        _paren(8, "▲"), _paren(12, ")"),
+    ]
+    assert derive_voice_markers(20, markers) == [
+        {"type": "voice", "offset": 2, "length": 6, "name": "note", "id": "n1"},
+        {"type": "voice", "offset": 8, "length": 4, "name": "emphasis", "id": "e1"},
     ]
 
 
