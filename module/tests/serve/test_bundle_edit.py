@@ -101,6 +101,18 @@ def _request(**overrides):
     return bundle_edit.BundleEditRequest.model_validate(data)
 
 
+def _move_request(**overrides):
+    data = {
+        "base_commit_sha": "base",
+        "source_bucket": "body",
+        "destination_bucket": "front",
+        "start": 0,
+        "end": 2,
+    }
+    data.update(overrides)
+    return bundle_edit.BundleMoveSectionRequest.model_validate(data)
+
+
 def _self_hash(value: dict) -> str:
     copy_value = copy.deepcopy(value)
     copy_value["hash"] = "sha256:" + "0" * 64
@@ -167,6 +179,27 @@ def test_prepare_files_rejects_bad_splice_history():
         raise AssertionError("expected invalid splice history to fail")
 
 
+def test_edit_edition_options_distinguishes_master_from_subeditions():
+    manifest = {
+        "metadata": {"edition": {"short": "X", "label": "Master X"}},
+        "editions": [
+            {"short": "X", "label": "Root X"},
+            {"short": "Y", "label": "Witness Y"},
+        ],
+    }
+
+    options = bundle_edit._edit_edition_options(
+        manifest,
+        requested_edition=None,
+        current_short="X",
+    )
+
+    assert options == [
+        {"short": "X", "label": "Master X", "query": None, "scope": "master"},
+        {"short": "Y", "label": "Witness Y", "query": "Y", "scope": "edition"},
+    ]
+
+
 def test_prepare_files_creates_external_marker_asset():
     remote = _remote()
     remote["marker_path"] = None
@@ -212,6 +245,129 @@ def test_prepare_files_creates_external_marker_asset_in_edition_scope():
     assert manifest["assets"]["markers"][0]["filename"] == marker_filename
     asset = yaml.safe_load(files[marker_path])
     assert asset["markers"]["body"][0]["type"] == "punctuation"
+
+
+def test_prepare_move_files_body_prefix_appends_to_front_and_moves_toc_marker():
+    remote = _remote()
+    remote["juan"]["front"] = {"text": "序", "hash": "sha256:old"}
+    remote["manifest"]["table_of_contents"] = [
+        {
+            "label": "Head",
+            "ref": {
+                "seq": 1,
+                "marker_id": "TEST0001_X_001-head",
+                "span": ["body", 0, 2],
+            },
+        },
+    ]
+
+    files, splices = bundle_edit._prepare_move_files(
+        remote, "TEST0001", 1, _move_request(),
+    )
+
+    juan = yaml.safe_load(files["TEST0001_001.yaml"])
+    manifest = yaml.safe_load(files["TEST0001.manifest.yaml"])
+    assert juan["front"]["text"] == "序甲乙"
+    assert juan["body"]["text"] == "丙丁"
+    assert juan["front"]["markers"][0]["id"] == "TEST0001_X_001-head"
+    assert juan["front"]["markers"][0]["offset"] == 1
+    assert manifest["table_of_contents"][0]["ref"]["span"] == ["front", 1, 3]
+    assert manifest["assets"]["parts"][0]["hash"] == juan["hash"]
+    assert manifest["hash"] == manifest_hash(manifest)
+    assert [(item["bucket"], item["text_splices"][0].start) for item in splices] == [
+        ("body", 0),
+        ("front", 1),
+    ]
+
+
+def test_prepare_move_files_body_prefix_rebases_toc_span_starting_at_zero():
+    remote = _remote()
+    remote["juan"]["front"] = {"text": "序", "hash": "sha256:old"}
+    remote["manifest"]["table_of_contents"] = [
+        {
+            "label": "Body",
+            "ref": {
+                "seq": 1,
+                "marker_id": "TEST0001_X_001-head",
+                "span": ["body", 0, 4],
+            },
+        },
+    ]
+
+    files, _splices = bundle_edit._prepare_move_files(
+        remote, "TEST0001", 1, _move_request(),
+    )
+
+    juan = yaml.safe_load(files["TEST0001_001.yaml"])
+    manifest = yaml.safe_load(files["TEST0001.manifest.yaml"])
+    assert juan["front"]["text"] == "序甲乙"
+    assert juan["body"]["text"] == "丙丁"
+    assert manifest["table_of_contents"][0]["ref"]["span"] == ["body", 0, 2]
+    assert manifest["hash"] == manifest_hash(manifest)
+
+
+def test_prepare_move_files_body_suffix_prepends_to_back_and_moves_external_marker():
+    remote = _remote()
+    remote["juan"]["back"] = {"text": "跋", "hash": "sha256:old"}
+    remote["manifest"]["table_of_contents"] = []
+    remote["marker_asset"]["markers"]["body"] = [
+        {"type": "punctuation", "offset": 2, "content": "。", "id": ""},
+        {"type": "ann", "offset": 3, "id": "TEST0001_X_001-ann"},
+    ]
+
+    files, _splices = bundle_edit._prepare_move_files(
+        remote,
+        "TEST0001",
+        1,
+        _move_request(
+            destination_bucket="back",
+            start=2,
+            end=4,
+        ),
+    )
+
+    juan = yaml.safe_load(files["TEST0001_001.yaml"])
+    asset = yaml.safe_load(files["assets/TEST0001_001.markers.yaml"])
+    manifest = yaml.safe_load(files["TEST0001.manifest.yaml"])
+    assert juan["body"]["text"] == "甲乙"
+    assert juan["back"]["text"] == "丙丁跋"
+    assert asset["markers"]["back"] == [
+        {"type": "punctuation", "offset": 0, "content": "。", "id": ""},
+        {"type": "ann", "offset": 1, "id": "TEST0001_X_001-ann"},
+    ]
+    assert asset["hash"] == marker_asset_hash(asset)
+    assert manifest["assets"]["markers"][0]["hash"] == asset["hash"]
+
+
+def test_prepare_move_files_rejects_middle_body_to_front():
+    remote = _remote()
+    with pytest.raises(Exception) as exc:
+        bundle_edit._prepare_move_files(
+            remote,
+            "TEST0001",
+            1,
+            _move_request(start=1, end=2),
+        )
+    assert getattr(exc.value, "status_code", None) == 422
+    assert "beginning of body" in str(getattr(exc.value, "detail", exc.value))
+
+
+def test_prepare_move_files_rejects_marker_crossing_boundary():
+    remote = _remote()
+    remote["manifest"]["table_of_contents"] = []
+    remote["juan"]["body"]["markers"] = [
+        {"type": "voice", "offset": 1, "length": 3, "id": "TEST0001_X_001-voice"},
+    ]
+
+    with pytest.raises(Exception) as exc:
+        bundle_edit._prepare_move_files(
+            remote,
+            "TEST0001",
+            1,
+            _move_request(destination_bucket="back", start=2, end=4),
+        )
+    assert getattr(exc.value, "status_code", None) == 422
+    assert "crosses the moved range" in str(getattr(exc.value, "detail", exc.value))
 
 
 def test_load_remote_loads_edition_scope(monkeypatch):

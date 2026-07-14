@@ -18,6 +18,7 @@ import type {
   BlueskyStatus,
   BundleSearchResponse,
   BundleEditDocument,
+  BundleMoveSectionRequest,
   BundleMarkerIdAllocationRequest,
   BundleMarkerIdAllocationResponse,
   BundleEditSaveRequest,
@@ -473,6 +474,23 @@ export async function saveBundleEdit(
   const q = edition ? `?edition=${encodeURIComponent(edition)}` : "";
   return fetchJson<BundleEditSaveResponse>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit${q}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function moveBundleSection(
+  textid: string,
+  seq: number,
+  payload: BundleMoveSectionRequest,
+  edition?: string | null,
+): Promise<BundleEditSaveResponse> {
+  const q = edition ? `?edition=${encodeURIComponent(edition)}` : "";
+  return fetchJson<BundleEditSaveResponse>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/edit/move-section${q}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

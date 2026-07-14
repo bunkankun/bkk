@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   allocateBundleMarkerIds,
   getBundleEdit,
+  moveBundleSection,
   saveBundleEdit,
 } from "../../api/client";
 import type {
@@ -38,6 +39,12 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; document: BundleEditDocument };
 type ValidationProblem = { message: string; markerKey?: string };
+type MoveDraft = {
+  start: number;
+  end: number;
+  destination: BucketName;
+  candidates: BucketName[];
+};
 
 let nextMarkerKey = 1;
 
@@ -210,7 +217,8 @@ export function BundleEditor({
   const [idFind, setIdFind] = useState("");
   const [idReplace, setIdReplace] = useState("");
   const [offsetTarget, setOffsetTarget] = useState("");
-  const editEdition = editTarget?.edition ?? null;
+  const [moveDraft, setMoveDraft] = useState<MoveDraft | null>(null);
+  const [editEdition, setEditEdition] = useState<string | null>(editTarget?.edition ?? null);
 
   const installBucket = (
     document: BundleEditDocument,
@@ -238,6 +246,7 @@ export function BundleEditor({
     setIdFind("");
     setIdReplace("");
     setOffsetTarget("");
+    setMoveDraft(null);
   };
 
   const reload = () => {
@@ -260,6 +269,9 @@ export function BundleEditor({
       });
   };
 
+  useEffect(() => {
+    setEditEdition(editTarget?.edition ?? null);
+  }, [textid, seq, editTarget?.edition]);
   useEffect(reload, [textid, seq, editEdition]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -289,6 +301,7 @@ export function BundleEditor({
     [markers, category],
   );
   const selected = markers.find((marker) => marker.key === selectedKey) ?? null;
+  const textLength = useMemo(() => codepoints(text).length, [text]);
   const availablePunctuationSets = useMemo(
     () => punctuationSets(markers),
     [markers],
@@ -305,7 +318,6 @@ export function BundleEditor({
     ).length;
   }, [idFind, markers]);
   const validationProblem = useMemo((): ValidationProblem | null => {
-    const textLength = codepoints(text).length;
     const ids = new Map<string, string>();
     for (const [index, marker] of markers.entries()) {
       if (typeof marker.data.type !== "string" || !marker.data.type) {
@@ -539,6 +551,73 @@ export function BundleEditor({
   const changeBucket = (nextBucket: BucketName) => {
     if (dirty && !window.confirm("Discard unsaved edits in this bucket?")) return;
     installBucket(document, nextBucket);
+  };
+
+  const changeEdition = (nextEdition: string | null) => {
+    if (nextEdition === editEdition) return;
+    if (dirty && !window.confirm("Discard unsaved edits and load another edition?")) return;
+    setMoveDraft(null);
+    setSaved(null);
+    setError(null);
+    setEditEdition(nextEdition);
+  };
+
+  const moveCandidates = (start: number, end: number): BucketName[] => {
+    if (end <= start) return [];
+    if (bucket === "body") {
+      const candidates: BucketName[] = [];
+      if (start === 0) candidates.push("front");
+      if (end === textLength) candidates.push("back");
+      return candidates;
+    }
+    if (bucket === "front" && end === textLength) return ["body"];
+    if (bucket === "back" && start === 0) return ["body"];
+    return [];
+  };
+
+  const placementLabel = (source: BucketName, destination: BucketName): string => {
+    if (source === "body" && destination === "front") return "append to the end of front";
+    if (source === "body" && destination === "back") return "prepend to the beginning of back";
+    if (source === "front" && destination === "body") return "prepend to the beginning of body";
+    if (source === "back" && destination === "body") return "append to the end of body";
+    return "move section";
+  };
+
+  const openMoveDialog = () => {
+    if (dirty) {
+      setError("Save or discard edits in this bucket before moving a section.");
+      return;
+    }
+    if (punctuationSet != null || showLayoutMarkers) {
+      setError("Turn off punctuation and layout display before moving a section.");
+      return;
+    }
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const selection = canonicalSelectionFromDom(
+      editorView,
+      textarea.selectionStart,
+      textarea.selectionEnd,
+    );
+    if (selection.length == null || selection.length <= 0) {
+      setError("Select the text to move first.");
+      return;
+    }
+    const start = selection.offset;
+    const end = selection.offset + selection.length;
+    const candidates = moveCandidates(start, end);
+    if (candidates.length === 0) {
+      setError(
+        bucket === "body"
+          ? "Body moves must select from the beginning for front, or through the end for back."
+          : bucket === "front"
+            ? "Front moves must select through the end of front."
+            : "Back moves must select from the beginning of back.",
+      );
+      return;
+    }
+    setError(null);
+    setMoveDraft({ start, end, destination: candidates[0], candidates });
   };
 
   const changeText = (nextText: string) => {
@@ -787,6 +866,42 @@ export function BundleEditor({
     }
   };
 
+  const submitMove = async () => {
+    if (!moveDraft) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await moveBundleSection(textid, seq, {
+        base_commit_sha: document.base_commit_sha,
+        source_bucket: bucket,
+        destination_bucket: moveDraft.destination,
+        start: moveDraft.start,
+        end: moveDraft.end,
+      }, editEdition);
+      setSaved(result);
+      setMoveDraft(null);
+      if (result.kind === "pull_request") return;
+      setLoad({ status: "loading" });
+      try {
+        const refreshed = await getBundleEdit(textid, seq, editEdition);
+        setLoad({ status: "ready", document: refreshed });
+        installBucket(refreshed, moveDraft.destination);
+        setSaved(result);
+      } catch (reloadReason) {
+        setLoad({ status: "ready", document });
+        setError(
+          `Saved, but could not reload the new commit: ${
+            reloadReason instanceof Error ? reloadReason.message : String(reloadReason)
+          }`,
+        );
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="bundle-editor">
       <aside className="be-markers">
@@ -794,6 +909,26 @@ export function BundleEditor({
           <select value={category} onChange={(event) => setCategory(event.target.value)}>
             <option value="*">All marker types</option>
             {categories.map((type) => <option key={type} value={type}>{type}</option>)}
+          </select>
+          <select
+            value={editEdition ?? "__master__"}
+            title="Edition"
+            aria-label="Editable edition"
+            onChange={(event) =>
+              changeEdition(
+                event.target.value === "__master__" ? null : event.target.value,
+              )
+            }
+          >
+            {document.editions.map((editionOption) => (
+              <option
+                key={editionOption.query ?? "__master__"}
+                value={editionOption.query ?? "__master__"}
+              >
+                {editionOption.scope === "master" ? "master" : editionOption.short}
+                {editionOption.label ? ` · ${editionOption.label}` : ""}
+              </option>
+            ))}
           </select>
           <button
             type="button"
@@ -907,6 +1042,13 @@ export function BundleEditor({
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={openMoveDialog}
+            disabled={saving || allocatingIds > 0}
+          >
+            Move
+          </button>
           <label className="be-punctuation-select">
             Punctuation
             <select
@@ -937,7 +1079,7 @@ export function BundleEditor({
             />
             Layout
           </label>
-          <span>{codepoints(text).length.toLocaleString()} characters</span>
+          <span>{textLength.toLocaleString()} characters</span>
           {unresolvedCount > 0 && <span className="be-unresolved-count">{unresolvedCount} unresolved</span>}
           {validationError && (
             <button
@@ -965,6 +1107,36 @@ export function BundleEditor({
           </button>
         </div>
         {error && <div className="be-error">{error}</div>}
+        {moveDraft && (
+          <div className="be-move-panel">
+            <span>
+              Move {Math.max(0, moveDraft.end - moveDraft.start).toLocaleString()} characters
+              from {bucket} offsets {moveDraft.start}-{moveDraft.end}
+            </span>
+            <select
+              value={moveDraft.destination}
+              onChange={(event) =>
+                setMoveDraft({
+                  ...moveDraft,
+                  destination: event.target.value as BucketName,
+                })
+              }
+            >
+              {moveDraft.candidates.map((candidate) => (
+                <option key={candidate} value={candidate}>
+                  {candidate}
+                </option>
+              ))}
+            </select>
+            <span>{placementLabel(bucket, moveDraft.destination)}</span>
+            <button type="button" onClick={() => void submitMove()} disabled={saving}>
+              {saving ? "Moving…" : "Apply move"}
+            </button>
+            <button type="button" onClick={() => setMoveDraft(null)} disabled={saving}>
+              Cancel
+            </button>
+          </div>
+        )}
         {saved && (
           <div className="be-success">
             Saved as {saved.kind === "commit" ? "commit" : "pull request"}:{" "}

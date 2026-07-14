@@ -206,12 +206,20 @@ export interface BundleEditBucket {
   markers: JuanMarker[];
 }
 
+export interface BundleEditEdition {
+  short: string;
+  label?: string | null;
+  query?: string | null;
+  scope?: "master" | "edition";
+}
+
 export interface BundleEditDocument {
   repository: string;
   branch: string;
   base_commit_sha: string;
   seq: number;
   buckets: Partial<Record<"front" | "body" | "back", BundleEditBucket>>;
+  editions: BundleEditEdition[];
   toc_marker_ids: string[];
   marker_id_context: {
     edition: string;
@@ -234,6 +242,15 @@ export interface BundleEditSaveRequest {
   renamed_marker_ids: Record<string, string>;
   acknowledge_toc_deletions: boolean;
   unresolved_marker_indexes: number[];
+  message?: string;
+}
+
+export interface BundleMoveSectionRequest {
+  base_commit_sha: string;
+  source_bucket: "front" | "body" | "back";
+  destination_bucket: "front" | "body" | "back";
+  start: number;
+  end: number;
   message?: string;
 }
 
