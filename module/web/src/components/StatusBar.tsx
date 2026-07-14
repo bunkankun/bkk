@@ -13,7 +13,7 @@ function formatCp(cp: number): string {
 
 const LINE_MODES: { id: LineMode; label: string; tip: string }[] = [
   { id: "paragraph", label: "P", tip: "Paragraph display" },
-  { id: "phrase", label: "L", tip: "Phrase-per-line display (tls:seg or punctuation)" },
+  { id: "phrase", label: "L", tip: "Phrase-per-line display (segments, layout, or punctuation)" },
 ];
 
 const LB_MODES: { id: LineBreakDisplay; label: string; tip: string }[] = [

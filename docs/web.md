@@ -151,10 +151,10 @@ The LeftPanel Catalog is a two-level tree of the Kanripo classification, populat
 
 The Workspace TextViewer ([module/web/src/components/Workspace/TextViewer.tsx](module/web/src/components/Workspace/TextViewer.tsx)) renders juan body text in **blocks** so very long juans don't pay the cost of mounting every span up-front:
 
-- Block boundaries follow `paragraph-break` markers (paragraph mode, default) or `tls:seg` markers (phrase mode), falling back to literal `\n` / phrase-ending punctuation when those markers are absent.
+- Block boundaries follow `paragraph-break` markers (paragraph mode, default) or `tls:seg` / source layout markers (phrase mode), falling back to literal `\n` / phrase-ending punctuation when those markers are absent.
 - Each block lives in an `IntersectionObserver` with `rootMargin: "200% 0px"`; once a block enters the expanded viewport it stays mounted (so scroll position never jumps back).
 - The line-mode toggle (¶ / ↵) lives in the StatusBar and persists in `localStorage["bkk.readPrefs"]`. When the user is logged in, it is also saved to `settings/session.json` in their GitHub workspace.
-- Punctuation is injected from `punctuation`-type markers at their `offset`, skipping positions where the master text already has punctuation.
+- Punctuation is injected from `punctuation`-type markers at their `offset`, skipping positions where the master text already has punctuation. In phrase mode, `indent` markers are also injected as layout spacing, and visible page-breaks show the parsed page label.
 - PUA Kanripo refs (`&KRnnnn;`) are decoded on render via `decodeKrRefs`; only CJK + PUA chars participate in selection (drag-select skips ASCII/whitespace markers).
 
 ### Selection refs

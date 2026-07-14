@@ -39,6 +39,7 @@ const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
 const BUCKETS = ["front", "body", "back"] as const;
 
 type BucketName = (typeof BUCKETS)[number];
+type VoiceRange = { start: number; end: number };
 
 function isBucketName(value: unknown): value is BucketName {
   return typeof value === "string" && (BUCKETS as readonly string[]).includes(value);
@@ -67,7 +68,12 @@ interface RenderedChar {
   isNewline: boolean;
   // Zero-width anchor injected at a page-break marker's offset; observed by
   // the page-anchor IntersectionObserver to drive Inspect-mode's ImagePanel.
-  pageAnchor?: { id: string; offset: number };
+  pageAnchor?: { id: string; offset: number; label: string };
+  // Offset for injected marker-backed entries that do not correspond to a
+  // canonical source character.
+  markerOffset?: number;
+  layout?: { type: "indent" };
+  noteVoice?: boolean;
 }
 
 interface Block {
@@ -137,6 +143,7 @@ function firstOffset(chars: RenderedChar[], fallback: number): number {
   for (const c of chars) {
     if (c.srcOffset != null) return c.srcOffset;
     if (c.pageAnchor) return c.pageAnchor.offset;
+    if (c.markerOffset != null) return c.markerOffset;
   }
   return fallback;
 }
@@ -146,8 +153,54 @@ function lastEndOffset(chars: RenderedChar[], fallback: number): number {
     const c = chars[i];
     if (c.srcEndOffset != null) return c.srcEndOffset;
     if (c.pageAnchor) return c.pageAnchor.offset;
+    if (c.markerOffset != null) return c.markerOffset;
   }
   return fallback;
+}
+
+function logicalOffset(rc: RenderedChar): number | null {
+  return rc.srcOffset ?? rc.markerOffset ?? rc.pageAnchor?.offset ?? null;
+}
+
+function pageLabel(id: string): string {
+  const parsed = parseMarkerId(id);
+  const raw = parsed?.location ?? id;
+  return raw.replace(/^\d{3,4}-/, "");
+}
+
+function noteVoiceRanges(markers: JuanMarker[]): VoiceRange[] {
+  const ranges: VoiceRange[] = [];
+  for (const m of markers) {
+    if (m.type !== "voice" || m.name !== "note") continue;
+    const start = typeof m.offset === "number" ? m.offset : null;
+    const length = typeof m.length === "number" ? m.length : null;
+    if (start == null || length == null || length <= 0) continue;
+    ranges.push({ start, end: start + length });
+  }
+  ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+  return ranges;
+}
+
+function isInNoteVoice(
+  offset: number,
+  ranges: VoiceRange[],
+  includeEnd = false,
+): boolean {
+  let lo = 0;
+  let hi = ranges.length - 1;
+  let best = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (ranges[mid].start <= offset) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  if (best < 0) return false;
+  const range = ranges[best];
+  return includeEnd ? offset <= range.end : offset < range.end;
 }
 
 // Build the rendered char stream: decode PUA refs, then inject punctuation
@@ -158,15 +211,19 @@ function lastEndOffset(chars: RenderedChar[], fallback: number): number {
 function buildRenderedChars(
   bodyText: string,
   markers: JuanMarker[],
+  lineMode: LineMode,
 ): RenderedChar[] {
   const chars = decodeKrRefsWithOffsets(bodyText);
   const bodyLength = [...bodyText].length;
   const charAtOffset = new Map(chars.map((c) => [c.srcOffset, c.ch]));
+  const noteRanges = noteVoiceRanges(markers);
 
   type PunctInject = { offset: number; content: string };
   type PageInject = { offset: number; id: string };
+  type LayoutInject = { offset: number; content: string; type: "indent" };
   const punctInjects: PunctInject[] = [];
   const pageInjects: PageInject[] = [];
+  const layoutInjects: LayoutInject[] = [];
   for (const m of markers) {
     const off = typeof m.offset === "number" ? m.offset : 0;
     if (m.type === "punctuation") {
@@ -179,14 +236,21 @@ function buildRenderedChars(
       const id = typeof m.id === "string" ? m.id : "";
       if (!id) continue;
       pageInjects.push({ offset: off, id });
+    } else if (lineMode === "phrase" && m.type === "indent") {
+      const content = typeof m.content === "string" && m.content.length > 0
+        ? m.content
+        : "\u3000";
+      layoutInjects.push({ offset: off, content, type: "indent" });
     }
   }
   punctInjects.sort((a, b) => a.offset - b.offset);
   pageInjects.sort((a, b) => a.offset - b.offset);
+  layoutInjects.sort((a, b) => a.offset - b.offset);
 
   const out: RenderedChar[] = [];
   let punctIdx = 0;
   let pageIdx = 0;
+  let layoutIdx = 0;
   let charIdx = 0;
   for (let i = 0; i <= bodyLength; i++) {
     // Page anchors first so they appear at the top of any cluster of
@@ -200,9 +264,24 @@ function buildRenderedChars(
         srcEndOffset: null,
         isPunct: false,
         isNewline: false,
-        pageAnchor: { id: p.id, offset: p.offset },
+        markerOffset: p.offset,
+        pageAnchor: { id: p.id, offset: p.offset, label: pageLabel(p.id) },
       });
       pageIdx++;
+    }
+    while (layoutIdx < layoutInjects.length && layoutInjects[layoutIdx].offset === i) {
+      const layout = layoutInjects[layoutIdx];
+      out.push({
+        ch: layout.content,
+        srcOffset: null,
+        srcEndOffset: null,
+        isPunct: false,
+        isNewline: false,
+        markerOffset: layout.offset,
+        layout: { type: layout.type },
+        noteVoice: isInNoteVoice(layout.offset, noteRanges, true),
+      });
+      layoutIdx++;
     }
     while (punctIdx < punctInjects.length && punctInjects[punctIdx].offset === i) {
       for (const ch of [...punctInjects[punctIdx].content]) {
@@ -212,6 +291,7 @@ function buildRenderedChars(
           srcEndOffset: null,
           isPunct: true,
           isNewline: false,
+          noteVoice: isInNoteVoice(punctInjects[punctIdx].offset, noteRanges, true),
         });
       }
       punctIdx++;
@@ -224,6 +304,7 @@ function buildRenderedChars(
         srcEndOffset: c.srcEndOffset,
         isPunct: PUNCT_RE.test(c.ch),
         isNewline: c.ch === "\n",
+        noteVoice: isInNoteVoice(c.srcOffset, noteRanges),
       });
       charIdx++;
     }
@@ -246,7 +327,9 @@ function buildBlocks(
   const boundaryOffsets = new Set<number>();
   for (const m of markers) {
     const isBoundary =
-      lineMode === "phrase" ? m.type === "tls:seg" : isParagraphBoundaryMarker(m);
+      lineMode === "phrase"
+        ? m.type === "tls:seg" || m.type === "line-break" || m.type === "page-break"
+        : isParagraphBoundaryMarker(m);
     if (!isBoundary) continue;
     const off = typeof m.offset === "number" ? m.offset : 0;
     boundaryOffsets.add(off);
@@ -292,11 +375,16 @@ function buildBlocks(
   };
 
   for (const rc of chars) {
-    const nextSrc = rc.srcOffset;
+    const nextOffset = logicalOffset(rc);
     // Decide whether to start a new block *before* placing this char.
-    if (cur.length > 0 && nextSrc != null) {
+    if (cur.length > 0 && nextOffset != null) {
       if (useMarkers) {
-        if (boundaryOffsets.has(nextSrc) && !PHRASE_LINE_CLOSER_RE.test(rc.ch)) {
+        const curStart = firstOffset(cur, lastEnd);
+        if (
+          curStart < nextOffset &&
+          boundaryOffsets.has(nextOffset) &&
+          !PHRASE_LINE_CLOSER_RE.test(rc.ch)
+        ) {
           flush();
         }
       } else if (lineMode === "paragraph") {
@@ -519,7 +607,7 @@ export function TextViewer({
         bucket: view.bucket,
         blocks: buildBlocks(
           view.bucket,
-          buildRenderedChars(view.text, view.markers),
+          buildRenderedChars(view.text, view.markers, lineMode),
           view.markers,
           lineMode,
           [...view.text].length,
@@ -1133,8 +1221,20 @@ function BlockView({
               data-bucket={block.bucket}
               data-page-id={rc.pageAnchor.id}
               data-page-offset={rc.pageAnchor.offset}
+              data-page-label={rc.pageAnchor.label}
               title={match ? rc.pageAnchor.id : undefined}
             />
+          );
+        }
+        if (rc.layout?.type === "indent") {
+          return (
+            <span
+              key={i}
+              className={`layout-indent${rc.noteVoice ? " voice-note" : ""}`}
+              aria-hidden="true"
+            >
+              {rc.ch}
+            </span>
           );
         }
         if (rc.isNewline) {
@@ -1147,7 +1247,7 @@ function BlockView({
           // Injected punctuation has no srcOffset; existing punct still has one
           // but we don't expose it for selection.
           return (
-            <span key={i} className="pu">
+            <span key={i} className={`pu${rc.noteVoice ? " voice-note" : ""}`}>
               {rc.ch}
             </span>
           );
@@ -1160,7 +1260,7 @@ function BlockView({
           flashBucket === block.bucket &&
           off >= flashOffsets.start &&
           off < flashOffsets.end;
-        const cls = `${has ? "ch has-ann" : "ch"}${flashing ? " kwic-flash" : ""}`;
+        const cls = `${has ? "ch has-ann" : "ch"}${rc.noteVoice ? " voice-note" : ""}${flashing ? " kwic-flash" : ""}`;
         const title = has ? anns!.map(annTooltip).join(" / ") : undefined;
         return (
           <span
