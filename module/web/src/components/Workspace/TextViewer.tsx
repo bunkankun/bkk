@@ -27,6 +27,7 @@ import {
   workspace,
   type LineBreakDisplay,
   type LineMode,
+  type TextDisplayMode,
 } from "../../state/useWorkspace";
 import { parseMarkerId, hasKrpLocation } from "../../lib/markers";
 import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
@@ -181,6 +182,24 @@ function noteVoiceRanges(markers: JuanMarker[]): VoiceRange[] {
   return ranges;
 }
 
+function substitutionOriginals(markers: JuanMarker[]): Map<number, string> {
+  const out = new Map<number, string>();
+  for (const marker of markers) {
+    if (marker.type !== "substitution") continue;
+    const offset = marker.offset;
+    const original = marker.original;
+    if (
+      typeof offset !== "number" ||
+      !Number.isInteger(offset) ||
+      offset < 0 ||
+      typeof original !== "string" ||
+      Array.from(original).length !== 1
+    ) continue;
+    out.set(offset, original);
+  }
+  return out;
+}
+
 function isInNoteVoice(
   offset: number,
   ranges: VoiceRange[],
@@ -212,10 +231,14 @@ function buildRenderedChars(
   bodyText: string,
   markers: JuanMarker[],
   lineMode: LineMode,
+  textDisplay: TextDisplayMode,
 ): RenderedChar[] {
   const chars = decodeKrRefsWithOffsets(bodyText);
+  const originals = textDisplay === "original"
+    ? substitutionOriginals(markers)
+    : new Map<number, string>();
   const bodyLength = [...bodyText].length;
-  const charAtOffset = new Map(chars.map((c) => [c.srcOffset, c.ch]));
+  const charAtOffset = new Map(chars.map((c) => [c.srcOffset, originals.get(c.srcOffset) ?? c.ch]));
   const noteRanges = noteVoiceRanges(markers);
 
   type PunctInject = { offset: number; content: string };
@@ -298,12 +321,13 @@ function buildRenderedChars(
     }
     while (charIdx < chars.length && chars[charIdx].srcOffset === i) {
       const c = chars[charIdx];
+      const ch = originals.get(c.srcOffset) ?? c.ch;
       out.push({
-        ch: c.ch,
+        ch,
         srcOffset: c.srcOffset,
         srcEndOffset: c.srcEndOffset,
-        isPunct: PUNCT_RE.test(c.ch),
-        isNewline: c.ch === "\n",
+        isPunct: PUNCT_RE.test(ch),
+        isNewline: ch === "\n",
         noteVoice: isInNoteVoice(c.srcOffset, noteRanges),
       });
       charIdx++;
@@ -482,6 +506,7 @@ export function TextViewer({
   const rightTab = useWorkspace((s) => s.rightTab);
   const showPageBreaks = useWorkspace((s) => s.readPrefs.showPageBreaks);
   const lineBreakDisplay = useWorkspace((s) => s.readPrefs.lineBreakDisplay);
+  const textDisplay = useWorkspace((s) => s.readPrefs.textDisplay);
   const currentPageMarkerId = useWorkspace((s) =>
     s.currentPage && s.currentPage.textid === textid && s.currentPage.seq === seq
       ? s.currentPage.markerId
@@ -607,13 +632,13 @@ export function TextViewer({
         bucket: view.bucket,
         blocks: buildBlocks(
           view.bucket,
-          buildRenderedChars(view.text, view.markers, lineMode),
+          buildRenderedChars(view.text, view.markers, lineMode, textDisplay),
           view.markers,
           lineMode,
           [...view.text].length,
         ),
       })),
-    [bucketViews, lineMode],
+    [bucketViews, lineMode, textDisplay],
   );
 
   const blocks = useMemo(

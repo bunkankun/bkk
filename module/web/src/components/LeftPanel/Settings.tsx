@@ -5,11 +5,17 @@ import {
   syncUserTexts,
 } from "../../api/client";
 import type { UserTextListItem } from "../../api/types";
-import { useWorkspace, workspace, type Theme } from "../../state/useWorkspace";
+import {
+  useWorkspace,
+  workspace,
+  type TextDisplayMode,
+  type Theme,
+} from "../../state/useWorkspace";
 import { NewUserTextDialog } from "./NewUserTextDialog";
 
 export function Settings() {
   const theme = useWorkspace((s) => s.uiPrefs.theme);
+  const textDisplay = useWorkspace((s) => s.readPrefs.textDisplay);
   const masterOnly = useWorkspace((s) => s.searchPrefs.masterOnly);
   const maxResults = useWorkspace((s) => s.searchPrefs.maxResults);
   const searchDistance = useWorkspace((s) => s.searchPrefs.searchDistance);
@@ -87,6 +93,19 @@ export function Settings() {
           <option value="current">Default</option>
           <option value="dark">Dark</option>
           <option value="light">Light</option>
+        </select>
+      </label>
+      <label className="settings-row">
+        <span className="settings-label">Text display</span>
+        <select
+          className="settings-select"
+          value={textDisplay}
+          title="Choose whether source texts display canonical substituted characters or original characters"
+          aria-label="Text display"
+          onChange={(e) => workspace.setTextDisplay(e.target.value as TextDisplayMode)}
+        >
+          <option value="canonical">Canonicalized</option>
+          <option value="original">Original</option>
         </select>
       </label>
       <label className="settings-row">

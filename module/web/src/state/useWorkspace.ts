@@ -74,6 +74,7 @@ export interface ParallelsSource {
 }
 export type LineMode = "paragraph" | "phrase";
 export type LineBreakDisplay = "off" | "glyph" | "br";
+export type TextDisplayMode = "canonical" | "original";
 export type Theme = "current" | "dark" | "light";
 export type ListFilterMode = "off" | "any" | "all";
 export interface BundleEditTarget {
@@ -320,7 +321,12 @@ export interface WorkspaceState {
   // and by ImagePanel's prev/next toolbar.
   currentPage: CurrentPage | null;
   // user-tunable read-mode display preferences (persisted in localStorage).
-  readPrefs: { lineMode: LineMode; showPageBreaks: boolean; lineBreakDisplay: LineBreakDisplay };
+  readPrefs: {
+    lineMode: LineMode;
+    showPageBreaks: boolean;
+    lineBreakDisplay: LineBreakDisplay;
+    textDisplay: TextDisplayMode;
+  };
   // user-tunable search preferences (persisted in localStorage and, when
   // logged in, in the user's GitHub workspace session file).
   searchPrefs: SearchPrefs;
@@ -361,16 +367,26 @@ const SESSION_PATH = "settings/session.json";
 const MAX_SEARCH_HISTORY = 50;
 const MAX_TEXT_HISTORY = 20;
 
-type ReadPrefs = { lineMode: LineMode; showPageBreaks: boolean; lineBreakDisplay: LineBreakDisplay };
+type ReadPrefs = {
+  lineMode: LineMode;
+  showPageBreaks: boolean;
+  lineBreakDisplay: LineBreakDisplay;
+  textDisplay: TextDisplayMode;
+};
 
 const DEFAULT_READ_PREFS: ReadPrefs = {
   lineMode: "paragraph",
   showPageBreaks: false,
   lineBreakDisplay: "off",
+  textDisplay: "canonical",
 };
 
 function coerceLineBreakDisplay(value: unknown): LineBreakDisplay {
   return value === "glyph" || value === "br" ? value : "off";
+}
+
+function coerceTextDisplay(value: unknown): TextDisplayMode {
+  return value === "original" ? "original" : "canonical";
 }
 
 function loadReadPrefs(): ReadPrefs {
@@ -383,6 +399,7 @@ function loadReadPrefs(): ReadPrefs {
       lineMode: parsed?.lineMode === "phrase" ? "phrase" : "paragraph",
       showPageBreaks: parsed?.showPageBreaks === true,
       lineBreakDisplay: coerceLineBreakDisplay(parsed?.lineBreakDisplay),
+      textDisplay: coerceTextDisplay(parsed?.textDisplay),
     };
   } catch {
     return { ...DEFAULT_READ_PREFS };
@@ -1568,6 +1585,7 @@ async function loadWorkspacePersistence(): Promise<void> {
               lineMode?: unknown;
               showPageBreaks?: unknown;
               lineBreakDisplay?: unknown;
+              textDisplay?: unknown;
             })
           : null;
       const readPrefs = sessionReadPrefs
@@ -1583,6 +1601,10 @@ async function loadWorkspacePersistence(): Promise<void> {
               sessionReadPrefs.lineBreakDisplay === undefined
                 ? state.readPrefs.lineBreakDisplay
                 : coerceLineBreakDisplay(sessionReadPrefs.lineBreakDisplay),
+            textDisplay:
+              sessionReadPrefs.textDisplay === undefined
+                ? state.readPrefs.textDisplay
+                : coerceTextDisplay(sessionReadPrefs.textDisplay),
           }
         : state.readPrefs;
       const sessionSearchPrefs =
@@ -3205,6 +3227,14 @@ export const workspace = {
   setLineBreakDisplay(mode: LineBreakDisplay) {
     if (state.readPrefs.lineBreakDisplay === mode) return;
     const readPrefs = { ...state.readPrefs, lineBreakDisplay: mode };
+    state = { ...state, readPrefs };
+    saveReadPrefs(readPrefs);
+    notify();
+    scheduleSessionSave();
+  },
+  setTextDisplay(mode: TextDisplayMode) {
+    if (state.readPrefs.textDisplay === mode) return;
+    const readPrefs = { ...state.readPrefs, textDisplay: mode };
     state = { ...state, readPrefs };
     saveReadPrefs(readPrefs);
     notify();
