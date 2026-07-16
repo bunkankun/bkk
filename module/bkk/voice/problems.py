@@ -8,7 +8,7 @@ from typing import Any, TextIO
 
 import yaml
 
-from bkk.index.merge import find_bundle
+from bkk.index.merge import discover_bundles, find_bundle
 from bkk.marker_assets import VALID_BUCKETS, effective_markers_for_bucket, load_marker_asset
 
 VOICE_PROBLEM_TYPE = "voice:problem"
@@ -23,10 +23,22 @@ def find_voice_problems(
     corpus_root: Path | str,
     *,
     text_id: str | None = None,
+    text_prefix: str | None = None,
 ) -> list[dict[str, Any]]:
+    if text_id and text_prefix:
+        raise ValueError("provide at most one of text_id or text_prefix")
     root = Path(corpus_root)
     rows: list[dict[str, Any]] = []
-    bundle_dirs = [_bundle_dir_for_text_id(root, text_id)] if text_id else sorted(_bundle_dirs(root))
+    if text_id:
+        bundle_dirs = [_bundle_dir_for_text_id(root, text_id)]
+    elif text_prefix:
+        bundle_dirs = discover_bundles(root, prefix=text_prefix)
+        if not bundle_dirs:
+            raise FileNotFoundError(
+                f"no bundles found under {root} with prefix {text_prefix!r}"
+            )
+    else:
+        bundle_dirs = sorted(_bundle_dirs(root))
     for bundle_dir in bundle_dirs:
         textid = bundle_dir.name
         manifest_path = bundle_dir / f"{textid}.manifest.yaml"

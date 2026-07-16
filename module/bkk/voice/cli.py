@@ -2,16 +2,18 @@
 
 Exposes two operations:
 
-``add (--bundle <dir> | --text-id <id>)`` walks every juan file in the bundle
-(master plus each documentary edition), derives ``voice`` range markers
-from the markers already on disk, writes the derived markers into each
-juan's marker asset, and refreshes marker-asset and manifest hashes.
+``add (--bundle <dir> | --text-id <id> | --text-prefix <prefix>)`` walks
+every juan file in the selected bundle(s) (master plus each documentary
+edition), derives ``voice`` range markers from the markers already on disk,
+writes the derived markers into each juan's marker asset, and refreshes
+marker-asset and manifest hashes.
 
     python -m bkk voice add --bundle <out-root>/<text-id>/
     python -m bkk voice add --text-id <text-id>     # resolved via .bkkrc
+    python -m bkk voice add --text-prefix KR6q      # resolved via .bkkrc
 
-Bare-id form resolves the bundle root against ``global.corpus`` from
-``.bkkrc`` unless ``--out`` is passed.
+Bare-id and prefix forms resolve the bundle root against ``global.corpus``
+from ``.bkkrc`` unless ``--out`` is passed.
 
 ``--source`` selects the derivation:
 
@@ -34,11 +36,11 @@ voice markers, so reruns are safe.
 
 ``--dry-run`` reports per-juan counts without writing.
 
-``remove (--bundle <dir> | --text-id <id>)`` strips every ``voice`` marker from
-each juan in the bundle (master and every edition) and refreshes the
-affected juan and manifest hashes. It does not derive. Idempotent:
-juans with no voice markers are left untouched. Useful for undoing a
-bad ``add`` run before re-deriving with different options.
+``remove (--bundle <dir> | --text-id <id> | --text-prefix <prefix>)`` strips
+every ``voice`` marker from each juan in the selected bundle(s) (master and
+every edition) and refreshes the affected juan and manifest hashes. It does
+not derive. Idempotent: juans with no voice markers are left untouched. Useful
+for undoing a bad ``add`` run before re-deriving with different options.
 """
 
 from __future__ import annotations
@@ -51,10 +53,16 @@ from pathlib import Path
 
 import yaml
 
-from bkk.cli_common import resolve_bundle_dir, resolve_rc_path, warn_deprecated
+from bkk.cli_common import (
+    add_text_prefix,
+    resolve_bundle_dir,
+    resolve_rc_path,
+    warn_deprecated,
+)
 from bkk.importer.hashing import manifest_hash, sha256_jcs, ZERO_HASH
 from bkk.importer.idassigner import allocate_marker_ids
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
+from bkk.index.merge import discover_bundles
 from bkk.marker_assets import (
     VALID_BUCKETS,
     build_marker_asset,
@@ -99,9 +107,13 @@ def _add_bundle_selector(sp: argparse.ArgumentParser) -> None:
         "--text-id", dest="text_id", type=text_id_arg, default=None,
         help="text id to resolve against global.corpus",
     )
+    add_text_prefix(
+        sp,
+        help="restrict to text ids starting with this prefix (resolved against global.corpus)",
+    )
     sp.add_argument(
         "--out", dest="out_root", type=Path, default=None,
-        help="bundle output root used to resolve --text-id "
+        help="bundle output root used to resolve --text-id/--text-prefix "
              "(overrides global.corpus)",
     )
 
@@ -156,6 +168,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--text-id", dest="text_id", type=text_id_arg, default=None,
         help="restrict the report to one bundle under the corpus root",
     )
+    add_text_prefix(
+        pp,
+        help="restrict the report to text ids starting with this prefix",
+    )
     pp.add_argument(
         "--out", dest="report", type=Path, default=None,
         help="report path (defaults to [voice].report or BKK_VOICE_PROBLEMS_REPORT)",
@@ -180,12 +196,17 @@ def run(argv: list[str] | None = None) -> int:
         return _run_problems(args, out_root)
 
     try:
-        bundle, text_id = _selected_bundle_args(args)
+        bundle, text_id, text_prefix = _selected_bundle_args(args)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
     if args.op == "remove":
+        if text_prefix is not None:
+            return _run_remove(
+                bundle, out_root, text_id=text_id, text_prefix=text_prefix,
+                dry_run=args.dry_run,
+            )
         return _run_remove(
             bundle, out_root, text_id=text_id, dry_run=args.dry_run,
         )
@@ -203,28 +224,36 @@ def run(argv: list[str] | None = None) -> int:
             )
             return 2
 
+    if text_prefix is not None:
+        return _run_add(
+            bundle, out_root, text_id=text_id, text_prefix=text_prefix,
+            source=source, force=args.force, dry_run=args.dry_run,
+        )
     return _run_add(
-        bundle, out_root, text_id=text_id, source=source,
-        force=args.force, dry_run=args.dry_run,
+        bundle, out_root, text_id=text_id, source=source, force=args.force,
+        dry_run=args.dry_run,
     )
 
 
-def _selected_bundle_args(args: argparse.Namespace) -> tuple[str | Path | None, str | None]:
+def _selected_bundle_args(
+    args: argparse.Namespace,
+) -> tuple[str | Path | None, str | None, str | None]:
     supplied = [
         bool(getattr(args, "legacy_bundle", None)),
         bool(getattr(args, "bundle", None)),
         bool(getattr(args, "text_id", None)),
+        bool(getattr(args, "text_prefix", None)),
     ]
     if sum(supplied) != 1:
-        raise ValueError("provide exactly one of --bundle or --text-id")
+        raise ValueError("provide exactly one of --bundle, --text-id, or --text-prefix")
     if getattr(args, "legacy_bundle", None):
         legacy = args.legacy_bundle
         if "/" in legacy or "\\" in legacy or Path(legacy).is_dir():
             warn_deprecated("positional <bundle>", "--bundle <dir>")
-            return legacy, None
+            return legacy, None, None
         warn_deprecated("positional <text-id>", "--text-id <text-id>")
-        return None, legacy
-    return args.bundle, args.text_id
+        return None, legacy, None
+    return args.bundle, args.text_id, args.text_prefix
 
 
 def _resolve_bundle_dir(
@@ -241,10 +270,28 @@ def _run_add(
     out_root,
     *,
     text_id: str | None = None,
+    text_prefix: str | None = None,
     source: str,
     force: bool,
     dry_run: bool,
 ) -> int:
+    if text_prefix is not None:
+        try:
+            bundle_dirs = _resolve_bundle_dirs_for_prefix(out_root, text_prefix)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        rc = 0
+        for bundle_dir in bundle_dirs:
+            print(f"[bundle {bundle_dir.name}]")
+            bundle_rc = _run_add(
+                bundle_dir, out_root, source=source, force=force,
+                dry_run=dry_run,
+            )
+            if bundle_rc:
+                rc = 1 if rc == 0 else rc
+        return rc
+
     try:
         bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
     except (FileNotFoundError, ValueError) as exc:
@@ -331,6 +378,10 @@ def _run_add(
 
 
 def _run_problems(args: argparse.Namespace, out_root: Path | None) -> int:
+    if args.text_id and args.text_prefix:
+        print("error: provide at most one of --text-id or --text-prefix", file=sys.stderr)
+        return 2
+
     corpus = args.corpus or args.legacy_corpus or out_root
     if corpus is None:
         print(
@@ -353,8 +404,10 @@ def _run_problems(args: argparse.Namespace, out_root: Path | None) -> int:
         return 2
 
     try:
-        rows = find_voice_problems(corpus, text_id=args.text_id)
-    except FileNotFoundError as exc:
+        rows = find_voice_problems(
+            corpus, text_id=args.text_id, text_prefix=args.text_prefix,
+        )
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     write_voice_problems_report(rows, report_path)
@@ -610,8 +663,25 @@ def _run_remove(
     out_root,
     *,
     text_id: str | None = None,
+    text_prefix: str | None = None,
     dry_run: bool,
 ) -> int:
+    if text_prefix is not None:
+        try:
+            bundle_dirs = _resolve_bundle_dirs_for_prefix(out_root, text_prefix)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        rc = 0
+        for bundle_dir in bundle_dirs:
+            print(f"[bundle {bundle_dir.name}]")
+            bundle_rc = _run_remove(
+                bundle_dir, out_root, dry_run=dry_run,
+            )
+            if bundle_rc:
+                rc = 1 if rc == 0 else rc
+        return rc
+
     try:
         bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
     except (FileNotFoundError, ValueError) as exc:
@@ -672,6 +742,26 @@ def _run_remove(
         from bkk.repair.markers import externalize_markers
         externalize_markers(bundle_dir, dry_run=False)
     return 0
+
+
+def _resolve_bundle_dirs_for_prefix(
+    out_root: Path | None,
+    text_prefix: str,
+) -> list[Path]:
+    if out_root is None:
+        raise FileNotFoundError(
+            "bundle directory not found: bundle root not configured; "
+            "pass --out or configure a corpus root"
+        )
+    root = Path(out_root).expanduser()
+    if not root.is_dir():
+        raise FileNotFoundError(f"corpus root not found: {root}")
+    bundle_dirs = discover_bundles(root, prefix=text_prefix)
+    if not bundle_dirs:
+        raise FileNotFoundError(
+            f"no bundles found under {root} with prefix {text_prefix!r}"
+        )
+    return bundle_dirs
 
 
 def _process_one_remove(
