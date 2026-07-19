@@ -19,6 +19,9 @@ Subcommands::
                                                      [--work-dir DIR] [--jobs N]
     python -m bkk.index parallel-fuzzy-from-scan <bkkx_path> <scan.jsonl>
                                                  [--max-edits N] [--out PATH]
+    python -m bkk.index parallel-lookup-build <bkkx_path> [--out PATH]
+    python -m bkk.index parallel-lookup-at <bkkx_path> <textid> <juan_seq>
+                                           <bucket> <offset>
     python -m bkk.index duplications <bkkx_path> [--out PATH]
                                                  [--min-length N]
                                                  [--min-pair-chars N] [--jobs N]
@@ -31,6 +34,7 @@ Subcommands::
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -46,6 +50,7 @@ from .ir import Hit
 from .merge import discover_bundles, find_bundle, is_stale, merge_bundles
 from .parallel import discover_parallel_passages, write_parallel_report
 from .parallel_fuzzy_from_scan import discover_fuzzy_from_scan
+from .parallel_lookup import ParallelLookup, build_parallel_lookup
 from .parallel_scan import discover_parallel_passages_scan
 from .query import Index
 from .translation import build_translation_index, merge_translations
@@ -265,6 +270,78 @@ def build_parser() -> argparse.ArgumentParser:
                      help="include clusters wholly contained in longer clusters")
     pfs.add_argument("--quiet", action="store_true",
                      help="suppress progress logging")
+
+    plb = sub.add_parser(
+        "parallel-lookup-build",
+        help="build a sidecar .bkkp point-lookup index for parallel passages",
+    )
+    plb.add_argument("index_path", type=Path)
+    plb.add_argument("--out", type=Path, default=None,
+                     help="lookup sidecar path (default: <bkkx>.bkkp)")
+    plb.add_argument("--work-dir", type=Path, default=None,
+                     help="directory for temporary partition/work files "
+                          "(default: next to the index)")
+    plb.add_argument("--work-db", type=Path, default=None,
+                     help="persistent candidate-span work DB to create or reuse")
+    plb.add_argument("--force-work-db", action="store_true",
+                     help="replace an existing stale or incomplete --work-db")
+    plb.add_argument("--jobs", type=int, default=1,
+                     help="worker processes for partition processing (default: 1)")
+    plb.add_argument("--bucket", choices=["front", "body", "back", "all"],
+                     default="body",
+                     help="bucket kind to scan (default: body)")
+    plb.add_argument("--min-length", type=int, default=8,
+                     help="minimum lookup passage length floor (default: 8)")
+    plb.add_argument("--anchor-length", type=int, default=12,
+                     help="fingerprint length in characters (default: 12)")
+    plb.add_argument("--max-edits", type=int, default=4,
+                     help="maximum precomputed fuzzy edit budget (0-4, default: 4)")
+    plb.add_argument("--min-occurrences", type=int, default=2,
+                     help="minimum locations per cluster floor (default: 2)")
+    plb.add_argument("--max-anchor-occurrences", type=int, default=200,
+                     help="skip an anchor hash above this occurrence count (default: 200)")
+    plb.add_argument("--partitions", type=int, default=256,
+                     help="number of hash partitions (default: 256)")
+    plb.add_argument("--include-contained", action="store_true",
+                     help="include clusters wholly contained in longer clusters")
+    plb.add_argument("--enable-sketch-prefilter", action="store_true",
+                     help="record optional sketch-prefilter metadata/tables")
+    plb.add_argument("--sketch-k-gram", type=int, default=5,
+                     help="sketch k-gram size metadata (default: 5)")
+    plb.add_argument("--sketch-size", type=int, default=128,
+                     help="sketch size metadata (default: 128)")
+    plb.add_argument("--lsh-bands", type=int, default=16,
+                     help="LSH band count metadata (default: 16)")
+    plb.add_argument("--quiet", action="store_true",
+                     help="suppress progress logging")
+
+    pla = sub.add_parser(
+        "parallel-lookup-at",
+        help="query a parallel lookup sidecar at a bucket-local offset",
+    )
+    pla.add_argument("index_path", type=Path)
+    pla.add_argument("textid")
+    pla.add_argument("juan_seq", type=int)
+    pla.add_argument("bucket", choices=["front", "body", "back"])
+    pla.add_argument("offset", type=int)
+    pla.add_argument("--lookup", type=Path, default=None,
+                     help="lookup sidecar path (default: <bkkx>.bkkp)")
+    pla.add_argument("--out", type=Path, default=None,
+                     help="output path (default: stdout)")
+    pla.add_argument("--min-length", type=int, default=8,
+                     help="minimum passage length (default: 8)")
+    pla.add_argument("--max-edits", type=int, default=0,
+                     help="maximum edit distance to representative (default: 0)")
+    pla.add_argument("--min-occurrences", type=int, default=2,
+                     help="minimum locations per cluster (default: 2)")
+    pla.add_argument("--context", type=int, default=20,
+                     help="snippet context around each occurrence (default: 20)")
+    pla.add_argument("--mode", choices=["overlap", "cover"], default="overlap",
+                     help="offset match mode (default: overlap)")
+    pla.add_argument("--include-self", action="store_true",
+                     help="include the queried occurrence in returned locations")
+    pla.add_argument("--format", choices=["jsonl", "tsv"], default="jsonl",
+                     help="report format (default: jsonl)")
 
     pd = sub.add_parser(
         "duplications",
@@ -700,6 +777,61 @@ def run(argv: list[str] | None = None) -> int:
                 progress=None if args.quiet else sys.stderr,
             )
         except ValueError as exc:
+            parser.error(str(exc))
+        if args.out is None:
+            write_parallel_report(clusters, sys.stdout, format=args.format)
+        else:
+            write_parallel_report(clusters, args.out, format=args.format)
+            print(f"wrote {args.out}")
+        return 0
+    if args.cmd == "parallel-lookup-build":
+        import sys
+        try:
+            stats = build_parallel_lookup(
+                args.index_path,
+                args.out,
+                bucket=args.bucket,
+                min_length=args.min_length,
+                anchor_length=args.anchor_length,
+                max_edits=args.max_edits,
+                max_anchor_occurrences=args.max_anchor_occurrences,
+                min_occurrences=args.min_occurrences,
+                partitions=args.partitions,
+                work_dir=args.work_dir,
+                work_db=args.work_db,
+                force_work_db=args.force_work_db,
+                jobs=args.jobs,
+                include_contained=args.include_contained,
+                enable_sketch_prefilter=args.enable_sketch_prefilter,
+                sketch_k_gram=args.sketch_k_gram,
+                sketch_size=args.sketch_size,
+                lsh_bands=args.lsh_bands,
+                progress=None if args.quiet else sys.stderr,
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            parser.error(str(exc))
+        print(
+            f"wrote {stats.lookup_path} "
+            f"({stats.clusters:,} clusters, {stats.occurrences:,} occurrences)"
+        )
+        return 0
+    if args.cmd == "parallel-lookup-at":
+        import sys
+        try:
+            with ParallelLookup(args.index_path, args.lookup) as lookup:
+                clusters = lookup.find_at(
+                    args.textid,
+                    args.juan_seq,
+                    args.offset,
+                    args.bucket,
+                    min_length=args.min_length,
+                    max_edits=args.max_edits,
+                    min_occurrences=args.min_occurrences,
+                    context=args.context,
+                    mode=args.mode,
+                    include_self=args.include_self,
+                )
+        except (sqlite3.DatabaseError, OSError, ValueError) as exc:
             parser.error(str(exc))
         if args.out is None:
             write_parallel_report(clusters, sys.stdout, format=args.format)

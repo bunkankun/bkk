@@ -19,6 +19,11 @@ from bkk.index.parallel import (
     ParallelLocation,
     discover_parallel_passages,
 )
+from bkk.index.parallel_lookup import (
+    ParallelLookup,
+    ParallelLookupStaleError,
+    default_parallel_lookup_path,
+)
 
 from .. import _examples as ex
 from .. import errors
@@ -1376,6 +1381,20 @@ class ParallelSearchResponse(BaseModel):
     clusters: list[ParallelClusterModel]
 
 
+class ParallelAtSearchResponse(BaseModel):
+    textid: str
+    juan_seq: int
+    bucket: str
+    offset: int
+    min_length: int
+    min_occurrences: int
+    max_edits: int
+    mode: str
+    include_self: bool
+    total: int
+    clusters: list[ParallelClusterModel]
+
+
 def _parallel_location_out(loc: ParallelLocation) -> ParallelLocationModel:
     return ParallelLocationModel(
         textid=loc.textid,
@@ -1458,4 +1477,61 @@ def search_parallel(
         offset=offset,
         limit=limit,
         clusters=[_parallel_cluster_out(c) for c in page],
+    )
+
+
+@router.get(
+    "/search/parallel-at",
+    response_model=ParallelAtSearchResponse,
+    summary="Look up precomputed parallel passages at a corpus offset",
+)
+def search_parallel_at(
+    request: Request,
+    textid: str = Query(...),
+    juan_seq: int = Query(..., ge=1),
+    bucket: Literal["front", "body", "back"] = Query("body"),
+    offset: int = Query(..., ge=0),
+    min_length: int = Query(8, ge=1, le=200),
+    min_occurrences: int = Query(2, ge=2, le=100),
+    max_edits: int = Query(0, ge=0, le=4),
+    context: int = Query(20, ge=0, le=200),
+    mode: Literal["overlap", "cover"] = Query("overlap"),
+    include_self: bool = Query(False),
+) -> ParallelAtSearchResponse:
+    state = request.app.state.bkk
+    lookup_path = default_parallel_lookup_path(state.config.index_path)
+    if not lookup_path.is_file():
+        raise errors.bad_request(
+            f"parallel lookup sidecar is not available: {lookup_path}"
+        )
+    try:
+        with ParallelLookup(state.config.index_path, lookup_path) as lookup:
+            clusters = lookup.find_at(
+                textid,
+                juan_seq,
+                offset,
+                bucket,
+                min_length=min_length,
+                max_edits=max_edits,
+                min_occurrences=min_occurrences,
+                context=context,
+                mode=mode,
+                include_self=include_self,
+            )
+    except ParallelLookupStaleError as exc:
+        raise errors.bad_request(str(exc))
+    except ValueError as exc:
+        raise errors.bad_request(str(exc))
+    return ParallelAtSearchResponse(
+        textid=textid,
+        juan_seq=juan_seq,
+        bucket=bucket,
+        offset=offset,
+        min_length=min_length,
+        min_occurrences=min_occurrences,
+        max_edits=max_edits,
+        mode=mode,
+        include_self=include_self,
+        total=len(clusters),
+        clusters=[_parallel_cluster_out(c) for c in clusters],
     )

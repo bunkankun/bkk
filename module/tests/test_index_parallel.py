@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import io
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,11 @@ from bkk.index.build import compute_bkkx_hash
 from bkk.index.cli import run as cli_run
 from bkk.index.parallel import discover_parallel_passages, write_parallel_report
 from bkk.index.parallel_fuzzy_from_scan import discover_fuzzy_from_scan
+from bkk.index.parallel_lookup import (
+    ParallelLookup,
+    ParallelLookupStaleError,
+    build_parallel_lookup,
+)
 from bkk.index.parallel_scan import discover_parallel_passages_scan
 
 
@@ -1017,3 +1023,199 @@ def test_parallel_fuzzy_rejects_max_edits_out_of_range(tmp_path):
 
     with pytest.raises(ValueError):
         discover_parallel_passages(out, seed="abc", max_edits=5)
+
+
+def test_parallel_lookup_build_and_find_at(tmp_path):
+    shared = "LOOKUP-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+
+    stats = build_parallel_lookup(
+        out,
+        lookup_path,
+        min_length=8,
+        anchor_length=4,
+        max_edits=0,
+        partitions=4,
+    )
+
+    assert stats.lookup_path == lookup_path
+    assert stats.clusters == 1
+    with ParallelLookup(out, lookup_path) as lookup:
+        clusters = lookup.find_at(
+            "KR0a0001",
+            1,
+            4,
+            "body",
+            min_length=8,
+            include_self=False,
+        )
+        outside = lookup.find_at(
+            "KR0a0001",
+            1,
+            0,
+            "body",
+            min_length=8,
+            include_self=False,
+        )
+
+    assert outside == []
+    assert len(clusters) == 1
+    assert clusters[0].text == shared
+    assert clusters[0].occurrence_count == 1
+    assert [(loc.textid, loc.start, loc.end) for loc in clusters[0].locations] == [
+        ("KR0a0002", 2, 2 + len(shared)),
+    ]
+
+
+def test_parallel_lookup_runtime_filters_and_modes(tmp_path):
+    rep = "LOOKUP-ABCDE-ZZ"
+    fuzzy = "LOOKUP-ABXDE-ZZ"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{rep}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{fuzzy}dd")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+    build_parallel_lookup(
+        out,
+        lookup_path,
+        min_length=6,
+        anchor_length=4,
+        max_edits=1,
+        partitions=4,
+        include_contained=True,
+    )
+
+    with ParallelLookup(out, lookup_path) as lookup:
+        exact_only = lookup.find_at(
+            "KR0a0001", 1, 4, "body", min_length=6, max_edits=0,
+        )
+        fuzzy_match = lookup.find_at(
+            "KR0a0001", 1, 4, "body", min_length=6, max_edits=1,
+        )
+        too_long = lookup.find_at(
+            "KR0a0001", 1, 4, "body", min_length=len(rep) + 1, max_edits=1,
+        )
+        overlap_end = lookup.find_at(
+            "KR0a0001", 1, 2 + len(rep), "body",
+            min_length=6, max_edits=1, mode="overlap",
+        )
+        cover_end = lookup.find_at(
+            "KR0a0001", 1, 2 + len(rep), "body",
+            min_length=6, max_edits=1, mode="cover",
+        )
+
+    assert exact_only == []
+    assert too_long == []
+    assert overlap_end == []
+    assert len(cover_end) == 1
+    assert len(fuzzy_match) == 1
+    assert fuzzy_match[0].locations[0].textid == "KR0a0002"
+    assert fuzzy_match[0].locations[0].edit_distance == 1
+    assert fuzzy_match[0].locations[0].text == fuzzy
+
+
+def test_parallel_lookup_rejects_stale_sidecar(tmp_path):
+    shared = "STALE-LOOKUP-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+    build_parallel_lookup(
+        out,
+        lookup_path,
+        min_length=8,
+        anchor_length=4,
+        max_edits=0,
+        partitions=4,
+    )
+
+    conn = sqlite3.connect(out)
+    try:
+        conn.execute(
+            "INSERT INTO meta(key, value) VALUES ('parallel_lookup_test', 'stale')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(ParallelLookupStaleError):
+        ParallelLookup(out, lookup_path)
+
+
+def test_parallel_lookup_cli_writes_jsonl(tmp_path):
+    shared = "CLI-LOOKUP-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+
+    rc = cli_run([
+        "parallel-lookup-build",
+        str(out),
+        "--out",
+        str(lookup_path),
+        "--min-length",
+        "8",
+        "--anchor-length",
+        "4",
+        "--max-edits",
+        "0",
+        "--partitions",
+        "4",
+        "--quiet",
+    ])
+    assert rc == 0
+
+    report = tmp_path / "lookup.jsonl"
+    rc = cli_run([
+        "parallel-lookup-at",
+        str(out),
+        "KR0a0001",
+        "1",
+        "body",
+        "4",
+        "--lookup",
+        str(lookup_path),
+        "--min-length",
+        "8",
+        "--out",
+        str(report),
+    ])
+
+    assert rc == 0
+    rows = [json.loads(line) for line in report.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["text"] == shared
+    assert rows[0]["locations"][0]["textid"] == "KR0a0002"
+
+
+def test_parallel_lookup_sketch_prefilter_tables_are_populated(tmp_path):
+    shared = "SKETCH-LOOKUP-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+
+    build_parallel_lookup(
+        out,
+        lookup_path,
+        min_length=8,
+        anchor_length=4,
+        max_edits=0,
+        partitions=4,
+        enable_sketch_prefilter=True,
+        sketch_k_gram=3,
+        sketch_size=16,
+        lsh_bands=4,
+    )
+
+    conn = sqlite3.connect(lookup_path)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM psketch").fetchone()[0] == 2
+        assert conn.execute("SELECT COUNT(*) FROM plsh_band").fetchone()[0] == 8
+        meta = dict(conn.execute("SELECT key, value FROM meta"))
+        assert meta["enable_sketch_prefilter"] == "1"
+    finally:
+        conn.close()

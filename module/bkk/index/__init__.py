@@ -21,13 +21,37 @@ from .parallel import (
     write_parallel_report,
 )
 from .parallel_fuzzy_from_scan import discover_fuzzy_from_scan
+from .parallel_lookup import (
+    ParallelLookup,
+    ParallelLookupBuildStats,
+    ParallelLookupStaleError,
+    build_parallel_lookup,
+    default_parallel_lookup_path,
+)
 from .parallel_scan import ParallelScanStats, discover_parallel_passages_scan
 from .query import Index
 from .translation import build_translation_index, merge_translations
 
 __all__ = [
-    "Index", "Hit", "VariantOverlay", "ParallelCluster", "ParallelLocation", "ParallelScanStats",
-    "build_index", "build_annotation_index", "build_catalog_index", "build_translation_index",
-    "merge_bundles", "merge_translations", "discover_parallel_passages",
-    "discover_parallel_passages_scan", "discover_fuzzy_from_scan", "write_parallel_report",
+    "Index",
+    "Hit",
+    "VariantOverlay",
+    "ParallelCluster",
+    "ParallelLocation",
+    "ParallelLookup",
+    "ParallelLookupBuildStats",
+    "ParallelLookupStaleError",
+    "ParallelScanStats",
+    "build_index",
+    "build_annotation_index",
+    "build_catalog_index",
+    "build_translation_index",
+    "merge_bundles",
+    "merge_translations",
+    "discover_parallel_passages",
+    "discover_parallel_passages_scan",
+    "discover_fuzzy_from_scan",
+    "build_parallel_lookup",
+    "default_parallel_lookup_path",
+    "write_parallel_report",
 ]
