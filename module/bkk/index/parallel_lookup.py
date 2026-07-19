@@ -26,7 +26,7 @@ from .parallel_scan import discover_parallel_passages_scan
 
 
 LOOKUP_SCHEMA_VERSION = 1
-DEFAULT_LOOKUP_MIN_LENGTH = 8
+DEFAULT_LOOKUP_MIN_LENGTH = 12
 DEFAULT_LOOKUP_MAX_EDITS = 4
 DEFAULT_LOOKUP_MIN_OCCURRENCES = 2
 DEFAULT_LOOKUP_ANCHOR_LENGTH = 12
@@ -112,7 +112,6 @@ def build_parallel_lookup(
     index_conn.row_factory = sqlite3.Row
     try:
         index_meta = _index_meta(index_path, index_conn)
-        scan_min_length = max(min_length, anchor_length)
         with tempfile.TemporaryDirectory(
             prefix="bkk-parallel-lookup-", dir=str(lookup_path.parent)
         ) as tmp:
@@ -123,7 +122,7 @@ def build_parallel_lookup(
             discover_parallel_passages_scan(
                 index_path,
                 bucket=bucket,
-                min_length=scan_min_length,
+                min_length=min_length,
                 anchor_length=anchor_length,
                 min_occurrences=min_occurrences,
                 max_anchor_occurrences=max_anchor_occurrences,
@@ -173,9 +172,9 @@ def build_parallel_lookup(
                     "status": "complete",
                     "bucket": bucket,
                     "min_length": str(min_length),
-                    "scan_min_length": str(scan_min_length),
                     "anchor_length": str(anchor_length),
-                    "max_edits": str(max_edits),
+                    "extension_max_edits": str(max_edits),
+                    "max_edits": str(_advertised_max_edits(clusters, max_edits)),
                     "max_anchor_occurrences": str(max_anchor_occurrences),
                     "min_occurrences": str(min_occurrences),
                     "partitions": str(partitions),
@@ -375,7 +374,7 @@ class ParallelLookup:
             raise ValueError("max_edits must be non-negative")
         if max_edits > build_max_edits:
             raise ValueError(
-                f"max_edits must be <= the lookup build budget ({build_max_edits})"
+                f"max_edits must be <= the lookup query budget ({build_max_edits})"
             )
 
     def _bucket_id(self, textid: str, juan_seq: int, bucket: str) -> int:
@@ -478,6 +477,8 @@ def _validate_build_args(
         raise ValueError("min_length must be positive")
     if anchor_length < 1:
         raise ValueError("anchor_length must be positive")
+    if min_length < anchor_length:
+        raise ValueError("min_length must be greater than or equal to anchor_length")
     if max_edits < 0 or max_edits > 4:
         raise ValueError("max_edits must be between 0 and 4")
     if max_anchor_occurrences < 2:
@@ -738,6 +739,16 @@ def _representative_span(
         key=lambda item: (item.end - item.start, -item.bucket_id, -item.start),
     )
     return loc.bucket_id, loc.start, loc.end
+
+
+def _advertised_max_edits(
+    clusters: list[ParallelCluster],
+    extension_max_edits: int,
+) -> int:
+    return max(
+        [extension_max_edits]
+        + [cluster.representative_edits for cluster in clusters]
+    )
 
 
 def _write_sketch_tables(

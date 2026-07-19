@@ -290,8 +290,8 @@ def build_parser() -> argparse.ArgumentParser:
     plb.add_argument("--bucket", choices=["front", "body", "back", "all"],
                      default="body",
                      help="bucket kind to scan (default: body)")
-    plb.add_argument("--min-length", type=int, default=8,
-                     help="minimum lookup passage length floor (default: 8)")
+    plb.add_argument("--min-length", type=int, default=12,
+                     help="minimum lookup passage length floor (default: 12)")
     plb.add_argument("--anchor-length", type=int, default=12,
                      help="fingerprint length in characters (default: 12)")
     plb.add_argument("--max-edits", type=int, default=4,
@@ -328,8 +328,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="lookup sidecar path (default: <bkkx>.bkkp)")
     pla.add_argument("--out", type=Path, default=None,
                      help="output path (default: stdout)")
-    pla.add_argument("--min-length", type=int, default=8,
-                     help="minimum passage length (default: 8)")
+    pla.add_argument("--min-length", type=int, default=12,
+                     help="minimum passage length (default: 12)")
     pla.add_argument("--max-edits", type=int, default=0,
                      help="maximum edit distance to representative (default: 0)")
     pla.add_argument("--min-occurrences", type=int, default=2,

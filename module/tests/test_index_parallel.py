@@ -1070,6 +1070,16 @@ def test_parallel_lookup_build_and_find_at(tmp_path):
     ]
 
 
+def test_parallel_lookup_rejects_min_length_below_anchor_length(tmp_path):
+    shared = "LOOKUP-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+
+    with pytest.raises(ValueError, match="min_length.*anchor_length"):
+        build_parallel_lookup(out, min_length=8, anchor_length=12)
+
+
 def test_parallel_lookup_runtime_filters_and_modes(tmp_path):
     rep = "LOOKUP-ABCDE-ZZ"
     fuzzy = "LOOKUP-ABXDE-ZZ"
@@ -1114,6 +1124,50 @@ def test_parallel_lookup_runtime_filters_and_modes(tmp_path):
     assert fuzzy_match[0].locations[0].textid == "KR0a0002"
     assert fuzzy_match[0].locations[0].edit_distance == 1
     assert fuzzy_match[0].locations[0].text == fuzzy
+
+
+def test_parallel_lookup_advertises_transitive_fuzzy_distance(tmp_path):
+    first = "ABCDEFGKEY1234X678"
+    second = "ABCDEFGKEY1234Y678"
+    third = "ABCDEFGKEY1234Y679"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{first}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"aa{second}bb")
+    _write_bundle(tmp_path, "KR0a0003", f"aa{third}bb")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+
+    build_parallel_lookup(
+        out,
+        lookup_path,
+        min_length=16,
+        anchor_length=4,
+        max_edits=1,
+        partitions=4,
+        include_contained=True,
+    )
+
+    conn = sqlite3.connect(lookup_path)
+    try:
+        meta = dict(conn.execute("SELECT key, value FROM meta"))
+    finally:
+        conn.close()
+
+    with ParallelLookup(out, lookup_path) as lookup:
+        one_edit = lookup.find_at(
+            "KR0a0001", 1, 4, "body", min_length=16, max_edits=1,
+        )
+        two_edits = lookup.find_at(
+            "KR0a0001", 1, 4, "body", min_length=16, max_edits=2,
+        )
+
+    assert meta["extension_max_edits"] == "1"
+    assert meta["max_edits"] == "2"
+    assert [loc.textid for loc in one_edit[0].locations] == ["KR0a0002"]
+    assert [loc.textid for loc in two_edits[0].locations] == [
+        "KR0a0002",
+        "KR0a0003",
+    ]
+    assert [loc.edit_distance for loc in two_edits[0].locations] == [1, 2]
 
 
 def test_parallel_lookup_rejects_stale_sidecar(tmp_path):
