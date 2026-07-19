@@ -49,6 +49,15 @@ class ParallelLookupBuildStats:
     candidate_spans: int
     fuzzy_spans: int
     total_seconds: float
+    sketch_bucket_count: int = 0
+    sketch_candidate_pairs: int = 0
+
+
+@dataclass(frozen=True)
+class _SketchPrefilter:
+    sketches: dict[int, bytes]
+    band_postings: list[tuple[str, int]]
+    candidate_pairs: set[tuple[int, int]]
 
 
 def default_parallel_lookup_path(index_path: Path | str) -> Path:
@@ -112,6 +121,23 @@ def build_parallel_lookup(
     index_conn.row_factory = sqlite3.Row
     try:
         index_meta = _index_meta(index_path, index_conn)
+        sketch_prefilter = (
+            _build_sketch_prefilter(
+                index_conn,
+                bucket=bucket,
+                k_gram=sketch_k_gram,
+                sketch_size=sketch_size,
+                lsh_bands=lsh_bands,
+            )
+            if enable_sketch_prefilter else None
+        )
+        if sketch_prefilter is not None:
+            _emit(
+                progress,
+                "sketch prefilter: "
+                f"{len(sketch_prefilter.sketches)} buckets, "
+                f"{len(sketch_prefilter.candidate_pairs)} candidate pairs",
+            )
         with tempfile.TemporaryDirectory(
             prefix="bkk-parallel-lookup-", dir=str(lookup_path.parent)
         ) as tmp:
@@ -133,6 +159,10 @@ def build_parallel_lookup(
                 jobs=jobs,
                 include_contained=True,
                 context=0,
+                candidate_bucket_pairs=(
+                    sketch_prefilter.candidate_pairs
+                    if sketch_prefilter is not None else None
+                ),
                 progress=progress,
             )
             candidate_spans = _candidate_span_count(scan_work_db)
@@ -185,11 +215,20 @@ def build_parallel_lookup(
                     "sketch_k_gram": str(sketch_k_gram),
                     "sketch_size": str(sketch_size),
                     "lsh_bands": str(lsh_bands),
+                    "sketch_bucket_count": str(
+                        len(sketch_prefilter.sketches)
+                        if sketch_prefilter is not None else 0
+                    ),
+                    "sketch_candidate_pairs": str(
+                        len(sketch_prefilter.candidate_pairs)
+                        if sketch_prefilter is not None else 0
+                    ),
                     "candidate_spans": str(candidate_spans),
                     "fuzzy_spans": str(fuzzy_spans),
                     "clusters": str(len(clusters)),
                 },
                 create_sketch_tables=enable_sketch_prefilter,
+                sketch_prefilter=sketch_prefilter,
             )
             os.replace(tmp_lookup, lookup_path)
     finally:
@@ -202,6 +241,13 @@ def build_parallel_lookup(
         candidate_spans=candidate_spans,
         fuzzy_spans=fuzzy_spans,
         total_seconds=time.monotonic() - started_at,
+        sketch_bucket_count=(
+            len(sketch_prefilter.sketches) if sketch_prefilter is not None else 0
+        ),
+        sketch_candidate_pairs=(
+            len(sketch_prefilter.candidate_pairs)
+            if sketch_prefilter is not None else 0
+        ),
     )
     _emit(
         progress,
@@ -633,6 +679,7 @@ def _write_lookup_db(
     *,
     meta: dict[str, str],
     create_sketch_tables: bool,
+    sketch_prefilter: _SketchPrefilter | None,
 ) -> None:
     conn = sqlite3.connect(str(path))
     try:
@@ -680,14 +727,8 @@ def _write_lookup_db(
                   ON plsh_band(band_hash, bucket_id);
                 """
             )
-            _write_sketch_tables(
-                conn,
-                index_conn,
-                bucket=meta["bucket"],
-                k_gram=int(meta["sketch_k_gram"]),
-                sketch_size=int(meta["sketch_size"]),
-                lsh_bands=int(meta["lsh_bands"]),
-            )
+            if sketch_prefilter is not None:
+                _write_sketch_tables(conn, sketch_prefilter)
         conn.executemany(
             "INSERT INTO meta(key, value) VALUES (?, ?)",
             sorted(meta.items()),
@@ -751,15 +792,17 @@ def _advertised_max_edits(
     )
 
 
-def _write_sketch_tables(
-    lookup_conn: sqlite3.Connection,
+def _build_sketch_prefilter(
     index_conn: sqlite3.Connection,
     *,
     bucket: str,
     k_gram: int,
     sketch_size: int,
     lsh_bands: int,
-) -> None:
+) -> _SketchPrefilter:
+    sketches: dict[int, bytes] = {}
+    band_postings: list[tuple[str, int]] = []
+    by_band: dict[str, list[int]] = {}
     if bucket == "all":
         rows = index_conn.execute(
             "SELECT bucket_id, text FROM bucket WHERE length(text) >= ? "
@@ -775,15 +818,37 @@ def _write_sketch_tables(
     for row in rows:
         sketch = _minhash_sketch(row["text"], k_gram=k_gram, size=sketch_size)
         blob = b"".join(v.to_bytes(8, "big") for v in sketch)
-        lookup_conn.execute(
-            "INSERT INTO psketch(bucket_id, sketch) VALUES (?, ?)",
-            (row["bucket_id"], blob),
-        )
+        bucket_id = int(row["bucket_id"])
+        sketches[bucket_id] = blob
         for band_hash in _lsh_band_hashes(blob, bands=lsh_bands):
-            lookup_conn.execute(
-                "INSERT INTO plsh_band(band_hash, bucket_id) VALUES (?, ?)",
-                (band_hash, row["bucket_id"]),
-            )
+            band_postings.append((band_hash, bucket_id))
+            by_band.setdefault(band_hash, []).append(bucket_id)
+
+    candidate_pairs = {(bucket_id, bucket_id) for bucket_id in sketches}
+    for bucket_ids in by_band.values():
+        unique = sorted(set(bucket_ids))
+        for i, left in enumerate(unique):
+            for right in unique[i + 1:]:
+                candidate_pairs.add((left, right))
+    return _SketchPrefilter(
+        sketches=sketches,
+        band_postings=band_postings,
+        candidate_pairs=candidate_pairs,
+    )
+
+
+def _write_sketch_tables(
+    lookup_conn: sqlite3.Connection,
+    sketch_prefilter: _SketchPrefilter,
+) -> None:
+    lookup_conn.executemany(
+        "INSERT INTO psketch(bucket_id, sketch) VALUES (?, ?)",
+        sorted(sketch_prefilter.sketches.items()),
+    )
+    lookup_conn.executemany(
+        "INSERT INTO plsh_band(band_hash, bucket_id) VALUES (?, ?)",
+        sorted(sketch_prefilter.band_postings),
+    )
 
 
 def _minhash_sketch(text: str, *, k_gram: int, size: int) -> list[int]:
@@ -805,14 +870,17 @@ def _minhash_sketch(text: str, *, k_gram: int, size: int) -> list[int]:
 
 def _lsh_band_hashes(blob: bytes, *, bands: int) -> list[str]:
     if bands <= 1:
-        return [hashlib.blake2b(blob, digest_size=8).hexdigest()]
-    width = max(8, len(blob) // bands)
+        return ["0:" + hashlib.blake2b(blob, digest_size=8).hexdigest()]
+    width = max(8, (len(blob) + bands - 1) // bands)
     hashes = []
-    for start in range(0, len(blob), width):
+    for idx, start in enumerate(range(0, len(blob), width)):
         part = blob[start:start + width]
         if not part:
             continue
-        hashes.append(hashlib.blake2b(part, digest_size=8).hexdigest())
+        hashes.append(
+            f"{idx}:"
+            + hashlib.blake2b(part, digest_size=8).hexdigest()
+        )
     return hashes
 
 

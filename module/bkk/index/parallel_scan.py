@@ -71,6 +71,7 @@ def discover_parallel_passages_scan(
     jobs: int = 1,
     include_contained: bool = False,
     context: int = 20,
+    candidate_bucket_pairs: set[tuple[int, int]] | None = None,
     progress: TextIO | None = None,
 ) -> tuple[list[ParallelCluster], ParallelScanStats]:
     """Discover exact repeated passages using external-memory fingerprints."""
@@ -102,6 +103,7 @@ def discover_parallel_passages_scan(
                 anchor_length=anchor_length,
                 max_anchor_occurrences=max_anchor_occurrences,
                 partitions=partitions,
+                candidate_bucket_pairs=candidate_bucket_pairs,
             )
             if work_db_path is not None else None
         )
@@ -167,6 +169,7 @@ def discover_parallel_passages_scan(
                 max_anchor_occurrences=max_anchor_occurrences,
                 partitions=partitions,
                 jobs=jobs,
+                candidate_bucket_pairs=candidate_bucket_pairs,
                 progress=progress,
             )
             partition_seconds = time.monotonic() - t_partitions
@@ -288,8 +291,9 @@ def _expected_work_meta(
     anchor_length: int,
     max_anchor_occurrences: int,
     partitions: int,
+    candidate_bucket_pairs: set[tuple[int, int]] | None = None,
 ) -> dict[str, str]:
-    return {
+    meta = {
         "work_db_version": str(_WORK_DB_VERSION),
         "algorithm": _WORK_DB_ALGORITHM,
         "index_path": str(index_path.resolve()),
@@ -302,6 +306,14 @@ def _expected_work_meta(
         "max_anchor_occurrences": str(max_anchor_occurrences),
         "partitions": str(partitions),
     }
+    if candidate_bucket_pairs is None:
+        meta["candidate_bucket_pair_filter"] = "none"
+    else:
+        meta["candidate_bucket_pair_filter"] = _candidate_pair_filter_hash(
+            candidate_bucket_pairs
+        )
+        meta["candidate_bucket_pair_count"] = str(len(candidate_bucket_pairs))
+    return meta
 
 
 def _index_signature(path: Path) -> tuple[int, int, int, int, int]:
@@ -559,6 +571,7 @@ def _process_partitions(
     max_anchor_occurrences: int,
     partitions: int,
     jobs: int,
+    candidate_bucket_pairs: set[tuple[int, int]] | None,
     progress: TextIO | None,
 ) -> tuple[int, int]:
     if jobs > 1:
@@ -571,6 +584,7 @@ def _process_partitions(
             max_anchor_occurrences=max_anchor_occurrences,
             partitions=partitions,
             jobs=jobs,
+            candidate_bucket_pairs=candidate_bucket_pairs,
             progress=progress,
         )
     skipped_anchor_groups = 0
@@ -590,6 +604,7 @@ def _process_partitions(
             max_anchor_occurrences=max_anchor_occurrences,
             min_length=min_length,
             anchor_length=anchor_length,
+            candidate_bucket_pairs=candidate_bucket_pairs,
             progress=progress,
             label=f"partition {part + 1}/{partitions}",
         )
@@ -616,6 +631,7 @@ def _process_partitions_parallel(
     max_anchor_occurrences: int,
     partitions: int,
     jobs: int,
+    candidate_bucket_pairs: set[tuple[int, int]] | None,
     progress: TextIO | None,
 ) -> tuple[int, int]:
     partition_dir = run_dir / "anchors"
@@ -632,6 +648,7 @@ def _process_partitions_parallel(
                 min_length,
                 anchor_length,
                 max_anchor_occurrences,
+                candidate_bucket_pairs,
             ))
     skipped_anchor_groups = 0
     candidate_spans = 0
@@ -692,6 +709,7 @@ def _process_partition_worker(args) -> tuple[int, int, int, int, str]:
         min_length,
         anchor_length,
         max_anchor_occurrences,
+        candidate_bucket_pairs,
     ) = args
     index_conn = sqlite3.connect(f"file:{index_path_s}?mode=ro", uri=True)
     index_conn.row_factory = sqlite3.Row
@@ -711,6 +729,7 @@ def _process_partition_worker(args) -> tuple[int, int, int, int, str]:
             max_anchor_occurrences=max_anchor_occurrences,
             min_length=min_length,
             anchor_length=anchor_length,
+            candidate_bucket_pairs=candidate_bucket_pairs,
             progress=None,
             label=f"partition {part + 1}",
         )
@@ -773,6 +792,7 @@ def _record_partition_spans(
     max_anchor_occurrences: int,
     min_length: int,
     anchor_length: int,
+    candidate_bucket_pairs: set[tuple[int, int]] | None,
     progress: TextIO | None,
     label: str,
 ) -> tuple[int, int, int]:
@@ -798,6 +818,7 @@ def _record_partition_spans(
                 max_anchor_occurrences=max_anchor_occurrences,
                 min_length=min_length,
                 anchor_length=anchor_length,
+                candidate_bucket_pairs=candidate_bucket_pairs,
                 progress=progress,
                 label=f"{label} hash {current_hash}",
             )
@@ -826,6 +847,7 @@ def _record_partition_spans(
             max_anchor_occurrences=max_anchor_occurrences,
             min_length=min_length,
             anchor_length=anchor_length,
+            candidate_bucket_pairs=candidate_bucket_pairs,
             progress=progress,
             label=f"{label} hash {current_hash}",
         )
@@ -843,12 +865,13 @@ def _record_hash_group(
     max_anchor_occurrences: int,
     min_length: int,
     anchor_length: int,
+    candidate_bucket_pairs: set[tuple[int, int]] | None,
     progress: TextIO | None,
     label: str,
 ) -> tuple[int, int, int]:
     if len(postings) < 2:
         return 0, 0, 0
-    if len(postings) > max_anchor_occurrences:
+    if candidate_bucket_pairs is None and len(postings) > max_anchor_occurrences:
         return 1, 1, 0
     spans = _record_group_spans(
         conn,
@@ -856,6 +879,7 @@ def _record_hash_group(
         postings,
         min_length=min_length,
         anchor_length=anchor_length,
+        candidate_bucket_pairs=candidate_bucket_pairs,
         progress=progress,
         label=label,
     )
@@ -869,6 +893,7 @@ def _record_group_spans(
     *,
     min_length: int,
     anchor_length: int,
+    candidate_bucket_pairs: set[tuple[int, int]] | None,
     progress: TextIO | None,
     label: str,
 ) -> int:
@@ -876,45 +901,84 @@ def _record_group_spans(
     pairs_seen = 0
     started_at = time.monotonic()
     next_heartbeat = started_at + _GROUP_HEARTBEAT_SECONDS
-    for i, left in enumerate(postings):
-        for right in postings[i + 1:]:
-            pairs_seen += 1
-            if pairs_seen % _PAIR_HEARTBEAT_CHECK_INTERVAL == 0:
-                now = time.monotonic()
-                if progress is not None and now >= next_heartbeat:
-                    _emit(
-                        progress,
-                        f"{label} heartbeat: "
-                        f"{pairs_seen} pairs checked, "
-                        f"{len(rows)} local spans, "
-                        f"{now - started_at:.1f}s elapsed",
-                    )
-                    next_heartbeat = now + _GROUP_HEARTBEAT_SECONDS
-            span_a, span_b = _maximal_pair_span(
-                cache,
-                left[0],
-                left[1],
-                right[0],
-                right[1],
-                anchor_length,
-            )
-            if span_a is None or span_b is None:
-                continue
-            if span_a.end - span_a.start < min_length:
-                continue
-            rows.append((
-                span_a.bucket_id,
-                span_a.start,
-                span_a.end,
-                span_b.bucket_id,
-                span_b.start,
-                span_b.end,
-            ))
+    if candidate_bucket_pairs is None:
+        pair_iter = (
+            (left, right)
+            for i, left in enumerate(postings)
+            for right in postings[i + 1:]
+        )
+    else:
+        pair_iter = _filtered_posting_pairs(postings, candidate_bucket_pairs)
+    for left, right in pair_iter:
+        pairs_seen += 1
+        if pairs_seen % _PAIR_HEARTBEAT_CHECK_INTERVAL == 0:
+            now = time.monotonic()
+            if progress is not None and now >= next_heartbeat:
+                _emit(
+                    progress,
+                    f"{label} heartbeat: "
+                    f"{pairs_seen} pairs checked, "
+                    f"{len(rows)} local spans, "
+                    f"{now - started_at:.1f}s elapsed",
+                )
+                next_heartbeat = now + _GROUP_HEARTBEAT_SECONDS
+        span_a, span_b = _maximal_pair_span(
+            cache,
+            left[0],
+            left[1],
+            right[0],
+            right[1],
+            anchor_length,
+        )
+        if span_a is None or span_b is None:
+            continue
+        if span_a.end - span_a.start < min_length:
+            continue
+        rows.append((
+            span_a.bucket_id,
+            span_a.start,
+            span_a.end,
+            span_b.bucket_id,
+            span_b.start,
+            span_b.end,
+        ))
     if not rows:
         return 0
     before = conn.total_changes
     _insert_candidate_span_rows(conn, rows)
     return conn.total_changes - before
+
+
+def _filtered_posting_pairs(
+    postings: list[tuple[int, int]],
+    candidate_bucket_pairs: set[tuple[int, int]],
+) -> Iterator[tuple[tuple[int, int], tuple[int, int]]]:
+    by_bucket: dict[int, list[int]] = {}
+    for bucket_id, position in postings:
+        by_bucket.setdefault(bucket_id, []).append(position)
+    bucket_ids = sorted(by_bucket)
+    for i, left_bucket in enumerate(bucket_ids):
+        left_positions = by_bucket[left_bucket]
+        for right_bucket in bucket_ids[i:]:
+            if (left_bucket, right_bucket) not in candidate_bucket_pairs:
+                continue
+            right_positions = by_bucket[right_bucket]
+            if left_bucket == right_bucket:
+                for left_idx, left_pos in enumerate(left_positions):
+                    for right_pos in right_positions[left_idx + 1:]:
+                        yield (left_bucket, left_pos), (right_bucket, right_pos)
+            else:
+                for left_pos in left_positions:
+                    for right_pos in right_positions:
+                        yield (left_bucket, left_pos), (right_bucket, right_pos)
+
+
+def _candidate_pair_filter_hash(pairs: set[tuple[int, int]]) -> str:
+    h = hashlib.sha256()
+    for left, right in sorted(pairs):
+        h.update(int(left).to_bytes(8, "big", signed=True))
+        h.update(int(right).to_bytes(8, "big", signed=True))
+    return f"sha256:{h.hexdigest()}"
 
 
 def _insert_candidate_span_rows(

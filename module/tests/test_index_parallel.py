@@ -1271,5 +1271,75 @@ def test_parallel_lookup_sketch_prefilter_tables_are_populated(tmp_path):
         assert conn.execute("SELECT COUNT(*) FROM plsh_band").fetchone()[0] == 8
         meta = dict(conn.execute("SELECT key, value FROM meta"))
         assert meta["enable_sketch_prefilter"] == "1"
+        assert meta["sketch_bucket_count"] == "2"
+        assert meta["sketch_candidate_pairs"] == "3"
     finally:
         conn.close()
+
+
+def test_parallel_lookup_sketch_prefilter_reduces_candidate_pairs(tmp_path):
+    first = "AAAAAAAAAAAAAAA"
+    second = "ZZZZZZZZZZZZZZZ"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{first}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"aa{first}bb")
+    _write_bundle(tmp_path, "KR0a0003", f"cc{second}dd")
+    _write_bundle(tmp_path, "KR0a0004", f"cc{second}dd")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+
+    stats = build_parallel_lookup(
+        out,
+        lookup_path,
+        min_length=12,
+        anchor_length=4,
+        max_edits=0,
+        partitions=4,
+        enable_sketch_prefilter=True,
+        sketch_k_gram=3,
+        sketch_size=16,
+        lsh_bands=4,
+    )
+
+    assert stats.sketch_bucket_count == 4
+    assert stats.sketch_candidate_pairs < 10  # all 4 self/cross pairs.
+    with ParallelLookup(out, lookup_path) as lookup:
+        clusters = lookup.find_at(
+            "KR0a0001", 1, 4, "body", min_length=12, max_edits=0,
+        )
+    assert len(clusters) == 1
+    assert [loc.textid for loc in clusters[0].locations] == ["KR0a0002"]
+
+
+def test_parallel_lookup_sketch_prefilter_rescues_capped_anchor_group(tmp_path):
+    shared = "CAP-PREFILTER-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0003", f"aa{shared}bb")
+    out = _merge(tmp_path)
+
+    plain = build_parallel_lookup(
+        out,
+        tmp_path / "plain.bkkp",
+        min_length=12,
+        anchor_length=4,
+        max_edits=0,
+        max_anchor_occurrences=2,
+        partitions=4,
+    )
+    filtered = build_parallel_lookup(
+        out,
+        tmp_path / "filtered.bkkp",
+        min_length=12,
+        anchor_length=4,
+        max_edits=0,
+        max_anchor_occurrences=2,
+        partitions=4,
+        enable_sketch_prefilter=True,
+        sketch_k_gram=3,
+        sketch_size=16,
+        lsh_bands=4,
+    )
+
+    assert plain.clusters == 0
+    assert filtered.clusters == 1
+    assert filtered.candidate_spans > 0
