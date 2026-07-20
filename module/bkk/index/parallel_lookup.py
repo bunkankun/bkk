@@ -10,19 +10,20 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TextIO
+from typing import Iterable, TextIO
 
 from .build import compute_bkkx_hash
 from .parallel import (
     ParallelCluster,
     _BucketCache,
     _align_ops,
+    _maximal_pair_span,
     _clusters_from_spans,
     _clusters_from_spans_fuzzy,
     _make_location,
     _maximal_pair_span_fuzzy,
 )
-from .parallel_scan import discover_parallel_passages_scan
+from .parallel_scan import _winnowed_anchors, discover_parallel_passages_scan
 
 
 LOOKUP_SCHEMA_VERSION = 1
@@ -54,6 +55,31 @@ class ParallelLookupBuildStats:
 
 
 @dataclass(frozen=True)
+class ParallelLookupDryRunEstimate:
+    """Sampled runtime estimate for ``parallel-lookup-build``."""
+
+    bucket_count: int
+    sampled_buckets: int
+    total_chars: int
+    sampled_chars: int
+    sampled_anchors: int
+    estimated_anchors: int
+    sampled_pair_checks: int
+    benchmarked_pair_checks: int
+    estimated_pair_checks: int
+    sketch_candidate_pairs: int
+    estimated_sketch_candidate_pairs: int
+    sketch_seconds: float
+    anchor_seconds: float
+    pair_seconds: float
+    overhead_seconds: float
+    estimated_seconds: float
+    lower_seconds: float
+    upper_seconds: float
+    notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class _SketchPrefilter:
     sketches: dict[int, bytes]
     band_postings: list[tuple[str, int]]
@@ -63,6 +89,252 @@ class _SketchPrefilter:
 def default_parallel_lookup_path(index_path: Path | str) -> Path:
     """Return the default ``.bkkp`` sidecar path for ``index_path``."""
     return Path(index_path).with_suffix(".bkkp")
+
+
+def estimate_parallel_lookup_build(
+    index_path: Path | str,
+    *,
+    bucket: str = "body",
+    min_length: int = DEFAULT_LOOKUP_MIN_LENGTH,
+    anchor_length: int = DEFAULT_LOOKUP_ANCHOR_LENGTH,
+    max_edits: int = DEFAULT_LOOKUP_MAX_EDITS,
+    max_anchor_occurrences: int = 200,
+    min_occurrences: int = DEFAULT_LOOKUP_MIN_OCCURRENCES,
+    partitions: int = 256,
+    jobs: int = 1,
+    include_contained: bool = False,
+    enable_sketch_prefilter: bool = False,
+    sketch_k_gram: int = DEFAULT_SKETCH_K_GRAM,
+    sketch_size: int = DEFAULT_SKETCH_SIZE,
+    lsh_bands: int = DEFAULT_LSH_BANDS,
+    sample_buckets: int = 200,
+    benchmark_pairs: int = 2000,
+    progress: TextIO | None = None,
+) -> ParallelLookupDryRunEstimate:
+    """Estimate ``parallel-lookup-build`` runtime with a sampled local benchmark.
+
+    This intentionally does not create the lookup sidecar or persistent work DB.
+    The pair-extension phase can be highly skewed by common anchors, so the
+    result is an order-of-magnitude estimate with a broad range.
+    """
+    _validate_build_args(
+        bucket=bucket,
+        min_length=min_length,
+        anchor_length=anchor_length,
+        max_edits=max_edits,
+        max_anchor_occurrences=max_anchor_occurrences,
+        min_occurrences=min_occurrences,
+        partitions=partitions,
+        jobs=jobs,
+        enable_sketch_prefilter=enable_sketch_prefilter,
+        sketch_k_gram=sketch_k_gram,
+        sketch_size=sketch_size,
+        lsh_bands=lsh_bands,
+    )
+    if sample_buckets < 1:
+        raise ValueError("sample_buckets must be positive")
+    if benchmark_pairs < 0:
+        raise ValueError("benchmark_pairs must be non-negative")
+    index_path = Path(index_path)
+    if not index_path.is_file():
+        raise FileNotFoundError(index_path)
+
+    conn = sqlite3.connect(f"file:{index_path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        bucket_rows = _lookup_bucket_rows(conn, bucket, min_length)
+        bucket_count = len(bucket_rows)
+        total_chars = sum(row[1] for row in bucket_rows)
+        sampled_ids = _sample_bucket_ids(bucket_rows, sample_buckets)
+        sampled_buckets = len(sampled_ids)
+        if sampled_buckets == 0:
+            return ParallelLookupDryRunEstimate(
+                bucket_count=0,
+                sampled_buckets=0,
+                total_chars=0,
+                sampled_chars=0,
+                sampled_anchors=0,
+                estimated_anchors=0,
+                sampled_pair_checks=0,
+                benchmarked_pair_checks=0,
+                estimated_pair_checks=0,
+                sketch_candidate_pairs=0,
+                estimated_sketch_candidate_pairs=0,
+                sketch_seconds=0.0,
+                anchor_seconds=0.0,
+                pair_seconds=0.0,
+                overhead_seconds=0.0,
+                estimated_seconds=0.0,
+                lower_seconds=0.0,
+                upper_seconds=0.0,
+                notes=("no buckets matched the build filters",),
+            )
+        sample_texts = _bucket_texts(conn, sampled_ids)
+        sampled_chars = sum(len(text) for _bucket_id, text in sample_texts)
+        _emit(
+            progress,
+            "dry-run sample: "
+            f"{sampled_buckets}/{bucket_count} buckets, "
+            f"{sampled_chars:,}/{total_chars:,} chars",
+        )
+
+        sketch_started = time.monotonic()
+        sample_prefilter = (
+            _build_sketch_prefilter_from_texts(
+                sample_texts,
+                k_gram=sketch_k_gram,
+                sketch_size=sketch_size,
+                lsh_bands=lsh_bands,
+            )
+            if enable_sketch_prefilter else None
+        )
+        sketch_sample_seconds = time.monotonic() - sketch_started
+        sketch_scale = _scale_by_chars(total_chars, sampled_chars)
+        sketch_seconds = (
+            sketch_sample_seconds * sketch_scale
+            if enable_sketch_prefilter else 0.0
+        )
+
+        anchor_started = time.monotonic()
+        sample_anchor_postings: dict[bytes, list[tuple[int, int]]] = {}
+        sampled_anchors = 0
+        for bucket_id, text in sample_texts:
+            for pos, h in _winnowed_anchors(
+                text,
+                anchor_length=anchor_length,
+                min_length=min_length,
+            ):
+                sample_anchor_postings.setdefault(h, []).append((bucket_id, pos))
+                sampled_anchors += 1
+        anchor_sample_seconds = time.monotonic() - anchor_started
+        anchor_seconds = anchor_sample_seconds * _scale_by_chars(total_chars, sampled_chars)
+        estimated_anchors = int(round(sampled_anchors * _scale_by_chars(total_chars, sampled_chars)))
+
+        sample_candidate_pairs = (
+            sample_prefilter.candidate_pairs
+            if sample_prefilter is not None else None
+        )
+        sampled_pair_checks, benchmark_rows = _sample_pair_work(
+            sample_anchor_postings,
+            sample_candidate_pairs,
+            max_anchor_occurrences=max_anchor_occurrences,
+            benchmark_pairs=benchmark_pairs,
+        )
+        pair_started = time.monotonic()
+        cache = _BucketCache(conn)
+        for left, right in benchmark_rows:
+            if max_edits == 0:
+                _maximal_pair_span(
+                    cache,
+                    left[0],
+                    left[1],
+                    right[0],
+                    right[1],
+                    anchor_length,
+                )
+            else:
+                _maximal_pair_span_fuzzy(
+                    cache,
+                    left[0],
+                    left[1],
+                    right[0],
+                    right[1],
+                    anchor_length,
+                    max_edits,
+                )
+        pair_benchmark_seconds = time.monotonic() - pair_started
+        pair_seconds_each = (
+            pair_benchmark_seconds / len(benchmark_rows)
+            if benchmark_rows else 0.0
+        )
+        pair_scale = _pair_scale(
+            bucket_count,
+            sampled_buckets,
+            sample_candidate_pairs,
+            enable_sketch_prefilter,
+        )
+        estimated_pair_checks = int(round(sampled_pair_checks * pair_scale))
+        worker_divisor = max(1, jobs)
+        pair_seconds = (estimated_pair_checks * pair_seconds_each) / worker_divisor
+        estimated_sketch_pairs = (
+            int(round(len(sample_candidate_pairs or ()) * pair_scale))
+            if enable_sketch_prefilter else 0
+        )
+        overhead_seconds = 0.20 * (sketch_seconds + anchor_seconds + pair_seconds)
+        estimated_seconds = sketch_seconds + anchor_seconds + pair_seconds + overhead_seconds
+        lower_seconds = estimated_seconds * 0.5
+        upper_seconds = estimated_seconds * (
+            4.0 if sampled_pair_checks < max(100, benchmark_pairs // 4) else 2.5
+        )
+        notes = [
+            "estimate is sampled; common-anchor distributions can be very skewed",
+            "fuzzy clustering and SQLite write time are modeled as overhead",
+        ]
+        if enable_sketch_prefilter:
+            notes.append("Stage 0 candidate-pair count is extrapolated from the sample")
+        if jobs > 1:
+            notes.append(f"pair-extension estimate assumes near-linear use of {jobs} jobs")
+        return ParallelLookupDryRunEstimate(
+            bucket_count=bucket_count,
+            sampled_buckets=sampled_buckets,
+            total_chars=total_chars,
+            sampled_chars=sampled_chars,
+            sampled_anchors=sampled_anchors,
+            estimated_anchors=estimated_anchors,
+            sampled_pair_checks=sampled_pair_checks,
+            benchmarked_pair_checks=len(benchmark_rows),
+            estimated_pair_checks=estimated_pair_checks,
+            sketch_candidate_pairs=len(sample_candidate_pairs or ()),
+            estimated_sketch_candidate_pairs=estimated_sketch_pairs,
+            sketch_seconds=sketch_seconds,
+            anchor_seconds=anchor_seconds,
+            pair_seconds=pair_seconds,
+            overhead_seconds=overhead_seconds,
+            estimated_seconds=estimated_seconds,
+            lower_seconds=lower_seconds,
+            upper_seconds=upper_seconds,
+            notes=tuple(notes),
+        )
+    finally:
+        conn.close()
+
+
+def format_parallel_lookup_dry_run(
+    estimate: ParallelLookupDryRunEstimate,
+) -> str:
+    """Return a human-readable dry-run report."""
+    lines = [
+        "parallel-lookup-build dry run",
+        f"  buckets: {estimate.bucket_count:,} "
+        f"(sampled {estimate.sampled_buckets:,})",
+        f"  chars: {estimate.total_chars:,} "
+        f"(sampled {estimate.sampled_chars:,})",
+        f"  anchors: ~{estimate.estimated_anchors:,} "
+        f"(sampled {estimate.sampled_anchors:,})",
+        f"  pair checks: ~{estimate.estimated_pair_checks:,} "
+        f"(sampled {estimate.sampled_pair_checks:,}; "
+        f"benchmarked {estimate.benchmarked_pair_checks:,})",
+    ]
+    if estimate.estimated_sketch_candidate_pairs:
+        lines.append(
+            "  sketch candidate bucket pairs: "
+            f"~{estimate.estimated_sketch_candidate_pairs:,} "
+            f"(sampled {estimate.sketch_candidate_pairs:,})"
+        )
+    lines.extend([
+        "  estimated time:",
+        f"    sketch: {_format_duration(estimate.sketch_seconds)}",
+        f"    anchors: {_format_duration(estimate.anchor_seconds)}",
+        f"    pair extension: {_format_duration(estimate.pair_seconds)}",
+        f"    fuzzy/cluster/write overhead: {_format_duration(estimate.overhead_seconds)}",
+        f"    total: {_format_duration(estimate.estimated_seconds)} "
+        f"(rough range {_format_duration(estimate.lower_seconds)} - "
+        f"{_format_duration(estimate.upper_seconds)})",
+    ])
+    if estimate.notes:
+        lines.append("  notes:")
+        lines.extend(f"    - {note}" for note in estimate.notes)
+    return "\n".join(lines)
 
 
 def build_parallel_lookup(
@@ -166,13 +438,17 @@ def build_parallel_lookup(
                 progress=progress,
             )
             candidate_spans = _candidate_span_count(scan_work_db)
+            _emit(progress, f"fuzzy extension candidates: {candidate_spans:,}")
             fuzzy_spans = _prepare_lookup_spans(
                 index_conn,
                 scan_work_db,
                 min_length=min_length,
                 max_edits=max_edits,
+                progress=progress,
             )
+            _emit(progress, f"fuzzy spans retained: {fuzzy_spans:,}")
             cache = _BucketCache(index_conn)
+            _emit(progress, "clustering lookup spans")
             if max_edits == 0:
                 clusters = _clusters_from_spans(
                     index_conn,
@@ -190,7 +466,9 @@ def build_parallel_lookup(
                     include_contained=include_contained,
                     context=0,
                 )
+            _emit(progress, f"lookup clusters retained: {len(clusters):,}")
             tmp_lookup = tmp_dir / (lookup_path.name + ".tmp")
+            _emit(progress, f"writing lookup sidecar: {lookup_path}")
             _write_lookup_db(
                 tmp_lookup,
                 index_conn,
@@ -577,12 +855,143 @@ def _candidate_span_count(work_db: Path) -> int:
         conn.close()
 
 
+def _lookup_bucket_rows(
+    conn: sqlite3.Connection,
+    bucket: str,
+    min_length: int,
+) -> list[tuple[int, int]]:
+    if bucket == "all":
+        rows = conn.execute(
+            "SELECT bucket_id, length(text) AS n FROM bucket "
+            "WHERE length(text) >= ? ORDER BY bucket_id",
+            (min_length,),
+        )
+    else:
+        rows = conn.execute(
+            "SELECT bucket_id, length(text) AS n FROM bucket "
+            "WHERE kind = ? AND length(text) >= ? ORDER BY bucket_id",
+            (bucket, min_length),
+        )
+    return [(int(row["bucket_id"]), int(row["n"])) for row in rows]
+
+
+def _sample_bucket_ids(
+    bucket_rows: list[tuple[int, int]],
+    sample_buckets: int,
+) -> list[int]:
+    if len(bucket_rows) <= sample_buckets:
+        return [bucket_id for bucket_id, _n in bucket_rows]
+    if sample_buckets == 1:
+        return [bucket_rows[len(bucket_rows) // 2][0]]
+    last = len(bucket_rows) - 1
+    selected = {
+        round(i * last / (sample_buckets - 1))
+        for i in range(sample_buckets)
+    }
+    return [bucket_rows[i][0] for i in sorted(selected)]
+
+
+def _bucket_texts(
+    conn: sqlite3.Connection,
+    bucket_ids: list[int],
+) -> list[tuple[int, str]]:
+    if not bucket_ids:
+        return []
+    placeholders = ",".join("?" for _ in bucket_ids)
+    rows = conn.execute(
+        f"SELECT bucket_id, text FROM bucket WHERE bucket_id IN ({placeholders})",
+        bucket_ids,
+    )
+    by_id = {int(row["bucket_id"]): str(row["text"]) for row in rows}
+    return [(bucket_id, by_id[bucket_id]) for bucket_id in bucket_ids]
+
+
+def _scale_by_chars(total_chars: int, sampled_chars: int) -> float:
+    if sampled_chars <= 0:
+        return 0.0
+    return max(1.0, total_chars / sampled_chars)
+
+
+def _pair_scale(
+    bucket_count: int,
+    sampled_buckets: int,
+    sample_candidate_pairs: set[tuple[int, int]] | None,
+    enable_sketch_prefilter: bool,
+) -> float:
+    if sampled_buckets <= 0:
+        return 0.0
+    sample_possible = sampled_buckets * (sampled_buckets + 1) / 2
+    full_possible = bucket_count * (bucket_count + 1) / 2
+    if not enable_sketch_prefilter or sample_candidate_pairs is None:
+        return max(1.0, full_possible / sample_possible)
+    sample_pairs = max(1, len(sample_candidate_pairs))
+    sample_density = sample_pairs / max(1.0, sample_possible)
+    estimated_full_pairs = max(bucket_count, full_possible * sample_density)
+    return max(1.0, estimated_full_pairs / sample_pairs)
+
+
+def _sample_pair_work(
+    anchor_postings: dict[bytes, list[tuple[int, int]]],
+    candidate_pairs: set[tuple[int, int]] | None,
+    *,
+    max_anchor_occurrences: int,
+    benchmark_pairs: int,
+) -> tuple[int, list[tuple[tuple[int, int], tuple[int, int]]]]:
+    pair_checks = 0
+    benchmark: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    for postings in anchor_postings.values():
+        if len(postings) < 2:
+            continue
+        if candidate_pairs is None and len(postings) > max_anchor_occurrences:
+            continue
+        if candidate_pairs is None:
+            pairs = (
+                (left, right)
+                for i, left in enumerate(postings)
+                for right in postings[i + 1:]
+            )
+        else:
+            pairs = _filtered_sample_pairs(postings, candidate_pairs)
+        for left, right in pairs:
+            pair_checks += 1
+            if len(benchmark) < benchmark_pairs:
+                benchmark.append((left, right))
+    return pair_checks, benchmark
+
+
+def _filtered_sample_pairs(
+    postings: list[tuple[int, int]],
+    candidate_pairs: set[tuple[int, int]],
+) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    by_bucket: dict[int, list[int]] = {}
+    for bucket_id, position in postings:
+        by_bucket.setdefault(bucket_id, []).append(position)
+    pairs = []
+    bucket_ids = sorted(by_bucket)
+    for i, left_bucket in enumerate(bucket_ids):
+        left_positions = by_bucket[left_bucket]
+        for right_bucket in bucket_ids[i:]:
+            if (left_bucket, right_bucket) not in candidate_pairs:
+                continue
+            right_positions = by_bucket[right_bucket]
+            if left_bucket == right_bucket:
+                for left_idx, left_pos in enumerate(left_positions):
+                    for right_pos in right_positions[left_idx + 1:]:
+                        pairs.append(((left_bucket, left_pos), (right_bucket, right_pos)))
+            else:
+                for left_pos in left_positions:
+                    for right_pos in right_positions:
+                        pairs.append(((left_bucket, left_pos), (right_bucket, right_pos)))
+    return pairs
+
+
 def _prepare_lookup_spans(
     index_conn: sqlite3.Connection,
     work_db: Path,
     *,
     min_length: int,
     max_edits: int,
+    progress: TextIO | None = None,
 ) -> int:
     index_conn.executescript(
         """
@@ -605,11 +1014,26 @@ def _prepare_lookup_spans(
     try:
         rows = []
         before = index_conn.total_changes
+        seen = 0
+        started_at = time.monotonic()
+        next_progress = started_at + 60.0
         for row in work_conn.execute(
             "SELECT bucket_a, start_a, end_a, bucket_b, start_b, end_b "
             "FROM candidate_span "
             "ORDER BY bucket_a, start_a, end_a, bucket_b, start_b, end_b"
         ):
+            seen += 1
+            if seen % 10000 == 0:
+                now = time.monotonic()
+                if progress is not None and now >= next_progress:
+                    _emit(
+                        progress,
+                        "fuzzy extension heartbeat: "
+                        f"{seen:,} candidates, "
+                        f"{index_conn.total_changes - before:,} spans, "
+                        f"{now - started_at:.1f}s elapsed",
+                    )
+                    next_progress = now + 60.0
             if max_edits == 0:
                 rows.append((
                     row["bucket_a"],
@@ -815,10 +1239,27 @@ def _build_sketch_prefilter(
             "WHERE kind = ? AND length(text) >= ? ORDER BY bucket_id",
             (bucket, k_gram),
         )
-    for row in rows:
-        sketch = _minhash_sketch(row["text"], k_gram=k_gram, size=sketch_size)
+    return _build_sketch_prefilter_from_texts(
+        ((int(row["bucket_id"]), str(row["text"])) for row in rows),
+        k_gram=k_gram,
+        sketch_size=sketch_size,
+        lsh_bands=lsh_bands,
+    )
+
+
+def _build_sketch_prefilter_from_texts(
+    texts: Iterable[tuple[int, str]],
+    *,
+    k_gram: int,
+    sketch_size: int,
+    lsh_bands: int,
+) -> _SketchPrefilter:
+    sketches: dict[int, bytes] = {}
+    band_postings: list[tuple[str, int]] = []
+    by_band: dict[str, list[int]] = {}
+    for bucket_id, text in texts:
+        sketch = _minhash_sketch(text, k_gram=k_gram, size=sketch_size)
         blob = b"".join(v.to_bytes(8, "big") for v in sketch)
-        bucket_id = int(row["bucket_id"])
         sketches[bucket_id] = blob
         for band_hash in _lsh_band_hashes(blob, bands=lsh_bands):
             band_postings.append((band_hash, bucket_id))
@@ -898,6 +1339,23 @@ def _lookup_occurrence_count(path: Path) -> int:
         return int(conn.execute("SELECT COUNT(*) FROM poccurrence").fetchone()[0])
     finally:
         conn.close()
+
+
+def _format_duration(seconds: float) -> str:
+    if seconds < 1:
+        return f"{seconds:.2f}s"
+    minutes, sec = divmod(int(round(seconds)), 60)
+    hours, minute = divmod(minutes, 60)
+    days, hour = divmod(hours, 24)
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hour or parts:
+        parts.append(f"{hour}h")
+    if minute or parts:
+        parts.append(f"{minute}m")
+    parts.append(f"{sec}s")
+    return " ".join(parts)
 
 
 def _emit(progress: TextIO | None, message: str) -> None:

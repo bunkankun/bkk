@@ -50,7 +50,12 @@ from .ir import Hit
 from .merge import discover_bundles, find_bundle, is_stale, merge_bundles
 from .parallel import discover_parallel_passages, write_parallel_report
 from .parallel_fuzzy_from_scan import discover_fuzzy_from_scan
-from .parallel_lookup import ParallelLookup, build_parallel_lookup
+from .parallel_lookup import (
+    ParallelLookup,
+    build_parallel_lookup,
+    estimate_parallel_lookup_build,
+    format_parallel_lookup_dry_run,
+)
 from .parallel_scan import discover_parallel_passages_scan
 from .query import Index
 from .translation import build_translation_index, merge_translations
@@ -312,6 +317,15 @@ def build_parser() -> argparse.ArgumentParser:
                      help="sketch size metadata (default: 128)")
     plb.add_argument("--lsh-bands", type=int, default=16,
                      help="LSH band count metadata (default: 16)")
+    plb.add_argument("--dry-run", action="store_true",
+                     help="sample the local index and estimate runtime without "
+                          "writing the lookup sidecar")
+    plb.add_argument("--dry-run-sample-buckets", type=int, default=200,
+                     help="number of evenly spaced buckets to benchmark "
+                          "(default: 200)")
+    plb.add_argument("--dry-run-benchmark-pairs", type=int, default=2000,
+                     help="maximum sampled anchor pairs to extension-benchmark "
+                          "(default: 2000)")
     plb.add_argument("--quiet", action="store_true",
                      help="suppress progress logging")
 
@@ -787,6 +801,28 @@ def run(argv: list[str] | None = None) -> int:
     if args.cmd == "parallel-lookup-build":
         import sys
         try:
+            if args.dry_run:
+                estimate = estimate_parallel_lookup_build(
+                    args.index_path,
+                    bucket=args.bucket,
+                    min_length=args.min_length,
+                    anchor_length=args.anchor_length,
+                    max_edits=args.max_edits,
+                    max_anchor_occurrences=args.max_anchor_occurrences,
+                    min_occurrences=args.min_occurrences,
+                    partitions=args.partitions,
+                    jobs=args.jobs,
+                    include_contained=args.include_contained,
+                    enable_sketch_prefilter=args.enable_sketch_prefilter,
+                    sketch_k_gram=args.sketch_k_gram,
+                    sketch_size=args.sketch_size,
+                    lsh_bands=args.lsh_bands,
+                    sample_buckets=args.dry_run_sample_buckets,
+                    benchmark_pairs=args.dry_run_benchmark_pairs,
+                    progress=None if args.quiet else sys.stderr,
+                )
+                print(format_parallel_lookup_dry_run(estimate))
+                return 0
             stats = build_parallel_lookup(
                 args.index_path,
                 args.out,

@@ -22,6 +22,8 @@ from bkk.index.parallel_lookup import (
     ParallelLookup,
     ParallelLookupStaleError,
     build_parallel_lookup,
+    estimate_parallel_lookup_build,
+    format_parallel_lookup_dry_run,
 )
 from bkk.index.parallel_scan import discover_parallel_passages_scan
 
@@ -1343,3 +1345,60 @@ def test_parallel_lookup_sketch_prefilter_rescues_capped_anchor_group(tmp_path):
     assert plain.clusters == 0
     assert filtered.clusters == 1
     assert filtered.candidate_spans > 0
+
+
+def test_parallel_lookup_dry_run_estimates_without_writing(tmp_path):
+    shared = "DRY-RUN-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"aa{shared}bb")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+
+    estimate = estimate_parallel_lookup_build(
+        out,
+        min_length=12,
+        anchor_length=4,
+        max_edits=0,
+        sample_buckets=2,
+        benchmark_pairs=20,
+    )
+    report = format_parallel_lookup_dry_run(estimate)
+
+    assert estimate.bucket_count == 2
+    assert estimate.sampled_buckets == 2
+    assert estimate.estimated_anchors > 0
+    assert estimate.estimated_seconds >= 0
+    assert "parallel-lookup-build dry run" in report
+    assert "estimated time" in report
+    assert not lookup_path.exists()
+
+
+def test_parallel_lookup_cli_dry_run_does_not_write_sidecar(tmp_path, capsys):
+    shared = "CLI-DRY-RUN-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"aa{shared}bb")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+
+    rc = cli_run([
+        "parallel-lookup-build",
+        str(out),
+        "--out",
+        str(lookup_path),
+        "--dry-run",
+        "--dry-run-sample-buckets",
+        "2",
+        "--dry-run-benchmark-pairs",
+        "20",
+        "--min-length",
+        "12",
+        "--anchor-length",
+        "4",
+        "--quiet",
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "parallel-lookup-build dry run" in captured.out
+    assert "pair checks" in captured.out
+    assert not lookup_path.exists()
