@@ -62,6 +62,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_bundle_selector(px, dry_run=True)
 
+    pf = sub.add_parser(
+        "front-to-body",
+        help="move front-bucket content into body when the body bucket is empty",
+    )
+    _add_bundle_selector(pf)
+    pf.add_argument(
+        "--text-prefix", action="append", default=None, dest="text_prefixes",
+        type=text_prefix_arg,
+        help="scan bundle directories under --out whose text ids start with this prefix; repeatable",
+    )
+    pf.add_argument(
+        "--write", action="store_true",
+        help="write juans, marker assets, and manifests; default is dry-run",
+    )
+
     pi = sub.add_parser(
         "ids-from-krp-titles",
         help="populate metadata.identifiers.alt_id on master manifests "
@@ -181,6 +196,32 @@ def run(argv: list[str] | None = None) -> int:
             return 2
         return _run_externalize_markers(
             bundle, out_root, text_id=text_id, dry_run=args.dry_run,
+        )
+    if args.op == "front-to-body":
+        prefixes = getattr(args, "text_prefixes", None) or []
+        if prefixes:
+            if any((
+                getattr(args, "legacy_bundle", None),
+                getattr(args, "bundle", None),
+                getattr(args, "text_id", None),
+            )):
+                print(
+                    "error: provide either --text-prefix or a single bundle/text id",
+                    file=sys.stderr,
+                )
+                return 2
+            return _run_front_to_body_prefixes(
+                sections=prefixes,
+                out_root=out_root,
+                dry_run=not args.write,
+            )
+        try:
+            bundle, text_id = _selected_bundle_args(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        return _run_front_to_body(
+            bundle, out_root, text_id=text_id, dry_run=not args.write,
         )
     if args.op == "ids-from-krp-titles":
         try:
@@ -315,6 +356,87 @@ def _run_externalize_markers(
         )
         for line in scope["lines"]:
             print(f"  {line}")
+    return 0
+
+
+def _run_front_to_body(
+    bundle: str | Path | None,
+    out_root: Path | None,
+    *,
+    text_id: str | None = None,
+    dry_run: bool,
+) -> int:
+    try:
+        bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    from .front_body import move_front_to_empty_body
+    summary = move_front_to_empty_body(bundle_dir, dry_run=dry_run)
+    prefix = "would move" if dry_run else "moved"
+    for scope in summary["scopes"]:
+        print(
+            f"{prefix} {scope['manifest']}: "
+            f"{scope['moved']} juans, {scope['chars']} chars"
+        )
+        for line in scope["lines"]:
+            print(f"  {line}")
+    if dry_run:
+        print("dry-run only; pass --write to update files")
+    return 0
+
+
+def _run_front_to_body_prefixes(
+    *,
+    sections: list[str],
+    out_root: Path | None,
+    dry_run: bool,
+) -> int:
+    if out_root is None:
+        print(
+            "error: bundle root not given (--out) and not configured in "
+            ".bkkrc (repair.out / import.out / global.corpus)",
+            file=sys.stderr,
+        )
+        return 2
+    out_root = Path(out_root).expanduser().resolve()
+    if not out_root.is_dir():
+        print(f"error: bundle root is not a directory: {out_root}", file=sys.stderr)
+        return 2
+
+    from .front_body import move_front_to_empty_body
+
+    prefixes = tuple(sections)
+    bundles = sorted(_iter_bundles_in_sections(out_root, prefixes))
+    changed = 0
+    chars = 0
+    prefix = "would move" if dry_run else "moved"
+    for bundle_dir in bundles:
+        summary = move_front_to_empty_body(bundle_dir, dry_run=dry_run)
+        bundle_juans = sum(scope["moved"] for scope in summary["scopes"])
+        bundle_chars = sum(scope["chars"] for scope in summary["scopes"])
+        if not bundle_juans:
+            continue
+        changed += bundle_juans
+        chars += bundle_chars
+        print(f"{bundle_dir.name}:")
+        for scope in summary["scopes"]:
+            if not scope["moved"]:
+                continue
+            print(
+                f"  {prefix} {scope['manifest']}: "
+                f"{scope['moved']} juans, {scope['chars']} chars"
+            )
+            for line in scope["lines"]:
+                print(f"    {line}")
+    mode = "dry-run: " if dry_run else ""
+    print(
+        f"{mode}{changed} juans, {chars} chars "
+        f"(scanned {len(bundles)} bundles in sections {list(sections)})"
+    )
+    if dry_run:
+        print("dry-run only; pass --write to update files")
     return 0
 
 
