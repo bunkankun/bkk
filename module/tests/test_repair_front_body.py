@@ -218,3 +218,20 @@ def test_front_to_body_cli_text_prefix_scans_corpus_root(tmp_path: Path, capsys)
     unchanged_juan = yaml.safe_load((unchanged / "KR0fb002_001.yaml").read_text("utf-8"))
     assert "front" not in changed_juan
     assert unchanged_juan["front"]["text"] == "甲乙"
+
+
+def test_front_to_body_cli_defaults_to_whole_corpus(tmp_path: Path, capsys):
+    changed = _write_bundle(tmp_path, text_id="KR0fb001")
+    unchanged = _write_bundle(tmp_path, text_id="KR1fb001", body_text="丙")
+
+    rc = repair_run(["front-to-body", "--out", str(tmp_path), "--write"])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "KR0fb001:" in out
+    assert "KR1fb001:" not in out
+    assert "(scanned 2 bundles in corpus)" in out
+    changed_juan = yaml.safe_load((changed / "KR0fb001_001.yaml").read_text("utf-8"))
+    unchanged_juan = yaml.safe_load((unchanged / "KR1fb001_001.yaml").read_text("utf-8"))
+    assert "front" not in changed_juan
+    assert unchanged_juan["front"]["text"] == "甲乙"

@@ -64,7 +64,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     pf = sub.add_parser(
         "front-to-body",
-        help="move front-bucket content into body when the body bucket is empty",
+        help="move front-bucket content into body when the body bucket is empty "
+             "(defaults to the whole corpus)",
+        description="Defaults to scanning the whole configured corpus. "
+                    "Use --bundle, --text-id, or --text-prefix to narrow the target.",
     )
     _add_bundle_selector(pf)
     pf.add_argument(
@@ -212,6 +215,16 @@ def run(argv: list[str] | None = None) -> int:
                 return 2
             return _run_front_to_body_prefixes(
                 sections=prefixes,
+                out_root=out_root,
+                dry_run=not args.write,
+            )
+        if not any((
+            getattr(args, "legacy_bundle", None),
+            getattr(args, "bundle", None),
+            getattr(args, "text_id", None),
+        )):
+            return _run_front_to_body_prefixes(
+                sections=[],
                 out_root=out_root,
                 dry_run=not args.write,
             )
@@ -407,7 +420,7 @@ def _run_front_to_body_prefixes(
 
     from .front_body import move_front_to_empty_body
 
-    prefixes = tuple(sections)
+    prefixes = tuple(sections) if sections else ("",)
     bundles = sorted(_iter_bundles_in_sections(out_root, prefixes))
     changed = 0
     chars = 0
@@ -431,9 +444,10 @@ def _run_front_to_body_prefixes(
             for line in scope["lines"]:
                 print(f"    {line}")
     mode = "dry-run: " if dry_run else ""
+    target = f"sections {list(sections)}" if sections else "corpus"
     print(
         f"{mode}{changed} juans, {chars} chars "
-        f"(scanned {len(bundles)} bundles in sections {list(sections)})"
+        f"(scanned {len(bundles)} bundles in {target})"
     )
     if dry_run:
         print("dry-run only; pass --write to update files")
