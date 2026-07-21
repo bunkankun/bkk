@@ -12,7 +12,7 @@ import yaml
 
 from bkk.index import Index, build_index, merge_bundles
 from bkk.index.cli import run as cli_run
-from bkk.index.merge import discover_bundles, is_stale
+from bkk.index.merge import discover_bundles, is_stale, read_text_id_list
 
 
 def _write_bundle(root: Path, textid: str, body_text: str,
@@ -183,6 +183,64 @@ def test_prefix_filter(tmp_path):
         assert ix.bundles == ["KR1a0001"]
         hits = list(ix.search("needle"))
     assert {h.textid for h in hits} == {"KR1a0001"}
+
+
+def test_read_text_id_list_accepts_first_token_comments_and_short_ids(tmp_path):
+    text_list = tmp_path / "list.txt"
+    text_list.write_text(
+        "\n".join([
+            "# name: sample",
+            "",
+            "KR1a0001 7 A title",
+            "1a2 short form",
+            "KR1a0001 duplicate",
+        ]),
+        encoding="utf-8",
+    )
+
+    assert read_text_id_list(text_list) == ["KR1a0001", "KR1a0002"]
+
+
+def test_read_text_id_list_rejects_non_kr_first_token(tmp_path):
+    text_list = tmp_path / "list.txt"
+    text_list.write_text("not-a-kr-id\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="expected a KR text id"):
+        read_text_id_list(text_list)
+
+
+def test_merge_text_id_subset_filter(tmp_path):
+    _write_bundle(tmp_path, "KR1a0001", "needle here")
+    _write_bundle(tmp_path, "KR1a0002", "needle elsewhere")
+    _write_bundle(tmp_path, "KR3a0001", "needle outside")
+    out = tmp_path / "corpus.bkkx"
+    merge_bundles(tmp_path, out, text_ids=["KR1a0002", "KR1a0001"])
+
+    with Index(out) as ix:
+        assert ix.bundles == ["KR1a0001", "KR1a0002"]
+        hits = list(ix.search("needle"))
+    assert {h.textid for h in hits} == {"KR1a0001", "KR1a0002"}
+
+
+def test_merge_text_id_subset_errors_on_missing_bundle_without_replacing_out(tmp_path):
+    _write_bundle(tmp_path, "KR1a0001", "abc")
+    out = tmp_path / "corpus.bkkx"
+    out.write_text("keep", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="KR1a0099"):
+        merge_bundles(tmp_path, out, text_ids=["KR1a0001", "KR1a0099"])
+
+    assert out.read_text(encoding="utf-8") == "keep"
+
+
+def test_merge_text_id_subset_empty_list_does_not_mean_all_bundles(tmp_path):
+    _write_bundle(tmp_path, "KR1a0001", "abc")
+    out = tmp_path / "corpus.bkkx"
+
+    with pytest.raises(FileNotFoundError, match="text id list"):
+        merge_bundles(tmp_path, out, text_ids=[])
+
+    assert not out.exists()
 
 
 def test_stale_triggers_rebuild(tmp_path):
@@ -400,6 +458,40 @@ def test_cli_merge_jobs_forwarded_to_per_bundle_builds(tmp_path, monkeypatch):
 
     assert rc == 0
     assert calls == [(bundle.name, 2)]
+
+
+def test_cli_merge_text_list_filters_to_listed_bundles(tmp_path, monkeypatch):
+    _write_bundle(tmp_path, "KR1a0001", "needle here")
+    _write_bundle(tmp_path, "KR1a0002", "needle elsewhere")
+    _write_bundle(tmp_path, "KR3a0001", "needle outside")
+    text_list = tmp_path / "list.txt"
+    text_list.write_text("# name: subset\nKR1a0002 3 title\n", encoding="utf-8")
+    out = tmp_path / "subset.bkkx"
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+
+    rc = cli_run([
+        "merge", str(tmp_path),
+        "--text-list", str(text_list),
+        "--out", str(out),
+    ])
+
+    assert rc == 0
+    with Index(out) as ix:
+        assert ix.bundles == ["KR1a0002"]
+
+
+def test_cli_merge_text_list_conflicts_with_prefix(tmp_path, monkeypatch):
+    _write_bundle(tmp_path, "KR1a0001", "abc")
+    text_list = tmp_path / "list.txt"
+    text_list.write_text("KR1a0001\n", encoding="utf-8")
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+
+    with pytest.raises(SystemExit):
+        cli_run([
+            "merge", str(tmp_path),
+            "--text-list", str(text_list),
+            "--text-prefix", "KR1a",
+        ])
 
 
 def test_cli_build_all_builds_per_bundle_indices(tmp_path, monkeypatch):

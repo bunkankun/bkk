@@ -10,6 +10,7 @@ Subcommands::
     python -m bkk.index translations <corpus> [--out PATH]
     python -m bkk.index annotations [annotations_root] [--out PATH]
     python -m bkk.index merge <corpus> [--out PATH] [--text-prefix KR3a]
+                                       [--text-list PATH]
                                        [--rebuild | --no-build] [--jobs N]
     python -m bkk.index core <core_root> [--out PATH]
     python -m bkk.index parallel <bkkx_path> <seed> [--out PATH]
@@ -47,7 +48,13 @@ from .build import build_index
 from .catalog import build_catalog_index, default_catalog_csv
 from .core import build_core_index
 from .ir import Hit
-from .merge import discover_bundles, find_bundle, is_stale, merge_bundles
+from .merge import (
+    discover_bundles,
+    find_bundle,
+    is_stale,
+    merge_bundles,
+    read_text_id_list,
+)
 from .parallel import discover_parallel_passages, write_parallel_report
 from .parallel_fuzzy_from_scan import discover_fuzzy_from_scan
 from .parallel_lookup import (
@@ -113,6 +120,10 @@ def build_parser() -> argparse.ArgumentParser:
                          "(sub)section like KR6 or KR6q; "
                          "filters by textid prefix and writes the output to "
                          "_<section>.bkkx alongside the full index")
+    pm.add_argument("--text-list", type=Path, default=None, dest="text_list",
+                    help="restrict to bundle text ids listed in PATH "
+                         "(first whitespace-delimited token per line; "
+                         "blank lines and # comments ignored)")
     grp = pm.add_mutually_exclusive_group()
     grp.add_argument("--rebuild", action="store_true",
                      help="rebuild every per-bundle .bkkx, ignoring mtimes")
@@ -445,11 +456,15 @@ def run(argv: list[str] | None = None) -> int:
         if args.corpus is None:
             parser.error("corpus is required (or set global.corpus in .bkkrc)")
     if args.cmd == "merge":
-        selected_prefixes = [
+        selected_scopes = [
             bool(args.section), bool(args.prefix), bool(args.text_prefix),
+            bool(args.text_list),
         ]
-        if sum(selected_prefixes) > 1:
-            parser.error("--text-prefix, --section, and --prefix are mutually exclusive")
+        if sum(selected_scopes) > 1:
+            parser.error(
+                "--text-prefix, --section, --prefix, and --text-list "
+                "are mutually exclusive"
+            )
         default_out = Path(idx.get("out") or args.corpus / "_corpus.bkkx")
         if args.prefix:
             warn_deprecated("--prefix", "--text-prefix")
@@ -464,6 +479,14 @@ def run(argv: list[str] | None = None) -> int:
                 args.out = default_out.parent / f"_{args.section}.bkkx"
         else:
             args.prefix = args.text_prefix
+        args.text_ids = None
+        if args.text_list is not None:
+            try:
+                args.text_ids = read_text_id_list(args.text_list)
+            except (OSError, ValueError) as exc:
+                parser.error(str(exc))
+            if not args.text_ids:
+                parser.error(f"{args.text_list}: no text ids found")
         if args.out is None:
             args.out = default_out
     if args.cmd == "translations":
@@ -588,7 +611,7 @@ def run(argv: list[str] | None = None) -> int:
         path = merge_bundles(
             args.corpus, args.out,
             prefix=args.prefix, rebuild=args.rebuild, no_build=args.no_build,
-            jobs=args.jobs, progress=True,
+            text_ids=args.text_ids, jobs=args.jobs, progress=True,
         )
         print(f"wrote {path}")
         return 0

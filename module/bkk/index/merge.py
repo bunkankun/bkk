@@ -10,21 +10,27 @@ parallel with the bucket/witness id it points at.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import sys
 import time
+from collections.abc import Collection, Sequence
 from pathlib import Path
+
+from bkk.short_refs import normalize_text_id
 
 from .build import build_index, compute_bkkx_hash
 from .schema import SCHEMA_VERSION, TABLES_DDL, create_heavy_indices
 
 log = logging.getLogger("bkk.index")
+_KR_TEXTID_RE = re.compile(r"^KR[0-9][a-z][0-9]{4}$")
 
 
 def discover_bundles(
     corpus_root: Path | str,
     prefix: str | None = None,
     max_depth: int = 4,
+    text_ids: Collection[str] | None = None,
 ) -> list[Path]:
     """Return bundle directories under ``corpus_root``, sorted by textid.
 
@@ -46,8 +52,10 @@ def discover_bundles(
     ``prefix`` filters by the *leaf* (text-id) name, mirroring the importer's
     ``--section`` flag — so ``prefix="KR1a"`` matches bundle ids starting
     with ``KR1a`` regardless of which directory layout they live under.
+    ``text_ids`` applies an exact leaf-id filter.
     """
     corpus_root = Path(corpus_root)
+    wanted = set(text_ids) if text_ids is not None else None
     out: list[Path] = []
 
     def walk(d: Path, depth: int) -> None:
@@ -59,6 +67,8 @@ def discover_bundles(
             if (sub / f"{sub.name}.manifest.yaml").exists():
                 if prefix and not sub.name.startswith(prefix):
                     continue
+                if wanted is not None and sub.name not in wanted:
+                    continue
                 out.append(sub)
                 continue
             walk(sub, depth + 1)
@@ -66,6 +76,34 @@ def discover_bundles(
     walk(corpus_root, 1)
     out.sort(key=lambda p: p.name)
     return out
+
+
+def read_text_id_list(path: Path | str) -> list[str]:
+    """Read a text-list file and return unique normalized KR text ids.
+
+    The accepted format is one bundle id per non-comment line. Only the first
+    whitespace-delimited token is significant, so exported list files may keep
+    hit counts or titles in later columns.
+    """
+    path = Path(path)
+    text_ids: list[str] = []
+    seen: set[str] = set()
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        trimmed = line.strip()
+        if not trimmed or trimmed.startswith("#"):
+            continue
+        token = trimmed.split(None, 1)[0]
+        try:
+            text_id = normalize_text_id(token)
+        except ValueError as exc:
+            raise ValueError(f"{path}:{lineno}: {exc}") from exc
+        if _KR_TEXTID_RE.fullmatch(text_id) is None:
+            raise ValueError(f"{path}:{lineno}: expected a KR text id, got {token!r}")
+        if text_id in seen:
+            continue
+        seen.add(text_id)
+        text_ids.append(text_id)
+    return text_ids
 
 
 def find_bundle(corpus_root: Path | str, textid: str) -> Path | None:
@@ -121,6 +159,7 @@ def merge_bundles(
     out_path: Path | str,
     *,
     prefix: str | None = None,
+    text_ids: Sequence[str] | None = None,
     rebuild: bool = False,
     no_build: bool = False,
     jobs: int = 1,
@@ -128,6 +167,7 @@ def merge_bundles(
 ) -> Path:
     """Build (if needed) and merge every bundle under ``corpus_root``.
 
+    ``text_ids`` restricts the merge to an exact subset of bundle ids.
     ``rebuild=True`` forces every per-bundle ``.bkkx`` to be rebuilt regardless
     of mtime. ``no_build=True`` errors instead of building when a per-bundle
     ``.bkkx`` is missing or stale. ``jobs`` is forwarded to per-bundle index
@@ -138,15 +178,30 @@ def merge_bundles(
         raise ValueError("jobs must be >= 1")
     corpus_root = Path(corpus_root)
     out_path = Path(out_path)
-    if out_path.exists():
-        out_path.unlink()
+    wanted_text_ids = list(text_ids) if text_ids is not None else None
 
-    bundles = discover_bundles(corpus_root, prefix)
+    bundles = discover_bundles(
+        corpus_root,
+        prefix,
+        text_ids=set(wanted_text_ids) if wanted_text_ids is not None else None,
+    )
     if not bundles:
         raise FileNotFoundError(
             f"no bundles found under {corpus_root}"
             + (f" with prefix {prefix!r}" if prefix else "")
+            + (" from text id list" if wanted_text_ids is not None else "")
         )
+    if wanted_text_ids is not None:
+        found = {bundle.name for bundle in bundles}
+        missing = [text_id for text_id in wanted_text_ids if text_id not in found]
+        if missing:
+            raise FileNotFoundError(
+                "bundle(s) not found under "
+                f"{corpus_root}: {', '.join(missing)}"
+            )
+
+    if out_path.exists():
+        out_path.unlink()
 
     n = len(bundles)
     t0 = time.monotonic()

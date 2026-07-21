@@ -187,6 +187,7 @@ juan parsing and witness-row derivation; SQLite writes remain centralized.
 ```
 python -m bkk.index merge <corpus> [--out PATH]      # default: <corpus>/_corpus.bkkx
                           [--prefix KR3a]   # restrict to one subgroup
+                          [--text-list PATH] # restrict to bundle ids in a text-list file
                           [--rebuild]       # rebuild every per-bundle .bkkx
                           [--no-build]      # error if any per-bundle .bkkx is missing/stale
                           [--jobs N]         # worker processes for per-bundle rebuilds
@@ -194,6 +195,9 @@ python -m bkk.index merge <corpus> [--out PATH]      # default: <corpus>/_corpus
 
 `<corpus>` falls back to `index.corpus` / `global.corpus` from `.bkkrc`;
 `--out` falls back to `index.out` from `.bkkrc`, else `<corpus>/_corpus.bkkx`.
+`--text-list` reads one KR bundle id from the first token of each non-comment
+line, so files may include blank lines, `#` comments, and extra columns such
+as hit counts or titles.
 
 Walks `<corpus>` for `<textid>/<textid>.manifest.yaml`, descending one
 level for sectioned layouts (`<corpus>/<section>/<textid>/`) produced by
