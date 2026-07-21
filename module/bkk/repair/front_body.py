@@ -23,6 +23,10 @@ from bkk.marker_assets import (
 )
 
 
+class FrontBodyRepairError(RuntimeError):
+    """A juan matched the front/body condition but could not be repaired."""
+
+
 def move_front_to_empty_body(bundle_dir: Path, *, dry_run: bool = True) -> dict[str, Any]:
     """Find juans whose ``body.text`` is empty and ``front.text`` is not.
 
@@ -71,6 +75,7 @@ def _move_scope(
     written_juans: dict[int, str] = {}
     written_marker_assets: dict[int, tuple[str, str] | None] = {}
     lines: list[str] = []
+    errors: list[dict[str, Any]] = []
 
     for part in (manifest.get("assets") or {}).get("parts") or []:
         if not isinstance(part, dict):
@@ -100,14 +105,23 @@ def _move_scope(
             continue
 
         marker_asset = load_marker_asset(root, manifest, seq)
-        changed = _move_one_juan(
-            text_id=text_id,
-            seq=seq,
-            edition_short=edition_short,
-            manifest=manifest,
-            juan=juan,
-            marker_asset=marker_asset,
-        )
+        try:
+            changed = _move_one_juan(
+                text_id=text_id,
+                seq=seq,
+                edition_short=edition_short,
+                manifest=manifest,
+                juan=juan,
+                marker_asset=marker_asset,
+            )
+        except FrontBodyRepairError as exc:
+            errors.append({
+                "seq": seq,
+                "filename": filename,
+                "message": str(exc),
+            })
+            lines.append(f"juan {seq:03d}: skipped: {exc}")
+            continue
         moved.append({
             "seq": seq,
             "filename": filename,
@@ -150,6 +164,7 @@ def _move_scope(
         "moved": len(moved),
         "chars": sum(item["chars"] for item in moved),
         "juans_changed": [item["seq"] for item in moved],
+        "errors": errors,
         "lines": lines,
     }
 
@@ -223,19 +238,29 @@ def _move_bucket_markers(
     moved = [dict(marker) for marker in front_markers]
     for marker in moved:
         if _marker_extent(marker, moved_len) is None:
-            raise RuntimeError("front marker has invalid offset or length")
+            raise FrontBodyRepairError(_invalid_marker_message("front", marker, moved_len))
     shifted_body: list[dict[str, Any]] = []
     for marker in body_markers:
         next_marker = dict(marker)
         extent = _marker_extent(next_marker, body_len)
         if extent is None:
-            raise RuntimeError("body marker has invalid offset or length")
+            raise FrontBodyRepairError(_invalid_marker_message("body", next_marker, body_len))
         offset = next_marker["offset"]
         next_marker["offset"] = offset + moved_len
         shifted_body.append(next_marker)
     combined = moved + shifted_body
     combined.sort(key=lambda marker: marker.get("offset", 0))
     return [], combined
+
+
+def _invalid_marker_message(bucket: str, marker: dict[str, Any], text_len: int) -> str:
+    mid = marker.get("id")
+    label = f" id={mid!r}" if isinstance(mid, str) and mid else ""
+    return (
+        f"{bucket} marker{label} type={marker.get('type')!r} "
+        f"offset={marker.get('offset')!r} length={marker.get('length')!r} "
+        f"is outside {bucket}.text length {text_len}"
+    )
 
 
 def _marker_extent(marker: dict[str, Any], text_len: int) -> tuple[int, int] | None:

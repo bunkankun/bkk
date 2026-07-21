@@ -388,16 +388,19 @@ def _run_front_to_body(
     from .front_body import move_front_to_empty_body
     summary = move_front_to_empty_body(bundle_dir, dry_run=dry_run)
     prefix = "would move" if dry_run else "moved"
+    errors = 0
     for scope in summary["scopes"]:
+        errors += len(scope.get("errors") or [])
         print(
             f"{prefix} {scope['manifest']}: "
             f"{scope['moved']} juans, {scope['chars']} chars"
+            + (f", skipped {len(scope.get('errors') or [])}" if scope.get("errors") else "")
         )
         for line in scope["lines"]:
             print(f"  {line}")
     if dry_run:
         print("dry-run only; pass --write to update files")
-    return 0
+    return 1 if errors else 0
 
 
 def _run_front_to_body_prefixes(
@@ -424,34 +427,39 @@ def _run_front_to_body_prefixes(
     bundles = sorted(_iter_bundles_in_sections(out_root, prefixes))
     changed = 0
     chars = 0
+    errors = 0
     prefix = "would move" if dry_run else "moved"
     for bundle_dir in bundles:
         summary = move_front_to_empty_body(bundle_dir, dry_run=dry_run)
         bundle_juans = sum(scope["moved"] for scope in summary["scopes"])
         bundle_chars = sum(scope["chars"] for scope in summary["scopes"])
-        if not bundle_juans:
+        bundle_errors = sum(len(scope.get("errors") or []) for scope in summary["scopes"])
+        if not bundle_juans and not bundle_errors:
             continue
         changed += bundle_juans
         chars += bundle_chars
+        errors += bundle_errors
         print(f"{bundle_dir.name}:")
         for scope in summary["scopes"]:
-            if not scope["moved"]:
+            if not scope["moved"] and not scope.get("errors"):
                 continue
             print(
                 f"  {prefix} {scope['manifest']}: "
                 f"{scope['moved']} juans, {scope['chars']} chars"
+                + (f", skipped {len(scope.get('errors') or [])}" if scope.get("errors") else "")
             )
             for line in scope["lines"]:
                 print(f"    {line}")
     mode = "dry-run: " if dry_run else ""
     target = f"sections {list(sections)}" if sections else "corpus"
+    skipped = f"{errors} skipped; " if errors else ""
     print(
         f"{mode}{changed} juans, {chars} chars "
-        f"(scanned {len(bundles)} bundles in {target})"
+        f"({skipped}scanned {len(bundles)} bundles in {target})"
     )
     if dry_run:
         print("dry-run only; pass --write to update files")
-    return 0
+    return 1 if errors else 0
 
 
 def _iter_bundles_in_sections(out_root: Path, prefixes: tuple[str, ...]):

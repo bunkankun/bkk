@@ -23,6 +23,7 @@ def _self_hash(data: dict) -> str:
 
 def _write_bundle(
     root: Path, *, text_id: str = TEXT_ID, body_text: str = "",
+    invalid_front_marker: bool = False,
 ) -> Path:
     bundle_dir = root / text_id
     bundle_dir.mkdir()
@@ -60,7 +61,7 @@ def _write_bundle(
             "front": [
                 marker_to_flow({
                     "type": "punctuation",
-                    "offset": 1,
+                    "offset": 3 if invalid_front_marker else 1,
                     "content": "、",
                     "id": f"{text_id}_T_001-p",
                 }),
@@ -235,3 +236,26 @@ def test_front_to_body_cli_defaults_to_whole_corpus(tmp_path: Path, capsys):
     unchanged_juan = yaml.safe_load((unchanged / "KR1fb001_001.yaml").read_text("utf-8"))
     assert "front" not in changed_juan
     assert unchanged_juan["front"]["text"] == "甲乙"
+
+
+def test_front_to_body_cli_skips_bad_juan_and_continues_corpus(
+    tmp_path: Path, capsys,
+):
+    bad = _write_bundle(tmp_path, text_id="KR0fb001", invalid_front_marker=True)
+    good = _write_bundle(tmp_path, text_id="KR0fb002")
+
+    rc = repair_run(["front-to-body", "--out", str(tmp_path), "--write"])
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "KR0fb001:" in out
+    assert "skipped" in out
+    assert "id='KR0fb001_T_001-p'" in out
+    assert "offset=3" in out
+    assert "front.text length 2" in out
+    assert "KR0fb002:" in out
+    assert "(1 skipped; scanned 2 bundles in corpus)" in out
+    bad_juan = yaml.safe_load((bad / "KR0fb001_001.yaml").read_text("utf-8"))
+    good_juan = yaml.safe_load((good / "KR0fb002_001.yaml").read_text("utf-8"))
+    assert bad_juan["front"]["text"] == "甲乙"
+    assert "front" not in good_juan
