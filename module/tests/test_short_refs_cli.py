@@ -101,6 +101,9 @@ def test_text_id_shortcut_is_wired_to_cli_parsers():
     assert repair_parser().parse_args(
         ["manifest", "--text-id", "1h4"]
     ).text_id == "KR1h0004"
+    assert repair_parser().parse_args(
+        ["negative-offsets", "--text-id", "1h4"]
+    ).text_id == "KR1h0004"
     assert repo_parser().parse_args(
         ["status", "--text-prefix", "1h4"]
     ).text_prefix == "KR1h0004"

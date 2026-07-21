@@ -108,6 +108,22 @@ bkk repair manifest KR2b0007 --out /alt/corpus/root
 After running, `bkk validate <bundle-dir>` should report no manifest-
 or part-hash errors.
 
+## Negative marker offset report
+
+`bkk repair negative-offsets` scans juan YAML files and external
+`assets/*.markers.yaml` marker assets for markers whose `offset` is a
+negative integer. By default it scans the configured corpus root
+(`repair.out`, `import.out`, or `global.corpus` from `.bkkrc`); pass
+`--bundle`, `--text-id`, or repeatable `--text-prefix` to narrow the
+target. The report is versioned JSONL and writes to stdout unless
+`--report` is supplied:
+
+```bash
+bkk repair negative-offsets --report negative-offsets.jsonl
+bkk repair negative-offsets --text-prefix KR6 --report KR6-negative-offsets.jsonl
+bkk repair negative-offsets --bundle /home/Shared/bkk/bkkbooks/KR2b0007/
+```
+
 ## Out of scope
 
 - The `<id>.source.yaml` sidecar is also overwritten per sub-file. It

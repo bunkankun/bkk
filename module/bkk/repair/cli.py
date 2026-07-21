@@ -165,6 +165,39 @@ def build_parser() -> argparse.ArgumentParser:
         "--rebuild-index", action="store_true",
         help="rebuild the parallel asset index before repairing pending stale records",
     )
+
+    pno = sub.add_parser(
+        "negative-offsets",
+        help="report markers whose offset is negative (defaults to the whole corpus)",
+        description="Scan inline juan markers and external marker assets for "
+                    "negative marker offsets. Use --bundle, --text-id, or "
+                    "--text-prefix to narrow the target.",
+    )
+    pno.add_argument(
+        "legacy_bundle", nargs="?", type=text_or_path_arg,
+        help=argparse.SUPPRESS,
+    )
+    pno.add_argument(
+        "--bundle", dest="bundle", type=Path, default=None,
+        help="bundle directory",
+    )
+    pno.add_argument(
+        "--text-id", dest="text_id", type=text_id_arg, default=None,
+        help="text id to resolve against repair.out / import.out / global.corpus",
+    )
+    pno.add_argument(
+        "--text-prefix", action="append", default=None, dest="text_prefixes",
+        type=text_prefix_arg,
+        help="scan bundle directories under --out whose text ids start with this prefix; repeatable",
+    )
+    pno.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help="bundle output root (overrides repair.out / import.out / global.corpus)",
+    )
+    pno.add_argument(
+        "--report", dest="report_path", type=Path, default=None,
+        help="write JSONL report to this path; default is stdout",
+    )
     return p
 
 
@@ -275,6 +308,11 @@ def run(argv: list[str] | None = None) -> int:
             parallels_root=args.parallels_root,
             corpus_root=args.corpus,
             rebuild_index=args.rebuild_index,
+        )
+    if args.op == "negative-offsets":
+        return _run_negative_offsets(
+            args=args,
+            out_root=out_root,
         )
     return 2
 
@@ -680,6 +718,94 @@ def _run_parallel_repair(
         f"dropped {summary['links_dropped']} overlapping links"
     )
     return 0
+
+
+def _run_negative_offsets(
+    *,
+    args: argparse.Namespace,
+    out_root: Path | None,
+) -> int:
+    prefixes = getattr(args, "text_prefixes", None) or []
+    has_single = any((
+        getattr(args, "legacy_bundle", None),
+        getattr(args, "bundle", None),
+        getattr(args, "text_id", None),
+    ))
+    if prefixes and has_single:
+        print(
+            "error: provide either --text-prefix or a single bundle/text id",
+            file=sys.stderr,
+        )
+        return 2
+
+    from .negative_offsets import (
+        find_negative_offset_markers,
+        find_negative_offset_markers_in_bundle,
+        write_negative_offset_report,
+    )
+
+    try:
+        if has_single:
+            bundle, text_id = _selected_bundle_args(args)
+            bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
+            summary = find_negative_offset_markers_in_bundle(bundle_dir)
+            bundles_scanned = 1
+        else:
+            if out_root is None:
+                print(
+                    "error: bundle root not given (--out) and not configured in "
+                    ".bkkrc (repair.out / import.out / global.corpus)",
+                    file=sys.stderr,
+                )
+                return 2
+            root = Path(out_root).expanduser().resolve()
+            if not root.is_dir():
+                print(f"error: bundle root is not a directory: {root}", file=sys.stderr)
+                return 2
+            summary = find_negative_offset_markers(
+                root,
+                text_prefixes=prefixes,
+            )
+            bundles_scanned = summary["bundles_scanned"]
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    rows = summary["rows"]
+    report_path = getattr(args, "report_path", None)
+    if report_path is None:
+        write_negative_offset_report(rows, sys.stdout)
+        summary_stream = sys.stderr
+    else:
+        try:
+            write_negative_offset_report(rows, report_path)
+        except OSError as exc:
+            print(f"error: could not write report {report_path}: {exc}", file=sys.stderr)
+            return 1
+        print(
+            f"wrote {len(rows)} negative-offset marker(s) to {report_path} "
+            f"(scanned {bundles_scanned} bundles)"
+        )
+        summary_stream = sys.stderr
+
+    errors = summary.get("errors") or []
+    for error in errors[:20]:
+        print(
+            f"warning: skipped {error.get('path')}: {error.get('message')}",
+            file=sys.stderr,
+        )
+    if len(errors) > 20:
+        print(
+            f"warning: suppressed {len(errors) - 20} more scan error(s)",
+            file=sys.stderr,
+        )
+    if report_path is None:
+        print(
+            f"found {len(rows)} negative-offset marker(s) "
+            f"(scanned {bundles_scanned} bundles)",
+            file=summary_stream,
+        )
+    return 1 if errors else 0
 
 
 def main() -> None:
