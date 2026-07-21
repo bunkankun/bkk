@@ -201,12 +201,20 @@ def test_read_text_id_list_accepts_first_token_comments_and_short_ids(tmp_path):
     assert read_text_id_list(text_list) == ["KR1a0001", "KR1a0002"]
 
 
-def test_read_text_id_list_rejects_non_kr_first_token(tmp_path):
+def test_read_text_id_list_skips_non_kr_first_token_rows(tmp_path):
     text_list = tmp_path / "list.txt"
-    text_list.write_text("not-a-kr-id\n", encoding="utf-8")
+    text_list.write_text(
+        "\n".join([
+            "not-a-kr-id",
+            "KR1a0001",
+            "KR1a0001/1 partial ref",
+            "notes about the list",
+            "KR1a0002",
+        ]),
+        encoding="utf-8",
+    )
 
-    with pytest.raises(ValueError, match="expected a KR text id"):
-        read_text_id_list(text_list)
+    assert read_text_id_list(text_list) == ["KR1a0001", "KR1a0002"]
 
 
 def test_merge_text_id_subset_filter(tmp_path):

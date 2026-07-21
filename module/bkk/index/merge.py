@@ -83,22 +83,23 @@ def read_text_id_list(path: Path | str) -> list[str]:
 
     The accepted format is one bundle id per non-comment line. Only the first
     whitespace-delimited token is significant, so exported list files may keep
-    hit counts or titles in later columns.
+    hit counts or titles in later columns. Rows whose first token is not a
+    complete KR text id are ignored.
     """
     path = Path(path)
     text_ids: list[str] = []
     seen: set[str] = set()
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for line in path.read_text(encoding="utf-8").splitlines():
         trimmed = line.strip()
         if not trimmed or trimmed.startswith("#"):
             continue
         token = trimmed.split(None, 1)[0]
         try:
             text_id = normalize_text_id(token)
-        except ValueError as exc:
-            raise ValueError(f"{path}:{lineno}: {exc}") from exc
+        except ValueError:
+            continue
         if _KR_TEXTID_RE.fullmatch(text_id) is None:
-            raise ValueError(f"{path}:{lineno}: expected a KR text id, got {token!r}")
+            continue
         if text_id in seen:
             continue
         seen.add(text_id)
