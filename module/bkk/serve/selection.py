@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Any, Callable
 
 import yaml
@@ -28,6 +29,7 @@ from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 from . import errors
 
 VALID_BUCKETS = ("front", "body", "back")
+_EDITION_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,33 @@ def load_juan_file(
             juan, load_marker_asset(bundle_dir, manifest, seq),
         )
     return {}
+
+
+def load_juan_file_for_edition(
+    bundle_dir: Path,
+    manifest: dict[str, Any],
+    textid: str,
+    seq: int,
+    edition: str | None = None,
+) -> dict[str, Any]:
+    """Read a root-surface juan or one documentary edition's juan.
+
+    ``edition=None`` keeps the existing root-manifest behavior. Passing an
+    edition short loads ``editions/<short>/<textid>-<short>.manifest.yaml`` and
+    resolves juan and marker assets relative to that edition directory.
+    """
+    if edition is None:
+        return load_juan_file(bundle_dir, manifest, textid, seq)
+    if not _EDITION_RE.fullmatch(edition):
+        raise errors.bad_request("bad_edition", edition=edition)
+    edition_dir = bundle_dir / "editions" / edition
+    manifest_path = edition_dir / f"{textid}-{edition}.manifest.yaml"
+    if not manifest_path.exists():
+        raise errors.bad_request("edition_not_found", textid=textid, edition=edition)
+    edition_manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(edition_manifest, dict):
+        raise errors.bad_request("edition_manifest_not_object", textid=textid, edition=edition)
+    return load_juan_file(edition_dir, edition_manifest, textid, seq)
 
 
 def load_juan(corpus_root: Path, textid: str, seq: int) -> tuple[dict[str, Any], dict[str, Any]]:

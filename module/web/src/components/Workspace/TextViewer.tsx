@@ -42,6 +42,22 @@ const BUCKETS = ["front", "body", "back"] as const;
 
 type BucketName = (typeof BUCKETS)[number];
 type VoiceRange = { start: number; end: number };
+type EditionSelection = string | null;
+
+interface EditionOption {
+  value: string;
+  short: string;
+  label: string | null;
+  scope: "surface" | "edition";
+}
+
+interface EditionScrollTarget {
+  location: string | null;
+  preferredEdition: string | null;
+  bucket: BucketName;
+  offsetRatio: number;
+  scrollRatio: number;
+}
 
 function isBucketName(value: unknown): value is BucketName {
   return typeof value === "string" && (BUCKETS as readonly string[]).includes(value);
@@ -548,6 +564,67 @@ function manifestAltIds(manifest: Manifest | null): string[] {
     .filter((v) => v.length > 0);
 }
 
+function editionOptions(manifest: Manifest | null): EditionOption[] {
+  const metaEdition = manifest?.metadata?.edition;
+  const surfaceShort =
+    typeof metaEdition?.short === "string" && metaEdition.short.trim()
+      ? metaEdition.short.trim()
+      : "surface";
+  const surfaceLabel =
+    typeof metaEdition?.label === "string" && metaEdition.label.trim()
+      ? metaEdition.label.trim()
+      : null;
+  const options: EditionOption[] = [
+    {
+      value: "__surface__",
+      short: surfaceShort,
+      label: surfaceLabel,
+      scope: "surface",
+    },
+  ];
+  const seen = new Set<string>();
+  for (const entry of manifest?.available_editions ?? []) {
+    const short = typeof entry.short === "string" ? entry.short.trim() : "";
+    if (!short || seen.has(short)) continue;
+    seen.add(short);
+    options.push({
+      value: short,
+      short,
+      label: typeof entry.label === "string" && entry.label.trim() ? entry.label.trim() : null,
+      scope: "edition",
+    });
+  }
+  return options;
+}
+
+function optionForSelection(
+  options: EditionOption[],
+  selectedEdition: EditionSelection,
+): EditionOption | null {
+  const value = selectedEdition ?? "__surface__";
+  return options.find((option) => option.value === value) ?? options[0] ?? null;
+}
+
+function pageLocation(markerId: string | null): string | null {
+  if (!markerId) return null;
+  return parseMarkerId(markerId)?.location ?? null;
+}
+
+function initialVisibleBlockIndexes(blocks: Block[], viewportHeight: number | null): Set<number> {
+  const targetHeight =
+    viewportHeight && viewportHeight > 0
+      ? viewportHeight * 3
+      : FALLBACK_LINE_HEIGHT * 30;
+  const visible = new Set<number>();
+  let height = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    visible.add(i);
+    height += Math.max(FALLBACK_LINE_HEIGHT, blocks[i].estimatedHeight);
+    if (height >= targetHeight) break;
+  }
+  return visible;
+}
+
 interface Props {
   paneId: string;
   tabId: string;
@@ -575,15 +652,17 @@ export function TextViewer({
       : null,
   );
   const sectionFocusKey = focusKey(sectionFocus);
-  const currentPageMarkerId = useWorkspace((s) =>
+  const currentPage = useWorkspace((s) =>
     s.currentPage && s.currentPage.textid === textid && s.currentPage.seq === seq
-      ? s.currentPage.markerId
+      ? s.currentPage
       : null,
   );
+  const currentPageMarkerId = currentPage?.markerId ?? null;
   const activeEdition = useMemo(
     () => (currentPageMarkerId ? parseMarkerId(currentPageMarkerId)?.edition ?? null : null),
     [currentPageMarkerId],
   );
+  const [selectedEdition, setSelectedEdition] = useState<EditionSelection>(null);
   const [juan, setJuan] = useState<Juan | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [catalogMatch, setCatalogMatch] = useState<CatalogMatch | null>(null);
@@ -602,35 +681,51 @@ export function TextViewer({
   // without scheduling a second scroll/flash for the same target.
   const lastFlashedRef = useRef<typeof pending>(null);
   const lastScrollSyncRef = useRef<string>("");
+  const editionScrollTargetRef = useRef<EditionScrollTarget | null>(null);
   const syncingFromTranslationRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
-    setJuan(null);
     setAnnotations(null);
     setCatalogMatch(null);
     setHasParallels(null);
     setError(null);
     Promise.all([
-      getJuan(textid, seq),
       getAnnotations(textid, seq),
       getManifest(textid).catch(() => null),
       getCatalog({ q: textid, limit: 10 }).catch(() => null),
       getJuanParallelsStatus(textid, seq).catch(() => null),
     ])
-      .then(([j, a, m, catalog, parallels]) => {
+      .then(([a, m, catalog, parallels]) => {
         if (cancelled) return;
-        setJuan(j);
         setAnnotations(a);
         setManifest(m);
         setHasParallels(parallels?.has_parallels ?? null);
         setCatalogMatch(
           catalog?.matches.find((match) => match.textid === textid) ?? null,
         );
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [textid, seq]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setJuan(null);
+    setError(null);
+    getJuan(textid, seq, selectedEdition)
+      .then((j) => {
+        if (cancelled) return;
+        setJuan(j);
         // Seed currentPage to the juan's first page-break so the image panel
         // has something to show before the user scrolls.
         const first = firstPageMarker(j);
-        if (first && typeof first.marker.id === "string") {
+        if (first && typeof first.marker.id === "string" && editionScrollTargetRef.current == null) {
           workspace.setCurrentPage({
             textid,
             seq,
@@ -647,7 +742,7 @@ export function TextViewer({
     return () => {
       cancelled = true;
     };
-  }, [textid, seq]);
+  }, [textid, seq, selectedEdition]);
 
   useEffect(() => {
     const onChanged = (event: Event) => {
@@ -681,6 +776,62 @@ export function TextViewer({
     for (const view of bucketViews) lengths.set(view.bucket, [...view.text].length);
     return lengths;
   }, [bucketViews]);
+
+  const editions = useMemo(() => editionOptions(manifest), [manifest]);
+  const selectedEditionOption = useMemo(
+    () => optionForSelection(editions, selectedEdition),
+    [editions, selectedEdition],
+  );
+
+  const mappedEditionTarget = useMemo(() => {
+    const target = editionScrollTargetRef.current;
+    if (!target || bucketViews.length === 0) return null;
+    if (target.location != null) {
+      let fallback: { bucket: BucketName; offset: number; markerId: string } | null = null;
+      for (const view of bucketViews) {
+        for (const marker of view.markers) {
+          if (marker.type !== "page-break" || typeof marker.id !== "string") continue;
+          const parsed = parseMarkerId(marker.id);
+          if (parsed?.location !== target.location) continue;
+          const offset = typeof marker.offset === "number" ? marker.offset : 0;
+          if (target.preferredEdition != null && parsed.edition === target.preferredEdition) {
+            return { bucket: view.bucket, offset, markerId: marker.id };
+          }
+          fallback ??= { bucket: view.bucket, offset, markerId: marker.id };
+        }
+      }
+      if (fallback) return fallback;
+    }
+    const bucket = bucketViews.some((view) => view.bucket === target.bucket)
+      ? target.bucket
+      : bucketViews[0].bucket;
+    const len = bucketLengths.get(bucket) ?? 0;
+    return { bucket, offset: Math.max(0, Math.floor(len * target.offsetRatio)) };
+  }, [bucketViews, bucketLengths]);
+
+  const handleEditionChange = useCallback(
+    (value: string) => {
+      const nextEdition = value === "__surface__" ? null : value;
+      if (nextEdition === selectedEdition) return;
+      const root = scrollRef.current;
+      const currentBucket = isBucketName(currentPage?.bucket) ? currentPage.bucket : "body";
+      const currentLen = bucketLengths.get(currentBucket) ?? 0;
+      const currentOffset =
+        typeof currentPage?.offset === "number" ? Math.max(0, currentPage.offset) : 0;
+      const scrollMax = root ? Math.max(0, root.scrollHeight - root.clientHeight) : 0;
+      editionScrollTargetRef.current = {
+        location: pageLocation(currentPageMarkerId),
+        preferredEdition: nextEdition,
+        bucket: currentBucket,
+        offsetRatio: currentLen > 0 ? Math.min(1, currentOffset / currentLen) : 0,
+        scrollRatio: root && scrollMax > 0 ? root.scrollTop / scrollMax : 0,
+      };
+      workspace.setSelection(null);
+      workspace.setCurrentPage(null);
+      setSelectedEdition(nextEdition);
+    },
+    [bucketLengths, currentPage, currentPageMarkerId, selectedEdition],
+  );
 
   // Sorted list of id-bearing markers, used to resolve a selection's
   // anchorMarkerId via binary search.
@@ -738,10 +889,87 @@ export function TextViewer({
   // Reset visibility state on key change (new juan / new line-mode triggers
   // a new blocks identity).
   useEffect(() => {
-    setVisibleBlocks(new Set([0]));
+    setVisibleBlocks(new Set());
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
     workspace.setCurrentPage(null);
   }, [textid, seq, lineMode, sectionFocusKey]);
+
+  useEffect(() => {
+    if (blocks.length === 0) return;
+    const initial = initialVisibleBlockIndexes(
+      blocks,
+      scrollRef.current?.clientHeight ?? null,
+    );
+    setVisibleBlocks((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const idx of initial) {
+        if (!next.has(idx)) {
+          next.add(idx);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [blocks]);
+
+  useEffect(() => {
+    if (editionScrollTargetRef.current == null || mappedEditionTarget == null) return;
+    const targetIdx = blocks.findIndex(
+      (b) =>
+        b.bucket === mappedEditionTarget.bucket &&
+        mappedEditionTarget.offset >= b.startOffset &&
+        mappedEditionTarget.offset < b.endOffset,
+    );
+    if (targetIdx < 0) return;
+    setVisibleBlocks((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (let i = 0; i <= targetIdx; i++) {
+        if (!next.has(i)) {
+          next.add(i);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [mappedEditionTarget, blocks]);
+
+  useLayoutEffect(() => {
+    const pendingEditionTarget = editionScrollTargetRef.current;
+    if (pendingEditionTarget == null || mappedEditionTarget == null) return;
+    const root = scrollRef.current;
+    const container = containerRef.current;
+    if (!root || !container) return;
+    const targetIdx = blocks.findIndex(
+      (b) =>
+        b.bucket === mappedEditionTarget.bucket &&
+        mappedEditionTarget.offset >= b.startOffset &&
+        mappedEditionTarget.offset < b.endOffset,
+    );
+    if (targetIdx >= 0 && !visibleBlocks.has(targetIdx)) return;
+    const target = jumpTarget(
+      container,
+      mappedEditionTarget.bucket,
+      mappedEditionTarget.offset,
+    );
+    if (target) {
+      target.scrollIntoView({ block: "center" });
+      if (mappedEditionTarget.markerId) {
+        workspace.setCurrentPage({
+          textid,
+          seq,
+          bucket: mappedEditionTarget.bucket,
+          markerId: mappedEditionTarget.markerId,
+          offset: mappedEditionTarget.offset,
+        });
+      }
+    } else {
+      const max = Math.max(0, root.scrollHeight - root.clientHeight);
+      root.scrollTop = max * pendingEditionTarget.scrollRatio;
+    }
+    editionScrollTargetRef.current = null;
+  }, [mappedEditionTarget, visibleBlocks, blocks, textid, seq]);
 
   // Mount IntersectionObserver after blocks render.
   useEffect(() => {
@@ -1179,7 +1407,7 @@ export function TextViewer({
   const title = manifest?.metadata?.title ?? textid;
   const titlePinyin = catalogString(catalogMatch, "title_pinyin");
   const titleEnglish = catalogString(catalogMatch, "title_english");
-  const editionShort = manifest?.metadata?.edition?.short ?? null;
+  const editionShort = selectedEditionOption?.short ?? manifest?.metadata?.edition?.short ?? null;
   const bunkankunUrl = textidToBunkankunUrl(textid);
   const altIds = manifestAltIds(manifest);
 
@@ -1202,6 +1430,22 @@ export function TextViewer({
             {textid}
           </a>
           {editionShort ? ` · ${editionShort}` : ""} · 卷 {seq}
+          {editions.length > 1 ? (
+            <select
+              className="tv-edition-select"
+              value={selectedEdition ?? "__surface__"}
+              aria-label="Text edition"
+              title="Text edition"
+              onChange={(event) => handleEditionChange(event.target.value)}
+            >
+              {editions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.scope === "surface" ? `${option.short} surface` : option.short}
+                  {option.label ? ` · ${option.label}` : ""}
+                </option>
+              ))}
+            </select>
+          ) : null}
           {hasParallels !== false ? (
             <button
               type="button"

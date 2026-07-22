@@ -448,9 +448,14 @@ export async function getJuanList(textid: string): Promise<ManifestPart[]> {
   return fetchJson<ManifestPart[]>(`${apiBase}/bundles/${encodeURIComponent(textid)}/juan`);
 }
 
-export async function getJuan(textid: string, seq: number): Promise<Juan> {
+export async function getJuan(
+  textid: string,
+  seq: number,
+  edition?: string | null,
+): Promise<Juan> {
+  const q = edition ? `?edition=${encodeURIComponent(edition)}` : "";
   return fetchJson<Juan>(
-    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}`,
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}${q}`,
   );
 }
 

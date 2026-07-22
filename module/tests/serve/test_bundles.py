@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
 from fastapi.testclient import TestClient
 
 from bkk.serve import create_app
@@ -97,6 +98,73 @@ def test_get_juan(client):
     juan = r.json()
     assert juan["seq"] == 1
     assert juan["body"]["text"] == "甲乙丙丁戊己庚辛壬癸"
+
+
+def test_get_juan_edition(tmp_path: Path):
+    bundle_dir = write_bundle(
+        tmp_path,
+        "EDIT0001",
+        "surface text",
+        editions=[
+            {"short": "VIRTUAL", "label": "virtual edition"},
+            {"short": "Z", "label": "z edition"},
+        ],
+    )
+    edition_dir = bundle_dir / "editions" / "Z"
+    edition_dir.mkdir(parents=True)
+    (edition_dir / "EDIT0001_001-Z.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "seq": 1,
+                "body": {
+                    "text": "edition text",
+                    "markers": [
+                        {
+                            "type": "page-break",
+                            "id": "EDIT0001_Z_001-001a",
+                            "offset": 0,
+                        }
+                    ],
+                },
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (edition_dir / "EDIT0001-Z.manifest.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "assets": {
+                    "parts": [
+                        {
+                            "seq": 1,
+                            "filename": "EDIT0001_001-Z.yaml",
+                            "hash": "sha256:0",
+                        }
+                    ]
+                }
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    client = TestClient(create_app(ServeConfig(
+        corpus_root=tmp_path,
+        index_path=tmp_path / "_corpus.bkkx",
+    )))
+
+    assert client.get("/bundles/EDIT0001/juan/1").json()["body"]["text"] == "surface text"
+    manifest = client.get("/bundles/EDIT0001/manifest").json()
+    assert manifest["editions"] == [
+        {"short": "VIRTUAL", "label": "virtual edition"},
+        {"short": "Z", "label": "z edition"},
+    ]
+    assert manifest["available_editions"] == [{"short": "Z", "label": "z edition"}]
+    r = client.get("/bundles/EDIT0001/juan/1?edition=Z")
+    assert r.status_code == 200
+    juan = r.json()
+    assert juan["body"]["text"] == "edition text"
+    assert juan["body"]["markers"][0]["id"] == "EDIT0001_Z_001-001a"
 
 
 def test_direct_bundle_lookup_does_not_build_corpus_cache(tmp_path: Path):

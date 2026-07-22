@@ -1276,6 +1276,23 @@ button {
   color: var(--amb);
   text-decoration: underline;
 }
+.tv-edition-select {
+  min-width: 120px;
+  max-width: min(260px, 100%);
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--bg-pan);
+  color: var(--t1);
+  font: inherit;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.2;
+  padding: 3px 24px 3px 8px;
+}
+.tv-edition-select:focus {
+  border-color: var(--amb);
+  outline: none;
+}
 .tv-section-focus,
 .section-focus-banner {
   display: flex;

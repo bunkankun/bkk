@@ -61,6 +61,33 @@ def _summary_from_manifest(textid: str, manifest: dict[str, Any]) -> BundleSumma
     )
 
 
+def _available_editions(
+    bundle_dir: Path, textid: str, manifest: dict[str, Any],
+) -> list[dict[str, str | None]]:
+    declared: dict[str, str | None] = {}
+    for entry in manifest.get("editions") or []:
+        if not isinstance(entry, dict):
+            continue
+        short = entry.get("short")
+        if not isinstance(short, str) or not short:
+            continue
+        label = entry.get("label")
+        declared[short] = label if isinstance(label, str) and label else None
+
+    editions_dir = bundle_dir / "editions"
+    if not editions_dir.is_dir():
+        return []
+    out: list[dict[str, str | None]] = []
+    for child in sorted(editions_dir.iterdir(), key=lambda p: p.name):
+        short = child.name
+        if not child.is_dir():
+            continue
+        if not (child / f"{textid}-{short}.manifest.yaml").is_file():
+            continue
+        out.append({"short": short, "label": declared.get(short)})
+    return out
+
+
 @router.get("", response_model=BundleListResponse, summary="List bundles in the corpus")
 def list_bundles(
     request: Request,
@@ -102,7 +129,13 @@ def get_bundle(request: Request, textid: str = PathParam(..., openapi_examples=e
 def get_manifest(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> dict[str, Any]:
     state: AppState = request.app.state.bkk
     rec = _record(request, textid)
-    return _manifest_with_image_overrides(rec.manifest, state)
+    manifest = _manifest_with_image_overrides(rec.manifest, state)
+    return {
+        **manifest,
+        "available_editions": _available_editions(
+            rec.bundle_dir, rec.textid, rec.manifest,
+        ),
+    }
 
 
 _BUCKET_ORDER = {"front": 0, "body": 1, "back": 2}
@@ -250,9 +283,15 @@ def get_juan(
     request: Request,
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
+    edition: str | None = Query(
+        None,
+        description="documentary edition short id; omitted reads the root surface edition",
+    ),
 ) -> dict[str, Any]:
     rec = _record(request, textid)
-    return selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
+    return selection.load_juan_file_for_edition(
+        rec.bundle_dir, rec.manifest, rec.textid, seq, edition,
+    )
 
 
 VALID_BUCKETS = ("front", "body", "back")

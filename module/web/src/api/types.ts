@@ -166,6 +166,7 @@ export interface ManifestMetadata {
 export interface Manifest {
   canonical_identifier?: string;
   editions?: { short: string; label?: string }[];
+  available_editions?: { short: string; label?: string | null }[];
   metadata?: ManifestMetadata;
   assets?: {
     parts?: ManifestPart[];
