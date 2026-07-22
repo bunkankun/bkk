@@ -36,7 +36,7 @@ import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
 const PHRASE_END_RE = /[。！？；，：]/;
 const PHRASE_LINE_OPENER_RE = /^[「『《〈（(〔【]$/;
-const PHRASE_LINE_CLOSER_RE = /^[」]$/;
+const PHRASE_LINE_NONSTART_RE = /^[，、。：；！？」』》〉）)〕】]$/;
 const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
 const BUCKETS = ["front", "body", "back"] as const;
 
@@ -228,7 +228,7 @@ function isInNoteVoice(
 // already has punctuation at that position). Page-break markers are also
 // injected here as zero-width anchor entries so the Inspect-mode observer
 // can track which page the user is currently reading.
-function buildRenderedChars(
+export function buildRenderedChars(
   bodyText: string,
   markers: JuanMarker[],
   lineMode: LineMode,
@@ -342,7 +342,7 @@ function buildRenderedChars(
 //   paragraph: split on paragraph starts (`paragraph-break` or xml <p> open
 //              markers); fall back to literal `\n`.
 //   phrase:    split on `tls:seg` markers; fall back to phrase-ending punct.
-function buildBlocks(
+export function buildBlocks(
   bucket: BucketName,
   chars: RenderedChar[],
   markers: JuanMarker[],
@@ -409,7 +409,7 @@ function buildBlocks(
         if (
           curStart < nextOffset &&
           boundaryOffsets.has(nextOffset) &&
-          !PHRASE_LINE_CLOSER_RE.test(rc.ch)
+          !PHRASE_LINE_NONSTART_RE.test(rc.ch)
         ) {
           flush();
         }
@@ -420,7 +420,7 @@ function buildBlocks(
       } else if (
         lineMode === "phrase" &&
         pendingPhraseBreak &&
-        !PHRASE_LINE_CLOSER_RE.test(rc.ch)
+        !PHRASE_LINE_NONSTART_RE.test(rc.ch)
       ) {
         pendingPhraseBreak = false;
         flush();
