@@ -30,6 +30,10 @@ from ``.bkkrc`` unless ``--out`` is passed.
   construction; heterogeneous overlaps are written through with a
   per-juan stderr warning.
 
+For paren derivation, TLS inline note bracket markers are included by
+default; pass ``--no-tls-notes`` to ignore ``tls:note-start`` /
+``tls:note-end`` markers and derive only from punctuation markers.
+
 ``--force`` strips any pre-existing ``voice`` markers and rederives;
 without it the command refuses to touch a bundle that already carries
 voice markers, so reruns are safe.
@@ -139,6 +143,15 @@ def build_parser() -> argparse.ArgumentParser:
              "Falls back to voice.source in .bkkrc; otherwise 'parens'.",
     )
     pa.add_argument(
+        "--tls-notes",
+        dest="tls_notes",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="include tls:note-start/tls:note-end paren markers in parens "
+             "derivation (default: true; falls back to voice.tls_notes in "
+             ".bkkrc)",
+    )
+    pa.add_argument(
         "--force", action="store_true",
         help="replace existing voice markers (default: refuse if any are present)",
     )
@@ -217,6 +230,15 @@ def run(argv: list[str] | None = None) -> int:
         )
 
     source = args.source
+    tls_notes = args.tls_notes
+    if tls_notes is None:
+        from bkk.config import load_rc
+        rc = load_rc()
+        try:
+            tls_notes = _rc_bool(rc, "tls_notes", default=True)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
     if source is None:
         from bkk.config import load_rc
         rc = load_rc()
@@ -233,10 +255,11 @@ def run(argv: list[str] | None = None) -> int:
         return _run_add(
             bundle, out_root, text_id=text_id, text_prefix=text_prefix,
             source=source, force=args.force, dry_run=args.dry_run,
+            include_tls_notes=tls_notes,
         )
     return _run_add(
         bundle, out_root, text_id=text_id, source=source, force=args.force,
-        dry_run=args.dry_run,
+        dry_run=args.dry_run, include_tls_notes=tls_notes,
     )
 
 
@@ -279,6 +302,7 @@ def _run_add(
     source: str,
     force: bool,
     dry_run: bool,
+    include_tls_notes: bool = True,
 ) -> int:
     if text_prefix is not None:
         try:
@@ -291,7 +315,7 @@ def _run_add(
             print(f"[bundle {bundle_dir.name}]")
             bundle_rc = _run_add(
                 bundle_dir, out_root, source=source, force=force,
-                dry_run=dry_run,
+                dry_run=dry_run, include_tls_notes=include_tls_notes,
             )
             if bundle_rc:
                 rc = 1 if rc == 0 else rc
@@ -337,6 +361,7 @@ def _run_add(
             stats = _process_one(
                 juan_dir, manifest_path, text_id, short,
                 source=source, force=force, dry_run=dry_run,
+                include_tls_notes=include_tls_notes,
             )
         except (RuntimeError, ValueError) as exc:
             print(f"  error: {exc}", file=sys.stderr)
@@ -434,9 +459,16 @@ def _configured_voice_report_path() -> Path | None:
     return None
 
 
+def _rc_bool(rc: dict, key: str, *, default: bool) -> bool:
+    value = (rc.get("voice") or {}).get(key, default)
+    if isinstance(value, bool):
+        return value
+    raise ValueError(f".bkkrc voice.{key}={value!r} must be true or false")
+
+
 def _process_one(
     juan_dir: Path, manifest_path: Path, text_id: str, short: str | None,
-    *, source: str, force: bool, dry_run: bool,
+    *, source: str, force: bool, dry_run: bool, include_tls_notes: bool = True,
 ) -> dict:
     """Apply voice derivation to all juan files under ``juan_dir`` and update
     ``manifest_path``. Returns a small stats dict.
@@ -547,7 +579,10 @@ def _process_one(
                     if not _is_stale_voice_problem(m, source)
                 ]
             try:
-                new_voices = _derive_for_bucket(source, len(text), markers)
+                new_voices = _derive_for_bucket(
+                    source, len(text), markers,
+                    include_tls_notes=include_tls_notes,
+                )
             except VoiceDerivationProblem as exc:
                 occupied_ids.update(_occupied_marker_ids_for_juan(data, marker_asset))
                 problem = _voice_problem_marker(
@@ -955,7 +990,7 @@ def _sorted_marker_flows(markers: list[dict]) -> list[dict]:
 
 
 def _derive_for_bucket(
-    source: str, text_len: int, markers: list,
+    source: str, text_len: int, markers: list, *, include_tls_notes: bool = True,
 ) -> list[dict]:
     """Dispatch to the requested deriver(s) and return their merged output.
 
@@ -966,13 +1001,17 @@ def _derive_for_bucket(
     (``n``/``e`` vs ``r``/``c``/``h``/``a``) don't collide either.
     """
     if source == "parens":
-        return derive_voice_markers(text_len, markers)
+        return derive_voice_markers(
+            text_len, markers, include_tls_notes=include_tls_notes,
+        )
     if source == "indent":
         return derive_voice_markers_from_indent(text_len, markers)
     if source == "all":
-        return list(derive_voice_markers(text_len, markers)) + list(
-            derive_voice_markers_from_indent(text_len, markers)
-        )
+        return list(
+            derive_voice_markers(
+                text_len, markers, include_tls_notes=include_tls_notes,
+            )
+        ) + list(derive_voice_markers_from_indent(text_len, markers))
     raise ValueError(f"unknown voice source: {source!r}")
 
 

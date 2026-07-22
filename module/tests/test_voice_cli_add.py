@@ -31,9 +31,21 @@ def _write_bundle_with_marker_asset(bundle_dir: Path) -> tuple[Path, str]:
     return _write_bundle_with_marker_asset_for(bundle_dir, TEXT_ID)
 
 
+def _write_tls_note_bundle_with_marker_asset(bundle_dir: Path) -> tuple[Path, str]:
+    return _write_bundle_with_marker_asset_for(
+        bundle_dir,
+        TEXT_ID,
+        markers=[
+            {"type": "tls:note-start", "offset": 2, "content": "(", "id": "n-start"},
+            {"type": "tls:note-end", "offset": 8, "content": ")", "id": "n-end"},
+        ],
+    )
+
+
 def _write_bundle_with_marker_asset_for(
     bundle_dir: Path,
     text_id: str,
+    markers: list[dict] | None = None,
 ) -> tuple[Path, str]:
     bundle_dir.mkdir(parents=True, exist_ok=True)
     juan = {
@@ -54,7 +66,7 @@ def _write_bundle_with_marker_asset_for(
         1,
         None,
         {
-            "body": [
+            "body": markers if markers is not None else [
                 {"type": "punctuation", "offset": 2, "content": "(", "id": ""},
                 {"type": "punctuation", "offset": 8, "content": ")", "id": ""},
             ],
@@ -130,6 +142,68 @@ def test_add_writes_voices_to_existing_marker_asset(tmp_path: Path) -> None:
     assert manifest["assets"]["parts"][0]["hash"] == original_juan_hash
     assert asset_entry["hash"] == asset["hash"]
     assert manifest["hash"] == manifest_hash(manifest)
+
+
+def test_add_includes_tls_note_markers_by_default(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_tls_note_bundle_with_marker_asset(bundle)
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="parens",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"note": 1}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert {
+        "type": "voice",
+        "offset": 2,
+        "length": 6,
+        "name": "note",
+        "id": "n1",
+    } in markers
+
+
+def test_add_can_exclude_tls_note_markers(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_tls_note_bundle_with_marker_asset(bundle)
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="parens",
+        force=False,
+        dry_run=False,
+        include_tls_notes=False,
+    )
+
+    assert stats["by_name"] == {}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert not any(marker.get("type") == "voice" for marker in markers)
+
+
+def test_add_parser_accepts_tls_note_toggle() -> None:
+    from bkk.voice.cli import build_parser
+
+    parser = build_parser()
+    disabled = parser.parse_args(["add", "--bundle", "/tmp/TSTV001", "--no-tls-notes"])
+    enabled = parser.parse_args(["add", "--bundle", "/tmp/TSTV001", "--tls-notes"])
+
+    assert disabled.tls_notes is False
+    assert enabled.tls_notes is True
 
 
 def test_add_skips_occupied_id_scan_when_no_problem(

@@ -11,6 +11,14 @@ def _paren(offset: int, ch: str) -> dict:
     return {"type": "punctuation", "offset": offset, "content": ch, "id": ""}
 
 
+def _tls_note_start(offset: int, content: str = "(") -> dict:
+    return {"type": "tls:note-start", "offset": offset, "content": content, "id": ""}
+
+
+def _tls_note_end(offset: int, content: str = ")") -> dict:
+    return {"type": "tls:note-end", "offset": offset, "content": content, "id": ""}
+
+
 def test_empty_markers_returns_no_markers():
     assert derive_voice_markers(0, []) == []
 
@@ -41,6 +49,44 @@ def test_single_paren_pair_one_note():
     assert derive_voice_markers(20, markers) == [
         {"type": "voice", "offset": 2, "length": 6, "name": "note", "id": "n1"},
     ]
+
+
+def test_tls_note_markers_are_recognized_as_paren_pair():
+    markers = [_tls_note_start(2), _tls_note_end(8)]
+    assert derive_voice_markers(20, markers) == [
+        {"type": "voice", "offset": 2, "length": 6, "name": "note", "id": "n1"},
+    ]
+
+
+def test_tls_note_markers_can_be_excluded():
+    markers = [_tls_note_start(2), _tls_note_end(8)]
+    assert derive_voice_markers(20, markers, include_tls_notes=False) == []
+
+
+def test_excluding_tls_notes_keeps_punctuation_parens():
+    markers = [
+        _tls_note_start(2), _tls_note_end(8),
+        _paren(10, "("), _paren(15, ")"),
+    ]
+    assert derive_voice_markers(20, markers, include_tls_notes=False) == [
+        {"type": "voice", "offset": 10, "length": 5, "name": "note", "id": "n1"},
+    ]
+
+
+def test_tls_note_markers_can_pair_with_punctuation_parens():
+    markers = [
+        _tls_note_start(2), _paren(8, ")"),
+        _paren(10, "("), _tls_note_end(15),
+    ]
+    assert derive_voice_markers(20, markers) == [
+        {"type": "voice", "offset": 2, "length": 6, "name": "note", "id": "n1"},
+        {"type": "voice", "offset": 10, "length": 5, "name": "note", "id": "n2"},
+    ]
+
+
+def test_tls_note_markers_require_matching_paren_content():
+    markers = [_tls_note_start(2, "["), _tls_note_end(8, "]")]
+    assert derive_voice_markers(20, markers) == []
 
 
 def test_triangle_open_close_paren_one_emphasis():
@@ -144,6 +190,17 @@ def test_missing_offset_raises():
     markers = [{"type": "punctuation", "content": "(", "id": ""}]
     with pytest.raises(ValueError, match="missing integer offset"):
         derive_voice_markers(10, markers)
+
+
+def test_tls_note_missing_offset_raises():
+    markers = [{"type": "tls:note-start", "content": "(", "id": ""}]
+    with pytest.raises(ValueError, match="missing integer offset"):
+        derive_voice_markers(10, markers)
+
+
+def test_excluded_tls_note_missing_offset_is_ignored():
+    markers = [{"type": "tls:note-start", "content": "(", "id": ""}]
+    assert derive_voice_markers(10, markers, include_tls_notes=False) == []
 
 
 def test_non_paren_punctuation_ignored():

@@ -2,9 +2,11 @@
 
 In KRP source layouts, double-column small-character text is fenced by
 ``(`` … ``)`` (with ``/`` as a column-break inside). The KRP importer
-extracts those as ``punctuation`` point markers so the source round-trips,
-but the voice semantics — what kind of layer the fenced text belongs to —
-never make it onto the canonical text stream.
+extracts those as ``punctuation`` point markers so the source round-trips;
+TLS inline notes carry the same presentation brackets as ``tls:note-start`` /
+``tls:note-end`` markers. In both cases, the voice semantics — what kind of
+layer the fenced text belongs to — never make it onto the canonical text
+stream.
 
 Paren-bounded text serves many purposes in the corpus: commentator gloss,
 editorial note, alternate reading, source citation, phonological annotation.
@@ -46,13 +48,15 @@ class VoiceDerivationProblem(ValueError):
 
 
 def derive_voice_markers(
-    text_len: int, markers: list[dict],
+    text_len: int, markers: list[dict], *, include_tls_notes: bool = True,
 ) -> list[dict]:
     """Return new ``voice`` marker dicts derived from source punctuation.
 
     ``markers`` is the bucket's existing marker list (plain dicts as
     loaded from YAML); it is not mutated. ``/`` punctuation markers are
-    column-break layout inside a paren span and are ignored.
+    column-break layout inside a paren span and are ignored. When
+    ``include_tls_notes`` is true, TLS inline note markers with ``content``
+    ``(`` / ``)`` are treated as the same paren tokens.
 
     Each ``(...)`` pair produces a single ``voice`` marker with
     ``name="note"`` covering the offsets from the opener through the
@@ -71,16 +75,14 @@ def derive_voice_markers(
     for index, m in enumerate(markers):
         if not isinstance(m, dict):
             continue
-        if m.get("type") != "punctuation":
-            continue
-        ch = m.get("content")
-        if ch not in (*_OPENERS, ")"):
+        ch = _paren_char(m, include_tls_notes=include_tls_notes)
+        if ch is None:
             continue
         off = m.get("offset")
         if not isinstance(off, int):
             raise VoiceDerivationProblem(
-                "punctuation-offset",
-                f"punctuation marker missing integer offset: {m}",
+                "paren-offset",
+                f"paren marker missing integer offset: {m}",
                 offset=0,
             )
         if off < 0 or off > text_len:
@@ -122,7 +124,11 @@ def derive_voice_markers(
 
         open_off, open_ch, name, prefix = open_span
         if has_close:
-            if name == "note" and "(" in chars and _has_later_close(groups, group_index):
+            if (
+                name == "note"
+                and "(" in chars
+                and _has_later_close(groups, group_index)
+            ):
                 continue
             spans.append((open_off, off, name, prefix))
             open_span = None
@@ -166,6 +172,20 @@ def _first_opener(chars: list[str]) -> str | None:
     for ch in chars:
         if ch in _OPENERS:
             return ch
+    return None
+
+
+def _paren_char(marker: dict, *, include_tls_notes: bool) -> str | None:
+    mtype = marker.get("type")
+    ch = marker.get("content")
+    if mtype == "punctuation" and ch in (*_OPENERS, ")"):
+        return ch
+    if not include_tls_notes:
+        return None
+    if mtype == "tls:note-start" and ch == "(":
+        return "("
+    if mtype == "tls:note-end" and ch == ")":
+        return ")"
     return None
 
 

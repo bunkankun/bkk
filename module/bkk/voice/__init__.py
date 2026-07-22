@@ -4,8 +4,9 @@ Public surface:
 
 - :func:`bkk.voice.derive.derive_voice_markers` — turns source punctuation
   pairs such as ``(``…``)`` and ``▲``…``)`` in a bucket's marker list into
-  ``voice`` range markers (note / emphasis). Used for KRP-style sources
-  that fence commentary inline (e.g. KR3a0001).
+  ``voice`` range markers (note / emphasis). TLS inline note bracket
+  markers are included by default and can be excluded by option. Used for
+  KRP-style sources that fence commentary inline (e.g. KR3a0001).
 - :func:`bkk.voice.derive_indent.derive_voice_markers_from_indent` — turns
   ``line-break``/``indent`` markers into ``voice`` range markers
   (root / commentary / head / attribution) by indent depth. Used for
