@@ -49,6 +49,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
   const defaultReadMode = useWorkspace((s) => s.readMode);
   const defaultLineMode = useWorkspace((s) => s.readPrefs.lineMode);
   const inspectWidth = useWorkspace((s) => s.panelWidths.inspect);
+  const rightTab = useWorkspace((s) => s.rightTab);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [seqsMap, setSeqsMap] = useState<Record<string, number[]>>({});
   const [editCursor, setEditCursor] = useState<EditorPosition>({
@@ -344,14 +345,18 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
           onJumpToOffset={
             showEdit || activeTextTab == null
               ? undefined
-              : (bucket, offset) =>
+              : (bucket, offset) => {
                   workspace.highlightTextLocation({
                     textid: activeTextTab.textid,
                     seq: activeTextTab.seq,
                     bucket,
                     offset,
                     length: 1,
-                  })
+                  });
+                  if (rightTab === "parallels") {
+                    workspace.focusParallelAt(activeTextTab.textid, activeTextTab.seq, bucket, offset);
+                  }
+                }
           }
         />
       )}

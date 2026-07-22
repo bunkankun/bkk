@@ -384,6 +384,25 @@ def test_parallels_are_merged_filtered_paged_and_hydrated(tmp_path: Path):
     assert second_page["locations"][1]["textid"] == "KR6q0999"
     assert second_page["locations"][1]["available"] is False
 
+    focused = client.get(
+        "/api/bundles/KR6q0001/juan/1/parallels",
+        params={"focus_bucket": "body", "focus_offset": 8, "limit": 2},
+    ).json()
+    assert focused["offset"] == 3
+    assert focused["locations"][0]["local_offset"] == 8
+
+    focused_with_filter = client.get(
+        "/api/bundles/KR6q0001/juan/1/parallels",
+        params={
+            "remote_textid": "KR6q0002",
+            "focus_bucket": "body",
+            "focus_offset": 6,
+            "limit": 2,
+        },
+    ).json()
+    assert focused_with_filter["offset"] == 1
+    assert focused_with_filter["locations"][0]["local_offset"] == 7
+
 
 def test_malformed_markers_are_skipped(tmp_path: Path):
     corpus = tmp_path / "corpus"
@@ -426,5 +445,11 @@ def test_length_filter_requires_both_bounds(tmp_path: Path):
     response = client.get(
         "/api/bundles/KR6q0001/juan/1/parallels",
         params={"min_length": 1},
+    )
+    assert response.status_code == 400
+
+    response = client.get(
+        "/api/bundles/KR6q0001/juan/1/parallels",
+        params={"focus_offset": 1},
     )
     assert response.status_code == 400

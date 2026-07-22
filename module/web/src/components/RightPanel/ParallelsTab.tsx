@@ -1,4 +1,11 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import {
   generateJuanParallels,
@@ -17,6 +24,7 @@ import { krClass } from "../../lib/krClass";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 
 const PAGE_SIZE = 50;
+const MERGED_PAGE_SIZE = 200;
 const DEFAULT_GENERATION_PARAMS: JuanParallelsGenerationParams = {
   bucket: "all",
   minLength: 12,
@@ -235,10 +243,205 @@ function groupParallelLocations(
     }));
 }
 
+interface MergedParallelGroup {
+  key: string;
+  bucket: "front" | "body" | "back";
+  start: number;
+  end: number;
+  locations: JuanParallelLocation[];
+  chars: Array<{ offset: number; ch: string; count: number }>;
+  maxDepth: number;
+}
+
+function mergeParallelLocations(locations: JuanParallelLocation[]): MergedParallelGroup[] {
+  const bucketOrder = { front: 0, body: 1, back: 2 };
+  const sorted = [...locations].sort((a, b) =>
+    bucketOrder[a.local_bucket] - bucketOrder[b.local_bucket] ||
+    a.local_offset - b.local_offset ||
+    a.local_length - b.local_length ||
+    a.textid.localeCompare(b.textid) ||
+    a.offset - b.offset,
+  );
+  const groups: Array<Omit<MergedParallelGroup, "key" | "chars" | "maxDepth">> = [];
+  for (const location of sorted) {
+    const start = location.local_offset;
+    const end = start + location.local_length;
+    const prev = groups[groups.length - 1];
+    if (prev && prev.bucket === location.local_bucket && start < prev.end) {
+      prev.end = Math.max(prev.end, end);
+      prev.locations.push(location);
+    } else {
+      groups.push({
+        bucket: location.local_bucket,
+        start,
+        end,
+        locations: [location],
+      });
+    }
+  }
+  return groups.map((group, index) => {
+    const byOffset = new Map<number, { ch: string; count: number }>();
+    let maxDepth = 0;
+    for (const location of group.locations) {
+      const chars = [...(location.local_text ?? "")];
+      for (let i = 0; i < location.local_length; i += 1) {
+        const offset = location.local_offset + i;
+        const current = byOffset.get(offset);
+        const count = (current?.count ?? 0) + 1;
+        byOffset.set(offset, {
+          ch: chars[i] ?? current?.ch ?? "□",
+          count,
+        });
+        maxDepth = Math.max(maxDepth, count);
+      }
+    }
+    const chars = Array.from({ length: Math.max(0, group.end - group.start) }, (_, i) => {
+      const offset = group.start + i;
+      const value = byOffset.get(offset);
+      return { offset, ch: value?.ch ?? "□", count: value?.count ?? 0 };
+    });
+    return {
+      ...group,
+      key: `${group.bucket}:${group.start}:${group.end}:${index}`,
+      chars,
+      maxDepth,
+    };
+  });
+}
+
+function MergedParallelRow({
+  location,
+  sourceTextid,
+  sourceSeq,
+  groupStart,
+  groupEnd,
+}: {
+  location: JuanParallelLocation;
+  sourceTextid: string;
+  sourceSeq: number;
+  groupStart: number;
+  groupEnd: number;
+}) {
+  const localEnd = location.local_offset + location.local_length;
+  const spanLength = Math.max(1, groupEnd - groupStart);
+  const leftPct = ((location.local_offset - groupStart) / spanLength) * 100;
+  const widthPct = (location.local_length / spanLength) * 100;
+  const openLocal = () => {
+    workspace.openTextLocation({
+      textid: sourceTextid,
+      seq: sourceSeq,
+      bucket: location.local_bucket,
+      offset: location.local_offset,
+      length: location.local_length,
+    });
+  };
+  const openRemote = () => {
+    if (!location.available) return;
+    workspace.openTextLocation({
+      textid: location.textid,
+      seq: location.juan_seq,
+      bucket: location.bucket,
+      offset: location.offset,
+      length: location.length,
+    });
+  };
+  return (
+    <div className="parallel-merged-row">
+      <button
+        type="button"
+        className="parallel-merged-main"
+        onClick={openLocal}
+        title={`Open local ${location.local_bucket} @${location.local_offset}`}
+      >
+        <span className={`parallel-merged-textid ${krClass(location.textid)}`}>{location.textid}</span>
+        <span>juan {location.juan_seq}</span>
+        <span>{location.local_bucket} @{location.local_offset}-{localEnd}</span>
+        <span>remote {location.bucket} @{location.offset}+{location.length}</span>
+        {location.edit_distance > 0 ? <span>Δ{location.edit_distance}</span> : null}
+      </button>
+      <div className="parallel-coverage" aria-hidden="true">
+        <span style={{ left: `${leftPct}%`, width: `${widthPct}%` }} />
+      </div>
+      <button
+        type="button"
+        className="parallel-open parallel-merged-open"
+        disabled={!location.available}
+        onClick={openRemote}
+        title={
+          location.available
+            ? `Open remote ${location.textid} · juan ${location.juan_seq}`
+            : "Remote passage unavailable"
+        }
+        aria-label="Open remote passage"
+      >
+        ↗
+      </button>
+    </div>
+  );
+}
+
+function MergedParallelsView({
+  groups,
+  sourceTextid,
+  sourceSeq,
+}: {
+  groups: MergedParallelGroup[];
+  sourceTextid: string;
+  sourceSeq: number;
+}) {
+  return (
+    <div className="parallel-merged">
+      {groups.map((group) => (
+        <section
+          className={`parallel-merged-group${group.locations.length > 1 ? " has-overlap" : ""}`}
+          key={group.key}
+        >
+          <div className="parallel-merged-head">
+            <div>
+              <span>{group.bucket} @{group.start}+{group.end - group.start}</span>
+              <span>{group.locations.length} passage{group.locations.length === 1 ? "" : "s"}</span>
+            </div>
+            <span>max depth {group.maxDepth}</span>
+          </div>
+          <div className="parallel-heatmap" aria-label="Local coverage heatmap">
+            {group.chars.map((item) => (
+              <span
+                key={item.offset}
+                className="parallel-heat-char"
+                style={{
+                  "--heat": `${28 + Math.round(
+                    48 * (group.maxDepth ? item.count / group.maxDepth : 0),
+                  )}%`,
+                } as CSSProperties}
+                title={`${group.bucket} @${item.offset} · ${item.count} passage${item.count === 1 ? "" : "s"}`}
+              >
+                {item.ch}
+              </span>
+            ))}
+          </div>
+          <div className="parallel-merged-list">
+            {group.locations.map((location) => (
+              <MergedParallelRow
+                key={location.id}
+                location={location}
+                sourceTextid={sourceTextid}
+                sourceSeq={sourceSeq}
+                groupStart={group.start}
+                groupEnd={group.end}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function ParallelsTab() {
   const activeTextid = useWorkspace((s) => s.activeTextid);
   const activeSeq = useWorkspace((s) => s.activeSeq);
   const source = useWorkspace((s) => s.parallelsSource);
+  const parallelFocus = useWorkspace((s) => s.parallelFocus);
   const selection = useWorkspace((s) => s.selection);
   const sectionFocus = useWorkspace((s) => s.sectionFocus);
   const authStatus = useWorkspace((s) => s.auth.status);
@@ -247,6 +450,7 @@ export function ParallelsTab() {
   const [error, setError] = useState<string | null>(null);
   const [lengthFilter, setLengthFilter] = useState<{ min: number; max: number } | null>(null);
   const [sortMode, setSortMode] = useState<"local" | "remote">("local");
+  const [viewMode, setViewMode] = useState<"rows" | "merged">("rows");
   const [remoteTextid, setRemoteTextid] = useState<string | null>(null);
   const [assetState, setAssetState] = useState<
     "checking" | "confirming" | "generating" | "ready"
@@ -267,6 +471,12 @@ export function ParallelsTab() {
       ? sectionFocus
       : null;
   const rangeFilter = activeSelection ?? activeSection;
+  const activeParallelFocus =
+    parallelFocus != null && parallelFocus.textid === textid && parallelFocus.seq === seq
+      ? parallelFocus
+      : null;
+  const pageLimit = viewMode === "merged" ? MERGED_PAGE_SIZE : PAGE_SIZE;
+  const requestSort = viewMode === "merged" ? "local" : sortMode;
 
   useEffect(() => {
     setOffset(0);
@@ -326,17 +536,24 @@ export function ParallelsTab() {
     setError(null);
     getJuanParallels(textid, seq, {
       offset,
-      limit: PAGE_SIZE,
+      limit: pageLimit,
       bucket: parallelBucket(rangeFilter?.bucket),
       start: rangeFilter?.start,
       end: rangeFilter?.end,
       minLength: lengthFilter?.min,
       maxLength: lengthFilter?.max,
-      sort: sortMode,
+      sort: requestSort,
       remoteTextid,
+      focusBucket: activeParallelFocus?.bucket,
+      focusOffset: activeParallelFocus?.offset,
     })
       .then((value) => {
-        if (!cancelled) setResponse(value);
+        if (cancelled) return;
+        setResponse(value);
+        if (activeParallelFocus != null) {
+          setOffset(value.offset);
+          workspace.consumeParallelFocus(activeParallelFocus);
+        }
       })
       .catch((reason) => {
         if (!cancelled) setError(String(reason));
@@ -349,13 +566,16 @@ export function ParallelsTab() {
     seq,
     assetState,
     offset,
+    pageLimit,
     rangeFilter?.bucket,
     rangeFilter?.start,
     rangeFilter?.end,
     lengthFilter?.min,
     lengthFilter?.max,
-    sortMode,
+    requestSort,
     remoteTextid,
+    activeParallelFocus?.bucket,
+    activeParallelFocus?.offset,
   ]);
 
   const runGeneration = async (event: FormEvent) => {
@@ -376,6 +596,10 @@ export function ParallelsTab() {
       setAssetState("confirming");
     }
   };
+  const mergedGroups = useMemo(
+    () => (response == null ? [] : mergeParallelLocations(response.locations)),
+    [response],
+  );
 
   if (textid == null || seq == null) {
     return <div className="rc empty">Open a juan to see parallel passages.</div>;
@@ -578,7 +802,7 @@ export function ParallelsTab() {
   const remoteTextOptions = response.remote_texts;
   const remoteTextLabel = (item: JuanParallelRemoteText) =>
     item.title ? `${item.title} · ${item.textid}` : item.textid;
-  const remoteRows = sortMode === "remote";
+  const remoteRows = viewMode === "rows" && sortMode === "remote";
   const remoteGroups = remoteRows
     ? groupParallelLocations(response.locations, remoteTextOptions)
     : [];
@@ -630,6 +854,34 @@ export function ParallelsTab() {
               }}
             >
               remote
+            </button>
+          </div>
+        </div>
+        <div className="parallel-order-row">
+          <span>View</span>
+          <div className="parallel-order-buttons">
+            <button
+              type="button"
+              className={`kwic-facet-chip${viewMode === "rows" ? " on" : ""}`}
+              onClick={() => {
+                if (viewMode === "rows") return;
+                setViewMode("rows");
+                setOffset(0);
+              }}
+            >
+              rows
+            </button>
+            <button
+              type="button"
+              className={`kwic-facet-chip${viewMode === "merged" ? " on" : ""}`}
+              onClick={() => {
+                if (viewMode === "merged") return;
+                setViewMode("merged");
+                setSortMode("local");
+                setOffset(0);
+              }}
+            >
+              merged
             </button>
           </div>
         </div>
@@ -774,7 +1026,13 @@ export function ParallelsTab() {
       ) : (
         <>
           <div className="parallel-count">{pageStart}–{pageEnd} of {response.total}</div>
-          {remoteRows ? (
+          {viewMode === "merged" ? (
+            <MergedParallelsView
+              groups={mergedGroups}
+              sourceTextid={textid}
+              sourceSeq={seq}
+            />
+          ) : remoteRows ? (
             remoteGroups.map((group) => (
               <section className="parallel-group" key={group.textid}>
                 <div className="parallel-group-head">
@@ -818,14 +1076,14 @@ export function ParallelsTab() {
               <button
                 type="button"
                 disabled={!hasPrev}
-                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+                onClick={() => setOffset(Math.max(0, response.offset - pageLimit))}
               >
                 ← Prev
               </button>
               <button
                 type="button"
                 disabled={!hasNext}
-                onClick={() => setOffset(offset + PAGE_SIZE)}
+                onClick={() => setOffset(response.offset + pageLimit)}
               >
                 Next →
               </button>

@@ -490,6 +490,34 @@ def _attach_gaps(rows: list[dict[str, Any]]) -> None:
         previous[key] = row
 
 
+def _local_distance(row: dict[str, Any], offset: int) -> tuple[int, int, str]:
+    start = row["local_offset"]
+    end = start + row["local_length"]
+    if offset < start:
+        distance = start - offset
+    elif offset >= end:
+        distance = offset - (end - 1)
+    else:
+        distance = 0
+    return (distance, start, row["id"])
+
+
+def _offset_for_focus(
+    rows: list[dict[str, Any]],
+    *,
+    bucket: str,
+    focus_offset: int,
+) -> int | None:
+    candidates = [row for row in rows if row["local_bucket"] == bucket]
+    if not candidates:
+        return None
+    best = min(candidates, key=lambda row: _local_distance(row, focus_offset))
+    try:
+        return rows.index(best)
+    except ValueError:
+        return None
+
+
 def _hydrate_page(
     state: AppState, rows: list[dict[str, Any]],
 ) -> list[ParallelPassageOut]:
@@ -746,6 +774,8 @@ def get_juan_parallels(
     max_length: int | None = Query(None, ge=1),
     sort: Literal["local", "remote"] = Query("local"),
     remote_textid: str | None = Query(None),
+    focus_bucket: Literal["front", "body", "back"] | None = Query(None),
+    focus_offset: int | None = Query(None, ge=0),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ) -> JuanParallelsResponse:
@@ -762,6 +792,8 @@ def get_juan_parallels(
         raise errors.bad_request("parallel length filter requires both min_length and max_length")
     if min_length is not None and max_length is not None and max_length < min_length:
         raise errors.bad_request("parallel length filter max_length must be greater than or equal to min_length")
+    if (focus_bucket is None) != (focus_offset is None):
+        raise errors.bad_request("parallel focus requires both focus_bucket and focus_offset")
     if remote_textid is not None and not remote_textid.strip():
         remote_textid = None
 
@@ -801,6 +833,14 @@ def get_juan_parallels(
         ))
     _attach_gaps(rows)
     total = len(rows)
+    if focus_bucket is not None and focus_offset is not None:
+        focused_offset = _offset_for_focus(
+            rows,
+            bucket=focus_bucket,
+            focus_offset=focus_offset,
+        )
+        if focused_offset is not None:
+            offset = focused_offset
     page = rows[offset : offset + limit]
     source_titles = _load_titles(state, [textid])
     return JuanParallelsResponse(

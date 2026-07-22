@@ -1254,6 +1254,8 @@ export function TextViewer({
                   activeEdition={activeEdition}
                   bucketLength={bucketLengths.get(view.bucket) ?? 0}
                   onAlignClick={translationAlign ? syncSourceBlock : undefined}
+                  rightTab={rightTab}
+                  hasParallels={hasParallels}
                 />
               );
             })}
@@ -1283,6 +1285,8 @@ interface BlockViewProps {
   activeEdition: string | null;
   bucketLength: number;
   onAlignClick?: (block: Block) => void;
+  rightTab: string;
+  hasParallels: boolean | null;
 }
 
 function BlockView({
@@ -1301,6 +1305,8 @@ function BlockView({
   activeEdition,
   bucketLength,
   onAlignClick,
+  rightTab,
+  hasParallels,
 }: BlockViewProps) {
   const Tag = block.tagName;
 
@@ -1390,6 +1396,11 @@ function BlockView({
               })
             }
             onClick={(ev) => {
+              if (rightTab === "parallels" && hasParallels === true) {
+                workspace.focusParallelAt(textid, seq, block.bucket, off);
+                ev.stopPropagation();
+                return;
+              }
               if (!has) return;
               // Suppress when this click is part of a drag-selection — let
               // mouseUp's getSelection() path handle multi-char selections.

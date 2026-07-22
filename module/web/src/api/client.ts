@@ -560,6 +560,8 @@ export async function getJuanParallels(
     maxLength?: number;
     sort?: "local" | "remote";
     remoteTextid?: string | null;
+    focusBucket?: "front" | "body" | "back";
+    focusOffset?: number;
   } = {},
 ): Promise<JuanParallelsResponse> {
   const params = new URLSearchParams();
@@ -572,6 +574,8 @@ export async function getJuanParallels(
   if (options.maxLength != null) params.set("max_length", String(options.maxLength));
   if (options.sort != null) params.set("sort", options.sort);
   if (options.remoteTextid != null) params.set("remote_textid", options.remoteTextid);
+  if (options.focusBucket != null) params.set("focus_bucket", options.focusBucket);
+  if (options.focusOffset != null) params.set("focus_offset", String(options.focusOffset));
   const query = params.toString();
   return fetchJson<JuanParallelsResponse>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/parallels`

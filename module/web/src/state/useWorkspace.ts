@@ -72,6 +72,12 @@ export interface ParallelsSource {
   textid: string;
   seq: number;
 }
+export interface ParallelFocus {
+  textid: string;
+  seq: number;
+  bucket: "front" | "body" | "back";
+  offset: number;
+}
 export type LineMode = "paragraph" | "phrase";
 export type LineBreakDisplay = "off" | "glyph" | "br";
 export type TextDisplayMode = "canonical" | "original";
@@ -299,6 +305,7 @@ export interface WorkspaceState {
   // right panel
   rightTab: RightTab;
   parallelsSource: ParallelsSource | null;
+  parallelFocus: ParallelFocus | null;
   // upper-right "Read | Trans | Inspect" — Trans/Inspect disabled in v1.
   readMode: ReadMode;
   openMode: OpenMode;
@@ -640,6 +647,7 @@ let state: WorkspaceState = {
   coreTarget: null,
   rightTab: "annotations",
   parallelsSource: null,
+  parallelFocus: null,
   readMode: "read",
   openMode: "read",
   selectedTranslation: null,
@@ -1816,17 +1824,42 @@ export const workspace = {
     notify();
   },
   setParallelsSource(source: ParallelsSource | null) {
-    state = { ...state, parallelsSource: source };
+    state = { ...state, parallelsSource: source, parallelFocus: null };
     notify();
   },
   openParallelsPanel(textid: string, seq: number) {
     state = {
       ...state,
       parallelsSource: { textid, seq },
+      parallelFocus: null,
       rightTab: "parallels",
     };
     notify();
     workspace.setSidebarVisible("right", true);
+  },
+  focusParallelAt(textid: string, seq: number, bucket: string, offset: number) {
+    if (bucket !== "front" && bucket !== "body" && bucket !== "back") return;
+    if (!Number.isFinite(offset) || offset < 0) return;
+    state = {
+      ...state,
+      parallelsSource: { textid, seq },
+      parallelFocus: { textid, seq, bucket, offset: Math.floor(offset) },
+      rightTab: "parallels",
+    };
+    notify();
+    workspace.setSidebarVisible("right", true);
+  },
+  consumeParallelFocus(focus: ParallelFocus) {
+    const cur = state.parallelFocus;
+    if (
+      cur == null ||
+      cur.textid !== focus.textid ||
+      cur.seq !== focus.seq ||
+      cur.bucket !== focus.bucket ||
+      cur.offset !== focus.offset
+    ) return;
+    state = { ...state, parallelFocus: null };
+    notify();
   },
   setReadMode(readMode: ReadMode) {
     const target = activePaneLeaf(state.pane);
