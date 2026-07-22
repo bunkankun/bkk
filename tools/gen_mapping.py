@@ -31,6 +31,12 @@ def remark_tags(remarks: str) -> set[str]:
     return {tag.strip() for tag in remarks.split(";") if tag.strip()}
 
 
+def char_for_cp(cp: str) -> str:
+    cp = cp.strip()
+    value = int(cp[2:], 16) if cp.lower().startswith("u+") else int(cp, 0)
+    return chr(value)
+
+
 def has_multiple_mappings(row: dict[str, str | None]) -> bool:
     reg_cps = (row.get("reg_cp") or "").split(",")
     reg_chars = row.get("reg_char") or ""
@@ -50,9 +56,9 @@ def main() -> int:
                 continue
             n += 1
             src_cp = row["var_cp"]
-            src_char = row["var_char"]
+            src_char = char_for_cp(src_cp)
             rep_cp = row["reg_cp"]
-            rep_char = row["reg_char"]
+            rep_char = char_for_cp(rep_cp)
             reason = extract_src(remarks)
             reason_y = f"'{reason}'" if "," in reason else reason
             var_count = row["var_count"]

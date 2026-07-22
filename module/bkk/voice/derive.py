@@ -83,6 +83,8 @@ def derive_voice_markers(
                 f"punctuation marker missing integer offset: {m}",
                 offset=0,
             )
+        if off < 0 or off > text_len:
+            continue
         parens.append((off, ch, index))
 
     if not parens:

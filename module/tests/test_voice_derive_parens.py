@@ -21,6 +21,21 @@ def test_no_parens_returns_no_markers():
     assert derive_voice_markers(10, markers) == []
 
 
+def test_out_of_range_parens_are_ignored():
+    markers = [_paren(12, "("), _paren(18, ")")]
+    assert derive_voice_markers(10, markers) == []
+
+
+def test_out_of_range_parens_do_not_disturb_in_range_pairing():
+    markers = [
+        _paren(2, "("), _paren(5, ")"),
+        _paren(12, "("), _paren(18, ")"),
+    ]
+    assert derive_voice_markers(10, markers) == [
+        {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"},
+    ]
+
+
 def test_single_paren_pair_one_note():
     markers = [_paren(2, "("), _paren(8, ")")]
     assert derive_voice_markers(20, markers) == [

@@ -17,6 +17,8 @@ import yaml
 from bkk.importer.hashing import ZERO_HASH, sha256_jcs
 from bkk.importer.write.yaml_writer import marker_to_flow
 
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 VALID_BUCKETS = ("front", "body", "back")
 
 STRUCTURAL_MARKER_TYPES = {
@@ -128,7 +130,7 @@ def load_marker_asset(
     path = manifest_dir / filename
     if not path.exists():
         return None
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    data = yaml.load(path.read_text(encoding="utf-8"), Loader=_YAML_LOADER) or {}
     return data if isinstance(data, dict) else None
 
 

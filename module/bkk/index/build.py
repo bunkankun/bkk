@@ -19,6 +19,11 @@ from .schema import SCHEMA_VERSION, TABLES_DDL, create_heavy_indices
 from .witness import apply_witness
 
 log = logging.getLogger("bkk.index")
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+def _yaml_load_text(text: str):
+    return yaml.load(text, Loader=_YAML_LOADER)
 
 
 @dataclass(frozen=True)
@@ -69,7 +74,7 @@ def build_index(
         out_path.unlink()
 
     manifest_path = bundle_dir / f"{textid}.manifest.yaml"
-    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    manifest = _yaml_load_text(manifest_path.read_text(encoding="utf-8"))
     editions = [e["short"] for e in (manifest.get("editions") or [])]
 
     conn = sqlite3.connect(str(out_path))
@@ -138,7 +143,7 @@ def _build_part_rows(args) -> _PartRows:
     bundle_dir = Path(bundle_dir_s)
     seq = part["seq"]
     juan_path = bundle_dir / part["filename"]
-    juan = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+    juan = _yaml_load_text(juan_path.read_text(encoding="utf-8"))
     if isinstance(juan, dict):
         juan = hydrate_juan_markers(
             juan, load_marker_asset(bundle_dir, manifest, seq),

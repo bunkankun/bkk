@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 
+import pytest
 import yaml
 
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs
@@ -129,6 +130,30 @@ def test_add_writes_voices_to_existing_marker_asset(tmp_path: Path) -> None:
     assert manifest["assets"]["parts"][0]["hash"] == original_juan_hash
     assert asset_entry["hash"] == asset["hash"]
     assert manifest["hash"] == manifest_hash(manifest)
+
+
+def test_add_skips_occupied_id_scan_when_no_problem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset(bundle)
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("occupied id scan should be problem-only")
+
+    monkeypatch.setattr("bkk.voice.cli._occupied_marker_ids_for_juan", fail_if_called)
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="parens",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"note": 1}
 
 
 def _write_two_juan_inline_paren_bundle(bundle_dir: Path) -> Path:

@@ -66,12 +66,110 @@ class CanonicalizationContext:
 
 
 def _parse_codepoint(s: str | int) -> int:
+    if isinstance(s, bool):
+        raise ValueError("boolean is not a codepoint")
     if isinstance(s, int):
-        return s
-    s = str(s).strip()
-    if s.startswith("U+") or s.startswith("u+"):
-        return int(s[2:], 16)
-    return int(s, 0)
+        cp = s
+    else:
+        s = str(s).strip()
+        if s.startswith("U+") or s.startswith("u+"):
+            cp = int(s[2:], 16)
+        else:
+            cp = int(s, 0)
+    if not _is_unicode_scalar(cp):
+        raise ValueError(f"not a Unicode scalar value: U+{cp:04X}")
+    return cp
+
+
+def _is_unicode_scalar(cp: int) -> bool:
+    return 0 <= cp <= 0x10FFFF and not (0xD800 <= cp <= 0xDFFF)
+
+
+def _parse_codepoint_field(path: Path, value: Any, label: str) -> int:
+    try:
+        return _parse_codepoint(value)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            f"{path.name}: {label} has invalid codepoint {value!r}"
+        ) from exc
+
+
+def _endpoint_codepoint(
+    path: Path,
+    entry_id: str,
+    endpoint: Any,
+    endpoint_name: str,
+) -> int:
+    if not isinstance(endpoint, dict):
+        raise RuntimeError(
+            f"{path.name}: entry {entry_id} {endpoint_name} is not a mapping"
+        )
+    if "cp" not in endpoint:
+        raise RuntimeError(
+            f"{path.name}: entry {entry_id} {endpoint_name}.cp is missing"
+        )
+    cp = _parse_codepoint_field(
+        path, endpoint["cp"], f"entry {entry_id} {endpoint_name}.cp"
+    )
+    declared_char = endpoint.get("char")
+    if declared_char is not None:
+        if not isinstance(declared_char, str) or len(declared_char) != 1:
+            raise RuntimeError(
+                f"{path.name}: entry {entry_id} {endpoint_name}.char "
+                f"is not a single character"
+            )
+        if ord(declared_char) != cp:
+            raise RuntimeError(
+                f"{path.name}: entry {entry_id} {endpoint_name}.char "
+                f"{declared_char!r} does not match {endpoint_name}.cp "
+                f"U+{cp:04X}"
+            )
+    return cp
+
+
+def _in_inclusion_blocks(cp: int, blocks: list[tuple[int, int]]) -> bool:
+    return any(lo <= cp <= hi for lo, hi in blocks)
+
+
+def _is_canonical_cp(
+    cp: int,
+    blocks: list[tuple[int, int]],
+    excluded: dict[int, dict[str, Any]],
+) -> bool:
+    return _in_inclusion_blocks(cp, blocks) and cp not in excluded
+
+
+def _validate_mapping_against_charset(
+    asset: MappingAsset,
+    entries: dict[int, MappingEntry],
+    *,
+    blocks: list[tuple[int, int]],
+    excluded: dict[int, dict[str, Any]],
+) -> None:
+    for source_cp, entry in entries.items():
+        if _is_canonical_cp(source_cp, blocks, excluded):
+            raise RuntimeError(
+                f"{asset.filename}: entry {entry.entry_id} source U+{source_cp:04X} "
+                "is already in the canonical character set"
+            )
+        expected_replacement = excluded.get(source_cp, {}).get("replaced_by")
+        if (
+            expected_replacement is not None
+            and expected_replacement != entry.replacement_cp
+        ):
+            raise RuntimeError(
+                f"{asset.filename}: entry {entry.entry_id} replacement "
+                f"U+{entry.replacement_cp:04X} does not match charset "
+                f"replaced_by U+{expected_replacement:04X}"
+            )
+        if expected_replacement is not None:
+            continue
+        replacement_cp = entry.replacement_cp
+        if not _is_canonical_cp(replacement_cp, blocks, excluded):
+            raise RuntimeError(
+                f"{asset.filename}: entry {entry.entry_id} replacement "
+                f"U+{replacement_cp:04X} is not in the canonical character set"
+            )
 
 
 def _self_hash(data: dict) -> str:
@@ -109,11 +207,13 @@ def load_charset(path: Path) -> tuple[str, str, list[tuple[int, int]], dict[int,
     for entry in data.get("excluded") or []:
         if not isinstance(entry, dict):
             continue
-        cp = _parse_codepoint(entry["cp"])
+        cp = _parse_codepoint_field(path, entry["cp"], "excluded.cp")
         excluded[cp] = {
             "char": entry.get("char"),
             "reason": entry.get("reason"),
-            "replaced_by": _parse_codepoint(entry["replaced_by"])
+            "replaced_by": _parse_codepoint_field(
+                path, entry["replaced_by"], "excluded.replaced_by",
+            )
                 if entry.get("replaced_by") is not None else None,
         }
 
@@ -139,17 +239,17 @@ def load_mapping(path: Path, mapping_index: int) -> tuple[MappingAsset, dict[int
     entries: dict[int, MappingEntry] = {}
     for entry in data.get("entries") or []:
         if not isinstance(entry, dict):
-            continue
+            raise RuntimeError(f"{path.name}: mapping entry is not a mapping")
         entry_id = entry.get("id")
         source = entry.get("source") or {}
         replacement = entry.get("replacement") or {}
         reason = entry.get("reason") or ""
         if not isinstance(entry_id, str):
-            continue
-        if "cp" not in source or "cp" not in replacement:
-            continue
-        source_cp = _parse_codepoint(source["cp"])
-        replacement_cp = _parse_codepoint(replacement["cp"])
+            raise RuntimeError(f"{path.name}: mapping entry missing string id")
+        source_cp = _endpoint_codepoint(path, entry_id, source, "source")
+        replacement_cp = _endpoint_codepoint(
+            path, entry_id, replacement, "replacement"
+        )
         if source_cp in entries:
             raise RuntimeError(
                 f"{path.name}: duplicate mapping entry for U+{source_cp:04X}"
@@ -192,6 +292,9 @@ def load_context(
         if not path.is_file():
             raise FileNotFoundError(f"mapping not found: {path}")
         asset, entries = load_mapping(path, mapping_index=i)
+        _validate_mapping_against_charset(
+            asset, entries, blocks=blocks, excluded=excluded,
+        )
         mappings.append(asset)
         for cp, entry in entries.items():
             if cp in mapping_entries:

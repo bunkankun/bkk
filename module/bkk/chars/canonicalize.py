@@ -43,18 +43,42 @@ class InvalidSubstitutionMarkerError(ValueError):
     """A substitution marker cannot be applied to the current text."""
 
 
+def _replacement_char(entry: MappingEntry) -> str:
+    cp = entry.replacement_cp
+    if (
+        not isinstance(cp, int)
+        or isinstance(cp, bool)
+        or cp < 0
+        or cp > 0x10FFFF
+        or 0xD800 <= cp <= 0xDFFF
+    ):
+        raise RuntimeError(
+            f"mapping entry {entry.entry_id!r} has invalid replacement "
+            f"codepoint {cp!r}"
+        )
+    replacement = chr(cp)
+    if len(replacement) != 1:
+        raise RuntimeError(
+            f"mapping entry {entry.entry_id!r} is not 1:1 "
+            f"(replacement length {len(replacement)}); v1 of "
+            f"bkk chars canonicalize only supports 1:1 substitutions"
+        )
+    return replacement
+
+
 def _build_substitution_marker(
     offset: int,
     original_cp: int,
     entry: MappingEntry,
     ctx: CanonicalizationContext,
+    replacement: str,
 ) -> dict[str, Any]:
     mapping = ctx.mappings[entry.mapping_index]
     return {
         "type": "substitution",
         "offset": offset,
         "original": chr(original_cp),
-        "replacement": chr(entry.replacement_cp),
+        "replacement": replacement,
         "reason": SUBSTITUTION_REASON,
         "mapping": {
             "identifier": mapping.canonical_identifier,
@@ -84,15 +108,11 @@ def canonicalize_text(
         cp = ord(ch)
         entry = ctx.mapping_entries.get(cp)
         if entry is not None:
-            replacement = chr(entry.replacement_cp)
-            if len(replacement) != 1:
-                raise RuntimeError(
-                    f"mapping entry {entry.entry_id!r} is not 1:1 "
-                    f"(replacement length {len(replacement)}); v1 of "
-                    f"bkk chars canonicalize only supports 1:1 substitutions"
-                )
+            replacement = _replacement_char(entry)
             out.append(replacement)
-            markers.append(_build_substitution_marker(offset, cp, entry, ctx))
+            markers.append(
+                _build_substitution_marker(offset, cp, entry, ctx, replacement)
+            )
             continue
 
         if ctx.in_inclusion_block(cp) and cp not in ctx.excluded:
@@ -135,15 +155,11 @@ def canonicalize_text_lenient(
         cp = ord(ch)
         entry = ctx.mapping_entries.get(cp)
         if entry is not None:
-            replacement = chr(entry.replacement_cp)
-            if len(replacement) != 1:
-                raise RuntimeError(
-                    f"mapping entry {entry.entry_id!r} is not 1:1 "
-                    f"(replacement length {len(replacement)}); v1 of "
-                    f"bkk chars canonicalize only supports 1:1 substitutions"
-                )
+            replacement = _replacement_char(entry)
             out.append(replacement)
-            markers.append(_build_substitution_marker(offset, cp, entry, ctx))
+            markers.append(
+                _build_substitution_marker(offset, cp, entry, ctx, replacement)
+            )
             continue
 
         if ctx.in_inclusion_block(cp) and cp not in ctx.excluded:
@@ -172,14 +188,7 @@ def canonicalize_query(text: str, ctx: CanonicalizationContext) -> str:
     for ch in text:
         entry = ctx.mapping_entries.get(ord(ch))
         if entry is not None:
-            replacement = chr(entry.replacement_cp)
-            if len(replacement) != 1:
-                raise RuntimeError(
-                    f"mapping entry {entry.entry_id!r} is not 1:1 "
-                    f"(replacement length {len(replacement)}); v1 of "
-                    f"bkk chars canonicalize only supports 1:1 substitutions"
-                )
-            out.append(replacement)
+            out.append(_replacement_char(entry))
         else:
             out.append(ch)
     return "".join(out)

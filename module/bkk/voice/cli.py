@@ -94,6 +94,11 @@ _JUAN_RE = re.compile(
     r"^(?P<text_id>.+?)_(?P<seq>\d{3})(?:-(?P<short>[A-Za-z0-9][A-Za-z0-9_-]*))?\.yaml$",
 )
 _BUCKETS = ("front", "body", "back")
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+def _yaml_load_text(text: str):
+    return yaml.load(text, Loader=_YAML_LOADER)
 
 
 def _add_bundle_selector(sp: argparse.ArgumentParser) -> None:
@@ -457,7 +462,7 @@ def _process_one(
 
     if not juan_entries:
         raise RuntimeError(f"no juan files found under {juan_dir}")
-    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    manifest = _yaml_load_text(manifest_path.read_text(encoding="utf-8")) or {}
     if not isinstance(manifest, dict):
         raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
     title = ((manifest.get("metadata") or {}).get("title"))
@@ -471,10 +476,10 @@ def _process_one(
     # record a location marker and keep processing the rest of the scope.
     pending_juans: list[tuple[Path, dict, str]] = []
     pending_assets: list[tuple[Path, dict, str, str]] = []
-    occupied_ids = _occupied_marker_ids(juan_dir, manifest, juan_entries)
+    occupied_ids: set[str] = set()
 
     for seq, juan_path in juan_entries:
-        data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+        data = _yaml_load_text(juan_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
         marker_asset = load_marker_asset(juan_dir, manifest, seq)
@@ -544,6 +549,7 @@ def _process_one(
             try:
                 new_voices = _derive_for_bucket(source, len(text), markers)
             except VoiceDerivationProblem as exc:
+                occupied_ids.update(_occupied_marker_ids_for_juan(data, marker_asset))
                 problem = _voice_problem_marker(
                     exc, text_id, seq, short, bucket_name, source, len(text),
                     occupied_ids,
@@ -792,7 +798,7 @@ def _process_one_remove(
 
     if not juan_entries:
         raise RuntimeError(f"no juan files found under {juan_dir}")
-    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    manifest = _yaml_load_text(manifest_path.read_text(encoding="utf-8")) or {}
     if not isinstance(manifest, dict):
         raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
 
@@ -801,7 +807,7 @@ def _process_one_remove(
     pending: list[tuple[Path, dict, str]] = []
 
     for seq, juan_path in juan_entries:
-        data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+        data = _yaml_load_text(juan_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
         data = hydrate_juan_markers(data, load_marker_asset(juan_dir, manifest, seq))
@@ -852,22 +858,16 @@ def _process_one_remove(
     }
 
 
-def _occupied_marker_ids(
-    juan_dir: Path,
-    manifest: dict,
-    juan_entries: list[tuple[int, Path]],
+def _occupied_marker_ids_for_juan(
+    data: dict,
+    marker_asset: dict | None,
 ) -> set[str]:
     occupied: set[str] = set()
-    for seq, juan_path in juan_entries:
-        data = yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
-        if not isinstance(data, dict):
-            continue
-        marker_asset = load_marker_asset(juan_dir, manifest, seq)
-        for bucket_name in _BUCKETS:
-            for marker in effective_markers_for_bucket(data, bucket_name, marker_asset):
-                mid = marker.get("id") if isinstance(marker, dict) else None
-                if isinstance(mid, str) and mid:
-                    occupied.add(mid)
+    for bucket_name in _BUCKETS:
+        for marker in effective_markers_for_bucket(data, bucket_name, marker_asset):
+            mid = marker.get("id") if isinstance(marker, dict) else None
+            if isinstance(mid, str) and mid:
+                occupied.add(mid)
     return occupied
 
 
@@ -1025,7 +1025,7 @@ def _juan_self_hash(juan_dict: dict) -> str:
 def _update_manifest(manifest_path: Path, new_hashes: dict[int, str]) -> None:
     """Patch ``assets.parts[*].hash`` for each updated juan, then recompute
     the manifest's self-hash and rewrite the file."""
-    data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    data = _yaml_load_text(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise RuntimeError(f"{manifest_path.name}: not a mapping")
     assets = data.get("assets")
@@ -1060,7 +1060,7 @@ def _update_manifest_for_voice_add(
     marker_hashes: dict[int, tuple[str, str]],
 ) -> None:
     """Patch changed juan and marker-asset hashes after direct voice writes."""
-    data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    data = _yaml_load_text(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise RuntimeError(f"{manifest_path.name}: not a mapping")
     assets = data.get("assets")

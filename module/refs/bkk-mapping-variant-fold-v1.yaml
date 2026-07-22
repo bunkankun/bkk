@@ -87860,7 +87860,7 @@ entries:
   note: corpus counts 3907 -> 104490
 - id: vf-17572
   source: {cp: U+63BD, char: 掽}
-  replacement: {cp: U+8E2B, char: 碰}
+  replacement: {cp: U+8E2B, char: 踫}
   reason: 'GB2013,Var-to-Rep'
   note: corpus counts 8 -> 212
 - id: vf-17573
@@ -104213,4 +104213,4 @@ entries:
   replacement: {cp: U+983D, char: 頽}
   reason: 'twjp-vardb,tw,reversed'
   note: corpus counts 6888 -> 14297
-hash: sha256:9bc9a4233a10ab6fe6494b31262c157187fd580f02a97cad91be81ccd48f7a20
+hash: sha256:7d600940f94de503e3132521405fc8529094b42713edc85acf5913f3e12be769

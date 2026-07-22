@@ -138,6 +138,96 @@ def test_load_context_real_charset_covers_excluded_with_mapping():
         f"{['U+{:04X}'.format(cp) for cp in missing[:5]]}"
     )
 
+
+def _write_refs(
+    refs_dir: Path,
+    *,
+    source_cp: str = "U+5434",
+    source_char: str = "\u5434",
+    replacement_cp: str = "U+5449",
+    replacement_char: str = "\u5449",
+) -> None:
+    charset = {
+        "canonical_identifier": "bkk:charset/cjk-v1",
+        "inclusion_blocks": [
+            {"name": "cjk", "range": ["U+4E00", "U+9FFF"]},
+        ],
+        "excluded": [
+            {
+                "cp": "U+5434",
+                "char": "\u5434",
+                "reason": "test",
+                "replaced_by": "U+5449",
+            },
+        ],
+    }
+    mapping = {
+        "canonical_identifier": "bkk:mapping/variant-fold-v1",
+        "valid_for_charset": ["bkk:charset/cjk-v1"],
+        "entries": [
+            {
+                "id": "vf-test",
+                "source": {"cp": source_cp, "char": source_char},
+                "replacement": {
+                    "cp": replacement_cp,
+                    "char": replacement_char,
+                },
+                "reason": "test",
+            },
+        ],
+    }
+    (refs_dir / "bkk-charset-cjk-v1.yaml").write_text(
+        yaml.safe_dump(charset, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    (refs_dir / "bkk-mapping-variant-fold-v1.yaml").write_text(
+        yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+
+def test_load_context_rejects_mapping_char_that_disagrees_with_cp(tmp_path: Path):
+    _write_refs(tmp_path, replacement_cp="U+5449", replacement_char="周")
+
+    with pytest.raises(RuntimeError, match="replacement\\.char .* does not match"):
+        load_context(tmp_path)
+
+
+def test_load_context_rejects_noncanonical_replacement(tmp_path: Path):
+    _write_refs(
+        tmp_path,
+        source_cp="U+0042",
+        source_char="B",
+        replacement_cp="U+0041",
+        replacement_char="A",
+    )
+
+    with pytest.raises(RuntimeError, match="replacement U\\+0041 is not in"):
+        load_context(tmp_path)
+
+
+def test_load_context_rejects_replacement_that_disagrees_with_charset(
+    tmp_path: Path,
+):
+    _write_refs(tmp_path, replacement_cp="U+5448", replacement_char="\u5448")
+
+    with pytest.raises(RuntimeError, match="does not match charset replaced_by"):
+        load_context(tmp_path)
+
+
+def test_canonicalize_rejects_invalid_runtime_replacement_cp():
+    ctx = _toy_ctx()
+    ctx.mapping_entries[0x5434] = MappingEntry(
+        entry_id="bad",
+        replacement_cp=0xD800,
+        reason="test",
+        mapping_index=0,
+    )
+
+    with pytest.raises(RuntimeError, match="invalid replacement codepoint"):
+        canonicalize_text(chr(0x5434), ctx)
+
+
 def test_revert_substitution_markers_restores_originals_and_drops_markers():
     src = chr(0x5434)
     repl = chr(0x5449)
