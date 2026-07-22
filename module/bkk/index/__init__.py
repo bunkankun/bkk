@@ -23,8 +23,10 @@ from .parallel import (
 from .parallel_fuzzy_from_scan import discover_fuzzy_from_scan
 from .parallel_lookup import (
     ParallelLookup,
+    ParallelLookupAdoptStats,
     ParallelLookupBuildStats,
     ParallelLookupStaleError,
+    adopt_parallel_lookup_index,
     build_parallel_lookup,
     default_parallel_lookup_path,
 )
@@ -39,9 +41,11 @@ __all__ = [
     "ParallelCluster",
     "ParallelLocation",
     "ParallelLookup",
+    "ParallelLookupAdoptStats",
     "ParallelLookupBuildStats",
     "ParallelLookupStaleError",
     "ParallelScanStats",
+    "adopt_parallel_lookup_index",
     "build_index",
     "build_annotation_index",
     "build_catalog_index",

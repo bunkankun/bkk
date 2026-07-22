@@ -1200,6 +1200,100 @@ def test_parallel_lookup_rejects_stale_sidecar(tmp_path):
         ParallelLookup(out, lookup_path)
 
 
+def test_parallel_lookup_adopt_accepts_compatible_rebuilt_index(tmp_path, capsys):
+    shared = "ADOPT-LOOKUP-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+    build_parallel_lookup(
+        out,
+        lookup_path,
+        min_length=8,
+        anchor_length=4,
+        max_edits=0,
+        partitions=4,
+    )
+
+    conn = sqlite3.connect(out)
+    try:
+        conn.execute(
+            "INSERT INTO meta(key, value) VALUES ('parallel_lookup_test', 'adopt')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(ParallelLookupStaleError):
+        ParallelLookup(out, lookup_path)
+
+    rc = cli_run([
+        "parallel-lookup-adopt",
+        str(out),
+        "--lookup",
+        str(lookup_path),
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "adopted" in captured.out
+    with ParallelLookup(out, lookup_path) as lookup:
+        clusters = lookup.find_at(
+            "KR0a0001",
+            1,
+            4,
+            "body",
+            min_length=8,
+            include_self=False,
+        )
+    assert len(clusters) == 1
+    assert clusters[0].text == shared
+
+    conn = sqlite3.connect(lookup_path)
+    try:
+        meta = dict(conn.execute("SELECT key, value FROM meta"))
+    finally:
+        conn.close()
+    assert meta["index_hash"] == compute_bkkx_hash(out)
+
+
+def test_parallel_lookup_adopt_rejects_invalid_spans(tmp_path, capsys):
+    shared = "ADOPT-BAD-SPAN-PASSAGE"
+    _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")
+    _write_bundle(tmp_path, "KR0a0002", f"cc{shared}dd")
+    out = _merge(tmp_path)
+    lookup_path = tmp_path / "_corpus.bkkp"
+    build_parallel_lookup(
+        out,
+        lookup_path,
+        min_length=8,
+        anchor_length=4,
+        max_edits=0,
+        partitions=4,
+    )
+
+    conn = sqlite3.connect(lookup_path)
+    try:
+        conn.execute(
+            "UPDATE poccurrence SET bucket_id = 999999 "
+            "WHERE rowid = (SELECT rowid FROM poccurrence LIMIT 1)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(SystemExit) as exc:
+        cli_run([
+            "parallel-lookup-adopt",
+            str(out),
+            "--lookup",
+            str(lookup_path),
+        ])
+
+    assert exc.value.code == 2
+    assert "missing bucket_id 999999" in capsys.readouterr().err
+
+
 def test_parallel_lookup_cli_writes_jsonl(tmp_path):
     shared = "CLI-LOOKUP-PASSAGE"
     _write_bundle(tmp_path, "KR0a0001", f"aa{shared}bb")

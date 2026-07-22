@@ -21,6 +21,7 @@ Subcommands::
     python -m bkk.index parallel-fuzzy-from-scan <bkkx_path> <scan.jsonl>
                                                  [--max-edits N] [--out PATH]
     python -m bkk.index parallel-lookup-build <bkkx_path> [--out PATH]
+    python -m bkk.index parallel-lookup-adopt <bkkx_path> [--lookup PATH]
     python -m bkk.index parallel-lookup-at <bkkx_path> <textid> <juan_seq>
                                            <bucket> <offset>
     python -m bkk.index duplications <bkkx_path> [--out PATH]
@@ -59,6 +60,7 @@ from .parallel import discover_parallel_passages, write_parallel_report
 from .parallel_fuzzy_from_scan import discover_fuzzy_from_scan
 from .parallel_lookup import (
     ParallelLookup,
+    adopt_parallel_lookup_index,
     build_parallel_lookup,
     estimate_parallel_lookup_build,
     format_parallel_lookup_dry_run,
@@ -341,31 +343,42 @@ def build_parser() -> argparse.ArgumentParser:
                      help="suppress progress logging")
 
     pla = sub.add_parser(
+        "parallel-lookup-adopt",
+        help="stamp a lookup sidecar as valid for a rebuilt compatible index",
+    )
+    pla.add_argument("index_path", type=Path)
+    pla.add_argument("--lookup", type=Path, default=None,
+                     help="lookup sidecar path (default: <bkkx>.bkkp)")
+    pla.add_argument("--skip-span-check", action="store_true",
+                     help="skip checking that stored bucket-local spans still "
+                          "fit the rebuilt index")
+
+    pat = sub.add_parser(
         "parallel-lookup-at",
         help="query a parallel lookup sidecar at a bucket-local offset",
     )
-    pla.add_argument("index_path", type=Path)
-    pla.add_argument("textid")
-    pla.add_argument("juan_seq", type=int)
-    pla.add_argument("bucket", choices=["front", "body", "back"])
-    pla.add_argument("offset", type=int)
-    pla.add_argument("--lookup", type=Path, default=None,
+    pat.add_argument("index_path", type=Path)
+    pat.add_argument("textid")
+    pat.add_argument("juan_seq", type=int)
+    pat.add_argument("bucket", choices=["front", "body", "back"])
+    pat.add_argument("offset", type=int)
+    pat.add_argument("--lookup", type=Path, default=None,
                      help="lookup sidecar path (default: <bkkx>.bkkp)")
-    pla.add_argument("--out", type=Path, default=None,
+    pat.add_argument("--out", type=Path, default=None,
                      help="output path (default: stdout)")
-    pla.add_argument("--min-length", type=int, default=12,
+    pat.add_argument("--min-length", type=int, default=12,
                      help="minimum passage length (default: 12)")
-    pla.add_argument("--max-edits", type=int, default=0,
+    pat.add_argument("--max-edits", type=int, default=0,
                      help="maximum edit distance to representative (default: 0)")
-    pla.add_argument("--min-occurrences", type=int, default=2,
+    pat.add_argument("--min-occurrences", type=int, default=2,
                      help="minimum locations per cluster (default: 2)")
-    pla.add_argument("--context", type=int, default=20,
+    pat.add_argument("--context", type=int, default=20,
                      help="snippet context around each occurrence (default: 20)")
-    pla.add_argument("--mode", choices=["overlap", "cover"], default="overlap",
+    pat.add_argument("--mode", choices=["overlap", "cover"], default="overlap",
                      help="offset match mode (default: overlap)")
-    pla.add_argument("--include-self", action="store_true",
+    pat.add_argument("--include-self", action="store_true",
                      help="include the queried occurrence in returned locations")
-    pla.add_argument("--format", choices=["jsonl", "tsv"], default="jsonl",
+    pat.add_argument("--format", choices=["jsonl", "tsv"], default="jsonl",
                      help="report format (default: jsonl)")
 
     pd = sub.add_parser(
@@ -872,6 +885,21 @@ def run(argv: list[str] | None = None) -> int:
         print(
             f"wrote {stats.lookup_path} "
             f"({stats.clusters:,} clusters, {stats.occurrences:,} occurrences)"
+        )
+        return 0
+    if args.cmd == "parallel-lookup-adopt":
+        try:
+            stats = adopt_parallel_lookup_index(
+                args.index_path,
+                args.lookup,
+                check_spans=not args.skip_span_check,
+            )
+        except (sqlite3.DatabaseError, OSError, ValueError) as exc:
+            parser.error(str(exc))
+        print(
+            f"adopted {stats.lookup_path} for {args.index_path} "
+            f"({stats.checked_clusters:,} clusters, "
+            f"{stats.checked_occurrences:,} occurrences checked)"
         )
         return 0
     if args.cmd == "parallel-lookup-at":

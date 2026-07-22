@@ -55,6 +55,17 @@ class ParallelLookupBuildStats:
 
 
 @dataclass(frozen=True)
+class ParallelLookupAdoptStats:
+    """Counters from adopting a rebuilt index for an existing lookup sidecar."""
+
+    lookup_path: Path
+    index_hash: str
+    index_signature: str
+    checked_clusters: int
+    checked_occurrences: int
+
+
+@dataclass(frozen=True)
 class ParallelLookupDryRunEstimate:
     """Sampled runtime estimate for ``parallel-lookup-build``."""
 
@@ -536,6 +547,80 @@ def build_parallel_lookup(
     return stats
 
 
+def adopt_parallel_lookup_index(
+    index_path: Path | str,
+    lookup_path: Path | str | None = None,
+    *,
+    check_spans: bool = True,
+) -> ParallelLookupAdoptStats:
+    """Update a lookup sidecar to trust ``index_path`` without rebuilding.
+
+    This is an explicit escape hatch for rebuilt global indices whose unrelated
+    tables changed while the bucket ids and bucket-local offsets used by the
+    sidecar stayed compatible.
+    """
+    index_path = Path(index_path)
+    if not index_path.is_file():
+        raise FileNotFoundError(index_path)
+    lookup_path = (
+        default_parallel_lookup_path(index_path)
+        if lookup_path is None else Path(lookup_path)
+    )
+    if not lookup_path.is_file():
+        raise FileNotFoundError(lookup_path)
+
+    index_conn = sqlite3.connect(f"file:{index_path}?mode=ro", uri=True)
+    index_conn.row_factory = sqlite3.Row
+    lookup_conn = sqlite3.connect(str(lookup_path))
+    lookup_conn.row_factory = sqlite3.Row
+    try:
+        meta = {
+            str(row["key"]): str(row["value"])
+            for row in lookup_conn.execute("SELECT key, value FROM meta")
+        }
+        if meta.get("status") != "complete":
+            raise ParallelLookupStaleError(
+                f"parallel lookup is not complete; rebuild {lookup_path}"
+            )
+        if meta.get("schema_version") != str(LOOKUP_SCHEMA_VERSION):
+            raise ParallelLookupStaleError(
+                f"parallel lookup schema is stale; rebuild {lookup_path}"
+            )
+
+        checked_clusters = 0
+        checked_occurrences = 0
+        if check_spans:
+            checked_clusters, checked_occurrences = _check_lookup_spans(
+                lookup_conn, index_conn
+            )
+
+        index_meta = _index_meta(index_path, index_conn)
+        with lookup_conn:
+            lookup_conn.executemany(
+                "INSERT INTO meta(key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [
+                    ("index_path", index_meta["index_path"]),
+                    ("index_hash", index_meta["index_hash"]),
+                    ("index_signature", index_meta["index_signature"]),
+                    (
+                        "index_schema_version",
+                        index_meta["index_schema_version"],
+                    ),
+                ],
+            )
+        return ParallelLookupAdoptStats(
+            lookup_path=lookup_path,
+            index_hash=index_meta["index_hash"],
+            index_signature=index_meta["index_signature"],
+            checked_clusters=checked_clusters,
+            checked_occurrences=checked_occurrences,
+        )
+    finally:
+        lookup_conn.close()
+        index_conn.close()
+
+
 class ParallelLookup:
     """Read-only point lookup over a ``.bkkx`` plus ``.bkkp`` sidecar."""
 
@@ -845,6 +930,64 @@ def _index_signature(path: Path) -> tuple[int, int, int, int, int]:
         stat.st_mtime_ns,
         stat.st_ctime_ns,
     )
+
+
+def _check_lookup_spans(
+    lookup_conn: sqlite3.Connection,
+    index_conn: sqlite3.Connection,
+) -> tuple[int, int]:
+    bucket_lengths = {
+        int(row["bucket_id"]): len(str(row["text"]))
+        for row in index_conn.execute("SELECT bucket_id, text FROM bucket")
+    }
+
+    checked_occurrences = 0
+    for row in lookup_conn.execute(
+        "SELECT cluster_id, bucket_id, start, end FROM poccurrence "
+        "ORDER BY cluster_id, bucket_id, start, end"
+    ):
+        _check_lookup_span(
+            bucket_lengths,
+            bucket_id=int(row["bucket_id"]),
+            start=int(row["start"]),
+            end=int(row["end"]),
+            label=f"occurrence in cluster {row['cluster_id']}",
+        )
+        checked_occurrences += 1
+
+    checked_clusters = 0
+    for row in lookup_conn.execute(
+        "SELECT cluster_id, rep_bucket_id, rep_start, rep_end FROM pcluster "
+        "ORDER BY cluster_id"
+    ):
+        _check_lookup_span(
+            bucket_lengths,
+            bucket_id=int(row["rep_bucket_id"]),
+            start=int(row["rep_start"]),
+            end=int(row["rep_end"]),
+            label=f"representative span in cluster {row['cluster_id']}",
+        )
+        checked_clusters += 1
+
+    return checked_clusters, checked_occurrences
+
+
+def _check_lookup_span(
+    bucket_lengths: dict[int, int],
+    *,
+    bucket_id: int,
+    start: int,
+    end: int,
+    label: str,
+) -> None:
+    length = bucket_lengths.get(bucket_id)
+    if length is None:
+        raise ValueError(f"{label} references missing bucket_id {bucket_id}")
+    if start < 0 or end < start or end > length:
+        raise ValueError(
+            f"{label} has invalid span {start}:{end} for bucket_id "
+            f"{bucket_id} length {length}"
+        )
 
 
 def _candidate_span_count(work_db: Path) -> int:
