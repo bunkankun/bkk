@@ -23,6 +23,7 @@ interface LocalTocItem {
   bucket: "front" | "body" | "back";
   start: number;
   end: number;
+  level: number;
   marker_id?: string;
 }
 
@@ -51,9 +52,16 @@ function buildItems(manifest: Manifest): JuanItem[] {
   });
 }
 
-function buildLocalItems(manifest: Manifest, seq: number | null): LocalTocItem[] {
+function tocLevel(entry: TocEntry): number {
+  const level = entry.level;
+  return typeof level === "number" && Number.isInteger(level) && level >= 1
+    ? level
+    : 1;
+}
+
+export function buildLocalItems(manifest: Manifest, seq: number | null): LocalTocItem[] {
   if (seq == null) return [];
-  return (manifest.table_of_contents ?? [])
+  const items = (manifest.table_of_contents ?? [])
     .map((entry, index): LocalTocItem | null => {
       const ref = entry.ref;
       if (ref?.seq !== seq) return null;
@@ -70,10 +78,28 @@ function buildLocalItems(manifest: Manifest, seq: number | null): LocalTocItem[]
         bucket,
         start,
         end,
+        level: tocLevel(entry),
         marker_id: ref.marker_id,
       };
     })
     .filter((item): item is LocalTocItem => item != null);
+  return items.map((item, index) => {
+    if (item.end > item.start) return item;
+    const nextPeer = items
+      .slice(index + 1)
+      .find(
+        (candidate) =>
+          candidate.bucket === item.bucket &&
+          candidate.level === item.level &&
+          candidate.start > item.start,
+      );
+    if (!nextPeer) return item;
+    return {
+      ...item,
+      key: `${item.seq}:${item.bucket}:${item.start}:${nextPeer.start}:${index}`,
+      end: nextPeer.start,
+    };
+  });
 }
 
 export function Toc() {
