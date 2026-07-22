@@ -338,6 +338,21 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
           ch={showEdit ? editCursor.ch : activeTextTab?.hoverChar ?? null}
           cp={showEdit ? editCursor.cp : activeTextTab?.hoverCodepoint ?? null}
           offset={showEdit ? editCursor.offset : null}
+          bucket={showEdit ? null : activeTextTab?.hoverBucket ?? null}
+          hoverOffset={showEdit ? null : activeTextTab?.hoverOffset ?? null}
+          bucketLength={showEdit ? null : activeTextTab?.hoverBucketLength ?? null}
+          onJumpToOffset={
+            showEdit || activeTextTab == null
+              ? undefined
+              : (bucket, offset) =>
+                  workspace.highlightTextLocation({
+                    textid: activeTextTab.textid,
+                    seq: activeTextTab.seq,
+                    bucket,
+                    offset,
+                    length: 1,
+                  })
+          }
         />
       )}
     </div>

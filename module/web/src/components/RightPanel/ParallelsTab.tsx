@@ -240,6 +240,7 @@ export function ParallelsTab() {
   const activeSeq = useWorkspace((s) => s.activeSeq);
   const source = useWorkspace((s) => s.parallelsSource);
   const selection = useWorkspace((s) => s.selection);
+  const sectionFocus = useWorkspace((s) => s.sectionFocus);
   const authStatus = useWorkspace((s) => s.auth.status);
   const [offset, setOffset] = useState(0);
   const [response, setResponse] = useState<JuanParallelsResponse | null>(null);
@@ -261,6 +262,11 @@ export function ParallelsTab() {
     selection != null && selection.textid === textid && selection.seq === seq
       ? selection
       : null;
+  const activeSection =
+    sectionFocus != null && sectionFocus.textid === textid && sectionFocus.seq === seq
+      ? sectionFocus
+      : null;
+  const rangeFilter = activeSelection ?? activeSection;
 
   useEffect(() => {
     setOffset(0);
@@ -268,6 +274,9 @@ export function ParallelsTab() {
     activeSelection?.bucket,
     activeSelection?.start,
     activeSelection?.end,
+    activeSection?.bucket,
+    activeSection?.start,
+    activeSection?.end,
   ]);
 
   useEffect(() => {
@@ -318,9 +327,9 @@ export function ParallelsTab() {
     getJuanParallels(textid, seq, {
       offset,
       limit: PAGE_SIZE,
-      bucket: parallelBucket(activeSelection?.bucket),
-      start: activeSelection?.start,
-      end: activeSelection?.end,
+      bucket: parallelBucket(rangeFilter?.bucket),
+      start: rangeFilter?.start,
+      end: rangeFilter?.end,
       minLength: lengthFilter?.min,
       maxLength: lengthFilter?.max,
       sort: sortMode,
@@ -340,9 +349,9 @@ export function ParallelsTab() {
     seq,
     assetState,
     offset,
-    activeSelection?.bucket,
-    activeSelection?.start,
-    activeSelection?.end,
+    rangeFilter?.bucket,
+    rangeFilter?.start,
+    rangeFilter?.end,
     lengthFilter?.min,
     lengthFilter?.max,
     sortMode,
@@ -732,22 +741,35 @@ export function ParallelsTab() {
           </button>
         </div>
       </div>
-      {activeSelection != null && (
+      {rangeFilter != null && (
         <div className="parallel-filter">
           <div>
-            Overlapping “{activeSelection.chars.join("")}”
+            {activeSelection != null
+              ? `Overlapping “${activeSelection.chars.join("")}”`
+              : `Section: ${activeSection?.label ?? ""}`}
             <span>{response.total} result{response.total === 1 ? "" : "s"}</span>
           </div>
-          <button type="button" onClick={() => workspace.setSelection(null)}>clear</button>
+          <button
+            type="button"
+            onClick={() =>
+              activeSelection != null
+                ? workspace.setSelection(null)
+                : workspace.setSectionFocus(null)
+            }
+          >
+            clear
+          </button>
         </div>
       )}
       {response.total === 0 ? (
         <div className="empty">
-          {activeSelection == null
+          {rangeFilter == null
             ? (lengthFilter == null
                 ? "No parallel passages are available for this juan."
                 : "No parallel passages match the current length filter.")
-            : "No parallel passages overlap the selection."}
+            : activeSelection != null
+              ? "No parallel passages overlap the selection."
+              : "No parallel passages overlap this section."}
         </div>
       ) : (
         <>

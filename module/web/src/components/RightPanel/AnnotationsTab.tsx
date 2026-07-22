@@ -9,7 +9,7 @@ import {
   subscribeCoreRecordSaved,
 } from "../../api/client";
 import type { Annotation, SegmentTranslationEntry } from "../../api/types";
-import { useWorkspace, workspace } from "../../state/useWorkspace";
+import { useWorkspace, workspace, type SectionFocus } from "../../state/useWorkspace";
 import {
   locationFilePath,
   selectionContentPreview,
@@ -154,10 +154,24 @@ function randomLocationId(): string {
   return `loc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function annotationInSection(a: Annotation, focus: SectionFocus | null): boolean {
+  if (focus == null) return true;
+  const bucket = a.bucket ?? "body";
+  if (bucket !== focus.bucket) return false;
+  const start = a.offset;
+  const end = start + Math.max(1, a.length ?? 1);
+  return end > focus.start && start < focus.end;
+}
+
 export function AnnotationsTab() {
   const textid = useWorkspace((s) => s.activeTextid);
   const seq = useWorkspace((s) => s.activeSeq);
   const sel = useWorkspace((s) => s.selection);
+  const sectionFocus = useWorkspace((s) =>
+    s.sectionFocus != null && s.sectionFocus.textid === textid && s.sectionFocus.seq === seq
+      ? s.sectionFocus
+      : null,
+  );
   const selectedSegment = useWorkspace((s) => s.selectedSegment);
   const localAnnotations = useWorkspace((s) => s.localAnnotations);
   const selectedAnnId = useWorkspace((s) => s.selectedAnnotationId);
@@ -288,7 +302,7 @@ export function AnnotationsTab() {
   const localKey = `${textid}_${seq}`;
   const locals = localAnnotations[localKey] ?? [];
   const merged = locals.length > 0 ? [...locals, ...anns] : anns;
-  const visible = merged;
+  const visible = merged.filter((a) => annotationInSection(a, sectionFocus));
 
   const selectionLines = sel
     ? [
@@ -472,6 +486,14 @@ export function AnnotationsTab() {
 
   return (
     <div className="rc">
+      {sectionFocus != null && (
+        <div className="section-focus-banner">
+          <span>{sectionFocus.label}</span>
+          <button type="button" onClick={() => workspace.setSectionFocus(null)}>
+            full juan
+          </button>
+        </div>
+      )}
       {sel && sel.textid === textid && sel.seq === seq && (
         <>
           <div className="sel-summary">{sel.chars.join("")}</div>
@@ -632,7 +654,11 @@ export function AnnotationsTab() {
       )}
 
       {visible.length === 0 ? (
-        <div className="empty">No annotations for this juan.</div>
+        <div className="empty">
+          {sectionFocus == null
+            ? "No annotations for this juan."
+            : "No annotations for this section."}
+        </div>
       ) : (
         visible.map((a, i) => {
           const key = a.id ?? `${a.offset}-${i}`;

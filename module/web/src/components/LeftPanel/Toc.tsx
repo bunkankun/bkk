@@ -7,7 +7,7 @@ import type {
   SearchHit,
   TocEntry,
 } from "../../api/types";
-import { useWorkspace, workspace } from "../../state/useWorkspace";
+import { useWorkspace, workspace, type SectionFocus } from "../../state/useWorkspace";
 import { parseMarkerId } from "../../lib/markers";
 
 interface JuanItem {
@@ -16,11 +16,25 @@ interface JuanItem {
   marker_id?: string;
 }
 
+interface LocalTocItem {
+  key: string;
+  label: string;
+  seq: number;
+  bucket: "front" | "body" | "back";
+  start: number;
+  end: number;
+  marker_id?: string;
+}
+
 type SearchLoad =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ok"; response: BundleSearchResponse }
   | { status: "error"; error: string };
+
+function isTocBucket(value: unknown): value is LocalTocItem["bucket"] {
+  return value === "front" || value === "body" || value === "back";
+}
 
 function buildItems(manifest: Manifest): JuanItem[] {
   const parts: ManifestPart[] = manifest.assets?.parts ?? [];
@@ -37,16 +51,42 @@ function buildItems(manifest: Manifest): JuanItem[] {
   });
 }
 
+function buildLocalItems(manifest: Manifest, seq: number | null): LocalTocItem[] {
+  if (seq == null) return [];
+  return (manifest.table_of_contents ?? [])
+    .map((entry, index): LocalTocItem | null => {
+      const ref = entry.ref;
+      if (ref?.seq !== seq) return null;
+      const span = ref.span;
+      if (!span || span.length !== 3) return null;
+      const [bucket, start, end] = span;
+      if (!isTocBucket(bucket) || typeof start !== "number" || typeof end !== "number") {
+        return null;
+      }
+      return {
+        key: `${seq}:${bucket}:${start}:${end}:${index}`,
+        label: entry.label ?? `${bucket} @${start}`,
+        seq,
+        bucket,
+        start,
+        end,
+        marker_id: ref.marker_id,
+      };
+    })
+    .filter((item): item is LocalTocItem => item != null);
+}
+
 export function Toc() {
   const activeTextid = useWorkspace((s) => s.activeTextid);
   const activeSeq = useWorkspace((s) => s.activeSeq);
+  const sectionFocus = useWorkspace((s) => s.sectionFocus);
   const searchDistance = useWorkspace((s) => s.searchPrefs.searchDistance);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [searchLoad, setSearchLoad] = useState<SearchLoad>({ status: "idle" });
-  const [tab, setTab] = useState<"juan" | "results">("juan");
+  const [tab, setTab] = useState<"juan" | "local" | "results">("juan");
 
   useEffect(() => {
     setQuery("");
@@ -112,9 +152,12 @@ export function Toc() {
   if (!manifest) return <div className="empty">Loading…</div>;
 
   const items = buildItems(manifest);
+  const localItems = buildLocalItems(manifest, activeSeq);
   const title = manifest.metadata?.title ?? activeTextid;
   const searching = debouncedQuery.length > 0;
   const showResultsTab = query.trim().length > 0;
+  const showLocalTab = activeSeq != null && localItems.length > 1;
+  const showTabstrip = showResultsTab || showLocalTab;
   const resultsCount =
     searchLoad.status === "ok" ? searchLoad.response.hits.length : null;
 
@@ -154,7 +197,7 @@ export function Toc() {
           </button>
         )}
       </div>
-      {showResultsTab && (
+      {showTabstrip && (
         <div className="toc-tabstrip" role="tablist">
           <button
             type="button"
@@ -163,11 +206,23 @@ export function Toc() {
             onClick={() => setTab("juan")}
             aria-selected={tab === "juan"}
           >
-            Juan
+            巻
           </button>
+          {showLocalTab && (
+            <button
+              type="button"
+              role="tab"
+              className={tab === "local" ? "on" : ""}
+              onClick={() => setTab("local")}
+              aria-selected={tab === "local"}
+            >
+              目次
+            </button>
+          )}
           <button
             type="button"
             role="tab"
+            hidden={!showResultsTab}
             className={tab === "results" ? "on" : ""}
             onClick={() => setTab("results")}
             aria-selected={tab === "results"}
@@ -178,6 +233,12 @@ export function Toc() {
       )}
       {tab === "results" && showResultsTab ? (
         <TocSearchResults load={searchLoad} />
+      ) : tab === "local" && showLocalTab ? (
+        <LocalTocList
+          items={localItems}
+          textid={activeTextid}
+          active={sectionFocus}
+        />
       ) : (
         <TocJuanList items={items} activeSeq={activeSeq} textid={activeTextid} />
       )}
@@ -213,6 +274,58 @@ function TocJuanList({
               <div className="toc-sub">{sub}</div>
             </div>
             <span className="toc-n">{it.seq}</span>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function LocalTocList({
+  items,
+  textid,
+  active,
+}: {
+  items: LocalTocItem[];
+  textid: string;
+  active: SectionFocus | null;
+}) {
+  return (
+    <>
+      {items.map((it) => {
+        const disabled = it.end <= it.start;
+        const parsed = it.marker_id ? parseMarkerId(it.marker_id) : null;
+        const sub = parsed
+          ? `${it.bucket} · ${parsed.edition} · ${parsed.location}`
+          : `${it.bucket} @${it.start}–${it.end}`;
+        const on =
+          active?.textid === textid &&
+          active.seq === it.seq &&
+          active.bucket === it.bucket &&
+          active.start === it.start &&
+          active.end === it.end;
+        return (
+          <div
+            key={it.key}
+            className={`toc-item toc-local-item${on ? " on" : ""}${disabled ? " disabled" : ""}`}
+            onClick={() => {
+              if (disabled) return;
+              workspace.setSectionFocus({
+                textid,
+                seq: it.seq,
+                bucket: it.bucket,
+                start: it.start,
+                end: it.end,
+                label: it.label,
+                markerId: it.marker_id,
+              });
+            }}
+            title={disabled ? "This TOC entry has an empty span" : undefined}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="toc-cjk">{it.label}</div>
+              <div className="toc-sub">{sub}</div>
+            </div>
           </div>
         );
       })}

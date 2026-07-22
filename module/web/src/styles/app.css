@@ -468,6 +468,13 @@ button {
   border-left-color: var(--amb);
   background: var(--amb-d);
 }
+.toc-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.toc-local-item {
+  padding-left: 18px;
+}
 .toc-cjk {
   font-family: var(--fc);
   font-size: 14px;
@@ -1269,6 +1276,44 @@ button {
   color: var(--amb);
   text-decoration: underline;
 }
+.tv-section-focus,
+.section-focus-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--bdr-l);
+  border-radius: 5px;
+  background: var(--bg-ed);
+  color: var(--t2);
+  font-size: 12px;
+}
+.tv-section-focus span,
+.section-focus-banner span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tv-section-focus button,
+.section-focus-banner button {
+  flex: 0 0 auto;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  padding: 3px 7px;
+}
+.tv-section-focus button:hover,
+.section-focus-banner button:hover {
+  border-color: var(--amb);
+  color: var(--amb);
+}
 .tv-parallels-btn {
   border: 1px solid var(--bdr);
   background: var(--bg-pan);
@@ -1872,6 +1917,16 @@ button {
   background: var(--bg-pan);
   min-height: 38px;
   flex-shrink: 0;
+}
+.cib-jumpable {
+  cursor: pointer;
+}
+.cib-jumpable:hover {
+  background: var(--hov);
+}
+.cib-jumpable:focus-visible {
+  outline: 2px solid var(--amb);
+  outline-offset: -2px;
 }
 .cib-g {
   font-family: var(--fc);

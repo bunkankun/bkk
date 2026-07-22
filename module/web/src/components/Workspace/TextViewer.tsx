@@ -27,6 +27,7 @@ import {
   workspace,
   type LineBreakDisplay,
   type LineMode,
+  type SectionFocus,
   type TextDisplayMode,
 } from "../../state/useWorkspace";
 import { parseMarkerId, hasKrpLocation } from "../../lib/markers";
@@ -314,6 +315,7 @@ function buildRenderedChars(
           srcEndOffset: null,
           isPunct: true,
           isNewline: false,
+          markerOffset: punctInjects[punctIdx].offset,
           noteVoice: isInNoteVoice(punctInjects[punctIdx].offset, noteRanges, true),
         });
       }
@@ -451,6 +453,66 @@ function hasBucketText(juan: Juan, bucket: BucketName): boolean {
   return typeof text === "string" && text.length > 0;
 }
 
+function focusKey(focus: SectionFocus | null): string {
+  return focus
+    ? `${focus.textid}:${focus.seq}:${focus.bucket}:${focus.start}:${focus.end}`
+    : "";
+}
+
+function filterBlocksForSection(blocks: Block[], focus: SectionFocus | null): Block[] {
+  if (focus == null || !isBucketName(focus.bucket)) return blocks;
+  return blocks
+    .filter(
+      (block) =>
+        block.bucket === focus.bucket &&
+        block.endOffset > focus.start &&
+        block.startOffset < focus.end,
+    )
+    .map((block) => {
+      const chars = block.chars.filter((char) => {
+        const off = logicalOffset(char);
+        return off == null || (off >= focus.start && off < focus.end);
+      });
+      const startOffset = Math.max(focus.start, firstOffset(chars, block.startOffset));
+      const endOffset = Math.min(focus.end, lastEndOffset(chars, block.endOffset));
+      return {
+        ...block,
+        startOffset,
+        endOffset: Math.max(startOffset, endOffset),
+        chars,
+        estimatedHeight: estimateBlockHeight(chars),
+      };
+    })
+    .filter((block) => block.chars.length > 0);
+}
+
+function jumpTarget(
+  container: HTMLElement,
+  bucket: string,
+  offset: number,
+): HTMLElement | null {
+  let before: { el: HTMLElement; offset: number } | null = null;
+  let after: { el: HTMLElement; offset: number } | null = null;
+  const spans = container.querySelectorAll<HTMLElement>(
+    `span[data-bucket="${bucket}"][data-offset]`,
+  );
+  for (const span of spans) {
+    const start = Number(span.dataset.offset);
+    const end = Number(span.dataset.endOffset);
+    if (Number.isNaN(start)) continue;
+    if (start === offset || (!Number.isNaN(end) && offset > start && offset < end)) {
+      return span;
+    }
+    if (start < offset && (before == null || start > before.offset)) {
+      before = { el: span, offset: start };
+    }
+    if (start > offset && (after == null || start < after.offset)) {
+      after = { el: span, offset: start };
+    }
+  }
+  return after?.el ?? before?.el ?? null;
+}
+
 function firstPageMarker(
   juan: Juan,
 ): { bucket: BucketName; marker: JuanMarker } | null {
@@ -507,6 +569,12 @@ export function TextViewer({
   const showPageBreaks = useWorkspace((s) => s.readPrefs.showPageBreaks);
   const lineBreakDisplay = useWorkspace((s) => s.readPrefs.lineBreakDisplay);
   const textDisplay = useWorkspace((s) => s.readPrefs.textDisplay);
+  const sectionFocus = useWorkspace((s) =>
+    s.sectionFocus?.textid === textid && s.sectionFocus.seq === seq
+      ? s.sectionFocus
+      : null,
+  );
+  const sectionFocusKey = focusKey(sectionFocus);
   const currentPageMarkerId = useWorkspace((s) =>
     s.currentPage && s.currentPage.textid === textid && s.currentPage.seq === seq
       ? s.currentPage.markerId
@@ -608,6 +676,12 @@ export function TextViewer({
     [juan],
   );
 
+  const bucketLengths = useMemo(() => {
+    const lengths = new Map<BucketName, number>();
+    for (const view of bucketViews) lengths.set(view.bucket, [...view.text].length);
+    return lengths;
+  }, [bucketViews]);
+
   // Sorted list of id-bearing markers, used to resolve a selection's
   // anchorMarkerId via binary search.
   const idMarkers = useMemo(() => {
@@ -628,17 +702,22 @@ export function TextViewer({
 
   const blocksByBucket = useMemo(
     () =>
-      bucketViews.map((view) => ({
-        bucket: view.bucket,
-        blocks: buildBlocks(
-          view.bucket,
-          buildRenderedChars(view.text, view.markers, lineMode, textDisplay),
-          view.markers,
-          lineMode,
-          [...view.text].length,
-        ),
-      })),
-    [bucketViews, lineMode, textDisplay],
+      bucketViews
+        .map((view) => ({
+          bucket: view.bucket,
+          blocks: filterBlocksForSection(
+            buildBlocks(
+              view.bucket,
+              buildRenderedChars(view.text, view.markers, lineMode, textDisplay),
+              view.markers,
+              lineMode,
+              [...view.text].length,
+            ),
+            sectionFocus,
+          ),
+        }))
+        .filter((view) => view.blocks.length > 0),
+    [bucketViews, lineMode, textDisplay, sectionFocus],
   );
 
   const blocks = useMemo(
@@ -662,7 +741,7 @@ export function TextViewer({
     setVisibleBlocks(new Set([0]));
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
     workspace.setCurrentPage(null);
-  }, [textid, seq, lineMode]);
+  }, [textid, seq, lineMode, sectionFocusKey]);
 
   // Mount IntersectionObserver after blocks render.
   useEffect(() => {
@@ -927,9 +1006,7 @@ export function TextViewer({
     if (lastFlashedRef.current === pending) return;
     const start = pending.offset;
     const end = pending.offset + Math.max(1, pending.length);
-    const target = containerRef.current.querySelector<HTMLElement>(
-      `span[data-bucket="${pending.bucket}"][data-offset="${start}"]`,
-    );
+    const target = jumpTarget(containerRef.current, pending.bucket, start);
     if (!target) return;
     lastFlashedRef.current = pending;
     target.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1113,7 +1190,6 @@ export function TextViewer({
       data-tab-id={tabId}
       ref={scrollRef}
       onMouseUp={handleMouseUp}
-      onMouseLeave={() => workspace.setHover(paneId, tabId, null)}
     >
       <div className="tv-title">
         <h1>{title}</h1>
@@ -1140,6 +1216,14 @@ export function TextViewer({
             <span className="tv-alt-ids"> {altIds.join(" ")}</span>
           ) : null}
         </h2>
+        {sectionFocus != null ? (
+          <div className="tv-section-focus">
+            <span>{sectionFocus.label}</span>
+            <button type="button" onClick={() => workspace.setSectionFocus(null)}>
+              full juan
+            </button>
+          </div>
+        ) : null}
       </div>
       <div
         className={`tv-body tv-body-${lineMode}${translationAlign && lineMode === "phrase" ? " tv-body-translation-align" : ""}${showPageBreaks ? " tv-show-pb" : ""} tv-lb-${lineBreakDisplay}`}
@@ -1168,6 +1252,7 @@ export function TextViewer({
                   resolveAnchor={resolveAnchor}
                   lineBreakDisplay={lineBreakDisplay}
                   activeEdition={activeEdition}
+                  bucketLength={bucketLengths.get(view.bucket) ?? 0}
                   onAlignClick={translationAlign ? syncSourceBlock : undefined}
                 />
               );
@@ -1196,6 +1281,7 @@ interface BlockViewProps {
   ) => { anchorMarkerId: string | null; anchorOffset: number };
   lineBreakDisplay: LineBreakDisplay;
   activeEdition: string | null;
+  bucketLength: number;
   onAlignClick?: (block: Block) => void;
 }
 
@@ -1213,6 +1299,7 @@ function BlockView({
   resolveAnchor,
   lineBreakDisplay,
   activeEdition,
+  bucketLength,
   onAlignClick,
 }: BlockViewProps) {
   const Tag = block.tagName;
@@ -1295,7 +1382,13 @@ function BlockView({
             data-offset={off}
             data-end-offset={rc.srcEndOffset ?? off + 1}
             title={title}
-            onMouseEnter={() => workspace.setHover(paneId, tabId, rc.ch)}
+            onMouseEnter={() =>
+              workspace.setHover(paneId, tabId, rc.ch, {
+                bucket: block.bucket,
+                offset: off,
+                bucketLength,
+              })
+            }
             onClick={(ev) => {
               if (!has) return;
               // Suppress when this click is part of a drag-selection — let

@@ -65,6 +65,7 @@ interface SourceTextProps {
   row: TranslationAlignedRow;
   paneId: string;
   tabId: string;
+  bucketLength: number;
   annIndex: AnnotationIndex;
   flashOffsets: { start: number; end: number } | null;
   onAnnClick: (
@@ -80,6 +81,7 @@ function SourceText({
   row,
   paneId,
   tabId,
+  bucketLength,
   annIndex,
   flashOffsets,
   onAnnClick,
@@ -111,7 +113,13 @@ function SourceText({
             data-anchor-id={row.source_marker_id}
             data-anchor-row-offset={row.source_offset}
             title={title}
-            onMouseEnter={() => workspace.setHover(paneId, tabId, c.ch)}
+            onMouseEnter={() =>
+              workspace.setHover(paneId, tabId, c.ch, {
+                bucket: "body",
+                offset: absOffset,
+                bucketLength,
+              })
+            }
             onClick={(ev) => {
               if (!has) return;
               const sel = window.getSelection();
@@ -206,6 +214,10 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
   }, [textid, seq]);
 
   const annIndex = useMemo(() => buildAnnotationIndex(annotations), [annotations]);
+  const sourceBucketLength = useMemo(
+    () => Math.max(0, ...((alignment?.rows ?? []).map((row) => row.source_end))),
+    [alignment],
+  );
 
   useEffect(() => {
     if (!selectedSegment || !alignment) return;
@@ -433,7 +445,6 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
       className="ec"
       ref={scrollRef}
       onMouseUp={handleMouseUp}
-      onMouseLeave={() => workspace.setHover(paneId, tabId, null)}
     >
       <div className="tv-title">
         <h1>{title}</h1>
@@ -492,6 +503,7 @@ export function TranslationViewer({ paneId, tabId, textid, seq, translationId }:
                   row={row}
                   paneId={paneId}
                   tabId={tabId}
+                  bucketLength={sourceBucketLength}
                   annIndex={annIndex}
                   flashOffsets={flashOffsets}
                   onAnnClick={handleAnnClick}

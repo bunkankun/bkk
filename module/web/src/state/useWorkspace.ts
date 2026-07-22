@@ -193,6 +193,16 @@ export interface CurrentPage {
   offset: number;
 }
 
+export interface SectionFocus {
+  textid: string;
+  seq: number;
+  bucket: string;
+  start: number;
+  end: number;
+  label: string;
+  markerId?: string;
+}
+
 export interface SelectionRange {
   textid: string;
   seq: number;
@@ -236,6 +246,9 @@ export interface TextTab {
   editTarget?: BundleEditTarget | null;
   hoverChar?: string | null;
   hoverCodepoint?: number | null;
+  hoverBucket?: string | null;
+  hoverOffset?: number | null;
+  hoverBucketLength?: number | null;
 }
 
 export interface CoreRecordTab {
@@ -316,6 +329,9 @@ export interface WorkspaceState {
   listFilterMode: ListFilterMode;
   // a search-result span the TextViewer should scroll to + flash, then clear.
   pendingHighlight: PendingHighlight | null;
+  // Optional TOC-local section range. When set, text, annotations, and
+  // per-juan parallels are narrowed to this range.
+  sectionFocus: SectionFocus | null;
   // the page-break the user is currently viewing in Inspect mode; drives the
   // ImagePanel. Updated by TextViewer's page-anchor IntersectionObserver
   // and by ImagePanel's prev/next toolbar.
@@ -684,6 +700,7 @@ let state: WorkspaceState = {
   activeListPaths: [],
   listFilterMode: loadListFilterMode(),
   pendingHighlight: null,
+  sectionFocus: null,
   currentPage: null,
   readPrefs: loadReadPrefs(),
   searchPrefs: loadSearchPrefs(),
@@ -1981,9 +1998,17 @@ export const workspace = {
     notify();
     scheduleSessionSave();
   },
-  setHover(paneId: string, tabId: string, char: string | null) {
+  setHover(
+    paneId: string,
+    tabId: string,
+    char: string | null,
+    location?: { bucket: string; offset: number; bucketLength: number } | null,
+  ) {
     const hoverChar = char && char.length > 0 ? char : null;
     const hoverCodepoint = hoverChar ? hoverChar.codePointAt(0) ?? null : null;
+    const hoverBucket = hoverChar && location ? location.bucket : null;
+    const hoverOffset = hoverChar && location ? location.offset : null;
+    const hoverBucketLength = hoverChar && location ? location.bucketLength : null;
     state = {
       ...state,
       pane: mapPaneLeaves(state.pane, (leaf) => {
@@ -1992,7 +2017,14 @@ export const workspace = {
           ...leaf,
           tabs: leaf.tabs.map((tab) =>
             tab.id === tabId && tab.type === "text"
-              ? { ...tab, hoverChar, hoverCodepoint }
+              ? {
+                  ...tab,
+                  hoverChar,
+                  hoverCodepoint,
+                  hoverBucket,
+                  hoverOffset,
+                  hoverBucketLength,
+                }
               : tab,
           ),
         };
@@ -2002,6 +2034,27 @@ export const workspace = {
   },
   setSelection(sel: SelectionRange | null) {
     state = { ...state, selection: sel, coreTarget: null };
+    notify();
+  },
+  setSectionFocus(focus: SectionFocus | null) {
+    state = {
+      ...state,
+      sectionFocus: focus,
+      selection: null,
+      selectedAnnotationId: null,
+      selectedSegment: null,
+      pendingHighlight:
+        focus == null
+          ? state.pendingHighlight
+          : {
+              textid: focus.textid,
+              seq: focus.seq,
+              bucket: focus.bucket,
+              offset: focus.start,
+              length: Math.max(1, Math.min(8, focus.end - focus.start)),
+              flash: false,
+            },
+    };
     notify();
   },
   setSelectedAnnotationId(id: string | null) {
@@ -2087,6 +2140,12 @@ export const workspace = {
       activeTextid: textTab?.textid ?? state.activeTextid,
       activeSeq: textTab?.seq ?? state.activeSeq,
       selectedTranslation: textTab ? textTab.selectedTranslation ?? null : state.selectedTranslation,
+      sectionFocus:
+        textTab != null &&
+        state.sectionFocus?.textid === textTab.textid &&
+        state.sectionFocus.seq === textTab.seq
+          ? state.sectionFocus
+          : null,
     };
     notify();
   },
@@ -2108,6 +2167,12 @@ export const workspace = {
       activeTextid: textTab?.textid ?? state.activeTextid,
       activeSeq: textTab?.seq ?? state.activeSeq,
       selectedTranslation: textTab ? textTab.selectedTranslation ?? null : state.selectedTranslation,
+      sectionFocus:
+        textTab != null &&
+        state.sectionFocus?.textid === textTab.textid &&
+        state.sectionFocus.seq === textTab.seq
+          ? state.sectionFocus
+          : null,
       pane: mapPaneLeaves(state.pane, (leaf) =>
         leaf.id === paneId ? { ...leaf, activeTabId: tabId } : leaf,
       ),
@@ -2156,6 +2221,7 @@ export const workspace = {
       selectedTranslation:
         state.selectedTranslation?.source_textid === textid ? state.selectedTranslation : null,
       selection: null,
+      sectionFocus: null,
       currentPage: null,
       activity,
       pane,
@@ -2200,6 +2266,7 @@ export const workspace = {
       activeSeq: seq,
       focusedPaneId,
       selection: null,
+      sectionFocus: null,
       currentPage: null,
       pane,
       activity: "overlays",
@@ -2239,6 +2306,7 @@ export const workspace = {
       focusedPaneId,
       selectedTranslation: tab.selectedTranslation ?? null,
       selection: keepSelection ? state.selection : null,
+      sectionFocus: null,
       currentPage: null,
       pane,
       activity,
@@ -2414,6 +2482,7 @@ export const workspace = {
       activeTextid: null,
       activeSeq: null,
       selection: null,
+      sectionFocus: null,
       currentPage: null,
       selectedTranslation: null,
       selectedSegment: null,
@@ -2892,6 +2961,7 @@ export const workspace = {
       focusedPaneId,
       selectedTranslation: tab.selectedTranslation ?? null,
       selection: null,
+      sectionFocus: null,
       currentPage: null,
       pane,
       activity: textActivity(tab),
@@ -3122,6 +3192,7 @@ export const workspace = {
         focusedPaneId: plan.leafId,
         selectedTranslation: focusedText?.selectedTranslation ?? null,
         selection: keepSelection ? state.selection : null,
+        sectionFocus: null,
         currentPage: null,
         pane: nextPane,
         activity: focusedText ? textActivity(focusedText) : "texts",
@@ -3154,6 +3225,7 @@ export const workspace = {
         focusedPaneId: plan.leafId,
         selectedTranslation: newTab.selectedTranslation ?? null,
         selection: keepSelection ? state.selection : null,
+        sectionFocus: null,
         currentPage: null,
         pane: nextPane,
         activity: textActivity(newTab),
@@ -3179,6 +3251,7 @@ export const workspace = {
       focusedPaneId,
       selectedTranslation: tab.selectedTranslation ?? null,
       selection: null,
+      sectionFocus: null,
       currentPage: null,
       pane,
       activity: textActivity(tab),
