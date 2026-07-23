@@ -50,6 +50,7 @@ class VariantOverlayOut(BaseModel):
 
 class HitOut(BaseModel):
     textid: str
+    title: str | None = None
     juan_seq: int
     bucket: str
     master_offset: int

@@ -498,6 +498,7 @@ export interface VariantOverlay {
 
 export interface SearchHit {
   textid: string;
+  title?: string | null;
   juan_seq: number;
   bucket: string;
   master_offset: number;

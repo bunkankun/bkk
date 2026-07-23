@@ -1258,7 +1258,10 @@ def search(
         limit=limit,
         sort=sort,
         facets=facets,
-        hits=[hit_out(h.textid, h) for h in page],
+        hits=[
+            hit_out(h.textid, h, title=meta.get(h.textid).title if h.textid in meta else None)
+            for h in page
+        ],
     )
 
 

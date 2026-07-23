@@ -342,6 +342,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
           bucket={showEdit ? null : activeTextTab?.hoverBucket ?? null}
           hoverOffset={showEdit ? null : activeTextTab?.hoverOffset ?? null}
           bucketLength={showEdit ? null : activeTextTab?.hoverBucketLength ?? null}
+          voice={showEdit ? null : activeTextTab?.hoverVoice ?? null}
           onJumpToOffset={
             showEdit || activeTextTab == null
               ? undefined

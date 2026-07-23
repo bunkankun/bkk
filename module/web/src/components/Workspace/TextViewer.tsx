@@ -36,12 +36,12 @@ import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
 const PHRASE_END_RE = /[。！？；，：]/;
 const PHRASE_LINE_OPENER_RE = /^[「『《〈（(〔【]$/;
-const PHRASE_LINE_NONSTART_RE = /^[，、。：；！？」』》〉）)〕】]$/;
+const PHRASE_LINE_NONSTART_RE = /^[，、。：；！？．/」』》〉）)〕】]$/;
 const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
 const BUCKETS = ["front", "body", "back"] as const;
 
 type BucketName = (typeof BUCKETS)[number];
-type VoiceRange = { start: number; end: number };
+type VoiceRange = { start: number; end: number; name: string };
 type EditionSelection = string | null;
 
 interface EditionOption {
@@ -91,6 +91,7 @@ interface RenderedChar {
   // canonical source character.
   markerOffset?: number;
   layout?: { type: "indent" };
+  voice?: string;
   noteVoice?: boolean;
 }
 
@@ -186,16 +187,19 @@ function pageLabel(id: string): string {
   return raw.replace(/^\d{3,4}-/, "");
 }
 
-function noteVoiceRanges(markers: JuanMarker[]): VoiceRange[] {
+function voiceRanges(markers: JuanMarker[]): VoiceRange[] {
   const ranges: VoiceRange[] = [];
   for (const m of markers) {
-    if (m.type !== "voice" || m.name !== "note") continue;
+    if (m.type !== "voice") continue;
     const start = typeof m.offset === "number" ? m.offset : null;
     const length = typeof m.length === "number" ? m.length : null;
+    const name = typeof m.name === "string" && m.name.trim()
+      ? m.name.trim()
+      : null;
     if (start == null || length == null || length <= 0) continue;
-    ranges.push({ start, end: start + length });
+    ranges.push({ start, end: start + length, name: name ?? "default" });
   }
-  ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+  ranges.sort((a, b) => a.start - b.start || b.end - a.end);
   return ranges;
 }
 
@@ -217,11 +221,11 @@ function substitutionOriginals(markers: JuanMarker[]): Map<number, string> {
   return out;
 }
 
-function isInNoteVoice(
+function voiceAtOffset(
   offset: number,
   ranges: VoiceRange[],
   includeEnd = false,
-): boolean {
+): string {
   let lo = 0;
   let hi = ranges.length - 1;
   let best = -1;
@@ -234,9 +238,14 @@ function isInNoteVoice(
       hi = mid - 1;
     }
   }
-  if (best < 0) return false;
-  const range = ranges[best];
-  return includeEnd ? offset <= range.end : offset < range.end;
+  for (let i = best; i >= 0; i--) {
+    const range = ranges[i];
+    if (range.start > offset) continue;
+    if (includeEnd ? offset <= range.end : offset < range.end) {
+      return range.name;
+    }
+  }
+  return "default";
 }
 
 // Build the rendered char stream: decode PUA refs, then inject punctuation
@@ -256,7 +265,7 @@ export function buildRenderedChars(
     : new Map<number, string>();
   const bodyLength = [...bodyText].length;
   const charAtOffset = new Map(chars.map((c) => [c.srcOffset, originals.get(c.srcOffset) ?? c.ch]));
-  const noteRanges = noteVoiceRanges(markers);
+  const voices = voiceRanges(markers);
 
   type PunctInject = { offset: number; content: string };
   type PageInject = { offset: number; id: string };
@@ -311,6 +320,7 @@ export function buildRenderedChars(
     }
     while (layoutIdx < layoutInjects.length && layoutInjects[layoutIdx].offset === i) {
       const layout = layoutInjects[layoutIdx];
+      const voice = voiceAtOffset(layout.offset, voices, true);
       out.push({
         ch: layout.content,
         srcOffset: null,
@@ -319,11 +329,13 @@ export function buildRenderedChars(
         isNewline: false,
         markerOffset: layout.offset,
         layout: { type: layout.type },
-        noteVoice: isInNoteVoice(layout.offset, noteRanges, true),
+        voice,
+        noteVoice: voice === "note",
       });
       layoutIdx++;
     }
     while (punctIdx < punctInjects.length && punctInjects[punctIdx].offset === i) {
+      const voice = voiceAtOffset(punctInjects[punctIdx].offset, voices, true);
       for (const ch of [...punctInjects[punctIdx].content]) {
         out.push({
           ch,
@@ -332,7 +344,8 @@ export function buildRenderedChars(
           isPunct: true,
           isNewline: false,
           markerOffset: punctInjects[punctIdx].offset,
-          noteVoice: isInNoteVoice(punctInjects[punctIdx].offset, noteRanges, true),
+          voice,
+          noteVoice: voice === "note",
         });
       }
       punctIdx++;
@@ -340,13 +353,15 @@ export function buildRenderedChars(
     while (charIdx < chars.length && chars[charIdx].srcOffset === i) {
       const c = chars[charIdx];
       const ch = originals.get(c.srcOffset) ?? c.ch;
+      const voice = voiceAtOffset(c.srcOffset, voices);
       out.push({
         ch,
         srcOffset: c.srcOffset,
         srcEndOffset: c.srcEndOffset,
         isPunct: PUNCT_RE.test(ch),
         isNewline: ch === "\n",
-        noteVoice: isInNoteVoice(c.srcOffset, noteRanges),
+        voice,
+        noteVoice: voice === "note",
       });
       charIdx++;
     }
@@ -669,6 +684,7 @@ export function TextViewer({
   const [annotations, setAnnotations] = useState<Annotation[] | null>(null);
   const [hasParallels, setHasParallels] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const contentReady = juan != null && annotations != null;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pending = useWorkspace((s) => s.pendingHighlight);
@@ -895,7 +911,7 @@ export function TextViewer({
   }, [textid, seq, lineMode, sectionFocusKey]);
 
   useEffect(() => {
-    if (blocks.length === 0) return;
+    if (!contentReady || blocks.length === 0) return;
     const initial = initialVisibleBlockIndexes(
       blocks,
       scrollRef.current?.clientHeight ?? null,
@@ -911,10 +927,14 @@ export function TextViewer({
       }
       return changed ? next : prev;
     });
-  }, [blocks]);
+  }, [blocks, contentReady]);
 
   useEffect(() => {
-    if (editionScrollTargetRef.current == null || mappedEditionTarget == null) return;
+    if (
+      !contentReady ||
+      editionScrollTargetRef.current == null ||
+      mappedEditionTarget == null
+    ) return;
     const targetIdx = blocks.findIndex(
       (b) =>
         b.bucket === mappedEditionTarget.bucket &&
@@ -933,9 +953,10 @@ export function TextViewer({
       }
       return changed ? next : prev;
     });
-  }, [mappedEditionTarget, blocks]);
+  }, [mappedEditionTarget, blocks, contentReady]);
 
   useLayoutEffect(() => {
+    if (!contentReady) return;
     const pendingEditionTarget = editionScrollTargetRef.current;
     if (pendingEditionTarget == null || mappedEditionTarget == null) return;
     const root = scrollRef.current;
@@ -969,13 +990,13 @@ export function TextViewer({
       root.scrollTop = max * pendingEditionTarget.scrollRatio;
     }
     editionScrollTargetRef.current = null;
-  }, [mappedEditionTarget, visibleBlocks, blocks, textid, seq]);
+  }, [mappedEditionTarget, visibleBlocks, blocks, textid, seq, contentReady]);
 
   // Mount IntersectionObserver after blocks render.
   useEffect(() => {
     const root = scrollRef.current;
     const container = containerRef.current;
-    if (!root || !container || blocks.length === 0) return;
+    if (!contentReady || !root || !container || blocks.length === 0) return;
     const obs = new IntersectionObserver(
       (entries) => {
         const newly: number[] = [];
@@ -1003,7 +1024,7 @@ export function TextViewer({
     const placeholders = container.querySelectorAll<HTMLElement>("[data-block-idx]");
     placeholders.forEach((el) => obs.observe(el));
     return () => obs.disconnect();
-  }, [blocks]);
+  }, [blocks, contentReady]);
 
   // Emit the source offset nearest the top of this pane so the translation
   // sidecar can follow manual source scrolling. This is intentionally DOM
@@ -1011,7 +1032,7 @@ export function TextViewer({
   useEffect(() => {
     const root = scrollRef.current;
     const container = containerRef.current;
-    if (!root || !container || blocks.length === 0) return;
+    if (!contentReady || !root || !container || blocks.length === 0) return;
     let raf = 0;
     const emit = () => {
       raf = 0;
@@ -1062,12 +1083,12 @@ export function TextViewer({
       root.removeEventListener("scroll", schedule);
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [blocks, visibleBlocks, paneId, tabId, textid, seq, translationAlign]);
+  }, [blocks, visibleBlocks, paneId, tabId, textid, seq, translationAlign, contentReady]);
 
   useEffect(() => {
     const root = scrollRef.current;
     const container = containerRef.current;
-    if (!root || !container || blocks.length === 0) return;
+    if (!contentReady || !root || !container || blocks.length === 0) return;
     const onTranslationScroll = (event: Event) => {
       const detail = (event as CustomEvent<{
         paneId?: string;
@@ -1130,7 +1151,7 @@ export function TextViewer({
     };
     window.addEventListener("bkk:translation-scroll-sync", onTranslationScroll);
     return () => window.removeEventListener("bkk:translation-scroll-sync", onTranslationScroll);
-  }, [blocks, paneId, tabId, textid, seq]);
+  }, [blocks, paneId, tabId, textid, seq, contentReady]);
 
   // Page-anchor observer: tracks the topmost page-break anchor in the upper
   // ~15% of the scroll viewport and reports it as currentPage. Distinct from
@@ -1139,7 +1160,7 @@ export function TextViewer({
   useEffect(() => {
     const root = scrollRef.current;
     const container = containerRef.current;
-    if (!root || !container) return;
+    if (!contentReady || !root || !container) return;
     const visible = new Map<Element, { id: string; offset: number; bucket: BucketName }>();
     const obs = new IntersectionObserver(
       (entries) => {
@@ -1179,7 +1200,7 @@ export function TextViewer({
     const anchors = container.querySelectorAll<HTMLElement>(".page-anchor");
     anchors.forEach((el) => obs.observe(el));
     return () => obs.disconnect();
-  }, [blocks, visibleBlocks, textid, seq]);
+  }, [blocks, visibleBlocks, textid, seq, contentReady]);
 
   // Consume pendingHighlight from a search-result click: ensure the target
   // block and everything before it are mounted, then scroll + flash on next
@@ -1220,6 +1241,7 @@ export function TextViewer({
 
   useLayoutEffect(() => {
     if (
+      !contentReady ||
       pending == null ||
       pending.textid !== textid ||
       pending.seq !== seq ||
@@ -1243,7 +1265,7 @@ export function TextViewer({
       setFlashOffsets({ start, end });
     }
     workspace.consumeHighlight();
-  }, [pending, textid, seq, visibleBlocks, blocks]);
+  }, [pending, textid, seq, visibleBlocks, blocks, contentReady]);
 
   // Clear the flash after a delay. Decoupled from the flash-set effect so
   // its cleanup can't nuke the timer when unrelated deps change.
@@ -1637,6 +1659,7 @@ function BlockView({
                 bucket: block.bucket,
                 offset: off,
                 bucketLength,
+                voice: rc.voice ?? "default",
               })
             }
             onClick={(ev) => {

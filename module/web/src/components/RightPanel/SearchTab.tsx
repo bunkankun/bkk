@@ -390,6 +390,7 @@ function DateFacet({
 
 function HitRow({ hit }: { hit: SearchHit }) {
   const witness = hit.matched_via !== "master" ? hit.matched_via : null;
+  const voiceLabel = hit.voice && hit.voice !== "none" ? hit.voice : null;
   const left = trimLeftContext(hit.left);
   const right = trimRightContext(hit.right);
   const leftElided = left.length < hit.left.length;
@@ -422,13 +423,20 @@ function HitRow({ hit }: { hit: SearchHit }) {
       type="button"
       className="kwic-row"
       onClick={() => workspace.openHit(hit)}
-      title={`${hit.textid} · juan ${hit.juan_seq} · ${hit.bucket} @${hit.master_offset}`}
+      title={[
+        hit.title ? `${hit.title} (${hit.textid})` : hit.textid,
+        `juan ${hit.juan_seq}`,
+        `${hit.bucket} @${hit.master_offset}`,
+        hit.toc_label,
+        voiceLabel ? `voice: ${voiceLabel}` : null,
+      ].filter(Boolean).join(" · ")}
     >
       <div className="kwic-meta">
         {hit.toc_label ? <span className="kwic-label">{hit.toc_label}</span> : null}
         <span className={`kwic-textid ${krClass(hit.textid)}`}>{hit.textid}</span>
         <span className="kwic-juan">juan {hit.juan_seq}</span>
         {hit.bucket !== "body" ? <span className="kwic-chip">{hit.bucket}</span> : null}
+        {voiceLabel ? <span className="kwic-chip">{voiceLabel}</span> : null}
         {witness ? <span className="kwic-chip">{witness}</span> : null}
         {badges.map((badge) => (
           <span

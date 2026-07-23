@@ -9,6 +9,7 @@ export function CharInfoBar({
   bucket = null,
   hoverOffset = null,
   bucketLength = null,
+  voice = null,
   onJumpToOffset,
 }: {
   ch: string | null;
@@ -17,6 +18,7 @@ export function CharInfoBar({
   bucket?: string | null;
   hoverOffset?: number | null;
   bucketLength?: number | null;
+  voice?: string | null;
   onJumpToOffset?: (bucket: string, offset: number) => void;
 }) {
   const canJump =
@@ -26,7 +28,7 @@ export function CharInfoBar({
     bucketLength > 0 &&
     onJumpToOffset != null;
   const locationLabel = bucket != null && hoverOffset != null
-    ? `${bucket} @ ${hoverOffset}`
+    ? `${bucket} @ ${hoverOffset}${voice ? ` · ${voice}` : ""}`
     : offset != null
       ? `Offset ${offset}`
       : null;

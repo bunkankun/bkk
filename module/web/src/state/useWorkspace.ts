@@ -255,6 +255,7 @@ export interface TextTab {
   hoverBucket?: string | null;
   hoverOffset?: number | null;
   hoverBucketLength?: number | null;
+  hoverVoice?: string | null;
 }
 
 export interface CoreRecordTab {
@@ -2035,13 +2036,14 @@ export const workspace = {
     paneId: string,
     tabId: string,
     char: string | null,
-    location?: { bucket: string; offset: number; bucketLength: number } | null,
+    location?: { bucket: string; offset: number; bucketLength: number; voice?: string | null } | null,
   ) {
     const hoverChar = char && char.length > 0 ? char : null;
     const hoverCodepoint = hoverChar ? hoverChar.codePointAt(0) ?? null : null;
     const hoverBucket = hoverChar && location ? location.bucket : null;
     const hoverOffset = hoverChar && location ? location.offset : null;
     const hoverBucketLength = hoverChar && location ? location.bucketLength : null;
+    const hoverVoice = hoverChar && location ? location.voice ?? "default" : null;
     state = {
       ...state,
       pane: mapPaneLeaves(state.pane, (leaf) => {
@@ -2057,6 +2059,7 @@ export const workspace = {
                   hoverBucket,
                   hoverOffset,
                   hoverBucketLength,
+                  hoverVoice,
                 }
               : tab,
           ),

@@ -25,6 +25,7 @@ def test_search_master_hit(client):
     assert body["total"] >= 1
     hit = body["hits"][0]
     assert hit["textid"] == "TEST0001"
+    assert hit["title"] == "天干"
     assert hit["bucket"] == "body"
     assert hit["match"] == "丙丁"
     assert hit["matched_via"] == "master"

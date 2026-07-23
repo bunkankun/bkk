@@ -25,10 +25,11 @@ def hit_recipe(textid: str, hit: Hit) -> dict:
     }
 
 
-def hit_out(textid: str, h: Hit) -> HitOut:
+def hit_out(textid: str, h: Hit, *, title: str | None = None) -> HitOut:
     """Build the :class:`HitOut` response model for a single ``Hit``."""
     return HitOut(
         textid=h.textid,
+        title=title,
         juan_seq=h.juan_seq,
         bucket=h.bucket,
         master_offset=h.master_offset,

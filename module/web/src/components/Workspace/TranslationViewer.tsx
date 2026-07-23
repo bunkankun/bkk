@@ -118,6 +118,7 @@ function SourceText({
                 bucket: "body",
                 offset: absOffset,
                 bucketLength,
+                voice: "default",
               })
             }
             onClick={(ev) => {
