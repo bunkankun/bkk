@@ -23,7 +23,8 @@ _HEAD_CUES = (
 )
 
 _LABELS = (
-    "補藻", "補注", "補音", "補義", "補遺", "補正", "補",
+    "補藻", "補注", "補音", "補義", "補遺", "補正", "韻藻",
+    "補", "藻", "增",
 )
 
 _SOURCE_CUES = tuple(sorted({
@@ -37,6 +38,8 @@ _SOURCE_CUES = tuple(sorted({
 }, key=len, reverse=True))
 
 _MAX_LEMMA_LEN = 4
+_LEMMA_HINT_WINDOW = 32
+_LEMMA_BOUNDARY_CHARS = frozenset("也注又曰云矣耳焉者兮乎哉乃則")
 
 
 def derive_dictionary_voice_markers(
@@ -60,14 +63,16 @@ def derive_dictionary_voice_markers(
         if end <= start or PLACEHOLDER not in text[start:end]:
             continue
         segment = text[start:end]
-        candidates = _lemma_candidates(segment, head)
+        candidates = _head_gloss_candidates(segment, head)
+        candidates.extend(_lemma_candidates(segment, head))
+        candidates.sort(key=lambda c: (c["lemma_start"], c["source_start"]))
         for i, candidate in enumerate(candidates):
             next_lemma_start = (
                 candidates[i + 1]["lemma_start"]
                 if i + 1 < len(candidates) else len(segment)
             )
             span_start = candidate["source_start"]
-            span_end = next_lemma_start
+            span_end = min(candidate.get("span_end", len(segment)), next_lemma_start)
             if span_end <= span_start:
                 continue
             span = segment[span_start:span_end]
@@ -123,14 +128,39 @@ def _head_from_line(line: str) -> str | None:
     found: list[tuple[int, str]] = []
     for cue in _HEAD_CUES:
         pos = line.find(cue)
-        if 1 <= pos <= 8:
+        if 1 <= pos <= 8 and "切" not in line[:pos]:
             found.append((pos, cue))
     for pos, _cue in sorted(found):
         if not _has_label_prefix(line[:pos]):
             head = line[pos - 1]
             if _is_lemma_char(head):
                 return head
+    if line and _is_lemma_char(line[0]):
+        cut_pos = line.find("切", 2, 9)
+        if cut_pos >= 2 and all(_is_lemma_char(ch) for ch in line[1:cut_pos]):
+            return line[0]
     return None
+
+
+def _head_gloss_candidates(line: str, head: str) -> list[dict]:
+    if not line.startswith(head):
+        return []
+    cut_pos = line.find("切", 2, 9)
+    if cut_pos < 0:
+        return []
+    label_start = _first_label_start(line[cut_pos + 1:])
+    if label_start is None:
+        return []
+    label_start += cut_pos + 1
+    source_start = cut_pos + 1
+    if PLACEHOLDER not in line[source_start:label_start]:
+        return []
+    return [{
+        "lemma_start": 0,
+        "source_start": source_start,
+        "span_end": label_start,
+        "lemma": head,
+    }]
 
 
 def _lemma_candidates(line: str, head: str) -> list[dict]:
@@ -196,14 +226,18 @@ def _choose_lemma_start(
 ) -> int | None:
     min_start = max(0, lemma_end - _MAX_LEMMA_LEN)
     label_start = _label_trim_start(line[:lemma_end])
-    if label_start is not None:
-        min_start = max(min_start, label_start)
+    if label_start is not None and label_start >= min_start:
+        return label_start
+
+    boundary_start = _boundary_trim_start(line[:lemma_end])
+    if boundary_start is not None:
+        return boundary_start
 
     available = lemma_end - min_start
     if available <= 0:
         return None
 
-    span = line[source_start:window_end]
+    span = line[source_start:min(window_end, source_start + _LEMMA_HINT_WINDOW)]
     placeholder_count = span.count(PLACEHOLDER)
     max_run = _max_placeholder_run(span)
     if placeholder_count <= 0:
@@ -215,7 +249,7 @@ def _choose_lemma_start(
         if length >= max_run and placeholder_count % length == 0
     ]
     if viable:
-        length = min(viable)
+        length = 2 if 2 in viable else min(viable)
     else:
         length = min(max(max_run, 1), available)
     return lemma_end - length
@@ -241,6 +275,19 @@ def _label_trim_start(prefix: str) -> int | None:
             if best is None or end > best:
                 best = end
     return best
+
+
+def _boundary_trim_start(prefix: str) -> int | None:
+    floor = max(0, len(prefix) - _MAX_LEMMA_LEN)
+    for pos in range(len(prefix) - 1, floor - 1, -1):
+        if prefix[pos] in _LEMMA_BOUNDARY_CHARS and pos + 1 < len(prefix):
+            return pos + 1
+    return None
+
+
+def _first_label_start(text: str) -> int | None:
+    positions = [pos for label in _LABELS if (pos := text.find(label)) >= 0]
+    return min(positions) if positions else None
 
 
 def _has_label_prefix(text: str) -> bool:
