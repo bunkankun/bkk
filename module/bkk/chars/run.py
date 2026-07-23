@@ -37,6 +37,11 @@ from .canonicalize import (
     canonicalize_text_lenient,
     revert_substitution_markers,
 )
+from .lemma_repeat import (
+    LEMMA_REPEAT_MARKER,
+    LemmaRepeatError,
+    apply_lemma_repeat_substitutions,
+)
 from .refs import CanonicalizationContext
 
 
@@ -349,6 +354,194 @@ def run_revert(
     finally:
         if log_fh is not None:
             log_fh.close()
+
+
+def run_lemma_repeat_apply(
+    out_root: Path | None = None,
+    *,
+    bundle_dir: Path | None = None,
+    text_ids: list[str] | None = None,
+    dry_run: bool = False,
+) -> int:
+    """Apply ``substitution:lemma-repeat`` markers in master juans."""
+    if bundle_dir is None:
+        if out_root is None:
+            print("error: corpus root is required", file=sys.stderr)
+            return 2
+        root = Path(out_root).expanduser().resolve()
+        if not root.is_dir():
+            print(f"error: corpus root not found: {root}", file=sys.stderr)
+            return 2
+        bundle_dirs = _select_bundles(root, text_ids)
+        if not bundle_dirs:
+            print(f"no bundles found under {root}", file=sys.stderr)
+            return 1
+    else:
+        bundle = Path(bundle_dir).expanduser().resolve()
+        if not bundle.is_dir():
+            print(f"error: bundle directory not found: {bundle}", file=sys.stderr)
+            return 2
+        root = bundle.parent
+        bundle_dirs = [bundle]
+
+    total_subs = 0
+    total_juans = 0
+    rewrote_bundles = 0
+    failed: list[str] = []
+
+    for bundle in bundle_dirs:
+        text_id = bundle.name
+        rel = bundle.relative_to(root) if root in bundle.parents else bundle
+        print(f"[{rel}]" if str(rel) != text_id else f"[{text_id}]")
+        try:
+            stats = _process_bundle_lemma_repeat(bundle, text_id, dry_run=dry_run)
+        except (RuntimeError, ValueError, FileNotFoundError) as exc:
+            print(f"[{text_id}] error: {exc}", file=sys.stderr)
+            failed.append(text_id)
+            continue
+        total_subs += stats["substitutions"]
+        total_juans += stats["juans"]
+        if stats["substitutions"] or stats["manifest_changed"]:
+            rewrote_bundles += 1
+        for line in stats["lines"]:
+            print(line)
+
+    verb = "would substitute" if dry_run else "substituted"
+    print(
+        f"{verb} {total_subs} lemma-repeat placeholder(s) across "
+        f"{total_juans} juan file(s) in {rewrote_bundles}/{len(bundle_dirs)} bundle(s)"
+    )
+    if failed:
+        print(
+            f"skipped {len(failed)} bundle(s) due to errors: {', '.join(failed)}",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def _process_bundle_lemma_repeat(
+    bundle_dir: Path,
+    text_id: str,
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    manifest_path = bundle_dir / f"{text_id}.manifest.yaml"
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"master manifest not found: {manifest_path}")
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(manifest, dict):
+        raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
+
+    juan_entries = _master_juan_entries(bundle_dir, text_id)
+    if not juan_entries:
+        raise RuntimeError(f"no master juan files found under {bundle_dir}")
+
+    lines: list[str] = []
+    total_subs = 0
+    pending_juans: list[tuple[Path, dict, str]] = []
+
+    for seq, juan_path in juan_entries:
+        data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
+        marker_asset = load_marker_asset(bundle_dir, manifest, seq)
+        data = hydrate_juan_markers(data, marker_asset)
+
+        if _has_marker_type(data, LEMMA_REPEAT_MARKER):
+            lines.append(f"  juan {seq:03d}: already has lemma-repeat marker(s); skipped")
+            continue
+
+        juan_subs = 0
+        juan_remaining = 0
+        for bucket_name in _BUCKETS:
+            bucket = data.get(bucket_name)
+            if not isinstance(bucket, dict):
+                continue
+            markers = bucket.get("markers") or []
+            if not isinstance(markers, list):
+                continue
+            text = bucket.get("text") or ""
+            try:
+                new_text, kept_markers, emitted = apply_lemma_repeat_substitutions(
+                    text, [m for m in markers if isinstance(m, dict)],
+                )
+            except LemmaRepeatError as exc:
+                raise RuntimeError(f"{juan_path.name} [{bucket_name}]: {exc}") from exc
+            if not emitted:
+                juan_remaining += text.count("丨")
+                continue
+            juan_subs += len(emitted)
+            bucket["text"] = new_text
+            bucket["hash"] = sha256_text(new_text) if new_text else ZERO_HASH
+            juan_remaining += new_text.count("丨")
+            merged = list(kept_markers) + emitted
+            indexed = list(enumerate(merged))
+            indexed.sort(key=lambda p: (_marker_offset(p[1]), p[0]))
+            bucket["markers"] = [marker_to_flow(dict(m)) for _, m in indexed]
+
+        if juan_subs == 0:
+            if juan_remaining:
+                lines.append(
+                    f"  juan {seq:03d}: no lemma-repeat substitutions "
+                    f"({juan_remaining} placeholder(s) left unchanged)"
+                )
+            else:
+                lines.append(f"  juan {seq:03d}: no lemma-repeat substitutions")
+            continue
+
+        total_subs += juan_subs
+        line = f"  juan {seq:03d}: {juan_subs} lemma-repeat substitution(s)"
+        if juan_remaining:
+            line += f", {juan_remaining} placeholder(s) left unchanged"
+        lines.append(line)
+        new_hash = _juan_self_hash(data)
+        data["hash"] = new_hash
+        pending_juans.append((juan_path, data, new_hash))
+
+    manifest_changed, new_manifest = _patch_manifest_after_revert(
+        manifest,
+        set(),
+        affected_marker_seqs={
+            int(_JUAN_RE.match(p.name).group("seq"))
+            for p, _, _ in pending_juans
+        },
+        new_hashes={
+            int(_JUAN_RE.match(p.name).group("seq")): h
+            for p, _, h in pending_juans
+        },
+    )
+
+    if dry_run:
+        return {
+            "juans": len(juan_entries),
+            "substitutions": total_subs,
+            "manifest_changed": manifest_changed,
+            "lines": lines,
+        }
+
+    if pending_juans:
+        for juan_path, data, _ in pending_juans:
+            juan_path.write_text(dump(data), encoding="utf-8")
+
+    if manifest_changed:
+        manifest_path.write_text(dump(new_manifest), encoding="utf-8")
+        if pending_juans:
+            from bkk.repair.markers import externalize_markers
+            externalize_markers(bundle_dir, dry_run=False)
+            _cleanup_unreferenced_marker_assets(
+                bundle_dir, text_id,
+                {int(_JUAN_RE.match(p.name).group("seq")) for p, _, _ in pending_juans},
+                manifest_path,
+                dry_run=False,
+            )
+
+    return {
+        "juans": len(juan_entries),
+        "substitutions": total_subs,
+        "manifest_changed": manifest_changed,
+        "lines": lines,
+    }
 
 
 def _process_bundle_revert(
@@ -787,6 +980,16 @@ def _has_substitution_markers(node: Any) -> bool:
         return any(_has_substitution_markers(value) for value in node.values())
     if isinstance(node, list):
         return any(_has_substitution_markers(value) for value in node)
+    return False
+
+
+def _has_marker_type(node: Any, marker_type: str) -> bool:
+    if isinstance(node, dict):
+        if node.get("type") == marker_type:
+            return True
+        return any(_has_marker_type(value, marker_type) for value in node.values())
+    if isinstance(node, list):
+        return any(_has_marker_type(value, marker_type) for value in node)
     return False
 
 

@@ -24,6 +24,9 @@ from ``.bkkrc`` unless ``--out`` is passed.
 - ``indent`` — from ``line-break``/``indent`` markers, emits
   ``root``/``commentary``/``head``/``attribution`` for sources whose
   layout indents each textual layer differently.
+- ``dictionary`` — detects dictionary explanation spans that contain the
+  lemma-repeat placeholder ``丨`` and emits ``note`` spans carrying lemma
+  metadata for ``bkk chars lemma-repeat apply``.
 - ``all`` — both derivers, concatenated. The two derivers use disjoint
   voice names (parens → ``note``/``emphasis``; indent →
   ``root``/``commentary``/…), so same-name overlaps are impossible by
@@ -81,6 +84,7 @@ from bkk.marker_assets import (
 from bkk.short_refs import text_id_arg, text_or_path_arg
 
 from .derive import VoiceDerivationProblem, derive_voice_markers
+from .derive_dictionary import derive_dictionary_voice_markers
 from .derive_indent import derive_voice_markers_from_indent
 from .problems import (
     VoiceProblemReportError,
@@ -90,7 +94,7 @@ from .problems import (
 )
 
 
-_VALID_SOURCES = ("parens", "indent", "all")
+_VALID_SOURCES = ("parens", "indent", "dictionary", "all")
 _VOICE_PROBLEM_TYPE = "voice:problem"
 
 
@@ -139,7 +143,8 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument(
         "--source", dest="source", choices=_VALID_SOURCES, default=None,
         help="derivation source: 'parens' (default; punctuation pairs), "
-             "'indent' (layout indentation), or 'all' (both, merged). "
+             "'indent' (layout indentation), 'dictionary' (lemma-repeat "
+             "dictionary notes), or 'all' (parens + indent, merged). "
              "Falls back to voice.source in .bkkrc; otherwise 'parens'.",
     )
     pa.add_argument(
@@ -516,7 +521,7 @@ def _process_one(
             raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
         marker_asset = load_marker_asset(juan_dir, manifest, seq)
 
-        existing = _existing_voice_count(data, marker_asset)
+        existing = _existing_voice_count(data, marker_asset, source=source)
         if existing and not force:
             raise RuntimeError(
                 f"{juan_path.name}: {existing} voice marker(s) already present "
@@ -544,7 +549,7 @@ def _process_one(
                 inline_markers = inline_markers_for_bucket(data, bucket_name)
                 new_inline = [
                     m for m in inline_markers
-                    if not (isinstance(m, dict) and m.get("type") == "voice")
+                    if not _is_replaceable_voice(m, source)
                 ]
                 if len(new_inline) != len(inline_markers):
                     if new_inline:
@@ -556,7 +561,7 @@ def _process_one(
                 external_markers = asset_markers_by_bucket.get(bucket_name, [])
                 new_external = [
                     m for m in external_markers
-                    if not (isinstance(m, dict) and m.get("type") == "voice")
+                    if not _is_replaceable_voice(m, source)
                 ]
                 if len(new_external) != len(external_markers):
                     asset_markers_by_bucket[bucket_name] = new_external
@@ -564,7 +569,7 @@ def _process_one(
 
                 markers = [
                     m for m in markers
-                    if not (isinstance(m, dict) and m.get("type") == "voice")
+                    if not _is_replaceable_voice(m, source)
                 ]
             external_markers = asset_markers_by_bucket.get(bucket_name, [])
             new_external = [
@@ -580,7 +585,7 @@ def _process_one(
                 ]
             try:
                 new_voices = _derive_for_bucket(
-                    source, len(text), markers,
+                    source, text, markers,
                     include_tls_notes=include_tls_notes,
                 )
             except VoiceDerivationProblem as exc:
@@ -990,7 +995,7 @@ def _sorted_marker_flows(markers: list[dict]) -> list[dict]:
 
 
 def _derive_for_bucket(
-    source: str, text_len: int, markers: list, *, include_tls_notes: bool = True,
+    source: str, text: str, markers: list, *, include_tls_notes: bool = True,
 ) -> list[dict]:
     """Dispatch to the requested deriver(s) and return their merged output.
 
@@ -1000,12 +1005,15 @@ def _derive_for_bucket(
     same-name overlaps are impossible by construction and their id prefixes
     (``n``/``e`` vs ``r``/``c``/``h``/``a``) don't collide either.
     """
+    text_len = len(text)
     if source == "parens":
         return derive_voice_markers(
             text_len, markers, include_tls_notes=include_tls_notes,
         )
     if source == "indent":
         return derive_voice_markers_from_indent(text_len, markers)
+    if source == "dictionary":
+        return derive_dictionary_voice_markers(text, markers)
     if source == "all":
         return list(
             derive_voice_markers(
@@ -1045,14 +1053,22 @@ def _warn_voice_overlaps(
 
 
 def _existing_voice_count(
-    juan_data: dict, marker_asset: dict | None = None,
+    juan_data: dict, marker_asset: dict | None = None, *, source: str | None = None,
 ) -> int:
     n = 0
     for bucket_name in _BUCKETS:
         for m in effective_markers_for_bucket(juan_data, bucket_name, marker_asset):
-            if isinstance(m, dict) and m.get("type") == "voice":
+            if _is_replaceable_voice(m, source):
                 n += 1
     return n
+
+
+def _is_replaceable_voice(marker: object, source: str | None) -> bool:
+    if not isinstance(marker, dict) or marker.get("type") != "voice":
+        return False
+    if source == "dictionary":
+        return marker.get("source") == "dictionary"
+    return True
 
 
 def _juan_self_hash(juan_dict: dict) -> str:

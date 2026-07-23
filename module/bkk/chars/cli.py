@@ -1,6 +1,6 @@
 """Command-line entry point for ``bkk chars``.
 
-Exposes two verbs:
+Exposes three operations:
 
 ``canonicalize`` walks each master bundle under the corpus root, applies
 step 5 of the canonicalization procedure (substitution against the
@@ -10,6 +10,9 @@ patches the master manifest's reference-asset declarations.
 ``revert`` reverses those substitution markers: it restores each marker's
 ``original`` character at its offset, removes the marker, and refreshes
 hashes / marker assets.
+
+``lemma-repeat apply`` replaces dictionary note placeholders (``丨``) using
+dictionary voice markers emitted by ``bkk voice add --source dictionary``.
 
     python -m bkk chars canonicalize
     python -m bkk chars canonicalize --text-id KR1a0001
@@ -33,7 +36,7 @@ from bkk.cli_common import warn_deprecated
 from bkk.short_refs import text_id_arg
 
 from .refs import DEFAULT_REFS_DIR, load_context
-from .run import run_canonicalize, run_revert
+from .run import run_canonicalize, run_lemma_repeat_apply, run_revert
 
 
 DEFAULT_UNMAPPED_REPORT = Path("chars-unmapped-report.tsv")
@@ -128,6 +131,39 @@ def build_parser() -> argparse.ArgumentParser:
         "--jobs", dest="jobs", type=int, default=1,
         help="number of bundles to process in parallel (default: 1)",
     )
+
+    pl = sub.add_parser(
+        "lemma-repeat",
+        help="dictionary lemma-repeat placeholder substitutions",
+    )
+    lemma_sub = pl.add_subparsers(dest="lemma_op", required=True)
+    pla = lemma_sub.add_parser(
+        "apply",
+        help="replace dictionary note placeholders using dictionary voice lemmas",
+    )
+    pla.add_argument(
+        "--bundle", dest="bundle", type=Path, default=None,
+        help="single bundle directory to process",
+    )
+    pla.add_argument(
+        "--corpus", dest="corpus", type=Path, default=None,
+        help="corpus root containing bundle dirs "
+             "(default: chars.corpus / info.corpus / global.corpus from .bkkrc)",
+    )
+    pla.add_argument(
+        "--out-root", dest="out_root", type=Path, default=None,
+        help="deprecated; use --corpus. Corpus root containing bundle dirs",
+    )
+    pla.add_argument(
+        "--text-id", dest="text_ids", action="append", default=None,
+        type=text_id_arg,
+        help="restrict the run to the named bundle (repeatable; default: "
+             "every bundle under the corpus root)",
+    )
+    pla.add_argument(
+        "--dry-run", dest="dry_run", action="store_true",
+        help="report what would be substituted without modifying files",
+    )
     return p
 
 
@@ -164,6 +200,43 @@ def _resolve_corpus_root(
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.op == "lemma-repeat":
+        if args.lemma_op != "apply":
+            print(f"error: unknown lemma-repeat operation {args.lemma_op!r}", file=sys.stderr)
+            return 2
+        if args.bundle is not None:
+            if args.corpus is not None or args.out_root is not None or args.text_ids:
+                print(
+                    "error: --bundle cannot be combined with --corpus, "
+                    "--out-root, or --text-id",
+                    file=sys.stderr,
+                )
+                return 2
+            return run_lemma_repeat_apply(
+                bundle_dir=args.bundle,
+                dry_run=args.dry_run,
+            )
+        try:
+            corpus_root = _resolve_corpus_root(
+                corpus=args.corpus,
+                out_root=args.out_root,
+            )
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if corpus_root is None:
+            print(
+                "error: no corpus root resolved; pass --corpus or set "
+                "chars.corpus / info.corpus / global.corpus in .bkkrc",
+                file=sys.stderr,
+            )
+            return 2
+        return run_lemma_repeat_apply(
+            corpus_root,
+            text_ids=args.text_ids,
+            dry_run=args.dry_run,
+        )
 
     try:
         corpus_root = _resolve_corpus_root(

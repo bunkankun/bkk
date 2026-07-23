@@ -206,7 +206,10 @@ function voiceRanges(markers: JuanMarker[]): VoiceRange[] {
 function substitutionOriginals(markers: JuanMarker[]): Map<number, string> {
   const out = new Map<number, string>();
   for (const marker of markers) {
-    if (marker.type !== "substitution") continue;
+    if (
+      marker.type !== "substitution" &&
+      marker.type !== "substitution:lemma-repeat"
+    ) continue;
     const offset = marker.offset;
     const original = marker.original;
     if (
