@@ -31,6 +31,7 @@ def test_dictionary_derives_note_spans_with_lemmas_across_lines() -> None:
         ("僉同", len(line1) + len(line2) + len(line3) + len("補藻僉同"), len("書詢謀丨丨議者丨丨")),
     ]
     assert all(voice["source"] == "dictionary" for voice in voices)
+    assert all(voice["name"] == "dict" for voice in voices)
     assert [voice["id"] for voice in voices] == ["dn1", "dn2"]
 
 

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import yaml
 
+from bkk.chars.lemma_repeat import apply_lemma_repeat_substitutions
 from bkk.chars.run import run_lemma_repeat_apply
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
@@ -47,7 +48,7 @@ def _write_lemma_repeat_bundle(bundle_dir: Path) -> None:
                     "type": "voice",
                     "offset": 2,
                     "length": 5,
-                    "name": "note",
+                    "name": "dict",
                     "id": "dn1",
                     "source": "dictionary",
                     "lemma": "北東",
@@ -109,3 +110,22 @@ def test_lemma_repeat_apply_rewrites_text_and_marker_asset(tmp_path: Path) -> No
     assert [marker["replacement"] for marker in substitutions] == ["北", "東", "北"]
     assert all(marker["original"] == "丨" for marker in substitutions)
     assert asset_entry["hash"] == asset["hash"]
+
+
+def test_lemma_repeat_accepts_legacy_dictionary_note_voice() -> None:
+    text = "北東書丨丨"
+    voice = {
+        "type": "voice",
+        "offset": 2,
+        "length": 3,
+        "name": "note",
+        "id": "dn1",
+        "source": "dictionary",
+        "lemma": "北東",
+    }
+
+    new_text, kept, emitted = apply_lemma_repeat_substitutions(text, [voice])
+
+    assert new_text == "北東書北東"
+    assert kept == [voice]
+    assert [marker["replacement"] for marker in emitted] == ["北", "東"]

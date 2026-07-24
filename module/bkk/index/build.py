@@ -234,7 +234,7 @@ def _voice_range_rows(
     for v in voices:
         off = v.get("offset")
         length = v.get("length")
-        name = v.get("name")
+        name = _voice_name(v)
         vid = v.get("id")
         responds_to = v.get("responds-to")
         if not isinstance(off, int) or not isinstance(length, int):
@@ -280,6 +280,13 @@ def _voice_range_rows(
                 f"responds-to={responds_to!r} has no matching id in the same bucket"
             )
     return rows
+
+
+def _voice_name(marker: dict) -> object:
+    name = marker.get("name")
+    if name == "note" and marker.get("source") == "dictionary":
+        return "dict"
+    return name
 
 
 def _insert_voice_ranges(

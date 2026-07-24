@@ -18,7 +18,7 @@ def apply_lemma_repeat_substitutions(
     text: str,
     markers: list[dict[str, Any]],
 ) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
-    """Replace ``丨`` inside dictionary note voices.
+    """Replace ``丨`` inside dictionary voice spans.
 
     Returns ``(new_text, kept_markers, emitted_markers)``. Existing markers are
     returned unchanged; emitted markers must be appended and sorted by the
@@ -36,7 +36,7 @@ def apply_lemma_repeat_substitutions(
         if isinstance(marker, dict)
         and marker.get("type") == "voice"
         and marker.get("source") == "dictionary"
-        and marker.get("name") == "note"
+        and marker.get("name") in {"dict", "note"}
     ]
     voices.sort(key=lambda m: (_int_value(m.get("offset")), _int_value(m.get("length"))))
 

@@ -11,7 +11,7 @@ patches the master manifest's reference-asset declarations.
 ``original`` character at its offset, removes the marker, and refreshes
 hashes / marker assets.
 
-``lemma-repeat apply`` replaces dictionary note placeholders (``丨``) using
+``lemma-repeat apply`` replaces dictionary placeholders (``丨``) using
 dictionary voice markers emitted by ``bkk voice add --source dictionary``.
 
     python -m bkk chars canonicalize
@@ -139,7 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
     lemma_sub = pl.add_subparsers(dest="lemma_op", required=True)
     pla = lemma_sub.add_parser(
         "apply",
-        help="replace dictionary note placeholders using dictionary voice lemmas",
+        help="replace dictionary placeholders using dictionary voice lemmas",
     )
     pla.add_argument(
         "--bundle", dest="bundle", type=Path, default=None,

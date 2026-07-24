@@ -1,7 +1,7 @@
-"""Derive dictionary-note voice markers for lemma-repeat placeholders.
+"""Derive dictionary voice markers for lemma-repeat placeholders.
 
 Dictionary-like KRP texts often print an entry lemma in the main column and
-the explanation in a smaller note column. In the note, repeated lemma
+the explanation in a smaller annotation column. There, repeated lemma
 characters may be abbreviated with U+4E28 (``丨``). This deriver identifies
 small note spans that contain those placeholders and annotates each span with
 the lemma needed by the substitution pass.
@@ -46,7 +46,7 @@ def derive_dictionary_voice_markers(
     text: str,
     markers: list[dict],
 ) -> list[dict]:
-    """Return note voice markers carrying lemma metadata.
+    """Return dictionary voice markers carrying lemma metadata.
 
     The emitted spans start at a detected source/citation cue and end before
     the next detected lemma in the same line. Spans without ``丨`` are skipped.
@@ -83,7 +83,7 @@ def derive_dictionary_voice_markers(
                 "type": "voice",
                 "offset": start + span_start,
                 "length": span_end - span_start,
-                "name": "note",
+                "name": "dict",
                 "id": f"dn{counter}",
                 "source": "dictionary",
                 "lemma": candidate["lemma"],

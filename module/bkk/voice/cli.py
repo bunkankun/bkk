@@ -25,7 +25,7 @@ from ``.bkkrc`` unless ``--out`` is passed.
   ``root``/``commentary``/``head``/``attribution`` for sources whose
   layout indents each textual layer differently.
 - ``dictionary`` — detects dictionary explanation spans that contain the
-  lemma-repeat placeholder ``丨`` and emits ``note`` spans carrying lemma
+  lemma-repeat placeholder ``丨`` and emits ``dict`` spans carrying lemma
   metadata for ``bkk chars lemma-repeat apply``.
 - ``all`` — both derivers, concatenated. The two derivers use disjoint
   voice names (parens → ``note``/``emphasis``; indent →

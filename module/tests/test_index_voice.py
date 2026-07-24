@@ -266,6 +266,32 @@ def test_build_rejects_overlapping_same_name_voices(tmp_path):
         build_index(bundle)
 
 
+def test_build_normalizes_legacy_dictionary_note_voice_name(tmp_path):
+    voices = [
+        {"offset": 0, "length": 5, "name": "note", "id": "n1"},
+        {
+            "offset": 0,
+            "length": 5,
+            "name": "note",
+            "id": "dn1",
+            "source": "dictionary",
+            "lemma": "AAAAA",
+        },
+    ]
+    bundle = _write_bundle(tmp_path, "KRV0011B", "AAAAA", voices=voices)
+
+    bkkx = build_index(bundle)
+
+    conn = sqlite3.connect(str(bkkx))
+    try:
+        rows = conn.execute(
+            "SELECT name, voice_id FROM voice_range ORDER BY voice_id"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert rows == [("dict", "dn1"), ("note", "n1")]
+
+
 def test_build_rejects_voice_out_of_range(tmp_path):
     bad = [{"offset": 0, "length": 99, "name": "root", "id": "r1"}]
     bundle = _write_bundle(tmp_path, "KRV0012", "ABCDE", voices=bad)
