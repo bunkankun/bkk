@@ -29,6 +29,7 @@ from typing import Any, TextIO
 from bkk.index.parallel_assets import (
     BUCKETS,
     TEXTID_RE,
+    TEXTID_ERROR,
     FlowDict,
     atomic_write,
     assert_index_unchanged,
@@ -68,7 +69,8 @@ def _validate_location(
     textid = value.get("textid")
     if not isinstance(textid, str) or TEXTID_RE.fullmatch(textid) is None:
         raise InputError(
-            f"line {line_number}: {prefix}.textid must match KR0a0000"
+            f"line {line_number}: {prefix}.textid {TEXTID_ERROR}: "
+            f"{textid!r}"
         )
 
     juan_seq = _require_int(

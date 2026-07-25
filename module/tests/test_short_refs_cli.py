@@ -20,6 +20,9 @@ from bkk.short_refs import (
         ("1h4", "KR1h0004"),
         ("KR1h4", "KR1h0004"),
         ("KR1h0004", "KR1h0004"),
+        ("3eq51", "KR3eq051"),
+        ("KR3eq51", "KR3eq051"),
+        ("KR3eq051", "KR3eq051"),
         ("J01nA001", "J01nA001"),
     ],
 )
@@ -53,6 +56,8 @@ def test_text_prefix_argument(value, expected):
         ("KR1h4", ("KR1h0004", None)),
         ("1h4/1", ("KR1h0004", 1)),
         ("KR1h0004/001", ("KR1h0004", 1)),
+        ("3eq51/1", ("KR3eq051", 1)),
+        ("KR3eq051/001", ("KR3eq051", 1)),
     ],
 )
 def test_text_juan_selector(value, expected):

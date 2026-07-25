@@ -21,7 +21,15 @@ from .parallel import ParallelCluster, ParallelLocation
 
 BUCKETS = ("front", "body", "back")
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-TEXTID_RE = re.compile(r"^KR(?P<section>[0-9][a-z])(?P<serial>[0-9]{4})$")
+TEXTID_RE = re.compile(
+    r"^KR(?P<section>"
+    r"(?:[0-9][a-z](?=[0-9]{4}$)|[0-9][a-z]{2}(?=[0-9]{3}$))"
+    r")(?P<serial>[0-9]+)$"
+)
+TEXTID_ERROR = (
+    "must match canonical KR text ID "
+    "(for example KR1h0004 or KR3eq051)"
+)
 
 
 class FlowDict(dict):
@@ -227,7 +235,7 @@ def validate_name(name: str) -> None:
 
 def validate_textid(textid: str) -> None:
     if TEXTID_RE.fullmatch(textid) is None:
-        raise ValueError(f"text ID {textid!r} must match KR0a0000")
+        raise ValueError(f"text ID {textid!r} {TEXTID_ERROR}")
 
 
 def short_ref(location: ParallelLocation | dict[str, Any]) -> str:
@@ -238,7 +246,7 @@ def short_ref(location: ParallelLocation | dict[str, Any]) -> str:
     )
     match = TEXTID_RE.fullmatch(textid)
     if match is None:
-        raise ValueError(f"text ID {textid!r} must match KR0a0000")
+        raise ValueError(f"text ID {textid!r} {TEXTID_ERROR}")
     serial = str(int(match.group("serial")))
     juan_seq = (
         location.juan_seq

@@ -11,9 +11,15 @@ from bkk.serve.recipe_refs import parse_short_ref
     ("ref", "textid", "selection"),
     [
         ("1h4/1", "KR1h0004", {"juan": 1}),
+        ("3eq51/1", "KR3eq051", {"juan": 1}),
         (
             "KR1h0004/001/body@0+86",
             "KR1h0004",
+            {"juan": 1, "offset": 0, "length": 86},
+        ),
+        (
+            "KR3eq051/001/body@0+86",
+            "KR3eq051",
             {"juan": 1, "offset": 0, "length": 86},
         ),
         ("1h4/1/front", "KR1h0004", {"juan": 1, "bucket": "front"}),

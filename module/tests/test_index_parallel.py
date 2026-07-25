@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from bkk.index import build_index, merge_bundles
+from bkk.index import parallel
 from bkk.index import parallel_assets
 import bkk.index.parallel_scan as parallel_scan
 from bkk.index.build import compute_bkkx_hash
@@ -315,6 +316,54 @@ def test_parallel_target_scans_whole_index_and_writes_target_assets(tmp_path):
     assert markers[0]["ref"].startswith("0a2/1/")
     assert not (tmp_path / "KR0a0002" / "parallels").exists()
     assert not (tmp_path / "KR0a0003" / "parallels").exists()
+
+
+def test_parallel_target_assets_accept_tls_style_remote_textid(tmp_path):
+    target = _write_bundle(tmp_path, "KR1h0004", "target")
+    local = parallel.ParallelLocation(
+        textid="KR1h0004",
+        juan_seq=1,
+        bucket="body",
+        bucket_id=1,
+        start=1,
+        end=7,
+        toc_label="target",
+        left="",
+        right="",
+    )
+    remote = parallel.ParallelLocation(
+        textid="KR3eq051",
+        juan_seq=1,
+        bucket="body",
+        bucket_id=2,
+        start=10,
+        end=16,
+        toc_label="remote",
+        left="",
+        right="",
+    )
+    cluster = parallel.ParallelCluster(
+        cluster_id="parallel-1",
+        length=6,
+        occurrence_count=2,
+        text="shared",
+        locations=(local, remote),
+    )
+
+    cluster_count, marker_count, file_count = (
+        parallel_assets.write_target_parallel_assets(
+            [cluster],
+            target,
+            textid="KR1h0004",
+            name="corpus",
+            provenance={"generator": {"command": "test"}},
+        )
+    )
+
+    path = target / "parallels" / "KR1h0004_001.corpus.parallels.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert (cluster_count, marker_count, file_count) == (1, 1, 1)
+    assert data["markers"]["body"][0]["ref"] == "3eq51/1/@10+6"
 
 
 def test_parallel_index_hash_is_cached(tmp_path, monkeypatch):

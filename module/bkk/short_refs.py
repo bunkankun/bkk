@@ -7,9 +7,10 @@ import re
 from typing import Any
 
 
+_KR_SECTION_PATTERN = r"[0-9][a-z]{1,2}"
 _REF_RE = re.compile(
     r"^(?:KR)?"
-    r"(?P<section>[0-9][a-z])"
+    rf"(?P<section>{_KR_SECTION_PATTERN})"
     r"(?P<serial>[0-9]{1,4})"
     r"/(?P<juan>[0-9]+)"
     r"(?:/"
@@ -19,10 +20,24 @@ _REF_RE = re.compile(
     r")?"
     r"$"
 )
-_TEXTID_RE = re.compile(r"^KR[0-9][a-z][0-9]{4}$")
-_COMPACT_TEXTID_RE = re.compile(
-    r"^(?:KR)?(?P<section>[0-9][a-z])(?P<serial>[0-9]{1,4})$"
+_TEXTID_RE = re.compile(
+    rf"^KR(?P<section>{_KR_SECTION_PATTERN})(?P<serial>[0-9]{{3,4}})$"
 )
+_COMPACT_TEXTID_RE = re.compile(
+    rf"^(?:KR)?(?P<section>{_KR_SECTION_PATTERN})(?P<serial>[0-9]{{1,4}})$"
+)
+
+
+def _serial_width(section: str) -> int:
+    return 3 if len(section) == 3 else 4
+
+
+def _valid_serial_width(section: str, serial: str) -> bool:
+    return len(serial) <= _serial_width(section)
+
+
+def _canonical_textid(section: str, serial: str) -> str:
+    return f"KR{section}{serial.zfill(_serial_width(section))}"
 
 
 def parse_short_ref(ref: str) -> tuple[str, dict[str, Any]]:
@@ -32,17 +47,18 @@ def parse_short_ref(ref: str) -> tuple[str, dict[str, Any]]:
     ``/@<offset>+<length>`` for a body slice, or
     ``/<bucket>@<offset>+<length>`` for an explicit bucket slice.
 
-    ``KR`` and leading zeroes in the four-digit text serial may be omitted.
+    ``KR`` and leading zeroes in the text serial may be omitted.
     The bucket defaults to ``body`` and is therefore omitted from the
     normalized selection unless it was explicit and non-body.
     """
     value = ref.strip()
     match = _REF_RE.fullmatch(value)
-    if match is None:
+    if match is None or not _valid_serial_width(
+        match.group("section"), match.group("serial")
+    ):
         raise ValueError(f"invalid shortcut ref {ref!r}")
 
-    serial = match.group("serial").zfill(4)
-    textid = f"KR{match.group('section')}{serial}"
+    textid = _canonical_textid(match.group("section"), match.group("serial"))
     selection: dict[str, Any] = {"juan": int(match.group("juan"))}
 
     bucket = match.group("bucket")
@@ -68,7 +84,10 @@ def parse_text_juan_selector(value: str) -> tuple[str, int | None]:
     selector = value.strip()
     if "/" not in selector and "\\" not in selector:
         normalized = normalize_text_id(selector)
-        if _TEXTID_RE.fullmatch(normalized):
+        match = _TEXTID_RE.fullmatch(normalized)
+        if match is not None and len(match.group("serial")) == _serial_width(
+            match.group("section")
+        ):
             return normalized, None
     textid, selection = parse_short_ref(selector)
     if set(selection) != {"juan"}:
@@ -87,11 +106,10 @@ def normalize_text_id(value: str) -> str:
     """
     textid = value.strip()
     match = _COMPACT_TEXTID_RE.fullmatch(textid)
-    if match is not None:
-        return (
-            f"KR{match.group('section')}"
-            f"{match.group('serial').zfill(4)}"
-        )
+    if match is not None and _valid_serial_width(
+        match.group("section"), match.group("serial")
+    ):
+        return _canonical_textid(match.group("section"), match.group("serial"))
     if "/" in textid or "\\" in textid:
         try:
             parsed_textid, _selection = parse_short_ref(textid)
