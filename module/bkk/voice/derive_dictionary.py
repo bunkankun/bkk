@@ -1,33 +1,24 @@
-"""Derive dictionary voice markers for lemma-repeat placeholders.
+"""Derive dictionary lemma voice markers from existing note voices.
 
-Dictionary-like KRP texts often print an entry lemma in the main column and
-the explanation in a smaller annotation column. There, repeated lemma
-characters may be abbreviated with U+4E28 (``丨``). This deriver identifies
-small note spans that contain those placeholders and annotates each span with
-the lemma needed by the substitution pass.
-
-The source has no explicit word separators, so this is a narrow heuristic
-rather than a general dictionary parser. It is intentionally opt-in through
-``bkk voice add --source dictionary``.
+Dictionary-like KRP texts print the lemma in the default text and the
+explanation in note text. Inside those notes, U+4E28 (``丨``) abbreviates
+characters from the preceding lemma. This pass runs after generic ``note``
+voices have been derived and marks only the default-text lemma span.
 """
 
 from __future__ import annotations
+
+from collections import Counter
+from dataclasses import dataclass
 
 from bkk.importer.charset import is_allowed_body_char
 
 
 PLACEHOLDER = "丨"
 
-_HEAD_CUES = (
-    "唐韻", "廣韻", "集韻", "韻會", "正韻", "玉篇", "類篇",
-)
-
-_LABELS = (
-    "補藻", "補注", "補音", "補義", "補遺", "補正", "韻藻",
-    "補", "藻", "增",
-)
-
 _SOURCE_CUES = tuple(sorted({
+    "唐韻", "廣韻", "集韻", "韻會", "韻㑹", "正韻", "玉篇", "類篇",
+    "說文", "説文",
     "後漢書", "舊唐書", "春秋左傳", "春秋", "漢書", "唐書", "宋史",
     "遼史", "史記", "魏志", "魏書", "周書", "梁書", "南史", "北史",
     "隋書", "齊書", "宋書", "晉書", "周禮", "儀禮", "禮記", "爾雅",
@@ -38,261 +29,190 @@ _SOURCE_CUES = tuple(sorted({
 }, key=len, reverse=True))
 
 _MAX_LEMMA_LEN = 4
-_LEMMA_HINT_WINDOW = 32
-_LEMMA_BOUNDARY_CHARS = frozenset("也注又曰云矣耳焉者兮乎哉乃則")
+
+_LABELS = tuple(sorted((
+    "補藻", "補注", "補音", "補義", "補遺", "補正", "韻藻",
+    "補", "藻", "增",
+), key=len, reverse=True))
+
+
+@dataclass(frozen=True)
+class _Span:
+    start: int
+    end: int
 
 
 def derive_dictionary_voice_markers(
     text: str,
     markers: list[dict],
 ) -> list[dict]:
-    """Return dictionary voice markers carrying lemma metadata.
+    """Return dictionary ``lemma`` voice markers.
 
-    The emitted spans start at a detected source/citation cue and end before
-    the next detected lemma in the same line. Spans without ``丨`` are skipped.
+    Input notes are ordinary ``voice`` markers with ``name="note"``. For each
+    note containing ``丨``, the placeholder pattern in the note estimates how
+    many immediately preceding default-text characters make up the lemma.
     """
     if not text or PLACEHOLDER not in text:
         return []
 
-    line_offsets = _line_offsets(len(text), markers)
-    segments = _head_segments(text, line_offsets)
+    notes = _note_spans(markers, len(text))
+    if not notes:
+        return []
+
+    existing_lemmas = _existing_dictionary_lemma_spans(markers)
+    emitted_spans: set[tuple[int, int]] = set()
     out: list[dict] = []
     counter = 0
 
-    for start, end, head in segments:
-        if end <= start or PLACEHOLDER not in text[start:end]:
+    for index, note in enumerate(notes):
+        note_text = text[note.start:note.end]
+        if PLACEHOLDER not in note_text:
             continue
-        segment = text[start:end]
-        candidates = _head_gloss_candidates(segment, head)
-        candidates.extend(_lemma_candidates(segment, head))
-        candidates.sort(key=lambda c: (c["lemma_start"], c["source_start"]))
-        for i, candidate in enumerate(candidates):
-            next_lemma_start = (
-                candidates[i + 1]["lemma_start"]
-                if i + 1 < len(candidates) else len(segment)
-            )
-            span_start = candidate["source_start"]
-            span_end = min(candidate.get("span_end", len(segment)), next_lemma_start)
-            if span_end <= span_start:
-                continue
-            span = segment[span_start:span_end]
-            if PLACEHOLDER not in span:
-                continue
-            counter += 1
-            out.append({
-                "type": "voice",
-                "offset": start + span_start,
-                "length": span_end - span_start,
-                "name": "dict",
-                "id": f"dn{counter}",
-                "source": "dictionary",
-                "lemma": candidate["lemma"],
-                "lemma_offset": start + candidate["lemma_start"],
-                "lemma_length": len(candidate["lemma"]),
-            })
+        length = _infer_lemma_length(note_text)
+        if length is None or length > note.start:
+            continue
+
+        lemma_start = note.start - length
+        lemma_end = note.start
+        if index > 0 and lemma_start < notes[index - 1].end:
+            continue
+        if _overlaps_any(lemma_start, lemma_end, existing_lemmas):
+            continue
+
+        lemma_start, lemma = _trim_label(lemma_start, text[lemma_start:lemma_end])
+        length = lemma_end - lemma_start
+        if not _valid_lemma(lemma):
+            continue
+
+        key = (lemma_start, lemma_end)
+        if key in emitted_spans:
+            continue
+        emitted_spans.add(key)
+        counter += 1
+        out.append({
+            "type": "voice",
+            "offset": lemma_start,
+            "length": length,
+            "name": "lemma",
+            "id": f"dl{counter}",
+            "source": "dictionary",
+        })
+
     return out
 
 
-def _line_offsets(text_len: int, markers: list[dict]) -> list[int]:
-    offsets = {
-        m.get("offset")
-        for m in markers
-        if isinstance(m, dict)
-        and m.get("type") == "line-break"
-        and isinstance(m.get("offset"), int)
-        and 0 <= m.get("offset") <= text_len
-    }
-    offsets.add(0)
-    return sorted(offsets)
+def _note_spans(markers: list[dict], text_len: int) -> list[_Span]:
+    spans: list[_Span] = []
+    for marker in markers:
+        if (
+            isinstance(marker, dict)
+            and marker.get("type") == "voice"
+            and marker.get("name") == "note"
+        ):
+            start = marker.get("offset")
+            length = marker.get("length")
+            if (
+                isinstance(start, int)
+                and not isinstance(start, bool)
+                and isinstance(length, int)
+                and not isinstance(length, bool)
+                and 0 <= start <= text_len
+                and 0 <= length
+            ):
+                spans.append(_Span(start, min(text_len, start + length)))
+    return sorted(spans, key=lambda span: (span.start, span.end))
 
 
-def _head_segments(text: str, line_offsets: list[int]) -> list[tuple[int, int, str]]:
-    segments: list[tuple[int, int, str]] = []
-    current_head: str | None = None
-    current_start: int | None = None
-    for index, start in enumerate(line_offsets):
-        end = line_offsets[index + 1] if index + 1 < len(line_offsets) else len(text)
-        head = _head_from_line(text[start:end])
-        if head is None:
+def _existing_dictionary_lemma_spans(markers: list[dict]) -> list[_Span]:
+    spans: list[_Span] = []
+    for marker in markers:
+        if not (
+            isinstance(marker, dict)
+            and marker.get("type") == "voice"
+            and marker.get("name") == "lemma"
+            and marker.get("source") == "dictionary"
+        ):
             continue
-        if current_head is not None and current_start is not None and start > current_start:
-            segments.append((current_start, start, current_head))
-        current_head = head
-        current_start = start
-    if current_head is not None and current_start is not None and current_start < len(text):
-        segments.append((current_start, len(text), current_head))
-    return segments
+        start = marker.get("offset")
+        length = marker.get("length")
+        if (
+            isinstance(start, int)
+            and not isinstance(start, bool)
+            and isinstance(length, int)
+            and not isinstance(length, bool)
+            and length >= 0
+        ):
+            spans.append(_Span(start, start + length))
+    return spans
 
 
-def _head_from_line(line: str) -> str | None:
-    found: list[tuple[int, str]] = []
-    for cue in _HEAD_CUES:
-        pos = line.find(cue)
-        if 1 <= pos <= 8 and "切" not in line[:pos]:
-            found.append((pos, cue))
-    for pos, _cue in sorted(found):
-        if not _has_label_prefix(line[:pos]):
-            head = line[pos - 1]
-            if _is_lemma_char(head):
-                return head
-    if line and _is_lemma_char(line[0]):
-        cut_pos = line.find("切", 2, 9)
-        if cut_pos >= 2 and all(_is_lemma_char(ch) for ch in line[1:cut_pos]):
-            return line[0]
-    return None
-
-
-def _head_gloss_candidates(line: str, head: str) -> list[dict]:
-    if not line.startswith(head):
-        return []
-    cut_pos = line.find("切", 2, 9)
-    if cut_pos < 0:
-        return []
-    label_start = _first_label_start(line[cut_pos + 1:])
-    if label_start is None:
-        return []
-    label_start += cut_pos + 1
-    source_start = cut_pos + 1
-    if PLACEHOLDER not in line[source_start:label_start]:
-        return []
-    return [{
-        "lemma_start": 0,
-        "source_start": source_start,
-        "span_end": label_start,
-        "lemma": head,
-    }]
-
-
-def _lemma_candidates(line: str, head: str) -> list[dict]:
-    valid_source_starts = [
-        source_start
-        for source_start, _cue in _source_cue_positions(line)
-        if source_start > 0 and line[source_start - 1] == head
+def _infer_lemma_length(note_text: str) -> int | None:
+    counts = [
+        min(segment.count(PLACEHOLDER), _MAX_LEMMA_LEN)
+        for segment in _quotation_segments(note_text)
+        if PLACEHOLDER in segment
     ]
-    raw: list[dict] = []
-    for source_start in valid_source_starts:
-        lemma_end = source_start
-        later_valid = [pos for pos in valid_source_starts if pos > source_start]
-        window_end = min(later_valid) if later_valid else len(line)
-        if PLACEHOLDER not in line[source_start:window_end]:
-            continue
-        lemma_start = _choose_lemma_start(line, lemma_end, source_start, window_end)
-        if lemma_start is None:
-            continue
-        lemma = line[lemma_start:lemma_end]
-        if not lemma or PLACEHOLDER in lemma or _has_label_prefix(lemma):
-            continue
-        raw.append({
-            "lemma_start": lemma_start,
-            "source_start": source_start,
-            "lemma": lemma,
-        })
-
-    # Multiple source cues can start inside one title, e.g. 後漢書 also
-    # contains 漢書 and 書. Keep the earliest/longest effective candidate for
-    # each source start.
-    dedup: dict[int, dict] = {}
-    for candidate in raw:
-        existing = dedup.get(candidate["source_start"])
-        if existing is None or len(candidate["lemma"]) > len(existing["lemma"]):
-            dedup[candidate["source_start"]] = candidate
-    return sorted(dedup.values(), key=lambda c: (c["lemma_start"], c["source_start"]))
+    counts = [count for count in counts if count > 0]
+    if not counts:
+        return None
+    by_frequency = Counter(counts)
+    best_frequency = max(by_frequency.values())
+    best = [count for count, frequency in by_frequency.items() if frequency == best_frequency]
+    if len(best) != 1:
+        return None
+    return best[0]
 
 
-def _source_cue_positions(line: str) -> list[tuple[int, str]]:
-    found: list[tuple[int, str]] = []
+def _quotation_segments(note_text: str) -> list[str]:
+    starts = _source_cue_starts(note_text)
+    if not starts:
+        return [note_text]
+    if starts[0] != 0:
+        starts.insert(0, 0)
+    starts.append(len(note_text))
+    return [
+        note_text[start:end]
+        for start, end in zip(starts, starts[1:])
+        if end > start
+    ]
+
+
+def _source_cue_starts(note_text: str) -> list[int]:
+    found: list[tuple[int, int]] = []
     for cue in _SOURCE_CUES:
         start = 0
         while True:
-            pos = line.find(cue, start)
+            pos = note_text.find(cue, start)
             if pos < 0:
                 break
-            found.append((pos, cue))
+            found.append((pos, len(cue)))
             start = pos + 1
-    found.sort(key=lambda p: (p[0], -len(p[1])))
-    return found
+    found.sort(key=lambda item: (item[0], -item[1]))
+
+    starts: list[int] = []
+    occupied_until = -1
+    for pos, cue_len in found:
+        if pos < occupied_until:
+            continue
+        starts.append(pos)
+        occupied_until = pos + cue_len
+    return starts
 
 
-def _next_source_start(line: str, after: int) -> int | None:
-    starts = [pos for pos, _cue in _source_cue_positions(line) if pos >= after]
-    return min(starts) if starts else None
+def _overlaps_any(start: int, end: int, spans: list[_Span]) -> bool:
+    return any(start < span.end and span.start < end for span in spans)
 
 
-def _choose_lemma_start(
-    line: str,
-    lemma_end: int,
-    source_start: int,
-    window_end: int,
-) -> int | None:
-    min_start = max(0, lemma_end - _MAX_LEMMA_LEN)
-    label_start = _label_trim_start(line[:lemma_end])
-    if label_start is not None and label_start >= min_start:
-        return label_start
-
-    boundary_start = _boundary_trim_start(line[:lemma_end])
-    if boundary_start is not None:
-        return boundary_start
-
-    available = lemma_end - min_start
-    if available <= 0:
-        return None
-
-    span = line[source_start:min(window_end, source_start + _LEMMA_HINT_WINDOW)]
-    placeholder_count = span.count(PLACEHOLDER)
-    max_run = _max_placeholder_run(span)
-    if placeholder_count <= 0:
-        return None
-
-    lengths = list(range(1, min(_MAX_LEMMA_LEN, available) + 1))
-    viable = [
-        length for length in lengths
-        if length >= max_run and placeholder_count % length == 0
-    ]
-    if viable:
-        length = 2 if 2 in viable else min(viable)
-    else:
-        length = min(max(max_run, 1), available)
-    return lemma_end - length
+def _valid_lemma(lemma: str) -> bool:
+    return (
+        bool(lemma)
+        and PLACEHOLDER not in lemma
+        and all(is_allowed_body_char(ch) for ch in lemma)
+    )
 
 
-def _max_placeholder_run(text: str) -> int:
-    best = cur = 0
-    for ch in text:
-        if ch == PLACEHOLDER:
-            cur += 1
-            best = max(best, cur)
-        else:
-            cur = 0
-    return best
-
-
-def _label_trim_start(prefix: str) -> int | None:
-    best: int | None = None
+def _trim_label(start: int, lemma: str) -> tuple[int, str]:
     for label in _LABELS:
-        pos = prefix.rfind(label)
-        if pos >= 0:
-            end = pos + len(label)
-            if best is None or end > best:
-                best = end
-    return best
-
-
-def _boundary_trim_start(prefix: str) -> int | None:
-    floor = max(0, len(prefix) - _MAX_LEMMA_LEN)
-    for pos in range(len(prefix) - 1, floor - 1, -1):
-        if prefix[pos] in _LEMMA_BOUNDARY_CHARS and pos + 1 < len(prefix):
-            return pos + 1
-    return None
-
-
-def _first_label_start(text: str) -> int | None:
-    positions = [pos for label in _LABELS if (pos := text.find(label)) >= 0]
-    return min(positions) if positions else None
-
-
-def _has_label_prefix(text: str) -> bool:
-    return any(text.startswith(label) for label in _LABELS)
-
-
-def _is_lemma_char(ch: str) -> bool:
-    return ch != PLACEHOLDER and is_allowed_body_char(ch)
+        if lemma.startswith(label):
+            return start + len(label), lemma[len(label):]
+    return start, lemma

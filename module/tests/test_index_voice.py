@@ -266,19 +266,18 @@ def test_build_rejects_overlapping_same_name_voices(tmp_path):
         build_index(bundle)
 
 
-def test_build_normalizes_legacy_dictionary_note_voice_name(tmp_path):
+def test_build_accepts_dictionary_lemma_voice(tmp_path):
     voices = [
         {"offset": 0, "length": 5, "name": "note", "id": "n1"},
         {
-            "offset": 0,
-            "length": 5,
-            "name": "note",
-            "id": "dn1",
+            "offset": 5,
+            "length": 2,
+            "name": "lemma",
+            "id": "dl1",
             "source": "dictionary",
-            "lemma": "AAAAA",
         },
     ]
-    bundle = _write_bundle(tmp_path, "KRV0011B", "AAAAA", voices=voices)
+    bundle = _write_bundle(tmp_path, "KRV0011B", "AAAAABB", voices=voices)
 
     bkkx = build_index(bundle)
 
@@ -289,7 +288,7 @@ def test_build_normalizes_legacy_dictionary_note_voice_name(tmp_path):
         ).fetchall()
     finally:
         conn.close()
-    assert rows == [("dict", "dn1"), ("note", "n1")]
+    assert rows == [("lemma", "dl1"), ("note", "n1")]
 
 
 def test_build_rejects_voice_out_of_range(tmp_path):

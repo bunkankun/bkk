@@ -46,13 +46,14 @@ def _write_bundle_with_marker_asset_for(
     bundle_dir: Path,
     text_id: str,
     markers: list[dict] | None = None,
+    body_text: str = "abcdefghij",
 ) -> tuple[Path, str]:
     bundle_dir.mkdir(parents=True, exist_ok=True)
     juan = {
         "canonical_identifier": f"bkk:krp/{text_id}/v1/juan/1",
         "seq": 1,
         "body": {
-            "text": "abcdefghij",
+            "text": body_text,
             "hash": "sha256:" + "0" * 64,
         },
         "hash": ZERO_HASH,
@@ -193,6 +194,100 @@ def test_add_can_exclude_tls_note_markers(tmp_path: Path) -> None:
     )
     markers = _asset_markers(bundle, manifest, 1)
     assert not any(marker.get("type") == "voice" for marker in markers)
+
+
+def test_add_dictionary_derives_lemma_from_existing_note_voice(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"},
+        ],
+        body_text="北東書丨丨",
+    )
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="dictionary",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"lemma": 1}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"} in markers
+    assert {
+        "type": "voice",
+        "offset": 0,
+        "length": 2,
+        "name": "lemma",
+        "id": "dl1",
+        "source": "dictionary",
+    } in markers
+    assert not any(marker.get("name") == "dict" for marker in markers)
+
+
+def test_add_dictionary_force_replaces_only_dictionary_lemmas(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"},
+        ],
+        body_text="北東書丨丨",
+    )
+    assert _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="dictionary",
+        force=False,
+        dry_run=False,
+    )["by_name"] == {"lemma": 1}
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="dictionary",
+        force=True,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"lemma": 1}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert [
+        marker for marker in markers
+        if marker.get("type") == "voice" and marker.get("name") == "note"
+    ] == [
+        {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"},
+    ]
+    assert [
+        marker for marker in markers
+        if marker.get("type") == "voice" and marker.get("name") == "lemma"
+    ] == [
+        {
+            "type": "voice",
+            "offset": 0,
+            "length": 2,
+            "name": "lemma",
+            "id": "dl1",
+            "source": "dictionary",
+        },
+    ]
 
 
 def test_add_parser_accepts_tls_note_toggle() -> None:

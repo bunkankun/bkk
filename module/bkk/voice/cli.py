@@ -24,9 +24,9 @@ from ``.bkkrc`` unless ``--out`` is passed.
 - ``indent`` — from ``line-break``/``indent`` markers, emits
   ``root``/``commentary``/``head``/``attribution`` for sources whose
   layout indents each textual layer differently.
-- ``dictionary`` — detects dictionary explanation spans that contain the
-  lemma-repeat placeholder ``丨`` and emits ``dict`` spans carrying lemma
-  metadata for ``bkk chars lemma-repeat apply``.
+- ``dictionary`` — after generic ``note`` voices exist, detects notes that
+  contain the lemma-repeat placeholder ``丨`` and emits default-text
+  ``lemma`` spans with ``source="dictionary"``.
 - ``all`` — both derivers, concatenated. The two derivers use disjoint
   voice names (parens → ``note``/``emphasis``; indent →
   ``root``/``commentary``/…), so same-name overlaps are impossible by
@@ -143,8 +143,8 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument(
         "--source", dest="source", choices=_VALID_SOURCES, default=None,
         help="derivation source: 'parens' (default; punctuation pairs), "
-             "'indent' (layout indentation), 'dictionary' (lemma-repeat "
-             "dictionary notes), or 'all' (parens + indent, merged). "
+             "'indent' (layout indentation), 'dictionary' (lemma spans for "
+             "lemma-repeat notes), or 'all' (parens + indent, merged). "
              "Falls back to voice.source in .bkkrc; otherwise 'parens'.",
     )
     pa.add_argument(

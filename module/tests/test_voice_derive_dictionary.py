@@ -1,107 +1,139 @@
 from __future__ import annotations
 
-from bkk.chars.lemma_repeat import apply_lemma_repeat_substitutions
 from bkk.voice.derive_dictionary import derive_dictionary_voice_markers
 
 
-def _lb(offset: int) -> dict:
-    return {"type": "line-break", "offset": offset, "content": "", "id": ""}
+def _note(offset: int, length: int, marker_id: str = "n1") -> dict:
+    return {"type": "voice", "offset": offset, "length": length, "name": "note", "id": marker_id}
 
 
-def test_dictionary_derives_note_spans_with_lemmas_across_lines() -> None:
-    line1 = "東唐韻德紅切"
-    line2 = "補藻北東書導沇水又丨丨入海師曰丨折而丨也"
-    line3 = "同玉篇集韻徒東切"
-    line4 = "補藻僉同書詢謀丨丨議者丨丨"
-    text = line1 + line2 + line3 + line4
+def test_dictionary_derives_lemma_voice_from_generic_note() -> None:
+    prefix = "韻藻南東"
+    note_text = "詩丨丨其畝"
+    text = prefix + note_text
+    markers = [_note(len(prefix), len(note_text))]
+
+    voices = derive_dictionary_voice_markers(text, markers)
+
+    assert voices == [
+        {
+            "type": "voice",
+            "offset": len("韻藻"),
+            "length": 2,
+            "name": "lemma",
+            "id": "dl1",
+            "source": "dictionary",
+        },
+    ]
+
+
+def test_dictionary_uses_placeholder_count_for_separated_placeholders() -> None:
+    prefix = "礬頭多"
+    note_text = "畫史巨然明潤最有爽氣丨丨太丨"
+    text = prefix + note_text
+    markers = [_note(len(prefix), len(note_text))]
+
+    voices = derive_dictionary_voice_markers(text, markers)
+
+    assert [
+        (voice["id"], voice["offset"], voice["length"], text[voice["offset"]:voice["offset"] + voice["length"]])
+        for voice in voices
+    ] == [
+        ("dl1", 0, 3, "礬頭多"),
+    ]
+
+
+def test_dictionary_uses_common_placeholder_count_across_quotations() -> None:
+    prefix = "燈影多"
+    note_text = "漢書上元以丨丨丨者為上宋史其相勝丨丨丨也"
+    text = prefix + note_text
+    markers = [_note(len(prefix), len(note_text))]
+
+    voices = derive_dictionary_voice_markers(text, markers)
+
+    assert [
+        (voice["id"], voice["offset"], voice["length"], text[voice["offset"]:voice["offset"] + voice["length"]])
+        for voice in voices
+    ] == [
+        ("dl1", 0, 3, "燈影多"),
+    ]
+
+
+def test_dictionary_splits_rhyme_source_quotations() -> None:
+    prefix = "一歌"
+    note_text = "古俄􅋀人聲曰丨歌者柯也韻㑹合樂曰丨"
+    text = prefix + note_text
+    markers = [_note(len(prefix), len(note_text))]
+
+    voices = derive_dictionary_voice_markers(text, markers)
+
+    assert [
+        (voice["id"], voice["offset"], voice["length"], text[voice["offset"]:voice["offset"] + voice["length"]])
+        for voice in voices
+    ] == [
+        ("dl1", 1, 1, "歌"),
+    ]
+
+
+def test_dictionary_trims_default_side_label_from_lemma() -> None:
+    prefix = "韻藻載歌"
+    note_text = "書乃丨載丨曰元首明哉沈佺期詩丨丨樂嵗豐"
+    text = prefix + note_text
+    markers = [_note(len(prefix), len(note_text))]
+
+    voices = derive_dictionary_voice_markers(text, markers)
+
+    assert [
+        (voice["id"], voice["offset"], voice["length"], text[voice["offset"]:voice["offset"] + voice["length"]])
+        for voice in voices
+    ] == [
+        ("dl1", len("韻藻"), 2, "載歌"),
+    ]
+
+
+def test_dictionary_skips_ambiguous_quotation_counts() -> None:
+    prefix = "燈影多"
+    note_text = "漢書上元以丨丨丨者為上宋史其相勝丨丨也"
+    text = prefix + note_text
+    markers = [_note(len(prefix), len(note_text))]
+
+    voices = derive_dictionary_voice_markers(text, markers)
+
+    assert voices == []
+
+
+def test_dictionary_dedupes_repeated_note_targets() -> None:
+    prefix = "北東"
+    first = "書導沇水丨丨"
+    second = "詩沂之丨丨"
+    text = prefix + first + second
     markers = [
-        _lb(0),
-        _lb(len(line1)),
-        _lb(len(line1) + len(line2)),
-        _lb(len(line1) + len(line2) + len(line3)),
+        _note(len(prefix), len(first), "n1"),
+        _note(len(prefix), len(first) + len(second), "n2"),
     ]
 
     voices = derive_dictionary_voice_markers(text, markers)
 
     assert [
-        (voice["lemma"], voice["offset"], voice["length"])
+        (voice["id"], voice["offset"], voice["length"])
         for voice in voices
     ] == [
-        ("北東", len(line1) + len("補藻北東"), len("書導沇水又丨丨入海師曰丨折而丨也")),
-        ("僉同", len(line1) + len(line2) + len(line3) + len("補藻僉同"), len("書詢謀丨丨議者丨丨")),
+        ("dl1", 0, 2),
     ]
-    assert all(voice["source"] == "dictionary" for voice in voices)
-    assert all(voice["name"] == "dict" for voice in voices)
-    assert [voice["id"] for voice in voices] == ["dn1", "dn2"]
 
 
-def test_dictionary_derives_peiwen_head_gloss_and_yunzao_entries() -> None:
-    line1 = "上平聲一東韻一"
-    line2 = "東德紅切眷方也漢書少陽在丨方丨動也禮記大明生於丨"
-    line3 = "韻藻南東詩丨丨其畝李孝先詩沂之丨丨自東詩我來丨丨"
-    text = line1 + line2 + line3
+def test_dictionary_skips_span_crossing_previous_note() -> None:
+    text = "甲乙書丨丨丙丁書丨丨"
     markers = [
-        _lb(0),
-        _lb(len(line1)),
-        _lb(len(line1) + len(line2)),
+        _note(2, 4, "n1"),
+        _note(7, 4, "n2"),
     ]
 
     voices = derive_dictionary_voice_markers(text, markers)
 
     assert [
-        (voice["lemma"], voice["offset"], voice["length"])
+        (voice["id"], voice["offset"], voice["length"], text[voice["offset"]:voice["offset"] + voice["length"]])
         for voice in voices
     ] == [
-        ("東", len(line1) + len("東德紅切"), len("眷方也漢書少陽在丨方丨動也禮記大明生於丨")),
-        ("南東", len(line1) + len(line2) + len("韻藻南東"), len("詩丨丨其畝李孝先詩沂之丨丨")),
-        ("自東", len(line1) + len(line2) + len("韻藻南東詩丨丨其畝李孝先詩沂之丨丨自東"), len("詩我來丨丨")),
-    ]
-
-    substituted, _markers, emitted = apply_lemma_repeat_substitutions(text, voices)
-
-    assert "漢書少陽在東方東動也禮記大明生於東" in substituted
-    assert "南東其畝李孝先詩沂之南東" in substituted
-    assert "自東" in {marker["lemma"] for marker in emitted}
-
-
-def test_dictionary_trims_single_zao_label() -> None:
-    line1 = "上平聲一東韻三"
-    line2 = "穹去宮切説文窮也廣韻又髙也"
-    line3 = "藻皓穹漢書鞏自丨丨"
-    text = line1 + line2 + line3
-    markers = [
-        _lb(0),
-        _lb(len(line1)),
-        _lb(len(line1) + len(line2)),
-    ]
-
-    voices = derive_dictionary_voice_markers(text, markers)
-
-    assert [
-        (voice["lemma"], voice["offset"], voice["length"])
-        for voice in voices
-    ] == [
-        ("皓穹", len(line1) + len(line2) + len("藻皓穹"), len("漢書鞏自丨丨")),
-    ]
-
-
-def test_dictionary_prefers_two_character_compound_for_separated_placeholders() -> None:
-    line1 = "上平聲一東韻四"
-    line2 = "功古紅切説文以勞定國曰丨廣韻丨績也"
-    line3 = "韻藻試功書明丨以丨車服以庸"
-    text = line1 + line2 + line3
-    markers = [
-        _lb(0),
-        _lb(len(line1)),
-        _lb(len(line1) + len(line2)),
-    ]
-
-    voices = derive_dictionary_voice_markers(text, markers)
-
-    assert [
-        (voice["lemma"], voice["offset"], voice["length"])
-        for voice in voices
-    ] == [
-        ("功", len(line1) + len("功古紅切"), len("説文以勞定國曰丨廣韻丨績也")),
-        ("試功", len(line1) + len(line2) + len("韻藻試功"), len("書明丨以丨車服以庸")),
+        ("dl1", 0, 2, "甲乙"),
     ]
