@@ -2,15 +2,16 @@
 
 Exposes two operations:
 
-``add (--bundle <dir> | --text-id <id> | --text-prefix <prefix>)`` walks
-every juan file in the selected bundle(s) (master plus each documentary
-edition), derives ``voice`` range markers from the markers already on disk,
-writes the derived markers into each juan's marker asset, and refreshes
-marker-asset and manifest hashes.
+``add (--bundle <dir> | --text-id <id> | --text-prefix <prefix> | --juan <ref>)``
+walks every selected juan file in the selected bundle(s) (master plus each
+documentary edition), derives ``voice`` range markers from the markers already
+on disk, writes the derived markers into each juan's marker asset, and
+refreshes marker-asset and manifest hashes.
 
     python -m bkk voice add --bundle <out-root>/<text-id>/
     python -m bkk voice add --text-id <text-id>     # resolved via .bkkrc
     python -m bkk voice add --text-prefix KR6q      # resolved via .bkkrc
+    python -m bkk voice add --juan KR3k0059/147     # one juan only
 
 Bare-id and prefix forms resolve the bundle root against ``global.corpus``
 from ``.bkkrc`` unless ``--out`` is passed.
@@ -24,9 +25,9 @@ from ``.bkkrc`` unless ``--out`` is passed.
 - ``indent`` — from ``line-break``/``indent`` markers, emits
   ``root``/``commentary``/``head``/``attribution`` for sources whose
   layout indents each textual layer differently.
-- ``dictionary`` — after generic ``note`` voices exist, detects notes that
-  contain the lemma-repeat placeholder ``丨`` and emits default-text
-  ``lemma`` spans with ``source="dictionary"``.
+- ``dictionary`` — after generic ``note`` voices exist, detects definition
+  notes and emits linked ``lemma``/``def`` spans with
+  ``source="dictionary"``.
 - ``all`` — both derivers, concatenated. The two derivers use disjoint
   voice names (parens → ``note``/``emphasis``; indent →
   ``root``/``commentary``/…), so same-name overlaps are impossible by
@@ -81,7 +82,7 @@ from bkk.marker_assets import (
     marker_asset_entry_for_seq,
     marker_asset_filename,
 )
-from bkk.short_refs import text_id_arg, text_or_path_arg
+from bkk.short_refs import parse_text_juan_selector, text_id_arg, text_or_path_arg
 
 from .derive import VoiceDerivationProblem, derive_voice_markers
 from .derive_dictionary import derive_dictionary_voice_markers
@@ -164,6 +165,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", dest="dry_run", action="store_true",
         help="report what would be written without modifying files",
     )
+    pa.add_argument(
+        "--juan",
+        dest="juan_selectors",
+        action="append",
+        default=None,
+        help=(
+            "restrict add to one complete juan; repeatable. Accepts "
+            "KR refs like KR3k0059/147 as a standalone selector, or a "
+            "bare seq like 147 with --bundle/--text-id/--text-prefix."
+        ),
+    )
 
     pr = sub.add_parser(
         "remove",
@@ -218,13 +230,12 @@ def run(argv: list[str] | None = None) -> int:
     if args.op == "problems":
         return _run_problems(args, out_root)
 
-    try:
-        bundle, text_id, text_prefix = _selected_bundle_args(args)
-    except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-
     if args.op == "remove":
+        try:
+            bundle, text_id, text_prefix = _selected_bundle_args(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
         if text_prefix is not None:
             return _run_remove(
                 bundle, out_root, text_id=text_id, text_prefix=text_prefix,
@@ -256,15 +267,22 @@ def run(argv: list[str] | None = None) -> int:
             )
             return 2
 
+    try:
+        bundle, text_id, text_prefix, selected_juans = _selected_add_args(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     if text_prefix is not None:
         return _run_add(
             bundle, out_root, text_id=text_id, text_prefix=text_prefix,
             source=source, force=args.force, dry_run=args.dry_run,
-            include_tls_notes=tls_notes,
+            include_tls_notes=tls_notes, selected_juans=selected_juans,
         )
     return _run_add(
         bundle, out_root, text_id=text_id, source=source, force=args.force,
         dry_run=args.dry_run, include_tls_notes=tls_notes,
+        selected_juans=selected_juans,
     )
 
 
@@ -289,6 +307,46 @@ def _selected_bundle_args(
     return args.bundle, args.text_id, args.text_prefix
 
 
+def _selected_add_args(
+    args: argparse.Namespace,
+) -> tuple[str | Path | None, str | None, str | None, set[int] | None]:
+    juan_selectors = list(getattr(args, "juan_selectors", None) or [])
+    text_refs: list[tuple[str, int]] = []
+    local_seqs: list[int] = []
+    for raw in juan_selectors:
+        value = str(raw).strip()
+        if value.isdigit():
+            local_seqs.append(int(value))
+            continue
+        try:
+            textid, seq = parse_text_juan_selector(value)
+        except ValueError as exc:
+            raise ValueError(f"invalid --juan selector {raw!r}: {exc}") from exc
+        if seq is None:
+            raise ValueError(f"--juan selector {raw!r} must include a juan number")
+        text_refs.append((textid, seq))
+
+    supplied_bundle_selector = any([
+        bool(getattr(args, "legacy_bundle", None)),
+        bool(getattr(args, "bundle", None)),
+        bool(getattr(args, "text_id", None)),
+        bool(getattr(args, "text_prefix", None)),
+    ])
+    if text_refs:
+        if supplied_bundle_selector:
+            raise ValueError(
+                "--juan TEXT/SEQ cannot be combined with --bundle, --text-id, "
+                "or --text-prefix"
+            )
+        textids = {textid for textid, _ in text_refs}
+        if len(textids) != 1:
+            raise ValueError("--juan TEXT/SEQ selectors must all name the same text")
+        return None, text_refs[0][0], None, {seq for _, seq in text_refs}
+
+    bundle, text_id, text_prefix = _selected_bundle_args(args)
+    return bundle, text_id, text_prefix, set(local_seqs) if local_seqs else None
+
+
 def _resolve_bundle_dir(
     bundle: str | Path | None,
     out_root: Path | None,
@@ -308,6 +366,7 @@ def _run_add(
     force: bool,
     dry_run: bool,
     include_tls_notes: bool = True,
+    selected_juans: set[int] | None = None,
 ) -> int:
     if text_prefix is not None:
         try:
@@ -321,6 +380,7 @@ def _run_add(
             bundle_rc = _run_add(
                 bundle_dir, out_root, source=source, force=force,
                 dry_run=dry_run, include_tls_notes=include_tls_notes,
+                selected_juans=selected_juans,
             )
             if bundle_rc:
                 rc = 1 if rc == 0 else rc
@@ -367,6 +427,7 @@ def _run_add(
                 juan_dir, manifest_path, text_id, short,
                 source=source, force=force, dry_run=dry_run,
                 include_tls_notes=include_tls_notes,
+                selected_juans=selected_juans,
             )
         except (RuntimeError, ValueError) as exc:
             print(f"  error: {exc}", file=sys.stderr)
@@ -474,6 +535,7 @@ def _rc_bool(rc: dict, key: str, *, default: bool) -> bool:
 def _process_one(
     juan_dir: Path, manifest_path: Path, text_id: str, short: str | None,
     *, source: str, force: bool, dry_run: bool, include_tls_notes: bool = True,
+    selected_juans: set[int] | None = None,
 ) -> dict:
     """Apply voice derivation to all juan files under ``juan_dir`` and update
     ``manifest_path``. Returns a small stats dict.
@@ -494,10 +556,18 @@ def _process_one(
             continue
         if m.group("short") != short:
             continue
-        juan_entries.append((int(m.group("seq")), entry))
+        seq = int(m.group("seq"))
+        if selected_juans is not None and seq not in selected_juans:
+            continue
+        juan_entries.append((seq, entry))
     juan_entries.sort(key=lambda t: t[0])
 
     if not juan_entries:
+        if selected_juans is not None:
+            selected = ", ".join(str(seq) for seq in sorted(selected_juans))
+            raise RuntimeError(
+                f"no selected juan files found under {juan_dir}: {selected}"
+            )
         raise RuntimeError(f"no juan files found under {juan_dir}")
     manifest = _yaml_load_text(manifest_path.read_text(encoding="utf-8")) or {}
     if not isinstance(manifest, dict):
@@ -545,6 +615,7 @@ def _process_one(
                 continue
             text = bucket.get("text") or ""
             markers = effective_markers_for_bucket(data, bucket_name, marker_asset)
+            derive_markers = list(markers)
             if force and existing:
                 inline_markers = inline_markers_for_bucket(data, bucket_name)
                 new_inline = [
@@ -571,6 +642,13 @@ def _process_one(
                     m for m in markers
                     if not _is_replaceable_voice(m, source)
                 ]
+                if source == "dictionary":
+                    derive_markers = [
+                        m for m in derive_markers
+                        if not _is_dictionary_lemma_voice(m)
+                    ]
+                else:
+                    derive_markers = list(markers)
             external_markers = asset_markers_by_bucket.get(bucket_name, [])
             new_external = [
                 m for m in external_markers
@@ -583,9 +661,13 @@ def _process_one(
                     m for m in markers
                     if not _is_stale_voice_problem(m, source)
                 ]
+                derive_markers = [
+                    m for m in derive_markers
+                    if not _is_stale_voice_problem(m, source)
+                ]
             try:
                 new_voices = _derive_for_bucket(
-                    source, text, markers,
+                    source, text, derive_markers,
                     include_tls_notes=include_tls_notes,
                 )
             except VoiceDerivationProblem as exc:
@@ -622,6 +704,12 @@ def _process_one(
                 )
             if not new_voices:
                 continue
+            if source == "dictionary":
+                inline_changed, external_changed = _remove_replaced_dictionary_notes(
+                    bucket, bucket_name, asset_markers_by_bucket, new_voices,
+                )
+                juan_changed = juan_changed or inline_changed
+                asset_changed = asset_changed or external_changed
             for v in new_voices:
                 name = v["name"]
                 juan_by_name[name] = juan_by_name.get(name, 0) + 1
@@ -1069,6 +1157,77 @@ def _is_replaceable_voice(marker: object, source: str | None) -> bool:
     if source == "dictionary":
         return marker.get("source") == "dictionary"
     return True
+
+
+def _is_dictionary_lemma_voice(marker: object) -> bool:
+    return (
+        isinstance(marker, dict)
+        and marker.get("type") == "voice"
+        and marker.get("source") == "dictionary"
+        and marker.get("name") == "lemma"
+    )
+
+
+def _remove_replaced_dictionary_notes(
+    bucket: dict,
+    bucket_name: str,
+    asset_markers_by_bucket: dict[str, list[dict]],
+    new_voices: list[dict],
+) -> tuple[bool, bool]:
+    def_spans = {
+        (
+            marker.get("offset"),
+            marker.get("length"),
+        )
+        for marker in new_voices
+        if (
+            isinstance(marker, dict)
+            and marker.get("type") == "voice"
+            and marker.get("name") == "def"
+            and isinstance(marker.get("offset"), int)
+            and isinstance(marker.get("length"), int)
+        )
+    }
+    if not def_spans:
+        return False, False
+
+    inline_changed = False
+    inline_markers = inline_markers_for_bucket({bucket_name: bucket}, bucket_name)
+    new_inline = [
+        marker for marker in inline_markers
+        if not _is_replaced_dictionary_note(marker, def_spans)
+    ]
+    if len(new_inline) != len(inline_markers):
+        inline_changed = True
+        if new_inline:
+            bucket["markers"] = [marker_to_flow(marker) for marker in new_inline]
+        else:
+            bucket.pop("markers", None)
+
+    external_changed = False
+    external_markers = asset_markers_by_bucket.get(bucket_name, [])
+    new_external = [
+        marker for marker in external_markers
+        if not _is_replaced_dictionary_note(marker, def_spans)
+    ]
+    if len(new_external) != len(external_markers):
+        external_changed = True
+        asset_markers_by_bucket[bucket_name] = new_external
+
+    return inline_changed, external_changed
+
+
+def _is_replaced_dictionary_note(
+    marker: object,
+    def_spans: set[tuple[object, object]],
+) -> bool:
+    return (
+        isinstance(marker, dict)
+        and marker.get("type") == "voice"
+        and marker.get("name") == "note"
+        and marker.get("source") != "dictionary"
+        and (marker.get("offset"), marker.get("length")) in def_spans
+    )
 
 
 def _juan_self_hash(juan_dict: dict) -> str:

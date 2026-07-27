@@ -363,7 +363,7 @@ def run_lemma_repeat_apply(
     text_ids: list[str] | None = None,
     dry_run: bool = False,
 ) -> int:
-    """Apply ``substitution:lemma-repeat`` markers in master juans."""
+    """Apply ``substitution:lemma-repeat`` markers in master and edition juans."""
     if bundle_dir is None:
         if out_root is None:
             print("error: corpus root is required", file=sys.stderr)
@@ -426,16 +426,64 @@ def _process_bundle_lemma_repeat(
     *,
     dry_run: bool,
 ) -> dict[str, Any]:
-    manifest_path = bundle_dir / f"{text_id}.manifest.yaml"
-    if not manifest_path.exists():
+    scopes = _lemma_repeat_scopes(bundle_dir, text_id)
+    if not scopes:
+        manifest_path = bundle_dir / f"{text_id}.manifest.yaml"
         raise FileNotFoundError(f"master manifest not found: {manifest_path}")
+
+    total_juans = 0
+    total_subs = 0
+    manifest_changed = False
+    lines: list[str] = []
+    affected: list[tuple[Path, str | None, Path, set[int]]] = []
+
+    for root, short, manifest_path in scopes:
+        stats = _process_lemma_repeat_scope(
+            root, text_id, short, manifest_path, dry_run=dry_run,
+        )
+        total_juans += stats["juans"]
+        total_subs += stats["substitutions"]
+        manifest_changed = manifest_changed or stats["manifest_changed"]
+        affected_seqs = stats["affected_seqs"]
+        if affected_seqs:
+            affected.append((root, short, manifest_path, affected_seqs))
+        label = "master" if short is None else f"edition {short}"
+        lines.extend(f"  {label}: {line.strip()}" for line in stats["lines"])
+
+    if not dry_run and affected:
+        from bkk.repair.markers import externalize_markers
+        externalize_markers(bundle_dir, dry_run=False)
+        for root, short, manifest_path, seqs in affected:
+            _cleanup_unreferenced_marker_assets(
+                root, text_id, seqs, manifest_path,
+                edition_short=short,
+                dry_run=False,
+            )
+
+    return {
+        "juans": total_juans,
+        "substitutions": total_subs,
+        "manifest_changed": manifest_changed,
+        "lines": lines,
+    }
+
+
+def _process_lemma_repeat_scope(
+    root: Path,
+    text_id: str,
+    short: str | None,
+    manifest_path: Path,
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
     if not isinstance(manifest, dict):
         raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
 
-    juan_entries = _master_juan_entries(bundle_dir, text_id)
+    juan_entries = _scope_juan_entries(root, text_id, short)
     if not juan_entries:
-        raise RuntimeError(f"no master juan files found under {bundle_dir}")
+        label = "master" if short is None else f"edition {short}"
+        raise RuntimeError(f"no {label} juan files found under {root}")
 
     lines: list[str] = []
     total_subs = 0
@@ -445,7 +493,7 @@ def _process_bundle_lemma_repeat(
         data = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
-        marker_asset = load_marker_asset(bundle_dir, manifest, seq)
+        marker_asset = load_marker_asset(root, manifest, seq)
         data = hydrate_juan_markers(data, marker_asset)
 
         if _has_marker_type(data, LEMMA_REPEAT_MARKER):
@@ -518,6 +566,10 @@ def _process_bundle_lemma_repeat(
             "substitutions": total_subs,
             "manifest_changed": manifest_changed,
             "lines": lines,
+            "affected_seqs": {
+                int(_JUAN_RE.match(p.name).group("seq"))
+                for p, _, _ in pending_juans
+            },
         }
 
     if pending_juans:
@@ -526,21 +578,16 @@ def _process_bundle_lemma_repeat(
 
     if manifest_changed:
         manifest_path.write_text(dump(new_manifest), encoding="utf-8")
-        if pending_juans:
-            from bkk.repair.markers import externalize_markers
-            externalize_markers(bundle_dir, dry_run=False)
-            _cleanup_unreferenced_marker_assets(
-                bundle_dir, text_id,
-                {int(_JUAN_RE.match(p.name).group("seq")) for p, _, _ in pending_juans},
-                manifest_path,
-                dry_run=False,
-            )
 
     return {
         "juans": len(juan_entries),
         "substitutions": total_subs,
         "manifest_changed": manifest_changed,
         "lines": lines,
+        "affected_seqs": {
+            int(_JUAN_RE.match(p.name).group("seq"))
+            for p, _, _ in pending_juans
+        },
     }
 
 
@@ -751,9 +798,10 @@ def _cleanup_unreferenced_marker_assets(
     seqs: set[int],
     manifest_path: Path,
     *,
+    edition_short: str | None = None,
     dry_run: bool,
 ) -> int:
-    """Remove stale per-juan marker files for affected master juans."""
+    """Remove stale per-juan marker files for affected juans."""
     if not seqs:
         return 0
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
@@ -764,7 +812,7 @@ def _cleanup_unreferenced_marker_assets(
     }
     removed = 0
     for seq in seqs:
-        filename = marker_asset_filename(text_id, seq, None)
+        filename = marker_asset_filename(text_id, seq, edition_short)
         if filename in referenced:
             continue
         path = bundle_dir / filename
@@ -1058,6 +1106,48 @@ def _master_juan_entries(bundle_dir: Path, text_id: str) -> list[tuple[int, Path
             continue
         if m.group("short") is not None:
             continue  # documentary edition — skipped in v1
+        entries.append((int(m.group("seq")), entry))
+    entries.sort(key=lambda t: t[0])
+    return entries
+
+
+def _lemma_repeat_scopes(
+    bundle_dir: Path,
+    text_id: str,
+) -> list[tuple[Path, str | None, Path]]:
+    scopes: list[tuple[Path, str | None, Path]] = []
+    master_manifest = bundle_dir / f"{text_id}.manifest.yaml"
+    if master_manifest.exists():
+        scopes.append((bundle_dir, None, master_manifest))
+
+    editions_root = bundle_dir / "editions"
+    if editions_root.is_dir():
+        for sub in sorted(editions_root.iterdir()):
+            if not sub.is_dir():
+                continue
+            manifest_path = sub / f"{text_id}-{sub.name}.manifest.yaml"
+            if manifest_path.exists():
+                scopes.append((sub, sub.name, manifest_path))
+    return scopes
+
+
+def _scope_juan_entries(
+    root: Path,
+    text_id: str,
+    short: str | None,
+) -> list[tuple[int, Path]]:
+    entries: list[tuple[int, Path]] = []
+    for entry in sorted(root.iterdir()):
+        if not entry.is_file():
+            continue
+        name = entry.name
+        if name.endswith(".manifest.yaml") or name.endswith(".ann.yaml"):
+            continue
+        m = _JUAN_RE.match(name)
+        if not m or m.group("text_id") != text_id:
+            continue
+        if m.group("short") != short:
+            continue
         entries.append((int(m.group("seq")), entry))
     entries.sort(key=lambda t: t[0])
     return entries

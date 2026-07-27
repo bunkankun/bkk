@@ -11,7 +11,7 @@ import yaml
 from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs
 from bkk.importer.write.yaml_writer import dump, marker_to_flow
 from bkk.marker_assets import build_marker_asset
-from bkk.voice.cli import _process_one, _run_add
+from bkk.voice.cli import _process_one, _run_add, _selected_add_args
 from bkk.voice.problems import (
     read_voice_problems_report,
     write_voice_problems_report,
@@ -217,12 +217,12 @@ def test_add_dictionary_derives_lemma_from_existing_note_voice(tmp_path: Path) -
         dry_run=False,
     )
 
-    assert stats["by_name"] == {"lemma": 1}
+    assert stats["by_name"] == {"def": 1, "lemma": 1}
     manifest = yaml.safe_load(
         (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
     )
     markers = _asset_markers(bundle, manifest, 1)
-    assert {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"} in markers
+    assert {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"} not in markers
     assert {
         "type": "voice",
         "offset": 0,
@@ -230,6 +230,18 @@ def test_add_dictionary_derives_lemma_from_existing_note_voice(tmp_path: Path) -
         "name": "lemma",
         "id": "dl1",
         "source": "dictionary",
+    } in markers
+    assert {
+        "type": "voice",
+        "offset": 2,
+        "length": 3,
+        "name": "def",
+        "id": "n1",
+        "source": "dictionary",
+        "responds-to": "dl1",
+        "lemma": "北東",
+        "lemma_offset": 0,
+        "lemma_length": 2,
     } in markers
     assert not any(marker.get("name") == "dict" for marker in markers)
 
@@ -252,7 +264,7 @@ def test_add_dictionary_force_replaces_only_dictionary_lemmas(tmp_path: Path) ->
         source="dictionary",
         force=False,
         dry_run=False,
-    )["by_name"] == {"lemma": 1}
+    )["by_name"] == {"def": 1, "lemma": 1}
 
     stats = _process_one(
         bundle,
@@ -264,7 +276,7 @@ def test_add_dictionary_force_replaces_only_dictionary_lemmas(tmp_path: Path) ->
         dry_run=False,
     )
 
-    assert stats["by_name"] == {"lemma": 1}
+    assert stats["by_name"] == {"def": 1, "lemma": 1}
     manifest = yaml.safe_load(
         (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
     )
@@ -272,9 +284,7 @@ def test_add_dictionary_force_replaces_only_dictionary_lemmas(tmp_path: Path) ->
     assert [
         marker for marker in markers
         if marker.get("type") == "voice" and marker.get("name") == "note"
-    ] == [
-        {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"},
-    ]
+    ] == []
     assert [
         marker for marker in markers
         if marker.get("type") == "voice" and marker.get("name") == "lemma"
@@ -288,6 +298,23 @@ def test_add_dictionary_force_replaces_only_dictionary_lemmas(tmp_path: Path) ->
             "source": "dictionary",
         },
     ]
+    assert [
+        marker for marker in markers
+        if marker.get("type") == "voice" and marker.get("name") == "def"
+    ] == [
+        {
+            "type": "voice",
+            "offset": 2,
+            "length": 3,
+            "name": "def",
+            "id": "n1",
+            "source": "dictionary",
+            "responds-to": "dl1",
+            "lemma": "北東",
+            "lemma_offset": 0,
+            "lemma_length": 2,
+        },
+    ]
 
 
 def test_add_parser_accepts_tls_note_toggle() -> None:
@@ -299,6 +326,28 @@ def test_add_parser_accepts_tls_note_toggle() -> None:
 
     assert disabled.tls_notes is False
     assert enabled.tls_notes is True
+
+
+def test_add_juan_selector_can_stand_in_for_text_id() -> None:
+    from bkk.voice.cli import build_parser
+
+    args = build_parser().parse_args(["add", "--juan", "KR3k0059/147"])
+
+    assert _selected_add_args(args) == (None, "KR3k0059", None, {147})
+
+
+def test_add_juan_selector_accepts_local_seq_with_bundle() -> None:
+    from bkk.voice.cli import build_parser
+
+    args = build_parser().parse_args([
+        "add",
+        "--bundle",
+        "/tmp/KR3k0059",
+        "--juan",
+        "147",
+    ])
+
+    assert _selected_add_args(args) == (Path("/tmp/KR3k0059"), None, None, {147})
 
 
 def test_add_skips_occupied_id_scan_when_no_problem(
@@ -418,6 +467,32 @@ def test_add_marks_unresolved_juan_and_writes_resolvable_juans(tmp_path: Path) -
     assert problem["code"] == "unmatched-open"
     assert problem["id"].startswith(f"{TEXT_ID}_bkk_002-bkkvprob")
     assert manifest["hash"] == manifest_hash(manifest)
+
+
+def test_add_selected_juan_skips_unselected_problem_juan(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path = _write_two_juan_inline_paren_bundle(bundle)
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="parens",
+        force=False,
+        dry_run=False,
+        selected_juans={1},
+    )
+
+    assert stats["juans"] == 1
+    assert stats["by_name"] == {"note": 1}
+    manifest = yaml.safe_load((bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8"))
+    marker_entries = [
+        item for item in manifest["assets"].get("markers", [])
+        if isinstance(item, dict)
+    ]
+    assert [item["seq"] for item in marker_entries] == [1]
+    assert any(marker.get("type") == "voice" for marker in _asset_markers(bundle, manifest, 1))
 
 
 def test_add_text_prefix_processes_matching_bundles_only(tmp_path: Path) -> None:

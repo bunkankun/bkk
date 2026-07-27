@@ -69,6 +69,7 @@ def test_fulfil_whole_bundle(recipe_client):
     assert res["role"] == "base"
     assert isinstance(res["content"], list)
     assert res["content"][0]["text"] == "甲乙丙丁戊己庚辛壬癸"
+    assert res["content"][0]["bucket_hash"] == "sha256:0"
     assert data["resolved_recipe"]["pins"][0]["canonical_identifier"]
 
 

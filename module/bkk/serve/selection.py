@@ -36,6 +36,7 @@ _EDITION_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 class JuanSlice:
     juan_seq: int
     bucket: str
+    bucket_hash: str | None
     span: tuple[int, int]
     text: str
     markers: list[dict[str, Any]]
@@ -120,12 +121,17 @@ def _bucket_or_400(juan: dict[str, Any], bucket: str) -> dict[str, Any]:
     return body
 
 
+def _bucket_hash(body: dict[str, Any]) -> str | None:
+    value = body.get("hash")
+    return value if isinstance(value, str) else None
+
+
 def slice_whole(juan: dict[str, Any], seq: int, *, bucket: str = "body") -> JuanSlice:
     body = _bucket_or_400(juan, bucket)
     text = body.get("text") or ""
     markers = [m for m in (body.get("markers") or []) if isinstance(m, dict)]
     return JuanSlice(
-        juan_seq=seq, bucket=bucket, span=(0, len(text)),
+        juan_seq=seq, bucket=bucket, bucket_hash=_bucket_hash(body), span=(0, len(text)),
         text=text, markers=list(markers),
     )
 
@@ -155,7 +161,7 @@ def slice_by_offset(
             adjusted["offset"] = mo - offset
             sliced_markers.append(adjusted)
     return JuanSlice(
-        juan_seq=seq, bucket=bucket, span=(offset, end),
+        juan_seq=seq, bucket=bucket, bucket_hash=_bucket_hash(body), span=(offset, end),
         text=sliced_text, markers=sliced_markers,
     )
 

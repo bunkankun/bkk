@@ -66,6 +66,60 @@ def _write_voice_bundle(root: Path, textid: str = "RND0001") -> Path:
     return bundle
 
 
+def _write_voice_gap_bundle(root: Path, textid: str = "RND0002") -> Path:
+    bundle = root / textid
+    bundle.mkdir()
+    body = "甲乙注文丙丁注文"
+    markers = [
+        {
+            "type": "voice",
+            "offset": 0,
+            "length": 2,
+            "name": "lemma",
+            "id": "dl1",
+            "source": "dictionary",
+        },
+        {"type": "voice", "offset": 2, "length": 2, "name": "note", "id": "n1"},
+        {"type": "voice", "offset": 6, "length": 2, "name": "note", "id": "n2"},
+    ]
+    (bundle / f"{textid}_001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "seq": 1,
+                "body": {
+                    "text": body,
+                    "hash": "sha256:body",
+                    "markers": markers,
+                },
+                "hash": "sha256:juan",
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (bundle / f"{textid}.manifest.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "canonical_identifier": f"bkk:test/{textid}/v1",
+                "hash": "sha256:manifest",
+                "metadata": {"title": "Voice Gaps", "edition": {"short": "bkk"}},
+                "assets": {
+                    "parts": [
+                        {
+                            "seq": 1,
+                            "filename": f"{textid}_001.yaml",
+                            "hash": "sha256:juan",
+                        }
+                    ]
+                },
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    return bundle
+
+
 def _voice_recipe(textid: str = "RND0001") -> dict:
     return {
         "kind": "bkk.recipe/v1",
@@ -147,6 +201,31 @@ def test_render_voice_marker_dataset(tmp_path: Path):
     assert voices[1]["right"] == "BB"
     assert voices[1]["responds_to"] == "r1"
     assert voices[1]["end"] == 10
+
+
+def test_marker_dataset_includes_left_gap_between_voice_spans(tmp_path: Path):
+    _write_voice_gap_bundle(tmp_path)
+    rendered = render_recipe(_voice_recipe("RND0002"), corpus_root=tmp_path)
+
+    voices = rendered.context["datasets"]["voices"]
+    assert voices[0]["gap_left"] == ""
+    assert voices[0]["gap_left_offset"] == 0
+    assert voices[0]["bucket_hash"] == "sha256:body"
+    assert voices[1]["gap_left"] == ""
+    assert voices[1]["gap_left_offset"] == 2
+    assert voices[2]["gap_left"] == "丙丁"
+    assert voices[2]["gap_left_offset"] == 4
+
+    slices = rendered.context["pins"]["text"]["slices"]
+    assert slices == [
+        {
+            "textid": "RND0002",
+            "juan_seq": 1,
+            "bucket": "body",
+            "bucket_hash": "sha256:body",
+            "span": [0, 8],
+        }
+    ]
 
 
 def test_render_rejects_malformed_template(tmp_path: Path):

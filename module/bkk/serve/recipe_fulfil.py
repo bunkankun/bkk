@@ -73,6 +73,7 @@ def _slice_to_out(sl: selection.JuanSlice, textid: str) -> JuanSliceOut:
         textid=textid,
         juan_seq=sl.juan_seq,
         bucket=sl.bucket,
+        bucket_hash=sl.bucket_hash,
         span=[sl.span[0], sl.span[1]],
         text=sl.text,
         markers=sl.markers,

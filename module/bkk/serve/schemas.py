@@ -382,6 +382,7 @@ class JuanSliceOut(BaseModel):
     textid: str | None = None
     juan_seq: int
     bucket: str
+    bucket_hash: str | None = None
     span: list[int] = Field(
         ...,
         description="[start, end) within the bucket text (in chars)",

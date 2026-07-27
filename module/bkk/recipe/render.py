@@ -124,10 +124,29 @@ def _pin_contexts(
             "textid": textid,
             "canonical_identifier": getattr(result, "canonical_identifier", None),
             "selection": getattr(result, "selection", None),
+            "slices": _slice_contexts(getattr(result, "content", None)),
             "verified": getattr(result, "verified", False),
             "manifest_hash": getattr(result, "manifest_hash", None),
             "error": getattr(result, "error", None),
         }
+    return out
+
+
+def _slice_contexts(content: Any) -> list[dict[str, Any]]:
+    if content is None:
+        return []
+    slices = content if isinstance(content, list) else [content]
+    out: list[dict[str, Any]] = []
+    for sl in slices:
+        if not isinstance(sl, JuanSliceOut):
+            sl = JuanSliceOut.model_validate(sl)
+        out.append({
+            "textid": sl.textid,
+            "juan_seq": sl.juan_seq,
+            "bucket": sl.bucket,
+            "bucket_hash": sl.bucket_hash,
+            "span": sl.span,
+        })
     return out
 
 
@@ -176,11 +195,14 @@ def _collect_markers(result: Any, spec: dict[str, Any]) -> list[dict[str, Any]]:
     for sl in slices:
         if not isinstance(sl, JuanSliceOut):
             sl = JuanSliceOut.model_validate(sl)
+        slice_items: list[dict[str, Any]] = []
         for marker in sl.markers:
             if want_type is not None and marker.get("type") != want_type:
                 continue
             item = _marker_item(result, sl, marker, include_text, context)
-            out.append(item)
+            slice_items.append(item)
+        _add_gap_left(slice_items, sl.text, sl.span[0])
+        out.extend(slice_items)
     out.sort(key=lambda it: (
         str(it.get("textid") or ""),
         int(it.get("juan_seq") or 0),
@@ -189,6 +211,28 @@ def _collect_markers(result: Any, spec: dict[str, Any]) -> list[dict[str, Any]]:
         str(it.get("id") or ""),
     ))
     return out
+
+
+def _add_gap_left(
+    items: list[dict[str, Any]], text: str, span_start: int,
+) -> None:
+    previous_end = 0
+    for item in sorted(items, key=lambda it: (
+        int(it.get("relative_offset") or 0),
+        int(it.get("length") or 0),
+        str(it.get("id") or ""),
+    )):
+        rel_offset = item.get("relative_offset")
+        length = item.get("length")
+        if not isinstance(rel_offset, int):
+            rel_offset = 0
+        if not isinstance(length, int):
+            length = 0
+        gap_start = max(0, min(previous_end, len(text)))
+        gap_end = max(gap_start, min(rel_offset, len(text)))
+        item["gap_left"] = text[gap_start:gap_end]
+        item["gap_left_offset"] = span_start + gap_start
+        previous_end = max(previous_end, rel_offset + max(0, length))
 
 
 def _marker_item(
@@ -210,6 +254,7 @@ def _marker_item(
         "textid": result.textid or sl.textid,
         "juan_seq": sl.juan_seq,
         "bucket": sl.bucket,
+        "bucket_hash": sl.bucket_hash,
         "offset": abs_offset,
         "relative_offset": rel_offset,
         "length": length,

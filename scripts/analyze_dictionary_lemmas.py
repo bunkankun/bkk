@@ -459,7 +459,7 @@ def _dictionary_voice_ranges(markers: Iterable[dict[str, Any]]) -> list[Range]:
         rng for rng in _voice_ranges(markers)
         if rng.marker.get("source") == "dictionary"
         and isinstance(rng.marker.get("lemma"), str)
-        and rng.marker.get("name") in {"dict", "note"}
+        and rng.marker.get("name") in {"def", "dict", "note"}
     ]
 
 
