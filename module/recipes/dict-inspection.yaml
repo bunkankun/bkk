@@ -1,0 +1,37 @@
+kind: bkk.recipe/v1
+pins:
+  - name: text
+    role: base
+    textid: KR3k0059
+    selection:
+      juan: 1
+
+datasets:
+  voices:
+    from: text
+    collect: markers
+    where:
+      type: voice
+    include_text: true
+    context: 0
+
+render:
+  format: markdown
+  template: |
+    {% set s = pins.text.slices[0] if pins.text.slices else none %}
+    # pin: {{ pins.text.textid }}{% if s %} {{ "%03d"|format(s.juan_seq) }}/{{ s.bucket }} {{ s.bucket_hash or "no-bucket-hash" }}{% endif %}
+
+    {% for v in datasets.voices %}
+    {% if v.name == "def" %}
+    {% set p = datasets.voices[loop.index0 - 1] if loop.index0 > 0 else none %}
+    {% if p and p.textid == v.textid and p.juan_seq == v.juan_seq and p.bucket == v.bucket and p.name == "lemma" and p.get("source") == "dictionary" and (v.responds_to == p.id or p.end == v.offset) %}
+    #@ {{ p.offset }}
+    {{ p.text }}
+    {% else %}
+    #@ {{ v.gap_left_offset }}
+    #- {{ v.gap_left }}
+    {% endif %}
+        {{ v.text }}
+
+    {% endif %}
+    {% endfor %}
