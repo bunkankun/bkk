@@ -145,6 +145,48 @@ def test_add_writes_voices_to_existing_marker_asset(tmp_path: Path) -> None:
     assert manifest["hash"] == manifest_hash(manifest)
 
 
+def test_add_keeps_valid_voices_when_same_juan_has_problem(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {"type": "punctuation", "offset": 1, "content": "(", "id": ""},
+            {"type": "punctuation", "offset": 3, "content": ")", "id": ""},
+            {"type": "punctuation", "offset": 5, "content": "(", "id": ""},
+        ],
+    )
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="parens",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"note": 1}
+    assert stats["problems"] == 1
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    markers = _asset_markers(bundle, manifest, 1)
+    assert {
+        "type": "voice",
+        "offset": 1,
+        "length": 2,
+        "name": "note",
+        "id": "n1",
+    } in markers
+    problem = next(
+        marker for marker in markers if marker.get("type") == "voice:problem"
+    )
+    assert problem["offset"] == 5
+    assert problem["source"] == "parens"
+    assert problem["code"] == "unmatched-open"
+    assert problem["id"].startswith(f"{TEXT_ID}_bkk_001-bkkvprob")
+
+
 def test_add_includes_tls_note_markers_by_default(tmp_path: Path) -> None:
     bundle = tmp_path / TEXT_ID
     manifest_path, _original_juan_hash = _write_tls_note_bundle_with_marker_asset(bundle)
@@ -534,6 +576,40 @@ def test_add_force_clears_stale_problem_after_marker_fix(tmp_path: Path) -> None
     seq2_markers = _asset_markers(bundle, manifest, 2)
     assert not any(marker.get("type") == "voice:problem" for marker in seq2_markers)
     assert any(marker.get("type") == "voice" for marker in seq2_markers)
+
+
+def test_add_default_rerun_resumes_failed_juans_only(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    _write_two_juan_inline_paren_bundle(bundle)
+    assert _run_add(bundle, None, source="parens", force=False, dry_run=False) == 1
+
+    juan2_path = bundle / f"{TEXT_ID}_002.yaml"
+    juan2 = yaml.safe_load(juan2_path.read_text(encoding="utf-8"))
+    juan2["body"]["markers"].append(
+        marker_to_flow({"type": "punctuation", "offset": 8, "content": ")", "id": ""})
+    )
+    juan2["hash"] = _self_hash(juan2)
+    juan2_path.write_text(dump(juan2), encoding="utf-8")
+
+    assert _run_add(bundle, None, source="parens", force=False, dry_run=False) == 0
+
+    manifest = yaml.safe_load((bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8"))
+    seq1_markers = _asset_markers(bundle, manifest, 1)
+    seq2_markers = _asset_markers(bundle, manifest, 2)
+    assert [
+        marker for marker in seq1_markers
+        if marker.get("type") == "voice" and marker.get("name") == "note"
+    ] == [
+        {"type": "voice", "offset": 2, "length": 6, "name": "note", "id": "n1"},
+    ]
+    assert not any(marker.get("type") == "voice:problem" for marker in seq2_markers)
+    assert {
+        "type": "voice",
+        "offset": 3,
+        "length": 5,
+        "name": "note",
+        "id": "n1",
+    } in seq2_markers
 
 
 def test_voice_problems_command_writes_report(tmp_path: Path) -> None:

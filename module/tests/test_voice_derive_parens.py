@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from bkk.voice.derive import derive_voice_markers
+from bkk.voice.derive import derive_voice_markers, derive_voice_markers_best_effort
 
 
 def _paren(offset: int, ch: str) -> dict:
@@ -178,6 +178,25 @@ def test_unmatched_open_raises():
     markers = [_paren(2, "(")]
     with pytest.raises(ValueError, match="unmatched"):
         derive_voice_markers(10, markers)
+
+
+def test_best_effort_keeps_valid_spans_around_problem():
+    markers = [
+        _paren(0, "("), _paren(3, ")"),
+        _paren(5, "("), _paren(7, "("), _paren(9, ")"),
+        _paren(12, "("), _paren(15, ")"),
+    ]
+
+    voices, problems = derive_voice_markers_best_effort(20, markers)
+
+    assert voices == [
+        {"type": "voice", "offset": 0, "length": 3, "name": "note", "id": "n1"},
+        {"type": "voice", "offset": 7, "length": 2, "name": "note", "id": "n2"},
+        {"type": "voice", "offset": 12, "length": 3, "name": "note", "id": "n3"},
+    ]
+    assert [(p.code, p.offset, p.length) for p in problems] == [
+        ("expected-close", 5, 2),
+    ]
 
 
 def test_close_before_open_raises():

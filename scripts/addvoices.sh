@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Walk a bkk corpus root and run `bkk voice add` on every text-id bundle.
 #
-# By default reruns are safe: `bkk voice add` refuses any bundle that
-# already carries voice markers, so a second pass cleanly skips them.
+# By default reruns are safe: `bkk voice add` skips juans that already carry
+# voice markers, so a second pass can resume failed juans.
 # Pass --force to strip and rederive instead.
 
 set -euo pipefail

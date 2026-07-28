@@ -39,8 +39,8 @@ default; pass ``--no-tls-notes`` to ignore ``tls:note-start`` /
 ``tls:note-end`` markers and derive only from punctuation markers.
 
 ``--force`` strips any pre-existing ``voice`` markers and rederives;
-without it the command refuses to touch a bundle that already carries
-voice markers, so reruns are safe.
+without it the command skips juans that already carry voice markers, so
+reruns can resume failed juans without touching completed ones.
 
 ``--dry-run`` reports per-juan counts without writing.
 
@@ -84,7 +84,11 @@ from bkk.marker_assets import (
 )
 from bkk.short_refs import parse_text_juan_selector, text_id_arg, text_or_path_arg
 
-from .derive import VoiceDerivationProblem, derive_voice_markers
+from .derive import (
+    VoiceDerivationProblem,
+    derive_voice_markers,
+    derive_voice_markers_best_effort,
+)
 from .derive_dictionary import derive_dictionary_voice_markers
 from .derive_indent import derive_voice_markers_from_indent
 from .problems import (
@@ -159,7 +163,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pa.add_argument(
         "--force", action="store_true",
-        help="replace existing voice markers (default: refuse if any are present)",
+        help="replace existing voice markers (default: skip juans that have any)",
     )
     pa.add_argument(
         "--dry-run", dest="dry_run", action="store_true",
@@ -593,10 +597,11 @@ def _process_one(
 
         existing = _existing_voice_count(data, marker_asset, source=source)
         if existing and not force:
-            raise RuntimeError(
-                f"{juan_path.name}: {existing} voice marker(s) already present "
-                "(pass --force to replace)"
+            lines.append(
+                f"  juan {seq:03d}: {existing} voice marker(s) already present; "
+                "skipped"
             )
+            continue
 
         juan_by_name: dict[str, int] = {}
         juan_problems = 0
@@ -666,10 +671,39 @@ def _process_one(
                     if not _is_stale_voice_problem(m, source)
                 ]
             try:
-                new_voices = _derive_for_bucket(
+                new_voices, problems = _derive_for_bucket_best_effort(
                     source, text, derive_markers,
                     include_tls_notes=include_tls_notes,
                 )
+                if problems:
+                    occupied_ids.update(
+                        _occupied_marker_ids_for_juan(data, marker_asset)
+                    )
+                for exc in problems:
+                    problem = _voice_problem_marker(
+                        exc, text_id, seq, short, bucket_name, source, len(text),
+                        occupied_ids,
+                    )
+                    problem_rows.append(_voice_problem_report_row(
+                        text_id=text_id,
+                        title=title,
+                        short=short,
+                        seq=seq,
+                        bucket_name=bucket_name,
+                        marker=problem,
+                    ))
+                    asset_markers_by_bucket.setdefault(bucket_name, []).append(problem)
+                    asset_changed = True
+                    juan_problems += 1
+                    total_problems += 1
+                    lines.append(
+                        f"  juan {seq:03d} [{bucket_name}]: "
+                        f"marked {exc.code}: {exc.message}"
+                    )
+                if problems:
+                    asset_markers_by_bucket[bucket_name] = _sorted_marker_flows(
+                        asset_markers_by_bucket[bucket_name],
+                    )
             except VoiceDerivationProblem as exc:
                 occupied_ids.update(_occupied_marker_ids_for_juan(data, marker_asset))
                 problem = _voice_problem_marker(
@@ -1109,6 +1143,29 @@ def _derive_for_bucket(
             )
         ) + list(derive_voice_markers_from_indent(text_len, markers))
     raise ValueError(f"unknown voice source: {source!r}")
+
+
+def _derive_for_bucket_best_effort(
+    source: str, text: str, markers: list, *, include_tls_notes: bool = True,
+) -> tuple[list[dict], list[VoiceDerivationProblem]]:
+    """Derive voices and return recoverable problems for ``bkk voice add``."""
+    text_len = len(text)
+    if source == "parens":
+        return derive_voice_markers_best_effort(
+            text_len, markers, include_tls_notes=include_tls_notes,
+        )
+    if source == "all":
+        paren_voices, problems = derive_voice_markers_best_effort(
+            text_len, markers, include_tls_notes=include_tls_notes,
+        )
+        return (
+            list(paren_voices)
+            + list(derive_voice_markers_from_indent(text_len, markers)),
+            problems,
+        )
+    return _derive_for_bucket(
+        source, text, markers, include_tls_notes=include_tls_notes,
+    ), []
 
 
 def _warn_voice_overlaps(

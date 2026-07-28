@@ -71,7 +71,25 @@ def derive_voice_markers(
 
     Raises :class:`ValueError` if the ``(``/``)`` pairing is malformed.
     """
+    out, problems = derive_voice_markers_best_effort(
+        text_len, markers, include_tls_notes=include_tls_notes,
+    )
+    if problems:
+        raise problems[0]
+    return out
+
+
+def derive_voice_markers_best_effort(
+    text_len: int, markers: list[dict], *, include_tls_notes: bool = True,
+) -> tuple[list[dict], list[VoiceDerivationProblem]]:
+    """Return recoverable voice markers and localized derivation problems.
+
+    Valid paren spans are emitted even if another span in the same bucket is
+    malformed. Callers that need strict all-or-nothing behavior should use
+    :func:`derive_voice_markers`, which raises the first recorded problem.
+    """
     parens: list[tuple[int, str, int]] = []
+    problems: list[VoiceDerivationProblem] = []
     for index, m in enumerate(markers):
         if not isinstance(m, dict):
             continue
@@ -80,17 +98,20 @@ def derive_voice_markers(
             continue
         off = m.get("offset")
         if not isinstance(off, int):
-            raise VoiceDerivationProblem(
-                "paren-offset",
-                f"paren marker missing integer offset: {m}",
-                offset=0,
+            problems.append(
+                VoiceDerivationProblem(
+                    "paren-offset",
+                    f"paren marker missing integer offset: {m}",
+                    offset=0,
+                )
             )
+            continue
         if off < 0 or off > text_len:
             continue
         parens.append((off, ch, index))
 
     if not parens:
-        return []
+        return [], problems
 
     parens.sort(key=lambda p: (p[0], p[2]))
 
@@ -108,11 +129,14 @@ def derive_voice_markers(
         has_close = ")" in chars
         if open_span is None:
             if has_close and opener is None:
-                raise VoiceDerivationProblem(
-                    "stray-close",
-                    f"unexpected ')' at offset {off} with no matching '('",
-                    offset=off,
+                problems.append(
+                    VoiceDerivationProblem(
+                        "stray-close",
+                        f"unexpected ')' at offset {off} with no matching '('",
+                        offset=off,
+                    )
                 )
+                continue
             if opener is None:
                 continue
             name, prefix = _OPENERS[opener]
@@ -138,20 +162,26 @@ def derive_voice_markers(
             continue
 
         if opener is not None:
-            raise VoiceDerivationProblem(
-                "expected-close",
-                f"expected ')' after '{open_ch}' at offset {open_off}, "
-                f"got '{opener}' at offset {off}",
-                offset=open_off,
-                length=max(0, off - open_off),
+            problems.append(
+                VoiceDerivationProblem(
+                    "expected-close",
+                    f"expected ')' after '{open_ch}' at offset {open_off}, "
+                    f"got '{opener}' at offset {off}",
+                    offset=open_off,
+                    length=max(0, off - open_off),
+                )
             )
+            next_name, next_prefix = _OPENERS[opener]
+            open_span = (off, opener, next_name, next_prefix)
 
     if open_span is not None:
         open_off, open_ch, _, _ = open_span
-        raise VoiceDerivationProblem(
-            "unmatched-open",
-            f"unmatched '{open_ch}' at offset {open_off}",
-            offset=open_off,
+        problems.append(
+            VoiceDerivationProblem(
+                "unmatched-open",
+                f"unmatched '{open_ch}' at offset {open_off}",
+                offset=open_off,
+            )
         )
 
     counters: dict[str, int] = {}
@@ -165,7 +195,7 @@ def derive_voice_markers(
             "name": name,
             "id": f"{prefix}{counters[prefix]}",
         })
-    return out
+    return out, problems
 
 
 def _first_opener(chars: list[str]) -> str | None:
