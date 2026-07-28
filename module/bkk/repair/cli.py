@@ -62,6 +62,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_bundle_selector(px, dry_run=True)
 
+    ped = sub.add_parser(
+        "remove-edition",
+        help="delete editions/<short>, purge it from the master manifest, "
+             "and remove that short from variant markers",
+    )
+    _add_bundle_selector(ped)
+    ped.add_argument(
+        "edition",
+        help="edition short name to remove from editions/",
+    )
+    ped.add_argument(
+        "--dry-run", action="store_true",
+        help="report the deletion and marker cleanup without writing files",
+    )
+
     pf = sub.add_parser(
         "front-to-body",
         help="move front-bucket content into body when the body bucket is empty "
@@ -198,6 +213,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--report", dest="report_path", type=Path, default=None,
         help="write JSONL report to this path; default is stdout",
     )
+
+    ppb = sub.add_parser(
+        "page-break",
+        help="synthesize missing page-break markers before first-line line-break markers",
+        description="Patch marker assets where a KRP first line-break such as "
+                    "<page-id>01 appears but the matching page-break is absent. "
+                    "Defaults to scanning the whole configured corpus.",
+    )
+    _add_bundle_selector(ppb)
+    ppb.add_argument(
+        "--text-prefix", action="append", default=None, dest="text_prefixes",
+        type=text_prefix_arg,
+        help="scan bundle directories under --out whose text ids start with this prefix; repeatable",
+    )
+    ppb.add_argument(
+        "--write", action="store_true",
+        help="write marker assets and manifests; default is dry-run",
+    )
     return p
 
 
@@ -232,6 +265,19 @@ def run(argv: list[str] | None = None) -> int:
             return 2
         return _run_externalize_markers(
             bundle, out_root, text_id=text_id, dry_run=args.dry_run,
+        )
+    if args.op == "remove-edition":
+        try:
+            bundle, text_id = _selected_bundle_args(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        return _run_remove_edition(
+            bundle,
+            out_root,
+            text_id=text_id,
+            edition_short=args.edition,
+            dry_run=args.dry_run,
         )
     if args.op == "front-to-body":
         prefixes = getattr(args, "text_prefixes", None) or []
@@ -311,6 +357,11 @@ def run(argv: list[str] | None = None) -> int:
         )
     if args.op == "negative-offsets":
         return _run_negative_offsets(
+            args=args,
+            out_root=out_root,
+        )
+    if args.op == "page-break":
+        return _run_page_break(
             args=args,
             out_root=out_root,
         )
@@ -407,6 +458,55 @@ def _run_externalize_markers(
         )
         for line in scope["lines"]:
             print(f"  {line}")
+    return 0
+
+
+def _run_remove_edition(
+    bundle: str | Path | None,
+    out_root: Path | None,
+    *,
+    text_id: str | None = None,
+    edition_short: str,
+    dry_run: bool,
+) -> int:
+    try:
+        bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    from .remove_edition import remove_edition
+    try:
+        summary = remove_edition(
+            bundle_dir,
+            edition_short,
+            dry_run=dry_run,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    prefix = "would remove" if dry_run else "removed"
+    print(f"{prefix} edition {edition_short}: {summary['edition_dir']}")
+    for scope in summary["scopes"]:
+        changed = []
+        if scope["manifest_changed"]:
+            changed.append("manifest")
+        if scope["juans_changed"]:
+            changed.append(f"{len(scope['juans_changed'])} juan(s)")
+        marker_count = scope["marker_assets_changed"] + scope["marker_assets_deleted"]
+        if marker_count:
+            changed.append(f"{marker_count} marker asset(s)")
+        if not changed:
+            continue
+        print(
+            f"  updated {scope['manifest']}: "
+            f"{scope['variant_witnesses_removed']} variant witness(es) removed, "
+            f"{scope['variant_markers_dropped']} variant marker(s) dropped; "
+            + ", ".join(changed)
+        )
+    if dry_run:
+        print("dry-run only; rerun without --dry-run to update files")
     return 0
 
 
@@ -806,6 +906,83 @@ def _run_negative_offsets(
             file=summary_stream,
         )
     return 1 if errors else 0
+
+
+def _run_page_break(
+    *,
+    args: argparse.Namespace,
+    out_root: Path | None,
+) -> int:
+    prefixes = getattr(args, "text_prefixes", None) or []
+    has_single = any((
+        getattr(args, "legacy_bundle", None),
+        getattr(args, "bundle", None),
+        getattr(args, "text_id", None),
+    ))
+    if prefixes and has_single:
+        print(
+            "error: provide either --text-prefix or a single bundle/text id",
+            file=sys.stderr,
+        )
+        return 2
+
+    from .page_break import synthesize_missing_page_breaks
+
+    try:
+        if has_single:
+            bundle, text_id = _selected_bundle_args(args)
+            bundles = [_resolve_bundle_dir(bundle, out_root, text_id=text_id)]
+            target = "bundle"
+        else:
+            if out_root is None:
+                print(
+                    "error: bundle root not given (--out) and not configured in "
+                    ".bkkrc (repair.out / import.out / global.corpus)",
+                    file=sys.stderr,
+                )
+                return 2
+            root = Path(out_root).expanduser().resolve()
+            if not root.is_dir():
+                print(f"error: bundle root is not a directory: {root}", file=sys.stderr)
+                return 2
+            prefix_tuple = tuple(prefixes) if prefixes else ("",)
+            bundles = sorted(_iter_bundles_in_sections(root, prefix_tuple))
+            target = f"prefixes {list(prefixes)}" if prefixes else "corpus"
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    dry_run = not args.write
+    prefix = "would insert" if dry_run else "inserted"
+    total = 0
+    scopes_changed = 0
+    for bundle_dir in bundles:
+        summary = synthesize_missing_page_breaks(bundle_dir, dry_run=dry_run)
+        bundle_inserted = sum(scope["inserted"] for scope in summary["scopes"])
+        if not bundle_inserted:
+            continue
+        total += bundle_inserted
+        print(f"{bundle_dir.name}:")
+        for scope in summary["scopes"]:
+            if not scope["inserted"]:
+                continue
+            scopes_changed += 1
+            print(
+                f"  {prefix} {scope['manifest']}: "
+                f"{scope['inserted']} page-break marker(s)"
+            )
+            for line in scope["lines"]:
+                print(f"    {line}")
+
+    mode = "dry-run: " if dry_run else ""
+    print(
+        f"{mode}{total} page-break marker(s), "
+        f"{scopes_changed} manifest scope(s) changed "
+        f"(scanned {len(bundles)} bundles in {target})"
+    )
+    if dry_run:
+        print("dry-run only; pass --write to update files")
+    return 0
 
 
 def main() -> None:
