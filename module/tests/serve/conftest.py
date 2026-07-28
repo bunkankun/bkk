@@ -21,6 +21,7 @@ def write_bundle(
     editions: list[dict] | None = None,
     identifiers: dict | None = None,
     variants: list[dict] | None = None,
+    voice_markers: list[dict] | None = None,
     base_edition: str | None = None,
     canonical_identifier: str | None = None,
     extra_metadata: dict | None = None,
@@ -39,6 +40,7 @@ def write_bundle(
     bundle_dir.mkdir(parents=True)
 
     markers = [{"type": "variant", **v} for v in (variants or [])]
+    markers.extend({"type": "voice", **v} for v in (voice_markers or []))
     (bundle_dir / f"{textid}_001.yaml").write_text(
         yaml.safe_dump(
             {

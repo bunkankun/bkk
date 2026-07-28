@@ -36,6 +36,7 @@ from ..schemas import (
     SearchOverview,
     SearchResponse,
     SearchTextidsResponse,
+    SearchVoicesResponse,
     TrigramExtension,
 )
 from .auth import SESSION_COOKIE
@@ -746,6 +747,26 @@ def _overview_response(
 router = APIRouter(tags=["search"])
 
 
+@router.get(
+    "/search/voices",
+    response_model=SearchVoicesResponse,
+    summary="Voice names available for voice-aware search",
+)
+def search_voices(request: Request) -> SearchVoicesResponse:
+    state = request.app.state.bkk
+    primary = state.open_index()
+    owner = _request_owner(request)
+    indexes = ([primary] if primary is not None else []) + state.open_user_text_indexes(owner)
+    if not indexes:
+        raise errors.index_unavailable(state._index_error or "index not built")
+    try:
+        voices = sorted({value for index in indexes for value in index.available_voices()})
+    finally:
+        for index in indexes:
+            index.close()
+    return SearchVoicesResponse(voices=voices)
+
+
 def _search_hits(
     request: Request,
     *,
@@ -891,7 +912,7 @@ def _search_hits(
                 trigram_left=left_extensions.most_common(20),
                 trigram_right=right_extensions.most_common(20),
             )
-            if total > cap:
+            if total > cap and voices is None:
                 empty_hits: list[Hit] = []
                 meta = _catalog_meta(request, None)
                 return (

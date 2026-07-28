@@ -593,6 +593,10 @@ export interface SearchTextidsResponse {
   }[];
 }
 
+export interface SearchVoicesResponse {
+  voices: string[];
+}
+
 // Translation overlays
 export interface OverlayFamily {
   id: string;

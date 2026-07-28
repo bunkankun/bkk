@@ -1,10 +1,11 @@
+import { useEffect } from "react";
 import type { ParallelBucket, SearchSort, TranslationSort } from "../../api/types";
 import { useWorkspace, workspace } from "../../state/useWorkspace";
 import type { SearchTarget } from "../../state/useWorkspace";
 
 const TARGETS: { value: SearchTarget; label: string; disabled: boolean }[] = [
   { value: "fulltext", label: "Full text", disabled: false },
-  { value: "dictionary", label: "Dictionary", disabled: true },
+  { value: "dictionary", label: "Voice aware", disabled: false },
   { value: "translations", label: "Translations", disabled: false },
   { value: "parallel", label: "Parallel passages", disabled: false },
 ];
@@ -34,16 +35,37 @@ export function SearchBar() {
   const query = useWorkspace((s) => s.search.query);
   const target = useWorkspace((s) => s.search.target);
   const sort = useWorkspace((s) => s.search.sort);
+  const selectedVoices = useWorkspace((s) => s.search.filters.voice);
+  const availableVoices = useWorkspace((s) => s.search.availableVoices);
+  const availableVoicesStatus = useWorkspace((s) => s.search.availableVoicesStatus);
+  const availableVoicesError = useWorkspace((s) => s.search.availableVoicesError);
   const translationSort = useWorkspace((s) => s.search.translationSort);
   const parallelOptions = useWorkspace((s) => s.search.parallelOptions);
   const status = useWorkspace((s) => s.search.status);
   const history = useWorkspace((s) => s.searchHistory);
 
+  useEffect(() => {
+    if (target === "dictionary") void workspace.loadAvailableVoices();
+  }, [target]);
+
   const trimmed = query.trim();
   const canSubmit =
     target === "parallel"
       ? trimmed.length >= 1 && trimmed.length <= 6
-      : trimmed.length > 0 && (target === "fulltext" || target === "translations");
+      : trimmed.length > 0 &&
+        (target === "fulltext" || target === "dictionary" || target === "translations");
+  const voiceSummary =
+    selectedVoices.length === 0
+      ? "all voices"
+      : selectedVoices.length === 1
+        ? selectedVoices[0]
+        : `${selectedVoices.length} voices`;
+  const toggleVoice = (voice: string) => {
+    const next = selectedVoices.includes(voice)
+      ? selectedVoices.filter((item) => item !== voice)
+      : [...selectedVoices, voice];
+    void workspace.setSearchVoices(next);
+  };
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,6 +112,51 @@ export function SearchBar() {
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
+      ) : target === "dictionary" ? (
+        <>
+          <details className="mb-voice-menu">
+            <summary className="mb-voice-summary" title="Search only selected voices">
+              {voiceSummary}
+            </summary>
+            <div className="mb-voice-popover">
+              <button
+                type="button"
+                className="mb-voice-all"
+                onClick={() => void workspace.setSearchVoices([])}
+              >
+                All voices
+              </button>
+              {availableVoicesStatus === "loading" ? (
+                <div className="mb-voice-note">Loading…</div>
+              ) : availableVoicesStatus === "error" ? (
+                <div className="mb-voice-note">{availableVoicesError ?? "Voice list unavailable"}</div>
+              ) : availableVoices.length === 0 ? (
+                <div className="mb-voice-note">No voices</div>
+              ) : (
+                availableVoices.map((voice) => (
+                  <label key={voice} className="mb-voice-option">
+                    <input
+                      type="checkbox"
+                      checked={selectedVoices.includes(voice)}
+                      onChange={() => toggleVoice(voice)}
+                    />
+                    <span>{voice}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          </details>
+          <select
+            className="mb-select"
+            value={sort}
+            onChange={(e) => workspace.setSearchSort(e.target.value as SearchSort)}
+            aria-label="Sort order"
+          >
+            {SORTS.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </>
       ) : target === "parallel" ? (
         <>
           <select

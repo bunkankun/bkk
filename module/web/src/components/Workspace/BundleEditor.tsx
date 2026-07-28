@@ -18,7 +18,7 @@ import {
   type EditableMarker,
 } from "../../lib/editSplices";
 import { setBundleEditorDirty } from "../../lib/editorDirty";
-import type { BundleEditTarget } from "../../state/useWorkspace";
+import { workspace, type BundleEditTarget } from "../../state/useWorkspace";
 import {
   canonicalSelectionFromDom,
   canonicalOffsetAt,
@@ -45,6 +45,7 @@ type MoveDraft = {
   destination: BucketName;
   candidates: BucketName[];
 };
+type EditScope = { start: number; end: number; protectedText: boolean };
 
 let nextMarkerKey = 1;
 
@@ -66,6 +67,47 @@ function editableMarkers(markers: JuanMarker[]): EditableMarker[] {
 function markerOffset(marker: EditableMarker): number | null {
   const offset = marker.data.offset;
   return typeof offset === "number" && Number.isFinite(offset) ? offset : null;
+}
+
+function markerLength(marker: EditableMarker): number | null {
+  const length = marker.data.length;
+  return typeof length === "number" && Number.isFinite(length) ? length : null;
+}
+
+function markerOverlapsScope(marker: EditableMarker, scope: EditScope): boolean {
+  const offset = markerOffset(marker);
+  if (offset == null) return false;
+  const length = markerLength(marker);
+  if (length != null && length > 0) {
+    return offset < scope.end && offset + length > scope.start;
+  }
+  return offset >= scope.start && offset <= scope.end;
+}
+
+function scopedMarkers(
+  markers: EditableMarker[],
+  scope: EditScope | null,
+): { active: EditableMarker[]; inactive: EditableMarker[] } {
+  if (scope == null) return { active: markers, inactive: [] };
+  const active: EditableMarker[] = [];
+  const inactive: EditableMarker[] = [];
+  for (const marker of markers) {
+    (markerOverlapsScope(marker, scope) ? active : inactive).push(marker);
+  }
+  return { active, inactive };
+}
+
+function displayMarker(marker: EditableMarker, scope: EditScope | null): EditableMarker {
+  if (scope == null) return marker;
+  const offset = markerOffset(marker);
+  if (offset == null) return marker;
+  return {
+    ...marker,
+    data: {
+      ...marker.data,
+      offset: offset - scope.start,
+    },
+  };
 }
 
 function scrollTextareaToPosition(textarea: HTMLTextAreaElement, position: number) {
@@ -186,11 +228,15 @@ function PropertyRow({
 }
 
 export function BundleEditor({
+  paneId,
+  tabId,
   textid,
   seq,
   editTarget,
   onCursorInfoChange,
 }: {
+  paneId: string;
+  tabId: string;
   textid: string;
   seq: number;
   editTarget?: BundleEditTarget | null;
@@ -203,6 +249,8 @@ export function BundleEditor({
   const [bucket, setBucket] = useState<BucketName>("body");
   const [text, setText] = useState("");
   const [markers, setMarkers] = useState<EditableMarker[]>([]);
+  const [inactiveMarkers, setInactiveMarkers] = useState<EditableMarker[]>([]);
+  const [editScope, setEditScope] = useState<EditScope | null>(null);
   const [splices, setSplices] = useState<BundleTextSplice[]>([]);
   const [category, setCategory] = useState("*");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -227,14 +275,31 @@ export function BundleEditor({
   ) => {
     const value = document.buckets[nextBucket];
     if (!value) return;
+    const allMarkers = editableMarkers(value.markers);
+    const textChars = codepoints(value.text);
+    const scope =
+      target?.protectedText === true && target.bucket === nextBucket
+        ? {
+            start: Math.max(0, Math.min(target.offset, textChars.length)),
+            end: Math.max(
+              0,
+              Math.min(target.offset + Math.max(0, target.length), textChars.length),
+            ),
+            protectedText: true,
+          }
+        : null;
+    const normalizedScope =
+      scope != null && scope.end > scope.start ? scope : null;
+    const scoped = scopedMarkers(allMarkers, normalizedScope);
     setBucket(nextBucket);
     setText(value.text);
-    const nextMarkers = editableMarkers(value.markers);
-    setMarkers(nextMarkers);
-    const targetMarker = target?.bucket === nextBucket
-      ? nextMarkers.find((marker) => marker.data.id === target.markerId) ?? null
+    setMarkers(scoped.active);
+    setInactiveMarkers(scoped.inactive);
+    setEditScope(normalizedScope);
+    const targetMarker = target?.bucket === nextBucket && target.markerId
+      ? scoped.active.find((marker) => marker.data.id === target.markerId) ?? null
       : null;
-    setSelectedKey(targetMarker?.key ?? nextMarkers[0]?.key ?? null);
+    setSelectedKey(targetMarker?.key ?? scoped.active[0]?.key ?? null);
     setSplices([]);
     setCategory("*");
     setDirty(false);
@@ -302,13 +367,23 @@ export function BundleEditor({
   );
   const selected = markers.find((marker) => marker.key === selectedKey) ?? null;
   const textLength = useMemo(() => codepoints(text).length, [text]);
+  const displayText = useMemo(() => {
+    if (editScope == null) return text;
+    return codepoints(text).slice(editScope.start, editScope.end).join("");
+  }, [editScope, text]);
+  const displayMarkers = useMemo(
+    () => markers.map((marker) => displayMarker(marker, editScope)),
+    [editScope, markers],
+  );
+  const displayTextLength = useMemo(() => codepoints(displayText).length, [displayText]);
+  const scopeBase = editScope?.start ?? 0;
   const availablePunctuationSets = useMemo(
     () => punctuationSets(markers),
     [markers],
   );
   const editorView = useMemo(
-    () => renderEditorText(text, markers, punctuationSet, showLayoutMarkers),
-    [markers, punctuationSet, showLayoutMarkers, text],
+    () => renderEditorText(displayText, displayMarkers, punctuationSet, showLayoutMarkers),
+    [displayMarkers, displayText, punctuationSet, showLayoutMarkers],
   );
   const unresolvedCount = markers.filter((marker) => marker.unresolved).length;
   const idReplaceCount = useMemo(() => {
@@ -319,6 +394,10 @@ export function BundleEditor({
   }, [idFind, markers]);
   const validationProblem = useMemo((): ValidationProblem | null => {
     const ids = new Map<string, string>();
+    for (const marker of inactiveMarkers) {
+      const id = marker.data.id;
+      if (typeof id === "string" && id) ids.set(id, marker.key);
+    }
     for (const [index, marker] of markers.entries()) {
       if (typeof marker.data.type !== "string" || !marker.data.type) {
         return { message: `Marker ${index + 1} needs a type.`, markerKey: marker.key };
@@ -362,13 +441,14 @@ export function BundleEditor({
       }
     }
     return null;
-  }, [markers, text, textid]);
+  }, [inactiveMarkers, markers, textLength, textid]);
   const validationError = validationProblem?.message ?? null;
 
   const reportCursor = () => {
     const textarea = textareaRef.current;
     if (!textarea || !onCursorInfoChange) return;
-    onCursorInfoChange(editorPositionAt(editorView, textarea.selectionStart));
+    const position = editorPositionAt(editorView, textarea.selectionStart);
+    onCursorInfoChange({ ...position, offset: position.offset + scopeBase });
   };
 
   const scrollMarkerButtonIntoView = (key: string) => {
@@ -383,7 +463,7 @@ export function BundleEditor({
     requestAnimationFrame(() => {
       const textarea = textareaRef.current;
       if (!textarea) return;
-      const selection = markerDomSelection(editorView, marker);
+      const selection = markerDomSelection(editorView, displayMarker(marker, editScope));
       textarea.focus();
       textarea.setSelectionRange(selection.start, selection.end);
       scrollTextareaToPosition(textarea, selection.start);
@@ -396,7 +476,7 @@ export function BundleEditor({
     if (!textarea) return;
     const candidates = visibleMarkers.length > 0 ? visibleMarkers : markers;
     if (candidates.length === 0) return;
-    const offset = canonicalOffsetAt(editorView, textarea.selectionStart);
+    const offset = canonicalOffsetAt(editorView, textarea.selectionStart) + scopeBase;
     const best = closestMarkerToOffset(offset, candidates);
     if (!best) return;
     setSelectedKey(best.key);
@@ -430,15 +510,21 @@ export function BundleEditor({
 
   const jumpToOffset = () => {
     const parsed = Number(offsetTarget);
-    const textLength = codepoints(text).length;
-    if (!Number.isInteger(parsed) || parsed < 0 || parsed >= textLength) {
-      setError(`Offset must be an integer from 0 to ${Math.max(0, textLength - 1)}.`);
+    const minOffset = editScope?.start ?? 0;
+    const maxOffset = editScope != null ? editScope.end : textLength;
+    if (!Number.isInteger(parsed) || parsed < minOffset || parsed >= maxOffset) {
+      setError(
+        editScope != null
+          ? `Offset must be an integer from ${minOffset} to ${Math.max(minOffset, maxOffset - 1)}.`
+          : `Offset must be an integer from 0 to ${Math.max(0, textLength - 1)}.`,
+      );
       return;
     }
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const start = editorView.charStart[parsed] ?? editorView.text.length;
-    const end = editorView.caretBefore[parsed + 1] ?? start;
+    const displayOffset = parsed - scopeBase;
+    const start = editorView.charStart[displayOffset] ?? editorView.text.length;
+    const end = editorView.caretBefore[displayOffset + 1] ?? start;
     textarea.focus();
     textarea.setSelectionRange(start, Math.max(start, end));
     scrollTextareaToPosition(textarea, start);
@@ -486,32 +572,75 @@ export function BundleEditor({
     if (load.status !== "ready" || !onCursorInfoChange) return;
     const textarea = textareaRef.current;
     const position = textarea?.selectionStart ?? 0;
-    onCursorInfoChange(editorPositionAt(editorView, position));
-  }, [editorView, load.status, onCursorInfoChange]);
+    const info = editorPositionAt(editorView, position);
+    onCursorInfoChange({ ...info, offset: info.offset + scopeBase });
+  }, [editorView, load.status, onCursorInfoChange, scopeBase]);
 
   useEffect(() => {
     if (load.status !== "ready" || editTarget == null) return;
-    const targetKey = `${textid}:${seq}:${editEdition ?? ""}:${editTarget.bucket}:${editTarget.markerId}`;
+    const targetKey = [
+      textid,
+      seq,
+      editEdition ?? "",
+      editTarget.bucket,
+      editTarget.markerId ?? "",
+      editTarget.offset,
+      editTarget.length,
+      editTarget.protectedText === true ? "protected" : "full",
+    ].join(":");
     if (bucket !== editTarget.bucket) {
       focusedEditTargetRef.current = null;
       installBucket(load.document, editTarget.bucket, editTarget);
       return;
     }
-    const marker = markers.find((item) => item.data.id === editTarget.markerId);
-    if (!marker || focusedEditTargetRef.current === targetKey) return;
+    const wantedStart = Math.max(0, Math.min(editTarget.offset, textLength));
+    const wantedEnd = Math.max(
+      0,
+      Math.min(editTarget.offset + Math.max(0, editTarget.length), textLength),
+    );
+    const wantedScoped = editTarget.protectedText === true && wantedEnd > wantedStart;
+    const scopeMismatch =
+      wantedScoped
+        ? editScope == null ||
+          editScope.start !== wantedStart ||
+          editScope.end !== wantedEnd
+        : editScope != null;
+    if (scopeMismatch) {
+      focusedEditTargetRef.current = null;
+      installBucket(load.document, editTarget.bucket, editTarget);
+      return;
+    }
+    if (focusedEditTargetRef.current === targetKey) return;
+    const marker = editTarget.markerId
+      ? markers.find((item) => item.data.id === editTarget.markerId) ?? null
+      : null;
+    if (!marker && editTarget.protectedText !== true) return;
     focusedEditTargetRef.current = targetKey;
     setCategory("*");
-    setSelectedKey(marker.key);
-    scrollMarkerButtonIntoView(marker.key);
-    focusMarkerInTextarea(marker);
+    if (marker) {
+      setSelectedKey(marker.key);
+      scrollMarkerButtonIntoView(marker.key);
+      focusMarkerInTextarea(marker);
+      return;
+    }
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(0, editorView.text.length);
+      scrollTextareaToPosition(textarea, 0);
+      reportCursor();
+    });
   }, [
     bucket,
+    editScope,
     editTarget,
     editEdition,
     editorView,
     load,
     markers,
     seq,
+    textLength,
     textid,
   ]);
 
@@ -531,13 +660,16 @@ export function BundleEditor({
     occupiedMarkers: EditableMarker[] = markers,
   ): Promise<string[]> => {
     if (markerTypes.length === 0) return [];
+    const occupied = editScope != null
+      ? [...inactiveMarkers, ...occupiedMarkers]
+      : occupiedMarkers;
     setAllocatingIds((count) => count + 1);
     try {
       const response = await allocateBundleMarkerIds(textid, seq, {
         base_commit_sha: document.base_commit_sha,
         bucket,
         marker_types: markerTypes,
-        occupied_ids: occupiedMarkers.flatMap((marker) => {
+        occupied_ids: occupied.flatMap((marker) => {
           const id = marker.data.id;
           return typeof id === "string" && id ? [id] : [];
         }),
@@ -584,6 +716,10 @@ export function BundleEditor({
   };
 
   const openMoveDialog = () => {
+    if (editScope != null) {
+      setError("Section moves are only available in full-juan edit mode.");
+      return;
+    }
     if (dirty) {
       setError("Save or discard edits in this bucket before moving a section.");
       return;
@@ -631,6 +767,10 @@ export function BundleEditor({
   };
 
   const changeEditorText = (nextText: string) => {
+    if (editScope?.protectedText === true) {
+      setError("Text is protected while editing a selected range; marker edits are still allowed.");
+      return;
+    }
     if (showLayoutMarkers) {
       setError("Turn off layout markers before editing text.");
       return;
@@ -749,6 +889,7 @@ export function BundleEditor({
           textarea.selectionEnd,
         )
       : { offset: 0, length: null };
+    const absoluteOffset = selection.offset + scopeBase;
     const type = category === "*" ? "marker" : category;
     setError(null);
     try {
@@ -756,7 +897,7 @@ export function BundleEditor({
       if (!id) throw new Error("Marker ID allocation returned no ID.");
       const data: JuanMarker = {
         type,
-        offset: selection.offset,
+        offset: absoluteOffset,
         content: "",
         id,
       };
@@ -813,7 +954,10 @@ export function BundleEditor({
         });
         setMarkers(workingMarkers);
       }
-      const ordered = [...workingMarkers].sort(
+      const markersForSave = editScope != null
+        ? [...inactiveMarkers, ...workingMarkers]
+        : workingMarkers;
+      const ordered = [...markersForSave].sort(
         (left, right) => Number(left.data.offset ?? 0) - Number(right.data.offset ?? 0),
       );
       const renamed: Record<string, string> = {};
@@ -837,7 +981,7 @@ export function BundleEditor({
         bucket,
         text,
         markers: ordered.map((marker) => marker.data),
-        text_splices: splices,
+        text_splices: editScope != null ? [] : splices,
         renamed_marker_ids: renamed,
         acknowledge_toc_deletions: tocDeleteAcknowledged,
         unresolved_marker_indexes: [],
@@ -849,7 +993,7 @@ export function BundleEditor({
       try {
         const refreshed = await getBundleEdit(textid, seq, editEdition);
         setLoad({ status: "ready", document: refreshed });
-        installBucket(refreshed, bucket);
+        installBucket(refreshed, bucket, editTarget ?? null);
         setSaved(result);
       } catch (reloadReason) {
         setLoad({ status: "ready", document });
@@ -1037,7 +1181,11 @@ export function BundleEditor({
       </aside>
       <main className="be-text">
         <div className="be-toolbar">
-          <select value={bucket} onChange={(event) => changeBucket(event.target.value as BucketName)}>
+          <select
+            value={bucket}
+            onChange={(event) => changeBucket(event.target.value as BucketName)}
+            disabled={editScope != null}
+          >
             {(Object.keys(document.buckets) as BucketName[]).map((name) => (
               <option key={name} value={name}>{name}</option>
             ))}
@@ -1045,7 +1193,7 @@ export function BundleEditor({
           <button
             type="button"
             onClick={openMoveDialog}
-            disabled={saving || allocatingIds > 0}
+            disabled={saving || allocatingIds > 0 || editScope != null}
           >
             Move
           </button>
@@ -1079,7 +1227,12 @@ export function BundleEditor({
             />
             Layout
           </label>
-          <span>{textLength.toLocaleString()} characters</span>
+          <span>
+            {editScope == null
+              ? `${textLength.toLocaleString()} characters`
+              : `${displayTextLength.toLocaleString()} of ${textLength.toLocaleString()} characters · offsets ${editScope.start}-${editScope.end}`}
+          </span>
+          {editScope?.protectedText === true && <span>text protected</span>}
           {unresolvedCount > 0 && <span className="be-unresolved-count">{unresolvedCount} unresolved</span>}
           {validationError && (
             <button
@@ -1092,6 +1245,13 @@ export function BundleEditor({
             </button>
           )}
           <span className="be-grow" />
+          <button
+            type="button"
+            onClick={() => workspace.cancelBundleEditor(paneId, tabId)}
+            disabled={saving}
+          >
+            Cancel
+          </button>
           <button
             type="button"
             onClick={save}
@@ -1149,6 +1309,7 @@ export function BundleEditor({
           ref={textareaRef}
           value={editorView.text}
           aria-label={`${bucket} text`}
+          readOnly={editScope?.protectedText === true}
           spellCheck={false}
           onChange={(event) => changeEditorText(event.target.value)}
           onSelect={reportCursor}

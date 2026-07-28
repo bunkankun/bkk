@@ -205,6 +205,13 @@ class SearchTextidsResponse(BaseModel):
     )
 
 
+class SearchVoicesResponse(BaseModel):
+    voices: list[str] = Field(
+        default_factory=list,
+        description="Distinct voice names available in the searchable corpus index.",
+    )
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: str | None = None

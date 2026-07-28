@@ -65,6 +65,7 @@ import type {
   SearchResponse,
   SearchSort,
   SearchTextidsResponse,
+  SearchVoicesResponse,
   ServerInfo,
   ServerWelcome,
   TimelineResponse,
@@ -905,6 +906,10 @@ export async function searchCorpus(params: {
   return fetchJson<SearchResponse>(`${apiBase}/search?${q.toString()}`, {
     signal: params.signal,
   });
+}
+
+export async function getSearchVoices(): Promise<SearchVoicesResponse> {
+  return fetchJson<SearchVoicesResponse>(`${apiBase}/search/voices`);
 }
 
 export async function searchParallel(params: {

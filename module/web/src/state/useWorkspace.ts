@@ -12,6 +12,7 @@ import {
   getWorkspaceFile,
   listWorkspaceFiles,
   getManifest,
+  getSearchVoices,
   logout as logoutRequest,
   putWorkspaceFile,
   searchCorpus,
@@ -85,10 +86,11 @@ export type Theme = "current" | "dark" | "light";
 export type ListFilterMode = "off" | "any" | "all";
 export interface BundleEditTarget {
   bucket: "front" | "body" | "back";
-  markerId: string;
+  markerId?: string | null;
   offset: number;
   length: number;
   edition?: string | null;
+  protectedText?: boolean;
 }
 export type SearchFacetKind =
   | "category"
@@ -138,6 +140,9 @@ export interface SearchState {
   sort: SearchSort;
   filters: SearchFilters;
   facetLimit: number;
+  availableVoices: string[];
+  availableVoicesStatus: "idle" | "loading" | "ok" | "error";
+  availableVoicesError: string | null;
   status: "idle" | "loading" | "ok" | "error";
   error: string | null;
   response: SearchResponse | null;
@@ -694,6 +699,9 @@ let state: WorkspaceState = {
       aroundBinomExclude: [],
     },
     facetLimit: 12,
+    availableVoices: [],
+    availableVoicesStatus: "idle",
+    availableVoicesError: null,
     status: "idle",
     error: null,
     response: null,
@@ -724,6 +732,7 @@ let state: WorkspaceState = {
 // a newer one when the user submits twice quickly.
 let searchRunId = 0;
 let searchAbort: AbortController | null = null;
+let availableVoicesLoad: Promise<void> | null = null;
 const workspaceFileShas: Record<string, string | undefined> = {};
 let sessionSaveTimer: number | null = null;
 let historySaveTimer: number | null = null;
@@ -1016,7 +1025,7 @@ async function runSearchInternal(offset: number): Promise<void> {
   if (!query.trim()) return;
   if (target === "translations") return runTranslationSearch(offset);
   if (target === "parallel") return runParallelSearch(offset);
-  if (target !== "fulltext") return;
+  if (target !== "fulltext" && target !== "dictionary") return;
   cancelSearchRequest();
   const runId = searchRunId;
   const controller = new AbortController();
@@ -1153,7 +1162,10 @@ function coerceSearchFilters(value: unknown): SearchFilters {
   };
 }
 
-function resetSearchFilters(filters: SearchFilters): SearchFilters {
+function resetSearchFilters(
+  filters: SearchFilters,
+  options: { keepVoice?: boolean } = {},
+): SearchFilters {
   return {
     ...filters,
     textid: null,
@@ -1164,8 +1176,8 @@ function resetSearchFilters(filters: SearchFilters): SearchFilters {
     dateAfter: null,
     witness: [],
     witnessExclude: [],
-    voice: [],
-    voiceExclude: [],
+    voice: options.keepVoice ? [...filters.voice] : [],
+    voiceExclude: options.keepVoice ? [...filters.voiceExclude] : [],
     leftChar: [],
     leftCharExclude: [],
     rightChar: [],
@@ -1311,7 +1323,7 @@ function validSearchHistoryEntry(value: unknown): SearchHistoryEntry | null {
   if (
     typeof rec.id !== "string" ||
     typeof rec.query !== "string" ||
-    !["fulltext", "dictionary", "translations"].includes(String(rec.target)) ||
+    !["fulltext", "dictionary", "translations", "parallel"].includes(String(rec.target)) ||
     typeof rec.sort !== "string" ||
     typeof rec.createdAt !== "string" ||
     typeof rec.filters !== "object" ||
@@ -2498,6 +2510,32 @@ export const workspace = {
     notify();
     scheduleSessionSave();
   },
+  cancelBundleEditor(paneId: string, tabId: string) {
+    const pane = mapPaneLeaves(state.pane, (leaf) => {
+      if (leaf.id !== paneId) return leaf;
+      return {
+        ...leaf,
+        tabs: leaf.tabs.map((tab) => {
+          if (tab.id !== tabId || tab.type !== "text") return tab;
+          return { ...tab, readMode: "read", editTarget: null };
+        }),
+      };
+    });
+    const leaf = paneLeaves(pane).find((item) => item.id === paneId);
+    const nextActiveText = leaf?.tabs.find((tab) => tab.id === tabId);
+    if (!isTextTab(nextActiveText)) return;
+    state = {
+      ...state,
+      pane,
+      focusedPaneId: paneId,
+      activeTextid: nextActiveText.textid,
+      activeSeq: nextActiveText.seq,
+      selectedTranslation: nextActiveText.selectedTranslation ?? null,
+      activity: textActivity(nextActiveText),
+    };
+    notify();
+    scheduleSessionSave();
+  },
   closePane(paneId: string) {
     if (!confirmDiscardBundleEditor()) return;
     const newPane = removePaneLeaf(state.pane, paneId);
@@ -2625,12 +2663,13 @@ export const workspace = {
   },
   setSearchQuery(query: string) {
     cancelSearchRequest();
+    const keepVoice = state.search.target === "dictionary";
     state = {
       ...state,
       search: {
         ...state.search,
         query,
-        filters: resetSearchFilters(state.search.filters),
+        filters: resetSearchFilters(state.search.filters, { keepVoice }),
         status: "idle",
         error: null,
         response: null,
@@ -2656,6 +2695,67 @@ export const workspace = {
       },
     };
     notify();
+  },
+  async loadAvailableVoices() {
+    if (state.search.availableVoicesStatus === "ok") return;
+    if (availableVoicesLoad != null) return availableVoicesLoad;
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        availableVoicesStatus: "loading",
+        availableVoicesError: null,
+      },
+    };
+    notify();
+    availableVoicesLoad = getSearchVoices()
+      .then((response) => {
+        state = {
+          ...state,
+          search: {
+            ...state.search,
+            availableVoices: response.voices,
+            availableVoicesStatus: "ok",
+            availableVoicesError: null,
+          },
+        };
+        notify();
+      })
+      .catch((e) => {
+        state = {
+          ...state,
+          search: {
+            ...state.search,
+            availableVoicesStatus: "error",
+            availableVoicesError: e instanceof Error ? e.message : String(e),
+          },
+        };
+        notify();
+      })
+      .finally(() => {
+        availableVoicesLoad = null;
+      });
+    return availableVoicesLoad;
+  },
+  setSearchVoices(voices: string[]) {
+    const unique = [...new Set(voices.filter((voice) => voice.trim()))].sort();
+    state = {
+      ...state,
+      search: {
+        ...state.search,
+        filters: {
+          ...state.search.filters,
+          voice: unique,
+          voiceExclude: state.search.filters.voiceExclude.filter((voice) => !unique.includes(voice)),
+        },
+        status: state.search.query.trim() ? state.search.status : "idle",
+        error: null,
+      },
+    };
+    notify();
+    if (state.search.target === "dictionary" && state.search.query.trim()) {
+      return runSearchInternal(0);
+    }
   },
   setParallelOption<K extends keyof ParallelOptions>(key: K, value: ParallelOptions[K]) {
     state = {
@@ -2697,12 +2797,13 @@ export const workspace = {
   },
   setSearchSort(sort: SearchSort) {
     cancelSearchRequest();
+    const keepVoice = state.search.target === "dictionary";
     state = {
       ...state,
       search: {
         ...state.search,
         sort,
-        filters: resetSearchFilters(state.search.filters),
+        filters: resetSearchFilters(state.search.filters, { keepVoice }),
         status: "idle",
         error: null,
         response: null,
@@ -2799,11 +2900,12 @@ export const workspace = {
     return runSearchInternal(0);
   },
   runSearch() {
+    const keepVoice = state.search.target === "dictionary";
     state = {
       ...state,
       search: {
         ...state.search,
-        filters: resetSearchFilters(state.search.filters),
+        filters: resetSearchFilters(state.search.filters, { keepVoice }),
         facetLimit: 12,
       },
     };
@@ -3091,6 +3193,127 @@ export const workspace = {
       offset: args.offset,
       length: args.length,
       edition: args.edition ?? null,
+    };
+    const highlight = {
+      textid: args.textid,
+      seq: args.seq,
+      bucket: args.bucket,
+      offset: args.offset,
+      length: Math.max(1, args.length),
+    };
+    const plan = planOpenTextLocation(state.pane, target?.id ?? null, tabId);
+    if (plan.kind === "focus") {
+      const nextPane = mapPaneLeaves(state.pane, (leaf) =>
+        leaf.id === plan.leafId
+          ? {
+              ...leaf,
+              activeTabId: tabId,
+              tabs: leaf.tabs.map((tab) =>
+                tab.id === tabId && tab.type === "text"
+                  ? { ...tab, readMode: "edit", editTarget }
+                  : tab,
+              ),
+            }
+          : leaf,
+      );
+      state = {
+        ...state,
+        activeTextid: args.textid,
+        activeSeq: args.seq,
+        focusedPaneId: plan.leafId,
+        selection: null,
+        currentPage: null,
+        pane: nextPane,
+        activity: "edit",
+        pendingHighlight: highlight,
+      };
+      rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
+      notify();
+      scheduleSessionSave();
+      return;
+    }
+    if (plan.kind === "replace") {
+      const newTab = makeTextTab({
+        textid: args.textid,
+        seq: args.seq,
+        pinned: false,
+        sourceText: plan.existing,
+        lineMode: plan.existing.lineMode ?? state.readPrefs.lineMode,
+        readMode: "edit",
+        editTarget,
+      });
+      const nextPane = mapPaneLeaves(state.pane, (leaf) => {
+        if (leaf.id !== plan.leafId) return leaf;
+        return leafWithTab(leaf.id, newTab);
+      });
+      state = {
+        ...state,
+        activeTextid: args.textid,
+        activeSeq: args.seq,
+        focusedPaneId: plan.leafId,
+        selectedTranslation: newTab.selectedTranslation ?? null,
+        selection: null,
+        currentPage: null,
+        pane: nextPane,
+        activity: "edit",
+        pendingHighlight: highlight,
+      };
+      rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
+      notify();
+      scheduleSessionSave();
+      return;
+    }
+    const tab = makeTextTab({
+      textid: args.textid,
+      seq: args.seq,
+      pinned: false,
+      sourceText,
+      readMode: "edit",
+      editTarget,
+    });
+    const pane = paneForOpenTab(tab);
+    const focusedPaneId = leafIdForTab(pane, tab.id);
+    state = {
+      ...state,
+      activeTextid: args.textid,
+      activeSeq: args.seq,
+      focusedPaneId,
+      selectedTranslation: tab.selectedTranslation ?? null,
+      selection: null,
+      currentPage: null,
+      pane,
+      activity: "edit",
+      pendingHighlight: highlight,
+    };
+    rememberTextVisit({ textid: args.textid, seq: args.seq, pinned: false });
+    notify();
+    scheduleSessionSave();
+  },
+  openBundleEditorAtSelection(args: {
+    textid: string;
+    seq: number;
+    bucket: "front" | "body" | "back";
+    offset: number;
+    length: number;
+    markerId?: string | null;
+    edition?: string | null;
+  }) {
+    const tabId = `${args.textid}:${args.seq}`;
+    const target = activePaneLeaf(state.pane);
+    const sourceTab = activeTabForLeaf(target);
+    const sourceText = isTextTab(sourceTab) ? sourceTab : null;
+    if (
+      sourceText?.readMode === "edit" &&
+      sourceText.id !== tabId &&
+      !confirmDiscardBundleEditor()
+    ) return;
+    const editTarget: BundleEditTarget = {
+      bucket: args.bucket,
+      markerId: args.markerId ?? null,
+      offset: args.offset,
+      length: args.length,
+      edition: args.edition ?? null,
+      protectedText: true,
     };
     const highlight = {
       textid: args.textid,

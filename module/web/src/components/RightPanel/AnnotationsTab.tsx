@@ -163,6 +163,10 @@ function annotationInSection(a: Annotation, focus: SectionFocus | null): boolean
   return end > focus.start && start < focus.end;
 }
 
+function editableBucket(bucket: string): "front" | "body" | "back" | null {
+  return bucket === "front" || bucket === "body" || bucket === "back" ? bucket : null;
+}
+
 export function AnnotationsTab() {
   const textid = useWorkspace((s) => s.activeTextid);
   const seq = useWorkspace((s) => s.activeSeq);
@@ -338,10 +342,22 @@ export function AnnotationsTab() {
     }
   };
 
-  const onSearchSelection = () => {
+  const onEditSelection = () => {
     if (!sel) return;
-    workspace.setSearchQuery(sel.chars.join(""));
-    void workspace.runSearch();
+    const bucket = editableBucket(sel.bucket);
+    if (bucket == null) return;
+    workspace.openBundleEditorAtSelection({
+      textid: sel.textid,
+      seq: sel.seq,
+      bucket,
+      offset: sel.start,
+      length: Math.max(0, sel.end - sel.start),
+      markerId: sel.anchorMarkerId,
+      // Bundle edit treats a missing edition query as the surface/master file.
+      // `edition` here is the annotation payload edition and may equal the
+      // surface short (for example "bkk"), which is not an editions/ subdir.
+      edition: null,
+    });
   };
 
   const onSubTextMouseUp = () => {
@@ -519,8 +535,8 @@ export function AnnotationsTab() {
             >
               Copy ref
             </button>
-            <button className="sel-action" onClick={onSearchSelection}>
-              Search this
+            <button className="sel-action" onClick={onEditSelection}>
+              Edit this
             </button>
           </div>
           <div className="loc-save">

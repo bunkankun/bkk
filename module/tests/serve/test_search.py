@@ -320,6 +320,34 @@ def test_search_context_facets_filter_and_count(client):
     assert left_values["乙"]["selected"] is True
 
 
+def test_search_voices_endpoint_and_voice_filter(tmp_path: Path):
+    write_bundle(
+        tmp_path,
+        "VOICE0001",
+        "甲乙丙丁",
+        voice_markers=[
+            {"id": "v1", "offset": 0, "length": 2, "name": "lemma"},
+            {"id": "v2", "offset": 2, "length": 2, "name": "def"},
+        ],
+    )
+    config = ServeConfig(corpus_root=tmp_path, index_path=tmp_path / "_corpus.bkkx")
+    client = TestClient(create_app(config))
+
+    voices = client.get("/search/voices")
+    assert voices.status_code == 200
+    assert voices.json()["voices"] == ["def", "lemma"]
+
+    r = client.get("/search", params={"q": "丙", "voice": "def"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    assert body["hits"][0]["voice"] == "def"
+
+    missed = client.get("/search", params={"q": "丙", "voice": "lemma"})
+    assert missed.status_code == 200
+    assert missed.json()["total"] == 0
+
+
 # ---------------------------------------------------------------- sort modes
 
 

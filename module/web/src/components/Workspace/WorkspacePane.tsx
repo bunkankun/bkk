@@ -281,6 +281,8 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
         showEdit ? (
           <BundleEditor
             key={`${activeTextTab.textid}:${activeTextTab.seq}`}
+            paneId={pane.id}
+            tabId={activeTextTab.id}
             textid={activeTextTab.textid}
             seq={activeTextTab.seq}
             editTarget={activeTextTab.editTarget ?? null}
