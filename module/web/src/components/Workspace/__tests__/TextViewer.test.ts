@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { JuanMarker } from "../../../api/types";
-import { buildBlocks, buildRenderedChars } from "../TextViewer";
+import {
+  buildBlocks,
+  buildRenderedChars,
+  voiceDisplaySegments,
+} from "../TextViewer";
 
 function blockText(
   bodyText: string,
@@ -28,6 +32,37 @@ describe("TextViewer phrase blocks", () => {
     expect(blockText("甲乙，！」。：．)/丙丁", [])).toEqual([
       "甲乙，！」。：．)/",
       "丙丁",
+    ]);
+  });
+
+  it("does not start a phrase line with an ASCII close parenthesis", () => {
+    const markers: JuanMarker[] = [
+      { type: "tls:seg", offset: 2 },
+      { type: "tls:seg", offset: 3 },
+    ];
+
+    expect(blockText("甲乙)丙丁", markers)).toEqual([
+      "甲乙)",
+      "丙丁",
+    ]);
+  });
+
+  it("keeps leading dictionary definition closers with the previous voice line", () => {
+    const markers: JuanMarker[] = [
+      { type: "voice", offset: 0, length: 2, name: "lemma" },
+      { type: "punctuation", offset: 2, content: "/)" },
+      { type: "voice", offset: 2, length: 2, name: "def" },
+    ];
+    const chars = buildRenderedChars("甲乙丙丁", markers, "phrase", "canonical");
+
+    expect(
+      voiceDisplaySegments(chars).map((segment) => ({
+        voice: segment.voice,
+        text: segment.chars.map((char) => char.ch).join(""),
+      })),
+    ).toEqual([
+      { voice: "lemma", text: "甲乙/)" },
+      { voice: "def", text: "丙丁" },
     ]);
   });
 

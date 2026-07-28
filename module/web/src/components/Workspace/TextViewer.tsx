@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import {
   getAnnotations,
@@ -36,7 +37,7 @@ import { annTooltip, buildAnnotationIndex } from "./AnnotationLayer";
 const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；…—\s\u00B7]/;
 const PHRASE_END_RE = /[。！？；，：]/;
 const PHRASE_LINE_OPENER_RE = /^[「『《〈（(〔【]$/;
-const PHRASE_LINE_NONSTART_RE = /^[，、。：；！？．/」』》〉）)〕】]$/;
+const PHRASE_LINE_NONSTART_RE = /^[，、。：；！？．/」』》〉）\)〕】]$/;
 const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
 const BUCKETS = ["front", "body", "back"] as const;
 
@@ -103,6 +104,14 @@ interface Block {
   chars: RenderedChar[];
   estimatedHeight: number;
   tagName: "div" | "p";
+}
+
+type VoiceBlockName = "lemma" | "def";
+
+interface VoiceDisplaySegment {
+  voice: VoiceBlockName | null;
+  start: number;
+  chars: RenderedChar[];
 }
 
 const FALLBACK_LINE_HEIGHT = 38;
@@ -621,6 +630,63 @@ function optionForSelection(
 ): EditionOption | null {
   const value = selectedEdition ?? "__surface__";
   return options.find((option) => option.value === value) ?? options[0] ?? null;
+}
+
+function isLineNonStartChar(rc: RenderedChar): boolean {
+  return (
+    !rc.pageAnchor &&
+    !rc.layout &&
+    !rc.isNewline &&
+    PHRASE_LINE_NONSTART_RE.test(rc.ch)
+  );
+}
+
+export function voiceDisplaySegments(chars: RenderedChar[]): VoiceDisplaySegment[] {
+  const segments: VoiceDisplaySegment[] = [];
+
+  const pushSegment = (
+    voice: VoiceBlockName | null,
+    start: number,
+    run: RenderedChar[],
+  ) => {
+    if (run.length === 0) return;
+    segments.push({ voice, start, chars: run });
+  };
+
+  const appendToPrevious = (start: number, run: RenderedChar[]) => {
+    if (run.length === 0) return;
+    const previous = segments[segments.length - 1];
+    if (previous) {
+      previous.chars.push(...run);
+    } else {
+      pushSegment(null, start, run);
+    }
+  };
+
+  for (let i = 0; i < chars.length;) {
+    const voice = chars[i].voice;
+    if (voice === "lemma" || voice === "def") {
+      const start = i;
+      while (i < chars.length && chars[i].voice === voice) i++;
+      let bodyStart = start;
+      while (bodyStart < i && isLineNonStartChar(chars[bodyStart])) bodyStart++;
+      appendToPrevious(start, chars.slice(start, bodyStart));
+      pushSegment(voice, bodyStart, chars.slice(bodyStart, i));
+      continue;
+    }
+
+    const start = i;
+    while (
+      i < chars.length &&
+      chars[i].voice !== "lemma" &&
+      chars[i].voice !== "def"
+    ) {
+      i++;
+    }
+    pushSegment(null, start, chars.slice(start, i));
+  }
+
+  return segments;
 }
 
 function pageLocation(markerId: string | null): string | null {
@@ -1579,6 +1645,153 @@ function BlockView({
 }: BlockViewProps) {
   const Tag = block.tagName;
 
+  const renderChar = (rc: RenderedChar, i: number) => {
+    if (rc.pageAnchor) {
+      const parsed = parseMarkerId(rc.pageAnchor.id);
+      const match = activeEdition != null && parsed?.edition === activeEdition;
+      return (
+        <span
+          key={i}
+          className={`page-anchor${match ? " page-anchor--match" : ""}`}
+          data-bucket={block.bucket}
+          data-page-id={rc.pageAnchor.id}
+          data-page-offset={rc.pageAnchor.offset}
+          data-page-label={rc.pageAnchor.label}
+          title={match ? rc.pageAnchor.id : undefined}
+        />
+      );
+    }
+    if (rc.layout?.type === "indent") {
+      return (
+        <span
+          key={i}
+          className={`layout-indent${rc.noteVoice ? " voice-note" : ""}`}
+          aria-hidden="true"
+        >
+          {rc.ch}
+        </span>
+      );
+    }
+    if (rc.isNewline) {
+      if (lineBreakDisplay === "br") return <br key={i} />;
+      if (lineBreakDisplay === "glyph")
+        return <span key={i} className="lb-mark" aria-hidden="true" />;
+      return null;
+    }
+    if (rc.isPunct) {
+      // Injected punctuation has no srcOffset; existing punct still has one
+      // but we don't expose it for selection.
+      return (
+        <span key={i} className={`pu${rc.noteVoice ? " voice-note" : ""}`}>
+          {rc.ch}
+        </span>
+      );
+    }
+    const off = rc.srcOffset!;
+    const anns = annIndex.byOffset.get(off);
+    const has = block.bucket === "body" && anns && anns.length > 0;
+    const flashing =
+      flashOffsets != null &&
+      flashBucket === block.bucket &&
+      off >= flashOffsets.start &&
+      off < flashOffsets.end;
+    const cls = `${has ? "ch has-ann" : "ch"}${rc.noteVoice ? " voice-note" : ""}${flashing ? " kwic-flash" : ""}`;
+    const title = has ? anns!.map(annTooltip).join(" / ") : undefined;
+    return (
+      <span
+        key={i}
+        className={cls}
+        data-bucket={block.bucket}
+        data-offset={off}
+        data-end-offset={rc.srcEndOffset ?? off + 1}
+        title={title}
+        onMouseEnter={() =>
+          workspace.setHover(paneId, tabId, rc.ch, {
+            bucket: block.bucket,
+            offset: off,
+            bucketLength,
+            voice: rc.voice ?? "default",
+          })
+        }
+        onClick={(ev) => {
+          if (rightTab === "parallels" && hasParallels === true) {
+            workspace.focusParallelAt(textid, seq, block.bucket, off);
+            ev.stopPropagation();
+            return;
+          }
+          if (!has) return;
+          // Suppress when this click is part of a drag-selection — let
+          // mouseUp's getSelection() path handle multi-char selections.
+          const sel = window.getSelection();
+          if (sel && !sel.isCollapsed) return;
+          const anchor = resolveAnchor(block.bucket, off);
+          workspace.setSelection({
+            textid,
+            seq,
+            bucket: block.bucket,
+            start: off,
+            end: off + 1,
+            chars: [rc.ch],
+            ...anchor,
+          });
+          const targetId = anns!.find((a) => a.id != null)?.id ?? null;
+          workspace.setSelectedAnnotationId(targetId);
+          workspace.setSearchQuery(rc.ch);
+          workspace.setRightTab("annotations");
+          ev.stopPropagation();
+        }}
+      >
+        {rc.ch}
+      </span>
+    );
+  };
+
+  const renderInlineChars = (
+    chars: RenderedChar[],
+    baseIndex: number,
+    keyPrefix: string,
+  ) => {
+    const nodes: ReactNode[] = [];
+    for (let i = 0; i < chars.length;) {
+      let end = i + 1;
+      while (end < chars.length && isLineNonStartChar(chars[end])) end++;
+      const absoluteIndex = baseIndex + i;
+      if (end > i + 1) {
+        nodes.push(
+          <span
+            key={`${keyPrefix}:keep:${absoluteIndex}`}
+            className="no-line-start-group"
+          >
+            {chars.slice(i, end).map((rc, offset) =>
+              renderChar(rc, absoluteIndex + offset),
+            )}
+          </span>,
+        );
+      } else {
+        nodes.push(renderChar(chars[i], absoluteIndex));
+      }
+      i = end;
+    }
+    return nodes;
+  };
+
+  const renderChars = () => {
+    return voiceDisplaySegments(block.chars).flatMap((segment, index) => {
+      const keyPrefix = `seg:${index}:${segment.start}`;
+      if (segment.voice) {
+        return (
+          <span
+            key={keyPrefix}
+            className={`voice-run voice-${segment.voice}`}
+          >
+            {renderInlineChars(segment.chars, segment.start, keyPrefix)}
+          </span>
+        );
+      }
+      return renderInlineChars(segment.chars, segment.start, keyPrefix);
+    });
+  };
+
   if (!visible) {
     return (
       <Tag
@@ -1597,106 +1810,7 @@ function BlockView({
       data-block-end={block.endOffset}
       onClick={() => onAlignClick?.(block)}
     >
-      {block.chars.map((rc, i) => {
-        if (rc.pageAnchor) {
-          const parsed = parseMarkerId(rc.pageAnchor.id);
-          const match = activeEdition != null && parsed?.edition === activeEdition;
-          return (
-            <span
-              key={i}
-              className={`page-anchor${match ? " page-anchor--match" : ""}`}
-              data-bucket={block.bucket}
-              data-page-id={rc.pageAnchor.id}
-              data-page-offset={rc.pageAnchor.offset}
-              data-page-label={rc.pageAnchor.label}
-              title={match ? rc.pageAnchor.id : undefined}
-            />
-          );
-        }
-        if (rc.layout?.type === "indent") {
-          return (
-            <span
-              key={i}
-              className={`layout-indent${rc.noteVoice ? " voice-note" : ""}`}
-              aria-hidden="true"
-            >
-              {rc.ch}
-            </span>
-          );
-        }
-        if (rc.isNewline) {
-          if (lineBreakDisplay === "br") return <br key={i} />;
-          if (lineBreakDisplay === "glyph")
-            return <span key={i} className="lb-mark" aria-hidden="true" />;
-          return null;
-        }
-        if (rc.isPunct) {
-          // Injected punctuation has no srcOffset; existing punct still has one
-          // but we don't expose it for selection.
-          return (
-            <span key={i} className={`pu${rc.noteVoice ? " voice-note" : ""}`}>
-              {rc.ch}
-            </span>
-          );
-        }
-        const off = rc.srcOffset!;
-        const anns = annIndex.byOffset.get(off);
-        const has = block.bucket === "body" && anns && anns.length > 0;
-        const flashing =
-          flashOffsets != null &&
-          flashBucket === block.bucket &&
-          off >= flashOffsets.start &&
-          off < flashOffsets.end;
-        const cls = `${has ? "ch has-ann" : "ch"}${rc.noteVoice ? " voice-note" : ""}${flashing ? " kwic-flash" : ""}`;
-        const title = has ? anns!.map(annTooltip).join(" / ") : undefined;
-        return (
-          <span
-            key={i}
-            className={cls}
-            data-bucket={block.bucket}
-            data-offset={off}
-            data-end-offset={rc.srcEndOffset ?? off + 1}
-            title={title}
-            onMouseEnter={() =>
-              workspace.setHover(paneId, tabId, rc.ch, {
-                bucket: block.bucket,
-                offset: off,
-                bucketLength,
-                voice: rc.voice ?? "default",
-              })
-            }
-            onClick={(ev) => {
-              if (rightTab === "parallels" && hasParallels === true) {
-                workspace.focusParallelAt(textid, seq, block.bucket, off);
-                ev.stopPropagation();
-                return;
-              }
-              if (!has) return;
-              // Suppress when this click is part of a drag-selection — let
-              // mouseUp's getSelection() path handle multi-char selections.
-              const sel = window.getSelection();
-              if (sel && !sel.isCollapsed) return;
-              const anchor = resolveAnchor(block.bucket, off);
-              workspace.setSelection({
-                textid,
-                seq,
-                bucket: block.bucket,
-                start: off,
-                end: off + 1,
-                chars: [rc.ch],
-                ...anchor,
-              });
-              const targetId = anns!.find((a) => a.id != null)?.id ?? null;
-              workspace.setSelectedAnnotationId(targetId);
-              workspace.setSearchQuery(rc.ch);
-              workspace.setRightTab("annotations");
-              ev.stopPropagation();
-            }}
-          >
-            {rc.ch}
-          </span>
-        );
-      })}
+      {renderChars()}
     </Tag>
   );
 }
