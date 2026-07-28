@@ -6,7 +6,7 @@ Exposes repair operations for manifests and marker storage.
     python -m bkk repair manifest --text-id <text-id>     # resolved via .bkkrc
 
 For the bare-id form, the bundle root is resolved against (in order):
-``repair.out``, ``import.out``, ``global.corpus`` from ``.bkkrc``. CLI
+``repair.out``, ``global.corpus``, ``import.out`` from ``.bkkrc``. CLI
 flags beat the rc file.
 """
 
@@ -31,12 +31,12 @@ def _add_bundle_selector(sp: argparse.ArgumentParser, *, dry_run: bool = False) 
     )
     sp.add_argument(
         "--text-id", dest="text_id", type=text_id_arg, default=None,
-        help="text id to resolve against repair.out / import.out / global.corpus",
+        help="text id to resolve against repair.out / global.corpus / import.out",
     )
     sp.add_argument(
         "--out", dest="out_root", type=Path, default=None,
         help="bundle output root used to resolve --text-id "
-             "(overrides repair.out / import.out / global.corpus)",
+             "(overrides repair.out / global.corpus / import.out)",
     )
     if dry_run:
         sp.add_argument(
@@ -118,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pi.add_argument(
         "--out", dest="out_root", type=Path, default=None,
-        help="bundle output root (overrides repair.out / import.out / global.corpus)",
+        help="bundle output root (overrides repair.out / global.corpus / import.out)",
     )
     pi.add_argument(
         "--dry-run", action="store_true",
@@ -144,7 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pr.add_argument(
         "--out", dest="out_root", type=Path, default=None,
-        help="bundle output root (overrides repair.out / import.out / global.corpus)",
+        help="bundle output root (overrides repair.out / global.corpus / import.out)",
     )
     pr.add_argument(
         "--dry-run", action="store_true",
@@ -198,7 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pno.add_argument(
         "--text-id", dest="text_id", type=text_id_arg, default=None,
-        help="text id to resolve against repair.out / import.out / global.corpus",
+        help="text id to resolve against repair.out / global.corpus / import.out",
     )
     pno.add_argument(
         "--text-prefix", action="append", default=None, dest="text_prefixes",
@@ -207,7 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pno.add_argument(
         "--out", dest="out_root", type=Path, default=None,
-        help="bundle output root (overrides repair.out / import.out / global.corpus)",
+        help="bundle output root (overrides repair.out / global.corpus / import.out)",
     )
     pno.add_argument(
         "--report", dest="report_path", type=Path, default=None,
@@ -247,7 +247,7 @@ def run(argv: list[str] | None = None) -> int:
         rc = load_rc()
         out_root = resolve_rc_path(
             None, rc,
-            (("repair", "out"), ("import", "out"), ("global", "corpus")),
+            (("repair", "out"), ("global", "corpus"), ("import", "out")),
         )
 
     if args.op == "manifest":
@@ -550,7 +550,7 @@ def _run_front_to_body_prefixes(
     if out_root is None:
         print(
             "error: bundle root not given (--out) and not configured in "
-            ".bkkrc (repair.out / import.out / global.corpus)",
+            ".bkkrc (repair.out / global.corpus / import.out)",
             file=sys.stderr,
         )
         return 2
@@ -649,7 +649,7 @@ def _run_ids_from_krp_titles(
     if out_root is None:
         print(
             "error: bundle root not given (--out) and not configured in "
-            ".bkkrc (repair.out / import.out / global.corpus)",
+            ".bkkrc (repair.out / global.corpus / import.out)",
             file=sys.stderr,
         )
         return 2
@@ -706,7 +706,7 @@ def _run_remove_ids(
     if out_root is None:
         print(
             "error: bundle root not given (--out) and not configured in "
-            ".bkkrc (repair.out / import.out / global.corpus)",
+            ".bkkrc (repair.out / global.corpus / import.out)",
             file=sys.stderr,
         )
         return 2
@@ -854,7 +854,7 @@ def _run_negative_offsets(
             if out_root is None:
                 print(
                     "error: bundle root not given (--out) and not configured in "
-                    ".bkkrc (repair.out / import.out / global.corpus)",
+                    ".bkkrc (repair.out / global.corpus / import.out)",
                     file=sys.stderr,
                 )
                 return 2
@@ -937,7 +937,7 @@ def _run_page_break(
             if out_root is None:
                 print(
                     "error: bundle root not given (--out) and not configured in "
-                    ".bkkrc (repair.out / import.out / global.corpus)",
+                    ".bkkrc (repair.out / global.corpus / import.out)",
                     file=sys.stderr,
                 )
                 return 2

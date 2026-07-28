@@ -141,7 +141,7 @@ def test_rebuild_toc_labels_match_head_markers(tmp_path: Path):
 
 def test_cli_resolves_bare_text_id_via_rc(tmp_path: Path, monkeypatch):
     """``bkk repair manifest <text-id>`` resolves the bundle dir against
-    a configured ``import.out`` (the same default the importer uses)."""
+    a configured ``import.out`` when no corpus root is configured."""
     bundle_dir = _stage_split_text_bug(tmp_path)
     # Stub load_rc with import.out pointing at tmp_path.
     monkeypatch.setattr(
@@ -151,6 +151,29 @@ def test_cli_resolves_bare_text_id_via_rc(tmp_path: Path, monkeypatch):
     rc = repair_run(["manifest", TEXT_ID])
     assert rc == 0
 
+    mf = yaml.safe_load(
+        (bundle_dir / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    assert [p["seq"] for p in mf["assets"]["parts"]] == [1, 2]
+
+
+def test_cli_global_corpus_beats_legacy_import_out(tmp_path: Path, monkeypatch):
+    global_corpus = tmp_path / "global-corpus"
+    import_out = tmp_path / "import-out"
+    global_corpus.mkdir()
+    import_out.mkdir()
+    bundle_dir = _stage_split_text_bug(global_corpus)
+    monkeypatch.setattr(
+        "bkk.config.load_rc",
+        lambda: {
+            "global": {"corpus": global_corpus},
+            "import": {"out": import_out},
+        },
+    )
+
+    rc = repair_run(["manifest", TEXT_ID])
+
+    assert rc == 0
     mf = yaml.safe_load(
         (bundle_dir / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
     )
