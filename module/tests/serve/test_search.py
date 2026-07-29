@@ -348,6 +348,29 @@ def test_search_voices_endpoint_and_voice_filter(tmp_path: Path):
     assert missed.json()["total"] == 0
 
 
+def test_search_bare_voice_regex_anchors_match_voice_boundaries(tmp_path: Path):
+    write_bundle(
+        tmp_path,
+        "VOICE0002",
+        "甲乙丙丁",
+        voice_markers=[
+            {"id": "v1", "offset": 0, "length": 2, "name": "lemma"},
+            {"id": "v2", "offset": 2, "length": 2, "name": "def"},
+        ],
+    )
+    config = ServeConfig(corpus_root=tmp_path, index_path=tmp_path / "_corpus.bkkx")
+    client = TestClient(create_app(config))
+
+    r = client.get("/search", params={"q": "^丙.$", "voice": "def"})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query_mode"] == "regex"
+    assert body["total"] == 1
+    assert body["hits"][0]["match"] == "丙丁"
+    assert body["hits"][0]["voice"] == "def"
+
+
 # ---------------------------------------------------------------- sort modes
 
 

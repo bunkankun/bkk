@@ -69,6 +69,7 @@ class _ParsedQuery:
     flags: int = 0
     anchor: str | None = None
     right: str | None = None
+    voice_boundary: bool = False
 
 
 _SECTION_RE = re.compile(r"^(KR\d+[a-z]+)")
@@ -76,6 +77,7 @@ _REGEX_FLAGS = {"i": re.IGNORECASE, "m": re.MULTILINE, "s": re.DOTALL}
 _REGEX_NONLITERAL_ESCAPES = set("AbBdDsSwWZzG")
 _REGEX_BREAK_CHARS = set(".^$()|")
 _REGEX_OPTIONAL_QUANTIFIERS = set("*?{")
+_LITE_REPEAT_RE = re.compile(r"\{[1-9][0-9]*\}")
 
 
 def _nfc(s: str) -> str:
@@ -97,6 +99,17 @@ def _parse_search_query(q: str) -> _ParsedQuery:
         compound = _parse_compound_literal(q)
         if compound is not None:
             return compound
+        lite = _parse_lite_regex(q)
+        if lite is not None:
+            pattern, voice_boundary = lite
+            _validate_regex(pattern, 0)
+            return _ParsedQuery(
+                mode="regex",
+                literal=q,
+                pattern=pattern,
+                anchor=_regex_anchor(pattern),
+                voice_boundary=voice_boundary,
+            )
         return _ParsedQuery(mode="literal", literal=q)
 
     last_slash = -1
@@ -116,6 +129,19 @@ def _parse_search_query(q: str) -> _ParsedQuery:
     flags = 0
     for flag in raw_flags:
         flags |= _REGEX_FLAGS[flag]
+    _validate_regex(pattern, flags)
+
+    return _ParsedQuery(
+        mode="regex",
+        literal=q,
+        pattern=pattern,
+        flags=flags,
+        anchor=None if flags & re.IGNORECASE else _regex_anchor(pattern),
+        voice_boundary=_has_regex_boundary_anchor(pattern),
+    )
+
+
+def _validate_regex(pattern: str, flags: int) -> None:
     try:
         compiled = re.compile(pattern, flags)
     except re.error as exc:
@@ -124,13 +150,73 @@ def _parse_search_query(q: str) -> _ParsedQuery:
     if empty is not None and empty.start() == empty.end():
         raise errors.bad_request("zero_length_regex", message="regex can match the empty string")
 
-    return _ParsedQuery(
-        mode="regex",
-        literal=q,
-        pattern=pattern,
-        flags=flags,
-        anchor=None if flags & re.IGNORECASE else _regex_anchor(pattern),
-    )
+
+def _has_regex_boundary_anchor(pattern: str) -> bool:
+    for i, ch in enumerate(pattern):
+        if ch in "^$" and not _is_escaped(pattern, i):
+            return True
+    return False
+
+
+def _parse_lite_regex(q: str) -> tuple[str, bool] | None:
+    """Translate bare ``^``, ``$``, ``.``, and ``{n}`` syntax to regex.
+
+    Everything else is escaped, keeping the bare form intentionally smaller
+    than slash-delimited full regex. ``^`` is special only at the beginning,
+    ``$`` only at the end, and ``{n}`` only immediately after a token.
+    """
+    out: list[str] = []
+    used_regex = False
+    voice_boundary = False
+    can_repeat = False
+    i = 0
+    while i < len(q):
+        ch = q[i]
+        if ch == "\\":
+            if i + 1 < len(q):
+                out.append(re.escape(q[i + 1]))
+                can_repeat = True
+                i += 2
+                continue
+            out.append(re.escape(ch))
+            can_repeat = True
+            i += 1
+            continue
+        if ch == "^" and i == 0:
+            out.append("^")
+            used_regex = True
+            voice_boundary = True
+            can_repeat = False
+            i += 1
+            continue
+        if ch == "$" and i == len(q) - 1:
+            out.append("$")
+            used_regex = True
+            voice_boundary = True
+            can_repeat = False
+            i += 1
+            continue
+        if ch == ".":
+            out.append(".")
+            used_regex = True
+            can_repeat = True
+            i += 1
+            continue
+        if ch == "{" and can_repeat:
+            match = _LITE_REPEAT_RE.match(q, i)
+            if match is not None:
+                out.append(match.group(0))
+                used_regex = True
+                can_repeat = False
+                i = match.end()
+                continue
+        out.append(re.escape(ch))
+        can_repeat = True
+        i += 1
+
+    if not used_regex:
+        return None
+    return "".join(out), voice_boundary
 
 
 def _parse_compound_literal(q: str) -> _ParsedQuery | None:
@@ -854,7 +940,11 @@ def _search_hits(
                 date_before=date_before,
                 date_after=date_after,
             )
-        if parsed.anchor is None and regex_scope_textids is None:
+        if (
+            parsed.anchor is None
+            and regex_scope_textids is None
+            and not (parsed.voice_boundary and voices is not None)
+        ):
             for index in indexes:
                 index.close()
             raise errors.bad_request(
@@ -974,6 +1064,7 @@ def _search_hits(
                             textid=tid,
                             voices=voices,
                             anchor=parsed.anchor,
+                            voice_scoped=parsed.voice_boundary,
                         ))
                         if len(all_hits) > cap:
                             raise errors.bad_request(
@@ -990,6 +1081,7 @@ def _search_hits(
                         textid=textid,
                         voices=voices,
                         anchor=parsed.anchor,
+                        voice_scoped=parsed.voice_boundary,
                     ))
                     if len(all_hits) > cap:
                         raise errors.bad_request(

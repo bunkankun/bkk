@@ -243,6 +243,35 @@ def test_nesting_innermost_wins(tmp_path):
     assert root_hits == []
 
 
+def test_voice_scoped_regex_anchors_match_voice_boundaries(tmp_path):
+    bundle = _write_bundle(tmp_path, "KRV0009B", ROOT_CMT_BODY,
+                           voices=ROOT_CMT_VOICES)
+    bkkx = build_index(bundle)
+    with Index(bkkx) as ix:
+        hits = list(ix.search_regex(
+            "^A.{4}$",
+            voices={"root"},
+            voice_scoped=True,
+        ))
+        commentary_hits = list(ix.search_regex(
+            "^C{5}$",
+            voices={"commentary"},
+            voice_scoped=True,
+        ))
+        row_scoped = list(ix.search_regex(
+            "^A.{4}$",
+            voices={"root"},
+            voice_scoped=False,
+        ))
+
+    assert len(hits) == 1
+    assert hits[0].match == "AAAAA"
+    assert hits[0].voice == "root"
+    assert len(commentary_hits) == 1
+    assert commentary_hits[0].match == "CCCCC"
+    assert row_scoped == []
+
+
 def test_voice_filter_rejects_unknown_voice_via_cli(tmp_path, capsys):
     from bkk.index.cli import run as cli_run
     bundle = _write_bundle(tmp_path, "KRV0010", ROOT_CMT_BODY,

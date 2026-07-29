@@ -183,6 +183,7 @@ class Index:
         textid: str | None = None,
         voices: set[str] | None = None,
         anchor: str | None = None,
+        voice_scoped: bool = False,
     ) -> Iterator[Hit]:
         """Yield :class:`Hit` for every regex match.
 
@@ -191,6 +192,10 @@ class Index:
         candidate machinery; the regex is still evaluated against each whole
         source row so variable-length matches can start before or after the
         anchor occurrence.
+
+        When ``voice_scoped`` and ``voices`` are both present, regex matching
+        scans each selected master voice range as its own string. This gives
+        ``^`` and ``$`` voice-boundary semantics for voice-aware searches.
         """
         compiled = re.compile(self._prepare_query(pattern), flags)
         source_keys: set[tuple[str, int]] | None = None
@@ -199,6 +204,12 @@ class Index:
             source_keys = set(self._candidate_positions(anchor))
             if not source_keys:
                 return
+
+        if voice_scoped and voices:
+            yield from self._scan_regex_voice_ranges(
+                compiled, context, textid, voices, source_keys,
+            )
+            return
 
         if source_keys is None:
             yield from self._scan_regex_all_sources(
@@ -531,6 +542,81 @@ class Index:
         return row["text"] if row is not None else ""
 
     # -- regex source scans ---------------------------------------------------
+
+    def _scan_regex_voice_ranges(
+        self,
+        pattern: re.Pattern[str],
+        context: int,
+        textid: str | None,
+        voices: set[str],
+        source_keys: set[tuple[str, int]] | None,
+    ) -> Iterator[Hit]:
+        bucket_scope = (
+            {src_id for kind, src_id in source_keys if kind == "bucket"}
+            if source_keys is not None else None
+        )
+        if bucket_scope is not None and not bucket_scope:
+            return
+
+        seen: set[tuple[int, int, int]] = set()
+        for row in self._voice_range_rows(textid, voices, bucket_scope):
+            bucket_id = row["bucket_id"]
+            voice_start = row["master_offset"]
+            voice_end = voice_start + row["length"]
+            text = row["text"][voice_start:voice_end]
+            for match in pattern.finditer(text):
+                pos, end = match.span()
+                if end == pos:
+                    raise RegexZeroLengthError("regex produced a zero-length match")
+                master_pos = voice_start + pos
+                master_len = end - pos
+                dedupe_key = (bucket_id, master_pos, master_len)
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                matched_text = row["text"][master_pos:master_pos + master_len]
+                hit = self._make_hit(
+                    row["textid"], row["seq"], row["kind"], bucket_id,
+                    row["text"], master_pos, master_len, "master", matched_text,
+                    context, witness_text=matched_text,
+                )
+                if _passes_voice_filter(hit, voices):
+                    yield hit
+
+    def _voice_range_rows(
+        self,
+        textid: str | None,
+        voices: set[str],
+        bucket_scope: set[int] | None,
+    ) -> list[sqlite3.Row]:
+        voice_values = sorted(voices)
+        voice_placeholders = ",".join("?" * len(voice_values))
+        params: list[object] = [*voice_values]
+        sql = (
+            "SELECT v.bucket_id, v.master_offset, v.length, "
+            "b.text, b.kind, j.seq, j.textid "
+            "FROM voice_range v "
+            "JOIN bucket b ON b.bucket_id = v.bucket_id "
+            "JOIN juan j ON b.juan_id = j.juan_id "
+            f"WHERE v.name IN ({voice_placeholders})"
+        )
+        if textid is not None:
+            sql += " AND j.textid = ?"
+            params.append(textid)
+        if bucket_scope is not None:
+            out: list[sqlite3.Row] = []
+            for chunk in _chunked(sorted(bucket_scope), _SQLITE_VAR_LIMIT):
+                placeholders = ",".join("?" * len(chunk))
+                out.extend(self._conn.execute(
+                    f"{sql} AND v.bucket_id IN ({placeholders}) "
+                    "ORDER BY j.textid, j.seq, v.bucket_id, v.master_offset, v.length",
+                    [*params, *chunk],
+                ).fetchall())
+            return out
+        return self._conn.execute(
+            f"{sql} ORDER BY j.textid, j.seq, v.bucket_id, v.master_offset, v.length",
+            params,
+        ).fetchall()
 
     def _scan_regex_all_sources(
         self,
