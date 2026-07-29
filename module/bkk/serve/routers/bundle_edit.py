@@ -1189,6 +1189,76 @@ def _commit_files(
     return commit_sha
 
 
+def _invalidate_local_bundle_caches(state: AppState, textid: str) -> None:
+    state._bundle_records.pop(textid, None)
+    if state._cache is not None:
+        state._cache.force_refresh()
+    with state._parallel_cache_lock:
+        state._parallel_marker_cache.clear()
+        state._parallel_bucket_text_cache.clear()
+
+
+def _sync_local_bundle_checkout(state: AppState, textid: str, branch: str) -> dict[str, Any]:
+    rec = state.lookup_bundle(textid)
+    if rec is None:
+        return {"status": "skipped", "reason": "local bundle not found"}
+    git_dir = rec.bundle_dir / ".git"
+    if not git_dir.exists():
+        return {"status": "skipped", "reason": "local bundle is not a git checkout"}
+
+    import subprocess
+
+    fetch = subprocess.run(
+        ["git", "-C", str(rec.bundle_dir), "fetch", "origin", branch],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if fetch.returncode != 0:
+        raise RuntimeError(f"git fetch failed: {fetch.stderr.strip()}")
+    merge = subprocess.run(
+        ["git", "-C", str(rec.bundle_dir), "merge", "--ff-only", f"origin/{branch}"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if merge.returncode != 0:
+        raise RuntimeError(
+            f"git merge --ff-only origin/{branch} failed: "
+            f"{merge.stderr.strip() or merge.stdout.strip()}"
+        )
+    head = subprocess.run(
+        ["git", "-C", str(rec.bundle_dir), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=10,
+    )
+    _invalidate_local_bundle_caches(state, textid)
+    return {"status": "success", "pulled_sha": head.stdout.strip()}
+
+
+def _sync_after_direct_bundle_commit(
+    state: AppState, textid: str, branch: str, commit_sha: str,
+) -> dict[str, Any]:
+    try:
+        return _sync_local_bundle_checkout(state, textid, branch)
+    except Exception as exc:  # noqa: BLE001
+        log.warning(
+            "GitHub commit %s for %s succeeded, but local sync failed: %s",
+            commit_sha,
+            textid,
+            exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"GitHub commit {commit_sha} succeeded, but the local bundle "
+                f"checkout could not be fast-forwarded: {exc}"
+            ),
+        ) from exc
+
+
 def _core_attestation_values(att: dict[str, Any]) -> dict[str, Any]:
     return {
         key: att.get(key)
@@ -1514,6 +1584,7 @@ def save_bundle_edit(
         core_repair = _apply_core_repairs(
             state, session, repairs.core_repairs, message=message,
         )
+        local_sync = _sync_after_direct_bundle_commit(state, textid, branch, commit_sha)
         parallel_stale, parallel_stale_id, parallel_stale_error = _record_parallel_stale(
             state,
             session,
@@ -1537,6 +1608,7 @@ def save_bundle_edit(
             "parallel_stale": parallel_stale,
             "parallel_stale_id": parallel_stale_id,
             "parallel_stale_error": parallel_stale_error,
+            "local_sync": local_sync,
         }
 
     fork = _ensure_fork(session.access_token, upstream, session.login, textid)
@@ -1625,6 +1697,7 @@ def move_bundle_section(
             files,
             create_branch=False,
         )
+        local_sync = _sync_after_direct_bundle_commit(state, textid, branch, commit_sha)
         parallel_stale, parallel_stale_id, parallel_stale_error = _record_parallel_stale_move(
             state,
             session,
@@ -1649,6 +1722,7 @@ def move_bundle_section(
             "parallel_stale": parallel_stale,
             "parallel_stale_id": parallel_stale_id,
             "parallel_stale_error": parallel_stale_error,
+            "local_sync": local_sync,
         }
 
     fork = _ensure_fork(session.access_token, upstream, session.login, textid)

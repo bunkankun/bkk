@@ -672,6 +672,15 @@ def test_admin_save_commits_directly(client, monkeypatch):
         return "commit123"
 
     monkeypatch.setattr(bundle_edit, "_commit_files", fake_commit)
+    sync_calls = []
+    monkeypatch.setattr(
+        bundle_edit,
+        "_sync_local_bundle_checkout",
+        lambda state, textid, branch: (
+            sync_calls.append((textid, branch))
+            or {"status": "success", "pulled_sha": "commit123"}
+        ),
+    )
     response = client.post(
         "/bundles/TEST0001/juan/1/edit",
         json=_request().model_dump(),
@@ -683,11 +692,13 @@ def test_admin_save_commits_directly(client, monkeypatch):
     assert body["parallel_stale"] is True
     assert body["parallel_stale_id"]
     assert body["repaired_parallel_assets"] == 0
+    assert body["local_sync"] == {"status": "success", "pulled_sha": "commit123"}
     stale = read_stale_records(client.app.state.bkk.corpus_root)
     assert len(stale) == 1
     assert stale[0]["textid"] == "TEST0001"
     assert stale[0]["result_commit_sha"] == "commit123"
     assert calls[0][1]["create_branch"] is False
+    assert sync_calls == [("TEST0001", "main")]
 
 
 def test_non_admin_save_opens_pull_request(client, monkeypatch):
@@ -704,6 +715,11 @@ def test_non_admin_save_opens_pull_request(client, monkeypatch):
     )
     monkeypatch.setattr(
         bundle_edit, "_commit_files", lambda *args, **kwargs: "commit456",
+    )
+    monkeypatch.setattr(
+        bundle_edit,
+        "_sync_local_bundle_checkout",
+        lambda *args, **kwargs: pytest.fail("PR edits must not sync local checkout"),
     )
     monkeypatch.setattr(
         bundle_edit,
@@ -725,6 +741,45 @@ def test_non_admin_save_opens_pull_request(client, monkeypatch):
     assert body["repaired_parallel_assets"] == 0
     assert body["parallel_stale"] is True
     assert body["parallel_stale_id"]
+    assert "local_sync" not in body
+
+
+def test_admin_move_section_commits_directly_and_syncs(client, monkeypatch):
+    _login(client, admin=True)
+    monkeypatch.setattr(bundle_edit, "_branch", lambda *args: "main")
+    monkeypatch.setattr(bundle_edit, "_head_sha", lambda *args: "base")
+    monkeypatch.setattr(bundle_edit, "_load_remote", lambda *args, **kwargs: _remote())
+    monkeypatch.setattr(
+        bundle_edit,
+        "_prepare_move_files",
+        lambda *args: (
+            {"TEST0001_001.yaml": "new"},
+            [{"bucket": "body", "text_splices": [{"start": 0, "delete_count": 2, "insert": ""}]}],
+        ),
+    )
+    monkeypatch.setattr(bundle_edit, "_commit_files", lambda *args, **kwargs: "commit789")
+    sync_calls = []
+    monkeypatch.setattr(
+        bundle_edit,
+        "_sync_local_bundle_checkout",
+        lambda state, textid, branch: (
+            sync_calls.append((textid, branch))
+            or {"status": "success", "pulled_sha": "commit789"}
+        ),
+    )
+
+    response = client.post(
+        "/bundles/TEST0001/juan/1/edit/move-section",
+        json=_move_request().model_dump(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "commit"
+    assert body["commit_sha"] == "commit789"
+    assert body["local_sync"] == {"status": "success", "pulled_sha": "commit789"}
+    assert body["parallel_stale"] is True
+    assert sync_calls == [("TEST0001", "main")]
 
 
 def test_marker_only_save_creates_no_parallel_stale_record(client, monkeypatch):
@@ -843,3 +898,47 @@ def test_commit_files_builds_one_atomic_tree_and_commit(monkeypatch):
         "PATCH",
         "/repos/bkkbooks/TEST0001/git/refs/heads/master",
     )
+
+
+def test_sync_local_bundle_checkout_fast_forwards_and_refreshes(client, monkeypatch):
+    import subprocess
+
+    state = client.app.state.bkk
+    rec = state.lookup_bundle("TEST0001")
+    assert rec is not None
+    (rec.bundle_dir / ".git").mkdir()
+    state.cache.get()
+
+    class FakeCompleted:
+        def __init__(self, args, returncode=0, stdout="", stderr=""):
+            self.args = args
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    runs = []
+
+    def fake_run(args, **kwargs):
+        runs.append(args)
+        if args[3] == "rev-parse":
+            return FakeCompleted(args, stdout="pulled-sha\n")
+        return FakeCompleted(args)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = bundle_edit._sync_local_bundle_checkout(state, "TEST0001", "main")
+
+    assert result == {"status": "success", "pulled_sha": "pulled-sha"}
+    assert [args[3] for args in runs] == ["fetch", "merge", "rev-parse"]
+    assert state.lookup_bundle("TEST0001") is not None
+
+
+def test_sync_local_bundle_checkout_skips_non_git_bundle(client):
+    state = client.app.state.bkk
+
+    result = bundle_edit._sync_local_bundle_checkout(state, "TEST0001", "main")
+
+    assert result == {
+        "status": "skipped",
+        "reason": "local bundle is not a git checkout",
+    }
