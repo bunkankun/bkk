@@ -33,9 +33,10 @@ import sys
 from pathlib import Path
 
 from bkk.cli_common import warn_deprecated
-from bkk.short_refs import text_id_arg
+from bkk.short_refs import text_id_arg, text_prefix_arg
 
 from .refs import DEFAULT_REFS_DIR, load_context
+from .krp_rep import run_krp_rep
 from .run import run_canonicalize, run_lemma_repeat_apply, run_revert
 
 
@@ -164,6 +165,55 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", dest="dry_run", action="store_true",
         help="report what would be substituted without modifying files",
     )
+
+    pk = sub.add_parser(
+        "krp-rep",
+        help="replace KRP &KRnnnn; entities in checked-out KRP source repos",
+        description="Defaults to dry-run. On the checked-out master branch, "
+                    "uses normlist-2016-02-05.txt for the BKK surface "
+                    "edition. On any other checked-out branch, uses "
+                    "replist-2016-02-05.txt for straight replacement.",
+    )
+    pk.add_argument(
+        "--repo", dest="repos", action="append", type=Path, default=None,
+        help="single KRP git clone to process; repeatable",
+    )
+    pk.add_argument(
+        "--krp-root", "--in", dest="krp_root", type=Path, default=None,
+        help="KRP mirror root used to resolve --text-id/--text-prefix "
+             "(default: chars.krp_root / global.krp_root from .bkkrc)",
+    )
+    pk.add_argument(
+        "--text-id", dest="text_ids", action="append", default=None,
+        type=text_id_arg,
+        help="restrict the run to one KRP repo id; repeatable",
+    )
+    pk.add_argument(
+        "--text-prefix", dest="text_prefixes", action="append", default=None,
+        type=text_prefix_arg,
+        help="scan KRP repos whose ids start with this prefix; repeatable",
+    )
+    pk.add_argument(
+        "--all", dest="all_repos", action="store_true",
+        help="scan every discoverable KRP repo under --krp-root",
+    )
+    pk.add_argument(
+        "--refs-dir", dest="refs_dir", type=Path, default=DEFAULT_REFS_DIR,
+        help=f"override the reference-assets directory (default: {DEFAULT_REFS_DIR})",
+    )
+    pk.add_argument(
+        "--master-branch", dest="master_branch", default="master",
+        help="branch name treated as the BKK surface edition "
+             "(default: master)",
+    )
+    pk.add_argument(
+        "--dry-run", action="store_true",
+        help="report planned replacements without writing files (default)",
+    )
+    pk.add_argument(
+        "--write", action="store_true",
+        help="rewrite matching tracked files; default is dry-run",
+    )
     return p
 
 
@@ -200,6 +250,29 @@ def _resolve_corpus_root(
 def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.op == "krp-rep":
+        if args.write and args.dry_run:
+            print("error: provide only one of --dry-run or --write", file=sys.stderr)
+            return 2
+        krp_root = args.krp_root
+        if krp_root is None:
+            from bkk.config import load_rc
+            rc = load_rc()
+            krp_root = (
+                rc.get("chars", {}).get("krp_root")
+                or rc.get("global", {}).get("krp_root")
+            )
+        return run_krp_rep(
+            repos=args.repos,
+            krp_root=krp_root,
+            text_ids=args.text_ids,
+            text_prefixes=args.text_prefixes,
+            all_repos=args.all_repos,
+            refs_dir=args.refs_dir,
+            dry_run=not args.write,
+            master_branch=args.master_branch,
+        )
 
     if args.op == "lemma-repeat":
         if args.lemma_op != "apply":
