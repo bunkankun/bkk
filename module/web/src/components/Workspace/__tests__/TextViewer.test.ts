@@ -66,6 +66,25 @@ describe("TextViewer phrase blocks", () => {
     ]);
   });
 
+  it("renders root and commentary voices as display segments", () => {
+    const markers: JuanMarker[] = [
+      { type: "voice", offset: 0, length: 2, name: "root" },
+      { type: "punctuation", offset: 2, content: "。" },
+      { type: "voice", offset: 2, length: 2, name: "commentary" },
+    ];
+    const chars = buildRenderedChars("甲乙丙丁", markers, "phrase", "canonical");
+
+    expect(
+      voiceDisplaySegments(chars).map((segment) => ({
+        voice: segment.voice,
+        text: segment.chars.map((char) => char.ch).join(""),
+      })),
+    ).toEqual([
+      { voice: "root", text: "甲乙。" },
+      { voice: "commentary", text: "丙丁" },
+    ]);
+  });
+
   it("labels rendered chars with their voice", () => {
     const markers: JuanMarker[] = [
       { type: "voice", offset: 1, length: 2, name: "note" },

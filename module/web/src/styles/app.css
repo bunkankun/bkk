@@ -1586,9 +1586,25 @@ button {
   font-size: 0.92em;
   font-weight: 400;
 }
+.voice-root {
+  margin-left: 0;
+  font-size: 1.08em;
+  font-weight: 600;
+}
+.voice-commentary {
+  margin-left: 2ch;
+  padding: 0.03em 0.18em;
+  font-size: 0.92em;
+  font-weight: 400;
+  background: oklch(0.47 0.12 155 / 0.055);
+  border-radius: 3px;
+}
 .voice-note {
   color: oklch(0.58 0.16 350);
   font-size: 0.92em;
+}
+:root[data-theme="dark"] .voice-commentary {
+  background: oklch(0.78 0.12 155 / 0.11);
 }
 :root[data-theme="dark"] .voice-note {
   color: oklch(0.76 0.14 350);

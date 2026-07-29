@@ -106,7 +106,7 @@ interface Block {
   tagName: "div" | "p";
 }
 
-type VoiceBlockName = "lemma" | "def";
+type VoiceBlockName = "lemma" | "def" | "root" | "commentary";
 
 interface VoiceDisplaySegment {
   voice: VoiceBlockName | null;
@@ -118,6 +118,16 @@ const FALLBACK_LINE_HEIGHT = 38;
 const FALLBACK_CHARS_PER_LINE = 24;
 const KR_REF_START_RE = /^&KR(\d+);/;
 const BUNKANKUN_BASE_URL = "https://ask.bunkankun.org";
+const DISPLAY_VOICE_NAMES = new Set<string>([
+  "lemma",
+  "def",
+  "root",
+  "commentary",
+]);
+
+function isDisplayVoiceName(voice: string | undefined): voice is VoiceBlockName {
+  return voice != null && DISPLAY_VOICE_NAMES.has(voice);
+}
 
 interface SourceChar {
   ch: string;
@@ -665,7 +675,7 @@ export function voiceDisplaySegments(chars: RenderedChar[]): VoiceDisplaySegment
 
   for (let i = 0; i < chars.length;) {
     const voice = chars[i].voice;
-    if (voice === "lemma" || voice === "def") {
+    if (isDisplayVoiceName(voice)) {
       const start = i;
       while (i < chars.length && chars[i].voice === voice) i++;
       let bodyStart = start;
@@ -678,8 +688,7 @@ export function voiceDisplaySegments(chars: RenderedChar[]): VoiceDisplaySegment
     const start = i;
     while (
       i < chars.length &&
-      chars[i].voice !== "lemma" &&
-      chars[i].voice !== "def"
+      !isDisplayVoiceName(chars[i].voice)
     ) {
       i++;
     }
