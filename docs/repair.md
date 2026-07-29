@@ -124,6 +124,29 @@ bkk repair negative-offsets --text-prefix KR6 --report KR6-negative-offsets.json
 bkk repair negative-offsets --bundle /home/Shared/bkk/bkkbooks/KR2b0007/
 ```
 
+## Overlong front buckets
+
+`bkk repair overlong-front` scans the configured corpus, a text prefix,
+or a single bundle/text id and moves the full `front` bucket to the
+beginning of `body` when either:
+
+- `front.text` is longer than `body.text`; or
+- `front.text` is longer than `--min-chars` outside the first manifest
+  part.
+
+The first manifest part is allowed to carry a longer preamble unless
+`front.text` is longer than `body.text`; pass `--include-first` to apply
+the `--min-chars` rule to that first part as well. Master and edition
+manifests are both scanned. The default is dry-run; pass `--write` to
+update juans, marker assets, and manifests. `--report` can still emit a
+JSONL target list, but the command discovers targets from the corpus.
+
+```bash
+bkk repair overlong-front --out /home/Shared/bkk/bkkbooks.gh --dry-run
+bkk repair overlong-front --out /home/Shared/bkk/bkkbooks.gh --text-prefix KR1a --write
+bkk repair overlong-front --text-id KR1a0041 --report overlong-front.jsonl
+```
+
 ## Out of scope
 
 - The `<id>.source.yaml` sidecar is also overwritten per sub-file. It

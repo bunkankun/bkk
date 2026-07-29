@@ -352,7 +352,7 @@ def test_search_bare_voice_regex_anchors_match_voice_boundaries(tmp_path: Path):
     write_bundle(
         tmp_path,
         "VOICE0002",
-        "甲乙丙丁",
+        "甲中丙丁",
         voice_markers=[
             {"id": "v1", "offset": 0, "length": 2, "name": "lemma"},
             {"id": "v2", "offset": 2, "length": 2, "name": "def"},
@@ -369,6 +369,14 @@ def test_search_bare_voice_regex_anchors_match_voice_boundaries(tmp_path: Path):
     assert body["total"] == 1
     assert body["hits"][0]["match"] == "丙丁"
     assert body["hits"][0]["voice"] == "def"
+
+    lemma = client.get("/search", params={"q": "中$", "voice": "lemma"})
+    assert lemma.status_code == 200
+    body = lemma.json()
+    assert body["query_mode"] == "regex"
+    assert body["total"] == 1
+    assert body["hits"][0]["match"] == "中"
+    assert body["hits"][0]["voice"] == "lemma"
 
 
 # ---------------------------------------------------------------- sort modes

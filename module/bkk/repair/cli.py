@@ -217,10 +217,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     pof = sub.add_parser(
         "overlong-front",
-        help="report non-initial juans whose front bucket is unusually long",
-        description="Scan juan front buckets. By default, juan 1 is ignored "
-                    "because long front matter is expected there; use "
-                    "--include-first to audit it too.",
+        help="move misplaced long front buckets into body",
+        description="Scan juan front buckets and move the whole front bucket "
+                    "to the beginning of body when front is longer than body, "
+                    "or when a non-first part has an unusually long front. "
+                    "Defaults to dry-run.",
     )
     pof.add_argument(
         "legacy_bundle", nargs="?", type=text_or_path_arg,
@@ -249,11 +250,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pof.add_argument(
         "--include-first", action="store_true",
-        help="include juan 1 instead of treating it as an allowed long-front case",
+        help="also move an overlong first-part front when it is not longer than body",
+    )
+    pof.add_argument(
+        "--dry-run", action="store_true",
+        help="report planned changes without writing files (default)",
+    )
+    pof.add_argument(
+        "--write", action="store_true",
+        help="write juans, marker assets, and manifests; default is dry-run",
     )
     pof.add_argument(
         "--report", dest="report_path", type=Path, default=None,
-        help="write JSONL report to this path; default is stdout",
+        help="also write a JSONL report of discovered targets to this path",
     )
 
     ppb = sub.add_parser(
@@ -997,6 +1006,10 @@ def _run_overlong_front(
     args: argparse.Namespace,
     out_root: Path | None,
 ) -> int:
+    if args.write and args.dry_run:
+        print("error: provide only one of --dry-run or --write", file=sys.stderr)
+        return 2
+    dry_run = not args.write
     prefixes = getattr(args, "text_prefixes", None) or []
     has_single = any((
         getattr(args, "legacy_bundle", None),
@@ -1013,17 +1026,27 @@ def _run_overlong_front(
     from .overlong_front import (
         find_overlong_front_buckets,
         find_overlong_front_buckets_in_bundle,
+        repair_overlong_front_buckets,
+        repair_overlong_front_buckets_in_bundle,
         write_overlong_front_report,
     )
 
+    report_summary = None
     try:
         if has_single:
             bundle, text_id = _selected_bundle_args(args)
             bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
-            summary = find_overlong_front_buckets_in_bundle(
+            if args.report_path is not None:
+                report_summary = find_overlong_front_buckets_in_bundle(
+                    bundle_dir,
+                    min_chars=args.min_chars,
+                    include_first=args.include_first,
+                )
+            summary = repair_overlong_front_buckets_in_bundle(
                 bundle_dir,
                 min_chars=args.min_chars,
                 include_first=args.include_first,
+                dry_run=dry_run,
             )
             bundles_scanned = 1
         else:
@@ -1038,51 +1061,97 @@ def _run_overlong_front(
             if not root.is_dir():
                 print(f"error: bundle root is not a directory: {root}", file=sys.stderr)
                 return 2
-            summary = find_overlong_front_buckets(
+            if args.report_path is not None:
+                report_summary = find_overlong_front_buckets(
+                    root,
+                    text_prefixes=prefixes,
+                    min_chars=args.min_chars,
+                    include_first=args.include_first,
+                )
+            summary = repair_overlong_front_buckets(
                 root,
                 text_prefixes=prefixes,
                 min_chars=args.min_chars,
                 include_first=args.include_first,
+                dry_run=dry_run,
             )
             bundles_scanned = summary["bundles_scanned"]
     except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    rows = summary["rows"]
     report_path = getattr(args, "report_path", None)
-    if report_path is None:
-        write_overlong_front_report(rows, sys.stdout)
-        summary_stream = sys.stderr
-    else:
+    if report_path is not None and report_summary is not None:
+        rows = report_summary["rows"]
         try:
             write_overlong_front_report(rows, report_path)
         except OSError as exc:
             print(f"error: could not write report {report_path}: {exc}", file=sys.stderr)
             return 1
         print(
-            f"wrote {len(rows)} overlong front bucket(s) to {report_path} "
+            f"wrote {len(rows)} overlong front target(s) to {report_path} "
             f"(scanned {bundles_scanned} bundles)"
         )
-        summary_stream = sys.stderr
 
-    errors = summary.get("errors") or []
-    for error in errors[:20]:
-        print(
-            f"warning: skipped {error.get('path')}: {error.get('message')}",
-            file=sys.stderr,
+    bundle_summaries = summary.get("bundles") or [summary]
+    prefix = "would move" if dry_run else "moved"
+    changed = 0
+    chars = 0
+    errors = 0
+    for bundle_summary in bundle_summaries:
+        bundle_juans = sum(scope["moved"] for scope in bundle_summary["scopes"])
+        bundle_chars = sum(scope["chars"] for scope in bundle_summary["scopes"])
+        bundle_errors = sum(
+            len(scope.get("errors") or []) for scope in bundle_summary["scopes"]
         )
-    if len(errors) > 20:
-        print(
-            f"warning: suppressed {len(errors) - 20} more scan error(s)",
-            file=sys.stderr,
-        )
-    if report_path is None:
-        print(
-            f"found {len(rows)} overlong front bucket(s) "
-            f"(threshold > {args.min_chars} chars; scanned {bundles_scanned} bundles)",
-            file=summary_stream,
-        )
+        if len(bundle_summaries) > 1 and not bundle_juans and not bundle_errors:
+            continue
+        changed += bundle_juans
+        chars += bundle_chars
+        errors += bundle_errors
+        if len(bundle_summaries) > 1:
+            print(f"{Path(bundle_summary['bundle_dir']).name}:")
+            indent = "  "
+            line_indent = "    "
+        else:
+            indent = ""
+            line_indent = "  "
+        for scope in bundle_summary["scopes"]:
+            if len(bundle_summaries) > 1 and not scope["moved"] and not scope.get("errors"):
+                continue
+            print(
+                f"{indent}{prefix} {scope['manifest']}: "
+                f"{scope['moved']} juans, {scope['chars']} chars"
+                + (f", skipped {len(scope.get('errors') or [])}" if scope.get("errors") else "")
+            )
+            for line in scope["lines"]:
+                print(f"{line_indent}{line}")
+
+    mode = "dry-run: " if dry_run else ""
+    target = f"prefixes {list(prefixes)}" if prefixes else "corpus"
+    if has_single:
+        target = "bundle"
+    skipped = f"{errors} skipped; " if errors else ""
+    print(
+        f"{mode}{changed} juans, {chars} chars "
+        f"({skipped}scanned {bundles_scanned} bundles in {target})"
+    )
+    if dry_run:
+        print("dry-run only; pass --write to update files")
+
+    if report_summary is not None:
+        report_errors = report_summary.get("errors") or []
+        for error in report_errors[:20]:
+            print(
+                f"warning: skipped {error.get('path')}: {error.get('message')}",
+                file=sys.stderr,
+            )
+        if len(report_errors) > 20:
+            print(
+                f"warning: suppressed {len(report_errors) - 20} more scan error(s)",
+                file=sys.stderr,
+            )
+        errors += len(report_errors)
     return 1 if errors else 0
 
 

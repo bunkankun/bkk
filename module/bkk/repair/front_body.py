@@ -1,4 +1,4 @@
-"""Move misplaced juan front-bucket content into empty body buckets."""
+"""Move misplaced juan front-bucket content into body buckets."""
 
 from __future__ import annotations
 
@@ -34,6 +34,30 @@ def move_front_to_empty_body(bundle_dir: Path, *, dry_run: bool = True) -> dict[
     moved with rebased offsets, TOC spans are moved from front to body, and
     juan/asset/manifest hashes are patched.
     """
+    return move_front_to_body(
+        bundle_dir,
+        dry_run=dry_run,
+        only_empty_body=True,
+    )
+
+
+def move_front_to_body(
+    bundle_dir: Path,
+    *,
+    dry_run: bool = True,
+    only_empty_body: bool = False,
+    min_front_chars: int | None = None,
+    include_first_long_front: bool = False,
+) -> dict[str, Any]:
+    """Move front buckets that match a repair condition into body.
+
+    ``only_empty_body`` preserves the legacy front-to-body behavior.
+    Otherwise, a juan is selected when its front is longer than its body, or
+    when its front exceeds ``min_front_chars`` outside the first manifest part.
+    """
+    if min_front_chars is not None and min_front_chars < 0:
+        raise ValueError("min_front_chars must be >= 0")
+
     bundle_dir = Path(bundle_dir).resolve()
     if not bundle_dir.is_dir():
         raise FileNotFoundError(f"not a directory: {bundle_dir}")
@@ -54,6 +78,9 @@ def move_front_to_empty_body(bundle_dir: Path, *, dry_run: bool = True) -> dict[
             results.append(
                 _move_scope(
                     text_id, root, short, manifest_path, dry_run=dry_run,
+                    only_empty_body=only_empty_body,
+                    min_front_chars=min_front_chars,
+                    include_first_long_front=include_first_long_front,
                 )
             )
     return {"bundle_dir": str(bundle_dir), "dry_run": dry_run, "scopes": results}
@@ -66,6 +93,9 @@ def _move_scope(
     manifest_path: Path,
     *,
     dry_run: bool,
+    only_empty_body: bool,
+    min_front_chars: int | None,
+    include_first_long_front: bool,
 ) -> dict[str, Any]:
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
     if not isinstance(manifest, dict):
@@ -77,6 +107,7 @@ def _move_scope(
     lines: list[str] = []
     errors: list[dict[str, Any]] = []
 
+    parts: list[tuple[int, str]] = []
     for part in (manifest.get("assets") or {}).get("parts") or []:
         if not isinstance(part, dict):
             continue
@@ -84,6 +115,10 @@ def _move_scope(
         filename = part.get("filename")
         if not isinstance(seq, int) or not isinstance(filename, str):
             continue
+        parts.append((seq, filename))
+
+    for index, (seq, filename) in enumerate(parts):
+        is_first_part = index == 0
 
         juan_path = root / filename
         juan = yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
@@ -101,7 +136,15 @@ def _move_scope(
         body_text = body.get("text") or ""
         if not isinstance(front_text, str) or not isinstance(body_text, str):
             continue
-        if not front_text or body_text:
+        reason = _move_reason(
+            front_text,
+            body_text,
+            only_empty_body=only_empty_body,
+            min_front_chars=min_front_chars,
+            is_first_part=is_first_part,
+            include_first_long_front=include_first_long_front,
+        )
+        if reason is None:
             continue
 
         marker_asset = load_marker_asset(root, manifest, seq)
@@ -125,12 +168,13 @@ def _move_scope(
         moved.append({
             "seq": seq,
             "filename": filename,
+            "reason": reason,
             "chars": len(front_text),
             "front_markers": changed["front_markers"],
             "body_markers": changed["body_markers"],
         })
         lines.append(
-            f"juan {seq:03d}: move {len(front_text)} chars and "
+            f"juan {seq:03d}: {reason}: move {len(front_text)} chars and "
             f"{changed['front_markers']} front markers into body"
         )
 
@@ -167,6 +211,32 @@ def _move_scope(
         "errors": errors,
         "lines": lines,
     }
+
+
+def _move_reason(
+    front_text: str,
+    body_text: str,
+    *,
+    only_empty_body: bool,
+    min_front_chars: int | None,
+    is_first_part: bool,
+    include_first_long_front: bool,
+) -> str | None:
+    if not front_text:
+        return None
+    front_len = len(front_text)
+    body_len = len(body_text)
+    if only_empty_body:
+        return "empty-body" if body_len == 0 else None
+    if front_len > body_len:
+        return "front-longer-than-body"
+    if min_front_chars is None or front_len <= min_front_chars:
+        return None
+    if is_first_part and not include_first_long_front:
+        return None
+    if is_first_part:
+        return "overlong-first-front"
+    return "overlong-non-initial-front"
 
 
 def _move_one_juan(

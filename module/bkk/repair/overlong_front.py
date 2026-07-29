@@ -1,4 +1,4 @@
-"""Report non-initial juans with unusually long front buckets."""
+"""Report or repair juans with misplaced long front buckets."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import Any, TextIO
 import yaml
 
 from bkk.index.merge import discover_bundles, find_bundle
+from bkk.repair.front_body import move_front_to_body
 
 REPORT_VERSION = 1
 DEFAULT_MIN_CHARS = 200
@@ -23,7 +24,7 @@ def find_overlong_front_buckets(
     min_chars: int = DEFAULT_MIN_CHARS,
     include_first: bool = False,
 ) -> dict[str, Any]:
-    """Scan a corpus root for juans whose ``front.text`` is too long."""
+    """Scan a corpus root for juans whose ``front.text`` needs attention."""
     if text_id and text_prefixes:
         raise ValueError("provide at most one of text_id or text_prefixes")
     if min_chars < 0:
@@ -85,7 +86,7 @@ def find_overlong_front_buckets_in_bundle(
     min_chars: int = DEFAULT_MIN_CHARS,
     include_first: bool = False,
 ) -> dict[str, Any]:
-    """Scan one bundle, including edition scopes, for long front buckets."""
+    """Scan one bundle, including edition scopes, for front buckets to move."""
     if min_chars < 0:
         raise ValueError("min_chars must be >= 0")
 
@@ -161,6 +162,7 @@ def _scan_scope(
 
     title = (manifest.get("metadata") or {}).get("title")
     title_value = title if isinstance(title, str) else None
+    parts: list[tuple[int, str]] = []
     for part in (manifest.get("assets") or {}).get("parts") or []:
         if not isinstance(part, dict):
             continue
@@ -168,9 +170,9 @@ def _scan_scope(
         filename = part.get("filename")
         if not isinstance(seq, int) or not isinstance(filename, str):
             continue
-        if seq == 1 and not include_first:
-            continue
+        parts.append((seq, filename))
 
+    for index, (seq, filename) in enumerate(parts):
         juan_path = scope_dir / filename
         try:
             juan = yaml.safe_load(juan_path.read_text(encoding="utf-8")) or {}
@@ -188,12 +190,19 @@ def _scan_scope(
         if not isinstance(front_text, str):
             continue
         front_chars = len(front_text)
-        if front_chars <= min_chars:
-            continue
 
         body = juan.get("body")
         body_text = body.get("text") if isinstance(body, dict) else None
-        body_chars = len(body_text) if isinstance(body_text, str) else None
+        body_chars = len(body_text) if isinstance(body_text, str) else 0
+        reason = _attention_reason(
+            front_chars=front_chars,
+            body_chars=body_chars,
+            is_first_part=index == 0,
+            min_chars=min_chars,
+            include_first=include_first,
+        )
+        if reason is None:
+            continue
         rows.append(_row(
             scope_dir=scope_dir,
             path=juan_path,
@@ -201,6 +210,7 @@ def _scan_scope(
             title=title_value,
             edition=edition,
             seq=seq,
+            reason=reason,
             chars=front_chars,
             body_chars=body_chars,
             preview=_preview(front_text),
@@ -216,6 +226,7 @@ def _row(
     title: str | None,
     edition: str | None,
     seq: int,
+    reason: str,
     chars: int,
     body_chars: int | None,
     preview: str,
@@ -227,12 +238,110 @@ def _row(
         "title": title,
         "edition": edition,
         "seq": seq,
+        "reason": reason,
         "bucket": "front",
         "chars": chars,
         "body_chars": body_chars,
         "path": _rel_path(scope_dir, path),
         "preview": preview,
     }
+
+
+def repair_overlong_front_buckets(
+    corpus_root: Path | str,
+    *,
+    text_id: str | None = None,
+    text_prefixes: Sequence[str] | None = None,
+    min_chars: int = DEFAULT_MIN_CHARS,
+    include_first: bool = False,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Scan a corpus root and optionally move selected front buckets."""
+    if text_id and text_prefixes:
+        raise ValueError("provide at most one of text_id or text_prefixes")
+    if min_chars < 0:
+        raise ValueError("min_chars must be >= 0")
+
+    root = Path(corpus_root)
+    if text_id:
+        bundle_dir = find_bundle(root, text_id)
+        if bundle_dir is None:
+            raise FileNotFoundError(
+                f"bundle directory not found for {text_id!r} under {root}"
+            )
+        bundle_dirs = [bundle_dir]
+    else:
+        prefixes = tuple(text_prefixes or ())
+        if prefixes:
+            seen: set[Path] = set()
+            bundle_dirs = []
+            for prefix in prefixes:
+                for bundle_dir in discover_bundles(root, prefix=prefix):
+                    if bundle_dir not in seen:
+                        seen.add(bundle_dir)
+                        bundle_dirs.append(bundle_dir)
+            bundle_dirs.sort(key=lambda p: p.name)
+            if not bundle_dirs:
+                raise FileNotFoundError(
+                    f"no bundles found under {root} with prefixes {list(prefixes)!r}"
+                )
+        else:
+            bundle_dirs = discover_bundles(root)
+
+    bundles = [
+        repair_overlong_front_buckets_in_bundle(
+            bundle_dir,
+            min_chars=min_chars,
+            include_first=include_first,
+            dry_run=dry_run,
+        )
+        for bundle_dir in bundle_dirs
+    ]
+    return {
+        "dry_run": dry_run,
+        "bundles": bundles,
+        "bundles_scanned": len(bundle_dirs),
+        "scopes_scanned": sum(len(bundle["scopes"]) for bundle in bundles),
+    }
+
+
+def repair_overlong_front_buckets_in_bundle(
+    bundle_dir: Path | str,
+    *,
+    min_chars: int = DEFAULT_MIN_CHARS,
+    include_first: bool = False,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Repair one bundle, including edition scopes."""
+    if min_chars < 0:
+        raise ValueError("min_chars must be >= 0")
+    return move_front_to_body(
+        Path(bundle_dir),
+        dry_run=dry_run,
+        min_front_chars=min_chars,
+        include_first_long_front=include_first,
+    )
+
+
+def _attention_reason(
+    *,
+    front_chars: int,
+    body_chars: int,
+    is_first_part: bool,
+    min_chars: int,
+    include_first: bool,
+) -> str | None:
+    if front_chars == 0:
+        return None
+    if front_chars > body_chars:
+        return "front-longer-than-body"
+    if front_chars <= min_chars:
+        return None
+    if is_first_part and not include_first:
+        return None
+    if is_first_part:
+        return "overlong-first-front"
+    return "overlong-non-initial-front"
 
 
 def _write(rows: list[dict[str, Any]], fh: TextIO) -> None:
