@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 from bkk.cli_common import resolve_bundle_dir, resolve_rc_path, warn_deprecated
+from bkk.repair.overlong_front import DEFAULT_MIN_CHARS
 from bkk.short_refs import text_id_arg, text_or_path_arg, text_prefix_arg
 
 
@@ -214,6 +215,47 @@ def build_parser() -> argparse.ArgumentParser:
         help="write JSONL report to this path; default is stdout",
     )
 
+    pof = sub.add_parser(
+        "overlong-front",
+        help="report non-initial juans whose front bucket is unusually long",
+        description="Scan juan front buckets. By default, juan 1 is ignored "
+                    "because long front matter is expected there; use "
+                    "--include-first to audit it too.",
+    )
+    pof.add_argument(
+        "legacy_bundle", nargs="?", type=text_or_path_arg,
+        help=argparse.SUPPRESS,
+    )
+    pof.add_argument(
+        "--bundle", dest="bundle", type=Path, default=None,
+        help="bundle directory",
+    )
+    pof.add_argument(
+        "--text-id", dest="text_id", type=text_id_arg, default=None,
+        help="text id to resolve against repair.out / global.corpus / import.out",
+    )
+    pof.add_argument(
+        "--text-prefix", action="append", default=None, dest="text_prefixes",
+        type=text_prefix_arg,
+        help="scan bundle directories under --out whose text ids start with this prefix; repeatable",
+    )
+    pof.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help="bundle output root (overrides repair.out / global.corpus / import.out)",
+    )
+    pof.add_argument(
+        "--min-chars", type=int, default=DEFAULT_MIN_CHARS,
+        help=f"report front.text longer than this many characters (default: {DEFAULT_MIN_CHARS})",
+    )
+    pof.add_argument(
+        "--include-first", action="store_true",
+        help="include juan 1 instead of treating it as an allowed long-front case",
+    )
+    pof.add_argument(
+        "--report", dest="report_path", type=Path, default=None,
+        help="write JSONL report to this path; default is stdout",
+    )
+
     ppb = sub.add_parser(
         "page-break",
         help="synthesize missing page-break markers before first-line line-break markers",
@@ -228,6 +270,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="scan bundle directories under --out whose text ids start with this prefix; repeatable",
     )
     ppb.add_argument(
+        "--write", action="store_true",
+        help="write marker assets and manifests; default is dry-run",
+    )
+
+    pvp = sub.add_parser(
+        "voice-paren-boundary",
+        help="move body offset-0 ')' punctuation markers to the end of front "
+             "when the voice-problems report shows the paired front/body "
+             "paren-boundary error",
+        description="Uses the voice-problems JSONL report as a targeting "
+                    "guide, then moves the actual source punctuation marker. "
+                    "Defaults to the configured corpus/report and dry-run.",
+    )
+    pvp.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help="corpus root (overrides repair.out / global.corpus / import.out)",
+    )
+    pvp.add_argument(
+        "--report", dest="report_path", type=Path, default=None,
+        help="voice-problems JSONL report path (defaults to [voice].report "
+             "or BKK_VOICE_PROBLEMS_REPORT)",
+    )
+    pvp.add_argument(
+        "--text-id", dest="text_id", type=text_id_arg, default=None,
+        help="restrict to one text id in the report",
+    )
+    pvp.add_argument(
+        "--text-prefix", action="append", default=None, dest="text_prefixes",
+        type=text_prefix_arg,
+        help="restrict to text ids starting with this prefix; repeatable",
+    )
+    pvp.add_argument(
         "--write", action="store_true",
         help="write marker assets and manifests; default is dry-run",
     )
@@ -360,8 +434,18 @@ def run(argv: list[str] | None = None) -> int:
             args=args,
             out_root=out_root,
         )
+    if args.op == "overlong-front":
+        return _run_overlong_front(
+            args=args,
+            out_root=out_root,
+        )
     if args.op == "page-break":
         return _run_page_break(
+            args=args,
+            out_root=out_root,
+        )
+    if args.op == "voice-paren-boundary":
+        return _run_voice_paren_boundary(
             args=args,
             out_root=out_root,
         )
@@ -908,6 +992,100 @@ def _run_negative_offsets(
     return 1 if errors else 0
 
 
+def _run_overlong_front(
+    *,
+    args: argparse.Namespace,
+    out_root: Path | None,
+) -> int:
+    prefixes = getattr(args, "text_prefixes", None) or []
+    has_single = any((
+        getattr(args, "legacy_bundle", None),
+        getattr(args, "bundle", None),
+        getattr(args, "text_id", None),
+    ))
+    if prefixes and has_single:
+        print(
+            "error: provide either --text-prefix or a single bundle/text id",
+            file=sys.stderr,
+        )
+        return 2
+
+    from .overlong_front import (
+        find_overlong_front_buckets,
+        find_overlong_front_buckets_in_bundle,
+        write_overlong_front_report,
+    )
+
+    try:
+        if has_single:
+            bundle, text_id = _selected_bundle_args(args)
+            bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
+            summary = find_overlong_front_buckets_in_bundle(
+                bundle_dir,
+                min_chars=args.min_chars,
+                include_first=args.include_first,
+            )
+            bundles_scanned = 1
+        else:
+            if out_root is None:
+                print(
+                    "error: bundle root not given (--out) and not configured in "
+                    ".bkkrc (repair.out / global.corpus / import.out)",
+                    file=sys.stderr,
+                )
+                return 2
+            root = Path(out_root).expanduser().resolve()
+            if not root.is_dir():
+                print(f"error: bundle root is not a directory: {root}", file=sys.stderr)
+                return 2
+            summary = find_overlong_front_buckets(
+                root,
+                text_prefixes=prefixes,
+                min_chars=args.min_chars,
+                include_first=args.include_first,
+            )
+            bundles_scanned = summary["bundles_scanned"]
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    rows = summary["rows"]
+    report_path = getattr(args, "report_path", None)
+    if report_path is None:
+        write_overlong_front_report(rows, sys.stdout)
+        summary_stream = sys.stderr
+    else:
+        try:
+            write_overlong_front_report(rows, report_path)
+        except OSError as exc:
+            print(f"error: could not write report {report_path}: {exc}", file=sys.stderr)
+            return 1
+        print(
+            f"wrote {len(rows)} overlong front bucket(s) to {report_path} "
+            f"(scanned {bundles_scanned} bundles)"
+        )
+        summary_stream = sys.stderr
+
+    errors = summary.get("errors") or []
+    for error in errors[:20]:
+        print(
+            f"warning: skipped {error.get('path')}: {error.get('message')}",
+            file=sys.stderr,
+        )
+    if len(errors) > 20:
+        print(
+            f"warning: suppressed {len(errors) - 20} more scan error(s)",
+            file=sys.stderr,
+        )
+    if report_path is None:
+        print(
+            f"found {len(rows)} overlong front bucket(s) "
+            f"(threshold > {args.min_chars} chars; scanned {bundles_scanned} bundles)",
+            file=summary_stream,
+        )
+    return 1 if errors else 0
+
+
 def _run_page_break(
     *,
     args: argparse.Namespace,
@@ -983,6 +1161,114 @@ def _run_page_break(
     if dry_run:
         print("dry-run only; pass --write to update files")
     return 0
+
+
+def _run_voice_paren_boundary(
+    *,
+    args: argparse.Namespace,
+    out_root: Path | None,
+) -> int:
+    if args.text_id and args.text_prefixes:
+        print("error: provide either --text-id or --text-prefix", file=sys.stderr)
+        return 2
+    if out_root is None:
+        print(
+            "error: corpus root not given (--out) and not configured in "
+            ".bkkrc (repair.out / global.corpus / import.out)",
+            file=sys.stderr,
+        )
+        return 2
+    root = Path(out_root).expanduser().resolve()
+    if not root.is_dir():
+        print(f"error: corpus root is not a directory: {root}", file=sys.stderr)
+        return 2
+
+    report_path = args.report_path or _configured_voice_report_path()
+    if report_path is None:
+        print(
+            "error: report path is required: pass --report, set [voice].report, "
+            "or set BKK_VOICE_PROBLEMS_REPORT",
+            file=sys.stderr,
+        )
+        return 2
+
+    from .voice_parens import move_body_initial_close_parens_from_report
+
+    dry_run = not args.write
+    try:
+        summary = move_body_initial_close_parens_from_report(
+            root,
+            report_path,
+            dry_run=dry_run,
+            text_id=args.text_id,
+            text_prefixes=args.text_prefixes or [],
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    prefix = "would move" if dry_run else "moved"
+    for bundle in summary["bundles"]:
+        if not bundle["moved"] and not bundle["skipped"]:
+            continue
+        print(f"{bundle['textid']}:")
+        for scope in bundle["scopes"]:
+            if not scope["moved"] and not scope["skipped"]:
+                continue
+            print(
+                f"  {prefix} {scope['manifest']}: "
+                f"{scope['moved']} close-paren marker(s)"
+                + (f", skipped {scope['skipped']}" if scope["skipped"] else "")
+            )
+            for move in scope["moves"][:10]:
+                print(
+                    f"    juan {move['seq']:03d}: {move['marker_id']} "
+                    f"body@0 -> front@{move['to'][1]}"
+                )
+            if len(scope["moves"]) > 10:
+                print(f"    ... {len(scope['moves']) - 10} more move(s)")
+            for skip in scope["skips"][:10]:
+                print(f"    juan {skip['seq']:03d}: skipped: {skip['reason']}")
+            if len(scope["skips"]) > 10:
+                print(f"    ... {len(scope['skips']) - 10} more skip(s)")
+
+    for error in summary["errors"][:20]:
+        print(
+            f"warning: skipped {error.get('textid')}: {error.get('message')}",
+            file=sys.stderr,
+        )
+    if len(summary["errors"]) > 20:
+        print(
+            f"warning: suppressed {len(summary['errors']) - 20} more error(s)",
+            file=sys.stderr,
+        )
+
+    mode = "dry-run: " if dry_run else ""
+    target = args.text_id or (
+        f"prefixes {args.text_prefixes}" if args.text_prefixes else "report"
+    )
+    print(
+        f"{mode}{summary['moved']} close-paren marker(s) moved, "
+        f"{summary['skipped']} skipped "
+        f"from {summary['targets']} targeted juan scope(s) ({target})"
+    )
+    if dry_run:
+        print("dry-run only; pass --write to update files")
+    return 1 if summary["errors"] else 0
+
+
+def _configured_voice_report_path() -> Path | None:
+    import os
+
+    env = os.environ.get("BKK_VOICE_PROBLEMS_REPORT")
+    if env:
+        return Path(env).resolve()
+    from bkk.config import load_rc
+    rc = load_rc()
+    report = (rc.get("voice") or {}).get("report")
+    if report:
+        return Path(report).resolve()
+    return None
 
 
 def main() -> None:
