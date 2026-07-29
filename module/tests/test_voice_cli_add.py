@@ -238,6 +238,77 @@ def test_add_can_exclude_tls_note_markers(tmp_path: Path) -> None:
     assert not any(marker.get("type") == "voice" for marker in markers)
 
 
+def test_add_tls_seg_derives_root_and_commentary(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {
+                "type": "tls:seg-start",
+                "offset": 0,
+                "content": "",
+                "id": "s1",
+                "seg_type": "root",
+            },
+            {"type": "tls:seg", "offset": 0, "content": "", "id": "s1"},
+            {
+                "type": "tls:seg-end",
+                "offset": 4,
+                "content": "",
+                "id": "s1_end",
+                "seg_type": "root",
+            },
+            {
+                "type": "tls:seg-start",
+                "offset": 4,
+                "content": "",
+                "id": "s2",
+                "seg_type": "comm",
+            },
+            {"type": "tls:seg", "offset": 4, "content": "", "id": "s2"},
+            {
+                "type": "tls:seg-end",
+                "offset": 10,
+                "content": "",
+                "id": "s2_end",
+                "seg_type": "comm",
+            },
+        ],
+    )
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="tls-seg",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"root": 1, "commentary": 1}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert {
+        "type": "voice",
+        "offset": 0,
+        "length": 4,
+        "name": "root",
+        "id": "r1",
+    } in markers
+    assert {
+        "type": "voice",
+        "offset": 4,
+        "length": 6,
+        "name": "commentary",
+        "id": "c1",
+        "responds-to": "r1",
+    } in markers
+
+
 def test_add_dictionary_derives_lemma_from_existing_note_voice(tmp_path: Path) -> None:
     bundle = tmp_path / TEXT_ID
     manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(

@@ -25,14 +25,14 @@ from ``.bkkrc`` unless ``--out`` is passed.
 - ``indent`` — from ``line-break``/``indent`` markers, emits
   ``root``/``commentary``/``head``/``attribution`` for sources whose
   layout indents each textual layer differently.
+- ``tls-seg`` — from ``tls:seg-start``/``tls:seg-end`` runs carrying
+  ``seg_type=root`` or ``seg_type=comm``, emits ``root``/``commentary``.
 - ``dictionary`` — after generic ``note`` voices exist, detects definition
   notes and emits linked ``lemma``/``def`` spans with
   ``source="dictionary"``.
-- ``all`` — both derivers, concatenated. The two derivers use disjoint
-  voice names (parens → ``note``/``emphasis``; indent →
-  ``root``/``commentary``/…), so same-name overlaps are impossible by
-  construction; heterogeneous overlaps are written through with a
-  per-juan stderr warning.
+- ``all`` — parens plus explicit TLS segment voicing when present,
+  otherwise indent voicing. Heterogeneous overlaps are written through
+  with a per-juan stderr warning.
 
 For paren derivation, TLS inline note bracket markers are included by
 default; pass ``--no-tls-notes`` to ignore ``tls:note-start`` /
@@ -91,6 +91,10 @@ from .derive import (
 )
 from .derive_dictionary import derive_dictionary_voice_markers
 from .derive_indent import derive_voice_markers_from_indent
+from .derive_tls_seg import (
+    derive_voice_markers_from_tls_segments,
+    derive_voice_markers_from_tls_segments_best_effort,
+)
 from .problems import (
     VoiceProblemReportError,
     find_voice_problems,
@@ -99,7 +103,7 @@ from .problems import (
 )
 
 
-_VALID_SOURCES = ("parens", "indent", "dictionary", "all")
+_VALID_SOURCES = ("parens", "indent", "tls-seg", "dictionary", "all")
 _VOICE_PROBLEM_TYPE = "voice:problem"
 
 
@@ -148,8 +152,9 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument(
         "--source", dest="source", choices=_VALID_SOURCES, default=None,
         help="derivation source: 'parens' (default; punctuation pairs), "
-             "'indent' (layout indentation), 'dictionary' (lemma spans for "
-             "lemma-repeat notes), or 'all' (parens + indent, merged). "
+             "'indent' (layout indentation), 'tls-seg' (typed TLS segment "
+             "runs), 'dictionary' (lemma spans for lemma-repeat notes), or "
+             "'all' (parens + explicit TLS segments, falling back to indent). "
              "Falls back to voice.source in .bkkrc; otherwise 'parens'.",
     )
     pa.add_argument(
@@ -1121,11 +1126,9 @@ def _derive_for_bucket(
 ) -> list[dict]:
     """Dispatch to the requested deriver(s) and return their merged output.
 
-    For ``--source all`` the two derivers' outputs are simply concatenated.
-    Their voice-name spaces are disjoint (parens → ``note``/``emphasis``;
-    indent → ``root``/``commentary``/``head``/``attribution``), so
-    same-name overlaps are impossible by construction and their id prefixes
-    (``n``/``e`` vs ``r``/``c``/``h``/``a``) don't collide either.
+    For ``--source all``, explicit TLS segment voicing wins over indent
+    voicing for the root/commentary layer because both sources produce the
+    same names.
     """
     text_len = len(text)
     if source == "parens":
@@ -1134,14 +1137,22 @@ def _derive_for_bucket(
         )
     if source == "indent":
         return derive_voice_markers_from_indent(text_len, markers)
+    if source == "tls-seg":
+        return derive_voice_markers_from_tls_segments(text_len, markers)
     if source == "dictionary":
         return derive_dictionary_voice_markers(text, markers)
     if source == "all":
-        return list(
+        paren_voices = list(
             derive_voice_markers(
                 text_len, markers, include_tls_notes=include_tls_notes,
             )
-        ) + list(derive_voice_markers_from_indent(text_len, markers))
+        )
+        tls_voices = list(derive_voice_markers_from_tls_segments(text_len, markers))
+        layout_voices = (
+            tls_voices if tls_voices
+            else list(derive_voice_markers_from_indent(text_len, markers))
+        )
+        return paren_voices + layout_voices
     raise ValueError(f"unknown voice source: {source!r}")
 
 
@@ -1154,14 +1165,25 @@ def _derive_for_bucket_best_effort(
         return derive_voice_markers_best_effort(
             text_len, markers, include_tls_notes=include_tls_notes,
         )
+    if source == "tls-seg":
+        return derive_voice_markers_from_tls_segments_best_effort(
+            text_len, markers,
+        )
     if source == "all":
         paren_voices, problems = derive_voice_markers_best_effort(
             text_len, markers, include_tls_notes=include_tls_notes,
         )
+        tls_voices, tls_problems = derive_voice_markers_from_tls_segments_best_effort(
+            text_len, markers,
+        )
+        layout_voices = (
+            list(tls_voices) if tls_voices or tls_problems
+            else list(derive_voice_markers_from_indent(text_len, markers))
+        )
         return (
             list(paren_voices)
-            + list(derive_voice_markers_from_indent(text_len, markers)),
-            problems,
+            + layout_voices,
+            problems + tls_problems,
         )
     return _derive_for_bucket(
         source, text, markers, include_tls_notes=include_tls_notes,
