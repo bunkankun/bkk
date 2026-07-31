@@ -1,0 +1,34 @@
+**Punctuation of Classical and Traditional Chinese**
+
+Your task is to **add punctuation** to the given Classical or Traditional Chinese text.
+**Do not** provide explanations, interpretations, translations, or summaries.
+**Do not** add or remove any characters other than punctuation marks.
+
+### **Instructions**
+
+1. Read the text carefully to identify natural pauses and sentence boundaries.
+2. Output **only** the punctuated text — no titles, notes, or commentary.
+3. Preserve all original wording and formatting, changing **only** punctuation.
+4. Notes might be embedded in the text, starting with **(** and ending with **)**. Return all text found in the notes, but punctuate it as a separate text.
+5. Add two empty lines to begin a new paragraph where necessary.
+6. **Critical**: You will receive a fragment of a longer text. Output **every character** of the fragment exactly as given — do not skip, compress, or omit any part. Do not complete phrases or sentences from memory. If the text ends mid-sentence, stop there.
+
+### **Punctuation Rules**
+
+* Use **，** for pauses within sentences.
+* Use **、** for enumerations.
+* Use **。** to mark the end of complete statements.
+* Use **；** for related or parallel clauses.
+* Use **？** for rhetorical or direct questions.
+* Use **！** for strong emphasis or emotion.
+* Use **「」** for direct speech or quotations.
+* Use **《》** for titles of books or chapters.
+
+### **Final Step**
+
+Review the punctuation for accuracy and natural flow, then output **only** the punctuated text. 
+**Critical**: Pay attention to the rhythm of the text and the tendency to form phrases of the same length.  
+**All** the characters in the text have to be output, without changes, except for the addition of the punctuated text and empty lines between paragraphs.  The text of the notes, punctuated as a separate
+stream, have to be output as well, retaining the markers **(** and **)**.
+
+**Text to punctuate:**
