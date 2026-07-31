@@ -13,6 +13,7 @@ Routes ``bkk <subcommand> ...`` to the matching sub-package CLI:
     bkk info     ...   -> bkk.info.cli:run
     bkk annotations ... -> bkk.annotations.cli:run
     bkk core     ...   -> bkk.core_cli.cli:run
+    bkk llm      ...   -> bkk.llm.cli:run
 
 The dispatcher parses only the first positional (the subcommand name); every
 remaining argument is forwarded verbatim to the sub-CLI so each one keeps its
@@ -96,6 +97,11 @@ def _load_repo() -> SubCommand:
     return run
 
 
+def _load_llm() -> SubCommand:
+    from bkk.llm.cli import run
+    return run
+
+
 SUBCOMMANDS: dict[str, tuple[Callable[[], SubCommand], str]] = {
     "import":   (_load_importer,  "import an external source (TLS, KRP) into a BKK bundle"),
     "export":   (_load_exporter,  "export bundles via a recipe to TEI/etc."),
@@ -110,6 +116,7 @@ SUBCOMMANDS: dict[str, tuple[Callable[[], SubCommand], str]] = {
     "core":     (_load_core,      "maintain the bkk-core knowledge layer (sync, …)"),
     "chars":    (_load_chars,     "canonicalize or revert text against the BKK character set"),
     "repo":     (_load_repo,      "manage text bundles as git repositories"),
+    "llm":      (_load_llm,       "generate LLM-derived corpus assets"),
 }
 
 # Aliases so familiar verbs work too.

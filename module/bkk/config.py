@@ -15,7 +15,7 @@ import yaml
 _VALID_SECTIONS = {
     "global", "import", "export", "index", "validate", "serve", "repair",
     "voice", "recipe", "info", "cbeta", "core", "annotations", "chars",
-    "duplications", "repo",
+    "duplications", "repo", "llm",
 }
 
 _PATH_KEYS = frozenset(
@@ -26,7 +26,7 @@ _PATH_KEYS = frozenset(
      "annotations_out", "annotations_root", "annotations_index",
      "parallels_root",
      "comments_root", "translations_root",
-     "source_root",
+     "source_root", "ai_config", "prompt",
      "report"}
 )
 

@@ -70,7 +70,7 @@ def reflow_manifest(manifest: dict) -> None:
     """
     assets = manifest.get("assets")
     if isinstance(assets, dict):
-        for key in ("parts", "markers"):
+        for key in ("parts", "markers", "references"):
             entries = assets.get(key)
             if isinstance(entries, list):
                 assets[key] = [

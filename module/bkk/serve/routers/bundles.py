@@ -548,7 +548,7 @@ def list_assets(
 
 
 @router.get(
-    "/{textid}/assets/{name}",
+    "/{textid}/assets/{name:path}",
     response_class=Response,
     summary="Fetch one declared reference asset by filename",
 )
@@ -566,7 +566,8 @@ def get_asset(
         raise errors.bad_request(
             "asset_not_declared", textid=textid, name=name
         )
-    if "/" in name or ".." in name:
+    asset_path = Path(name)
+    if asset_path.is_absolute() or ".." in asset_path.parts:
         raise errors.bad_request("bad_asset_name", name=name)
     path = rec.bundle_dir / name
     if not path.exists() or not path.is_file():

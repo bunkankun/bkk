@@ -106,6 +106,35 @@ def test_get_asset(assets_client: TestClient):
     assert r.text == "x: 1\n"
 
 
+def test_get_declared_nested_asset(tmp_path: Path):
+    corpus = tmp_path
+    write_bundle(
+        corpus,
+        "AST0002",
+        "甲乙",
+        references=[
+            {
+                "filename": "assets/AST0002_001.model.punctuation.yaml",
+                "role": "llm-punctuation",
+                "hash": "sha256:3",
+            },
+        ],
+    )
+    asset_path = corpus / "AST0002" / "assets" / "AST0002_001.model.punctuation.yaml"
+    asset_path.parent.mkdir()
+    asset_path.write_text("markers: {}\n", encoding="utf-8")
+    client = TestClient(
+        create_app(ServeConfig(corpus_root=corpus, index_path=corpus / "_corpus.bkkx"))
+    )
+
+    r = client.get(
+        "/bundles/AST0002/assets/assets/AST0002_001.model.punctuation.yaml"
+    )
+
+    assert r.status_code == 200
+    assert r.text == "markers: {}\n"
+
+
 def test_get_asset_not_declared(assets_client: TestClient):
     r = assets_client.get("/bundles/AST0001/assets/secrets.txt")
     assert r.status_code == 400
