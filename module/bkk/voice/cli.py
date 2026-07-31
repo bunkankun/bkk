@@ -25,6 +25,8 @@ from ``.bkkrc`` unless ``--out`` is passed.
 - ``indent`` — from ``line-break``/``indent`` markers, emits
   ``root``/``commentary``/``head``/``attribution`` for sources whose
   layout indents each textual layer differently.
+- ``indent-headings`` — from short lines opened by CJK ``indent`` markers,
+  emits ``head`` spans for tractat-style section labels.
 - ``tls-seg`` — from ``tls:seg-start``/``tls:seg-end`` runs carrying
   ``seg_type=root`` or ``seg_type=comm``, emits ``root``/``commentary``.
 - ``dictionary`` — after generic ``note`` voices exist, detects definition
@@ -33,6 +35,8 @@ from ``.bkkrc`` unless ``--out`` is passed.
 - ``all`` — parens plus explicit TLS segment voicing when present,
   otherwise indent voicing. Heterogeneous overlaps are written through
   with a per-juan stderr warning.
+- ``auto`` — chooses explicit TLS segments, tractat heading indents, or
+  generic indentation by marker profile.
 
 For paren derivation, TLS inline note bracket markers are included by
 default; pass ``--no-tls-notes`` to ignore ``tls:note-start`` /
@@ -91,6 +95,11 @@ from .derive import (
 )
 from .derive_dictionary import derive_dictionary_voice_markers
 from .derive_indent import derive_voice_markers_from_indent
+from .derive_indent_headings import (
+    HEADING_INDENT_VOICE_SOURCE,
+    derive_voice_markers_from_indent_headings,
+    has_indent_heading_profile,
+)
 from .derive_tls_seg import (
     derive_voice_markers_from_tls_segments,
     derive_voice_markers_from_tls_segments_best_effort,
@@ -103,8 +112,18 @@ from .problems import (
 )
 
 
-_VALID_SOURCES = ("parens", "indent", "tls-seg", "dictionary", "all")
+_VALID_SOURCES = (
+    "parens",
+    "indent",
+    "indent-headings",
+    "tls-seg",
+    "dictionary",
+    "all",
+    "auto",
+)
 _VOICE_PROBLEM_TYPE = "voice:problem"
+_AUTO_LAYOUT_SOURCES = {"indent", "indent-headings", "tls-seg"}
+_AUTO_LEGACY_LAYOUT_NAMES = {"root", "commentary", "head", "attribution"}
 
 
 _JUAN_RE = re.compile(
@@ -152,9 +171,11 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument(
         "--source", dest="source", choices=_VALID_SOURCES, default=None,
         help="derivation source: 'parens' (default; punctuation pairs), "
-             "'indent' (layout indentation), 'tls-seg' (typed TLS segment "
-             "runs), 'dictionary' (lemma spans for lemma-repeat notes), or "
-             "'all' (parens + explicit TLS segments, falling back to indent). "
+             "'indent' (layout indentation), 'indent-headings' (short "
+             "CJK-indent section labels), 'tls-seg' (typed TLS segment "
+             "runs), 'dictionary' (lemma spans for lemma-repeat notes), "
+             "'all' (parens + explicit TLS segments, falling back to indent), "
+             "or 'auto' (choose TLS, heading indents, or generic indent). "
              "Falls back to voice.source in .bkkrc; otherwise 'parens'.",
     )
     pa.add_argument(
@@ -1137,10 +1158,14 @@ def _derive_for_bucket(
         )
     if source == "indent":
         return derive_voice_markers_from_indent(text_len, markers)
+    if source == "indent-headings":
+        return derive_voice_markers_from_indent_headings(text_len, markers, text)
     if source == "tls-seg":
         return derive_voice_markers_from_tls_segments(text_len, markers)
     if source == "dictionary":
         return derive_dictionary_voice_markers(text, markers)
+    if source == "auto":
+        return _derive_auto_for_bucket(text, markers)
     if source == "all":
         paren_voices = list(
             derive_voice_markers(
@@ -1169,6 +1194,10 @@ def _derive_for_bucket_best_effort(
         return derive_voice_markers_from_tls_segments_best_effort(
             text_len, markers,
         )
+    if source == "indent-headings":
+        return derive_voice_markers_from_indent_headings(text_len, markers, text), []
+    if source == "auto":
+        return _derive_auto_for_bucket_best_effort(text, markers)
     if source == "all":
         paren_voices, problems = derive_voice_markers_best_effort(
             text_len, markers, include_tls_notes=include_tls_notes,
@@ -1188,6 +1217,37 @@ def _derive_for_bucket_best_effort(
     return _derive_for_bucket(
         source, text, markers, include_tls_notes=include_tls_notes,
     ), []
+
+
+def _derive_auto_for_bucket(text: str, markers: list) -> list[dict]:
+    voices, problems = _derive_auto_for_bucket_best_effort(text, markers)
+    if problems:
+        raise problems[0]
+    return voices
+
+
+def _derive_auto_for_bucket_best_effort(
+    text: str, markers: list,
+) -> tuple[list[dict], list[VoiceDerivationProblem]]:
+    text_len = len(text)
+    tls_voices, tls_problems = derive_voice_markers_from_tls_segments_best_effort(
+        text_len, markers,
+    )
+    if tls_voices or tls_problems:
+        return _tag_voice_source(list(tls_voices), "tls-seg"), tls_problems
+    if has_indent_heading_profile(text_len, markers, text):
+        return derive_voice_markers_from_indent_headings(text_len, markers, text), []
+    return _tag_voice_source(
+        list(derive_voice_markers_from_indent(text_len, markers)),
+        "indent",
+    ), []
+
+
+def _tag_voice_source(voices: list[dict], source: str) -> list[dict]:
+    for voice in voices:
+        if isinstance(voice, dict):
+            voice.setdefault("source", source)
+    return voices
 
 
 def _warn_voice_overlaps(
@@ -1235,6 +1295,16 @@ def _is_replaceable_voice(marker: object, source: str | None) -> bool:
         return False
     if source == "dictionary":
         return marker.get("source") == "dictionary"
+    if source == "indent-headings":
+        return marker.get("source") == HEADING_INDENT_VOICE_SOURCE
+    if source == "auto":
+        marker_source = marker.get("source")
+        if marker_source in _AUTO_LAYOUT_SOURCES:
+            return True
+        return (
+            marker_source is None
+            and marker.get("name") in _AUTO_LEGACY_LAYOUT_NAMES
+        )
     return True
 
 

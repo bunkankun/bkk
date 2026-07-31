@@ -309,6 +309,154 @@ def test_add_tls_seg_derives_root_and_commentary(tmp_path: Path) -> None:
     } in markers
 
 
+def test_add_indent_headings_preserves_existing_note_voice(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {"type": "line-break", "offset": 0, "content": "", "id": "l1"},
+            {"type": "indent", "offset": 0, "content": "\u3000", "id": "i1"},
+            {"type": "line-break", "offset": 2, "content": "", "id": "l2"},
+            {"type": "indent", "offset": 2, "content": "\u3000\u3000", "id": "i2"},
+            {"type": "line-break", "offset": 5, "content": "", "id": "l3"},
+            {"type": "voice", "offset": 5, "length": 2, "name": "note", "id": "n1"},
+        ],
+        body_text="傅子正心篇本文",
+    )
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="indent-headings",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"head": 2}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert {"type": "voice", "offset": 5, "length": 2, "name": "note", "id": "n1"} in markers
+    assert [
+        marker for marker in markers
+        if marker.get("type") == "voice" and marker.get("name") == "head"
+    ] == [
+        {
+            "type": "voice",
+            "offset": 0,
+            "length": 2,
+            "name": "head",
+            "id": "h1",
+            "source": "indent-headings",
+            "indent_depth": 1,
+        },
+        {
+            "type": "voice",
+            "offset": 2,
+            "length": 3,
+            "name": "head",
+            "id": "h2",
+            "source": "indent-headings",
+            "indent_depth": 2,
+        },
+    ]
+
+
+def test_add_indent_headings_force_replaces_only_heading_source(
+    tmp_path: Path,
+) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {"type": "line-break", "offset": 0, "content": "", "id": "l1"},
+            {"type": "indent", "offset": 0, "content": "\u3000", "id": "i1"},
+            {"type": "line-break", "offset": 2, "content": "", "id": "l2"},
+            {"type": "indent", "offset": 2, "content": "\u3000\u3000", "id": "i2"},
+            {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"},
+        ],
+        body_text="傅子正心篇",
+    )
+    assert _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="indent-headings",
+        force=False,
+        dry_run=False,
+    )["by_name"] == {"head": 2}
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="indent-headings",
+        force=True,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"head": 2}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert [
+        marker for marker in markers
+        if marker.get("type") == "voice" and marker.get("name") == "note"
+    ] == [
+        {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"},
+    ]
+    assert len([
+        marker for marker in markers
+        if marker.get("type") == "voice" and marker.get("name") == "head"
+    ]) == 2
+
+
+def test_add_auto_chooses_indent_headings_profile(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {"type": "line-break", "offset": 0, "content": "", "id": "l1"},
+            {"type": "indent", "offset": 0, "content": "\u3000", "id": "i1"},
+            {"type": "line-break", "offset": 2, "content": "", "id": "l2"},
+            {"type": "indent", "offset": 2, "content": "\u3000\u3000", "id": "i2"},
+            {"type": "line-break", "offset": 5, "content": "", "id": "l3"},
+            {"type": "indent", "offset": 5, "content": "\u3000\u3000", "id": "i3"},
+        ],
+        body_text="傅子正心篇仁論篇",
+    )
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="auto",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"head": 3}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert all(
+        marker.get("source") == "indent-headings"
+        for marker in markers
+        if marker.get("type") == "voice" and marker.get("name") == "head"
+    )
+
+
 def test_add_dictionary_derives_lemma_from_existing_note_voice(tmp_path: Path) -> None:
     bundle = tmp_path / TEXT_ID
     manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
