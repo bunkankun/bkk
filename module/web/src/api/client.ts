@@ -61,6 +61,7 @@ import type {
   ParallelBucket,
   ParallelSearchResponse,
   ParallelSort,
+  PunctuationSidecarsResponse,
   Rating,
   SearchResponse,
   SearchSort,
@@ -457,6 +458,17 @@ export async function getJuan(
   const q = edition ? `?edition=${encodeURIComponent(edition)}` : "";
   return fetchJson<Juan>(
     `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}${q}`,
+  );
+}
+
+export async function getPunctuationSidecars(
+  textid: string,
+  seq: number,
+  edition?: string | null,
+): Promise<PunctuationSidecarsResponse> {
+  const q = edition ? `?edition=${encodeURIComponent(edition)}` : "";
+  return fetchJson<PunctuationSidecarsResponse>(
+    `${apiBase}/bundles/${encodeURIComponent(textid)}/juan/${seq}/punctuation-sidecars${q}`,
   );
 }
 

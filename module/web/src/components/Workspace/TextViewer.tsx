@@ -13,6 +13,7 @@ import {
   getJuan,
   getJuanParallelsStatus,
   getManifest,
+  getPunctuationSidecars,
 } from "../../api/client";
 import type {
   Annotation,
@@ -20,6 +21,7 @@ import type {
   Juan,
   JuanMarker,
   Manifest,
+  PunctuationSidecar,
 } from "../../api/types";
 import { krRefToChar } from "../../lib/pua";
 import {
@@ -51,6 +53,8 @@ interface EditionOption {
   label: string | null;
   scope: "surface" | "edition";
 }
+
+type PunctuationSidecarSelection = string | null;
 
 interface EditionScrollTarget {
   location: string | null;
@@ -642,6 +646,13 @@ function optionForSelection(
   return options.find((option) => option.value === value) ?? options[0] ?? null;
 }
 
+function punctuationSidecarLabel(sidecar: PunctuationSidecar): string {
+  const model = typeof sidecar.model === "string" ? sidecar.model.trim() : "";
+  if (model) return model;
+  const name = sidecar.name.split("/").pop() ?? sidecar.name;
+  return name.replace(/\.punctuation\.ya?ml$/i, "");
+}
+
 function isLineNonStartChar(rc: RenderedChar): boolean {
   return (
     !rc.pageAnchor &&
@@ -761,6 +772,9 @@ export function TextViewer({
   const [catalogMatch, setCatalogMatch] = useState<CatalogMatch | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[] | null>(null);
   const [hasParallels, setHasParallels] = useState<boolean | null>(null);
+  const [punctuationSidecars, setPunctuationSidecars] = useState<PunctuationSidecar[]>([]);
+  const [selectedPunctuationSidecar, setSelectedPunctuationSidecar] =
+    useState<PunctuationSidecarSelection>(null);
   const [error, setError] = useState<string | null>(null);
   const contentReady = juan != null && annotations != null;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -839,6 +853,40 @@ export function TextViewer({
   }, [textid, seq, selectedEdition]);
 
   useEffect(() => {
+    let cancelled = false;
+    setPunctuationSidecars([]);
+    getPunctuationSidecars(textid, seq, selectedEdition)
+      .then((response) => {
+        if (cancelled) return;
+        const sidecars = response.sidecars.filter((sidecar) => sidecar.error == null);
+        setPunctuationSidecars(sidecars);
+        setSelectedPunctuationSidecar((previous) => {
+          if (sidecars.length === 1) return sidecars[0].name;
+          if (previous && sidecars.some((sidecar) => sidecar.name === previous)) {
+            return previous;
+          }
+          return null;
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPunctuationSidecars([]);
+        setSelectedPunctuationSidecar(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [textid, seq, selectedEdition]);
+
+  const activePunctuationSidecar = useMemo(
+    () =>
+      selectedPunctuationSidecar == null
+        ? null
+        : punctuationSidecars.find((sidecar) => sidecar.name === selectedPunctuationSidecar) ?? null,
+    [punctuationSidecars, selectedPunctuationSidecar],
+  );
+
+  useEffect(() => {
     const onChanged = (event: Event) => {
       const detail = (event as CustomEvent<{
         textid?: string;
@@ -859,10 +907,13 @@ export function TextViewer({
         ? BUCKETS.filter((bucket) => hasBucketText(juan, bucket)).map((bucket) => ({
             bucket,
             text: juan[bucket]?.text ?? "",
-            markers: (juan[bucket]?.markers ?? []) as JuanMarker[],
+            markers: [
+              ...((juan[bucket]?.markers ?? []) as JuanMarker[]),
+              ...((activePunctuationSidecar?.markers?.[bucket] ?? []) as JuanMarker[]),
+            ],
           }))
         : [],
-    [juan],
+    [juan, activePunctuationSidecar],
   );
 
   const bucketLengths = useMemo(() => {
@@ -1549,6 +1600,28 @@ export function TextViewer({
                 <option key={option.value} value={option.value}>
                   {option.scope === "surface" ? `${option.short} surface` : option.short}
                   {option.label ? ` · ${option.label}` : ""}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {punctuationSidecars.length > 1 ? (
+            <select
+              className="tv-edition-select tv-punctuation-sidecar-select"
+              value={selectedPunctuationSidecar ?? "__off__"}
+              aria-label="Punctuation sidecar"
+              title="Punctuation sidecar"
+              onChange={(event) => {
+                const value = event.target.value;
+                setSelectedPunctuationSidecar(value === "__off__" ? null : value);
+              }}
+            >
+              <option value="__off__">punctuation off</option>
+              {punctuationSidecars.map((sidecar) => (
+                <option key={sidecar.name} value={sidecar.name}>
+                  {punctuationSidecarLabel(sidecar)}
+                  {sidecar.status && sidecar.status !== "complete"
+                    ? ` · ${sidecar.status}`
+                    : ""}
                 </option>
               ))}
             </select>

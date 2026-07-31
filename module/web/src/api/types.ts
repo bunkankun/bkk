@@ -176,6 +176,20 @@ export interface Manifest {
   [k: string]: unknown;
 }
 
+export interface BundleAsset {
+  name: string;
+  role?: string | null;
+  hash?: string | null;
+  seq?: number | null;
+  model?: string | null;
+  size?: number | null;
+}
+
+export interface BundleAssetsResponse {
+  textid: string;
+  assets: BundleAsset[];
+}
+
 // Juan body shape from /bundles/{textid}/juan/{seq}
 export interface JuanMarker {
   type: string;
@@ -200,6 +214,23 @@ export interface Juan {
   front?: JuanBucket;
   back?: JuanBucket;
   [k: string]: unknown;
+}
+
+export interface PunctuationSidecar {
+  name: string;
+  role?: string | null;
+  seq?: number | null;
+  model?: string | null;
+  status?: string | null;
+  error?: string | null;
+  markers: Partial<Record<"front" | "body" | "back", JuanMarker[]>>;
+}
+
+export interface PunctuationSidecarsResponse {
+  textid: string;
+  seq: number;
+  edition?: string | null;
+  sidecars: PunctuationSidecar[];
 }
 
 export interface BundleEditBucket {

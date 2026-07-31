@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+import yaml
 from bkk.index import Index
 from fastapi import APIRouter, Path as PathParam, Query, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
@@ -22,6 +23,8 @@ from ..schemas import (
     BundleSummary,
     EditionInfo,
     JuanSliceOut,
+    PunctuationSidecar,
+    PunctuationSidecarsResponse,
 )
 from ..state import AppState
 from .. import selection
@@ -392,6 +395,88 @@ def get_juan_slice(
 
 
 @router.get(
+    "/{textid}/juan/{seq}/punctuation-sidecars",
+    response_model=PunctuationSidecarsResponse,
+    summary="LLM punctuation sidecars declared for one juan",
+)
+def list_punctuation_sidecars(
+    request: Request,
+    textid: str = PathParam(..., openapi_examples=ex.TEXTID),
+    seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
+    edition: str | None = Query(
+        None,
+        description="documentary edition short id; omitted reads the root surface edition",
+    ),
+) -> PunctuationSidecarsResponse:
+    rec = _record(request, textid)
+    bundle_dir, manifest = selection.load_manifest_for_edition_scope(
+        rec.bundle_dir, rec.manifest, rec.textid, edition,
+    )
+    sidecars: list[PunctuationSidecar] = []
+    for entry in _asset_entries(manifest):
+        if entry.get("role") != "llm-punctuation":
+            continue
+        if entry.get("seq") != seq:
+            continue
+        name = entry.get("filename") or entry.get("name")
+        if not isinstance(name, str):
+            continue
+        path = _declared_asset_path(bundle_dir, name)
+        if not path.exists() or not path.is_file():
+            sidecars.append(
+                PunctuationSidecar(
+                    name=name,
+                    role=entry.get("role"),
+                    seq=entry.get("seq"),
+                    model=_entry_model(entry),
+                    status="missing",
+                    error="asset_missing_on_disk",
+                )
+            )
+            continue
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception as exc:
+            sidecars.append(
+                PunctuationSidecar(
+                    name=name,
+                    role=entry.get("role"),
+                    seq=entry.get("seq"),
+                    model=_entry_model(entry),
+                    status="unreadable",
+                    error=str(exc),
+                )
+            )
+            continue
+        if not isinstance(data, dict):
+            sidecars.append(
+                PunctuationSidecar(
+                    name=name,
+                    role=entry.get("role"),
+                    seq=entry.get("seq"),
+                    model=_entry_model(entry),
+                    status="invalid",
+                    error="sidecar_not_object",
+                )
+            )
+            continue
+        status = data.get("status")
+        sidecars.append(
+            PunctuationSidecar(
+                name=name,
+                role=entry.get("role"),
+                seq=entry.get("seq"),
+                model=_entry_model(entry, data),
+                status=status if isinstance(status, str) else None,
+                markers=_marker_buckets(data.get("markers")),
+            )
+        )
+    return PunctuationSidecarsResponse(
+        textid=textid, seq=seq, edition=edition, sidecars=sidecars,
+    )
+
+
+@router.get(
     "/{textid}/juan/{seq}/{bucket}",
     response_model=dict,
     summary="One bucket of a juan: front, body, or back",
@@ -520,6 +605,39 @@ def _asset_entries(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return [r for r in refs if isinstance(r, dict)]
 
 
+def _declared_asset_path(bundle_dir: Path, name: str) -> Path:
+    asset_path = Path(name)
+    if asset_path.is_absolute() or ".." in asset_path.parts:
+        raise errors.bad_request("bad_asset_name", name=name)
+    return bundle_dir / name
+
+
+def _marker_buckets(value: Any) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, list[dict[str, Any]]] = {}
+    for bucket in VALID_BUCKETS:
+        raw = value.get(bucket)
+        if not isinstance(raw, list):
+            continue
+        markers = [m for m in raw if isinstance(m, dict)]
+        if markers:
+            out[bucket] = markers
+    return out
+
+
+def _entry_model(entry: dict[str, Any], data: dict[str, Any] | None = None) -> str | None:
+    model = entry.get("model")
+    if isinstance(model, str) and model:
+        return model
+    provenance = (data or {}).get("provenance")
+    if isinstance(provenance, dict):
+        model = provenance.get("model")
+        if isinstance(model, str) and model:
+            return model
+    return None
+
+
 @router.get(
     "/{textid}/assets",
     response_model=BundleAssetsResponse,
@@ -541,6 +659,8 @@ def list_assets(
                 name=name,
                 role=entry.get("role"),
                 hash=entry.get("hash"),
+                seq=entry.get("seq"),
+                model=_entry_model(entry),
                 size=size,
             )
         )
@@ -569,7 +689,7 @@ def get_asset(
     asset_path = Path(name)
     if asset_path.is_absolute() or ".." in asset_path.parts:
         raise errors.bad_request("bad_asset_name", name=name)
-    path = rec.bundle_dir / name
+    path = _declared_asset_path(rec.bundle_dir, name)
     if not path.exists() or not path.is_file():
         raise errors.bad_request(
             "asset_missing_on_disk", textid=textid, name=name

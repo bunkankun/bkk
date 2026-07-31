@@ -79,8 +79,21 @@ def load_juan_file_for_edition(
     edition short loads ``editions/<short>/<textid>-<short>.manifest.yaml`` and
     resolves juan and marker assets relative to that edition directory.
     """
+    scope_dir, scope_manifest = load_manifest_for_edition_scope(
+        bundle_dir, manifest, textid, edition,
+    )
+    return load_juan_file(scope_dir, scope_manifest, textid, seq)
+
+
+def load_manifest_for_edition_scope(
+    bundle_dir: Path,
+    manifest: dict[str, Any],
+    textid: str,
+    edition: str | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    """Return the directory and manifest for the root surface or one edition."""
     if edition is None:
-        return load_juan_file(bundle_dir, manifest, textid, seq)
+        return bundle_dir, manifest
     if not _EDITION_RE.fullmatch(edition):
         raise errors.bad_request("bad_edition", edition=edition)
     edition_dir = bundle_dir / "editions" / edition
@@ -90,7 +103,7 @@ def load_juan_file_for_edition(
     edition_manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
     if not isinstance(edition_manifest, dict):
         raise errors.bad_request("edition_manifest_not_object", textid=textid, edition=edition)
-    return load_juan_file(edition_dir, edition_manifest, textid, seq)
+    return edition_dir, edition_manifest
 
 
 def load_juan(corpus_root: Path, textid: str, seq: int) -> tuple[dict[str, Any], dict[str, Any]]:

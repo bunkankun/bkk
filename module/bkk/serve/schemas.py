@@ -224,12 +224,31 @@ class BundleAsset(BaseModel):
         None, description="declared role from manifest.assets.references[].role"
     )
     hash: str | None = None
+    seq: int | None = None
+    model: str | None = None
     size: int | None = Field(None, description="file size in bytes if readable")
 
 
 class BundleAssetsResponse(BaseModel):
     textid: str
     assets: list[BundleAsset]
+
+
+class PunctuationSidecar(BaseModel):
+    name: str = Field(..., description="filename relative to the bundle directory")
+    role: str | None = None
+    seq: int | None = None
+    model: str | None = None
+    status: str | None = None
+    error: str | None = None
+    markers: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+
+
+class PunctuationSidecarsResponse(BaseModel):
+    textid: str
+    seq: int
+    edition: str | None = None
+    sidecars: list[PunctuationSidecar]
 
 
 class OverlayFamily(BaseModel):

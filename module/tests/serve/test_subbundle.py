@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 from bkk.serve import create_app
@@ -133,6 +134,75 @@ def test_get_declared_nested_asset(tmp_path: Path):
 
     assert r.status_code == 200
     assert r.text == "markers: {}\n"
+
+
+def test_list_punctuation_sidecars(tmp_path: Path):
+    corpus = tmp_path
+    write_bundle(
+        corpus,
+        "AST0003",
+        "甲乙丙",
+        references=[
+            {
+                "seq": 1,
+                "filename": "assets/AST0003_001.test-model.punctuation.yaml",
+                "role": "llm-punctuation",
+                "model": "test-model",
+                "hash": "sha256:3",
+            },
+        ],
+    )
+    asset_path = (
+        corpus / "AST0003" / "assets" / "AST0003_001.test-model.punctuation.yaml"
+    )
+    asset_path.parent.mkdir()
+    asset_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema": 1,
+                "status": "complete",
+                "provenance": {"model": "fallback-model"},
+                "markers": {
+                    "body": [
+                        {
+                            "type": "punctuation",
+                            "offset": 1,
+                            "content": "。",
+                            "source": "llm-punctuation",
+                            "model": "test-model",
+                        }
+                    ],
+                    "front": [],
+                },
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(ServeConfig(corpus_root=corpus, index_path=corpus / "_corpus.bkkx"))
+    )
+
+    r = client.get("/bundles/AST0003/juan/1/punctuation-sidecars")
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["textid"] == "AST0003"
+    assert body["seq"] == 1
+    assert len(body["sidecars"]) == 1
+    sidecar = body["sidecars"][0]
+    assert sidecar["name"] == "assets/AST0003_001.test-model.punctuation.yaml"
+    assert sidecar["model"] == "test-model"
+    assert sidecar["status"] == "complete"
+    assert sidecar["markers"]["body"] == [
+        {
+            "type": "punctuation",
+            "offset": 1,
+            "content": "。",
+            "source": "llm-punctuation",
+            "model": "test-model",
+        }
+    ]
 
 
 def test_get_asset_not_declared(assets_client: TestClient):
