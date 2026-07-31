@@ -15,8 +15,13 @@ import yaml
 
 from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 
-from .schema import SCHEMA_VERSION, TABLES_DDL, create_heavy_indices
-from .witness import apply_witness
+from .schema import (
+    DEDICATED_VOICE_SEARCH_NAMES,
+    SCHEMA_VERSION,
+    TABLES_DDL,
+    create_heavy_indices,
+)
+from .witness import Segment, apply_witness
 
 log = logging.getLogger("bkk.index")
 _YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
@@ -27,10 +32,23 @@ def _yaml_load_text(text: str):
 
 
 @dataclass(frozen=True)
+class _VoiceSearchRows:
+    source_offset: int
+    source_length: int
+    master_offset: int
+    master_length: int
+    name: str
+    voice_id: str
+    source: str | None
+    text: str
+
+
+@dataclass(frozen=True)
 class _WitnessRows:
     label: str
     text: str
     segments: bytes
+    voice_searches: list[_VoiceSearchRows]
 
 
 @dataclass(frozen=True)
@@ -39,6 +57,7 @@ class _BucketRows:
     text: str
     variants: list[tuple[int, int, str, str, str]]
     voices: list[tuple[int, int, str, str, str | None]]
+    voice_searches: list[_VoiceSearchRows]
     witnesses: list[_WitnessRows]
 
 
@@ -160,13 +179,16 @@ def _build_part_rows(args) -> _PartRows:
         markers = bucket.get("markers") or []
         variants = [m for m in markers if m.get("type") == "variant"]
         voices = [m for m in markers if m.get("type") == "voice"]
+        voice_rows = _voice_range_rows(voices, len(text), textid, seq, kind)
+        voice_searches = _voice_search_rows(voices, text)
         buckets.append(
             _BucketRows(
                 kind=kind,
                 text=text,
                 variants=_variant_rows(variants),
-                voices=_voice_range_rows(voices, len(text), textid, seq, kind),
-                witnesses=_witness_rows(text, variants, editions),
+                voices=voice_rows,
+                voice_searches=voice_searches,
+                witnesses=_witness_rows(text, variants, editions, voice_searches),
             )
         )
     return _PartRows(seq=seq, hash=juan.get("hash"), buckets=buckets)
@@ -186,6 +208,7 @@ def _insert_part_rows(cur, textid: str, part: _PartRows) -> None:
         bucket_id = cur.lastrowid
         _insert_variant_rows(cur, bucket_id, bucket.variants)
         _insert_voice_ranges(cur, bucket_id, bucket.voices)
+        _insert_voice_search_rows(cur, bucket_id, "bucket", bucket_id, bucket.voice_searches)
         _insert_witness_texts(cur, bucket_id, bucket.witnesses)
         _insert_trigrams(cur, "bucket", bucket_id, bucket.text)
 
@@ -295,10 +318,83 @@ def _insert_voice_ranges(
         )
 
 
+def _voice_search_rows(
+    voices: list[dict],
+    text: str,
+) -> list[_VoiceSearchRows]:
+    rows: list[_VoiceSearchRows] = []
+    text_len = len(text)
+    for marker in voices:
+        name = marker.get("name")
+        if name not in DEDICATED_VOICE_SEARCH_NAMES:
+            continue
+        off = marker.get("offset")
+        length = marker.get("length")
+        vid = marker.get("id")
+        if not (
+            isinstance(off, int)
+            and not isinstance(off, bool)
+            and isinstance(length, int)
+            and not isinstance(length, bool)
+            and isinstance(name, str)
+            and isinstance(vid, str)
+            and 0 <= off <= text_len
+            and length > 0
+            and off + length <= text_len
+        ):
+            continue
+        source = marker.get("source")
+        rows.append(
+            _VoiceSearchRows(
+                source_offset=off,
+                source_length=length,
+                master_offset=off,
+                master_length=length,
+                name=name,
+                voice_id=vid,
+                source=source if isinstance(source, str) else None,
+                text=text[off:off + length],
+            )
+        )
+    return rows
+
+
+def _insert_voice_search_rows(
+    cur,
+    bucket_id: int,
+    source_kind: str,
+    source_id: int,
+    rows: list[_VoiceSearchRows],
+) -> None:
+    if rows:
+        cur.executemany(
+            "INSERT INTO voice_search(bucket_id, source_kind, source_id, "
+            "source_offset, source_length, master_offset, master_length, "
+            "name, voice_id, source, text) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                (
+                    bucket_id,
+                    source_kind,
+                    source_id,
+                    row.source_offset,
+                    row.source_length,
+                    row.master_offset,
+                    row.master_length,
+                    row.name,
+                    row.voice_id,
+                    row.source,
+                    row.text,
+                )
+                for row in rows
+            ),
+        )
+
+
 def _witness_rows(
     master_text: str,
     variants: list[dict],
     editions: list[str],
+    voice_searches: list[_VoiceSearchRows],
 ) -> list[_WitnessRows]:
     rows = []
     for ed in editions:
@@ -309,8 +405,76 @@ def _witness_rows(
             [[s.w_start, s.w_end, s.m_start, s.m_end, int(s.is_variant)] for s in segs],
             ensure_ascii=True,
         ).encode("utf-8")
-        rows.append(_WitnessRows(label=ed, text=w_text, segments=seg_blob))
+        rows.append(
+            _WitnessRows(
+                label=ed,
+                text=w_text,
+                segments=seg_blob,
+                voice_searches=_witness_voice_search_rows(w_text, segs, voice_searches),
+            )
+        )
     return rows
+
+
+def _witness_voice_search_rows(
+    witness_text: str,
+    segments: list[Segment],
+    master_rows: list[_VoiceSearchRows],
+) -> list[_VoiceSearchRows]:
+    rows: list[_VoiceSearchRows] = []
+    for row in master_rows:
+        projected = _master_to_witness_span(
+            segments,
+            row.master_offset,
+            row.master_offset + row.master_length,
+        )
+        if projected is None:
+            continue
+        w_start, w_end = projected
+        if w_end <= w_start:
+            continue
+        rows.append(
+            _VoiceSearchRows(
+                source_offset=w_start,
+                source_length=w_end - w_start,
+                master_offset=row.master_offset,
+                master_length=row.master_length,
+                name=row.name,
+                voice_id=row.voice_id,
+                source=row.source,
+                text=witness_text[w_start:w_end],
+            )
+        )
+    return rows
+
+
+def _master_to_witness_span(
+    segments: list[Segment],
+    master_start: int,
+    master_end: int,
+) -> tuple[int, int] | None:
+    if master_end <= master_start:
+        return None
+    first = _segment_at_master(segments, master_start)
+    last = _segment_at_master(segments, master_end - 1)
+    if first is None or last is None:
+        return None
+    if first.is_variant:
+        w_start = first.w_start
+    else:
+        w_start = first.w_start + (master_start - first.m_start)
+    if last.is_variant:
+        w_end = last.w_end
+    else:
+        w_end = last.w_start + (master_end - last.m_start)
+    return w_start, w_end
+
+
+def _segment_at_master(segments: list[Segment], master_pos: int) -> Segment | None:
+    for seg in segments:
+        if seg.m_start <= master_pos < seg.m_end:
+            return seg
+    return None
 
 
 def _insert_witness_texts(
@@ -324,6 +488,9 @@ def _insert_witness_texts(
             (bucket_id, row.label, row.text, row.segments),
         )
         witness_id = cur.lastrowid
+        _insert_voice_search_rows(
+            cur, bucket_id, "witness", witness_id, row.voice_searches,
+        )
         _insert_trigrams(cur, "witness", witness_id, row.text)
 
 

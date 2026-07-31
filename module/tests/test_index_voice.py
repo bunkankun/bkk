@@ -320,6 +320,91 @@ def test_build_accepts_dictionary_lemma_voice(tmp_path):
     assert rows == [("lemma", "dl1"), ("note", "n1")]
 
 
+def test_voice_search_table_populated_for_dedicated_voices_only(tmp_path):
+    voices = [
+        {
+            "offset": 0,
+            "length": 2,
+            "name": "lemma",
+            "id": "dl1",
+            "source": "dictionary",
+        },
+        {"offset": 2, "length": 2, "name": "title", "id": "t1"},
+        {"offset": 4, "length": 2, "name": "head", "id": "h1"},
+        {"offset": 6, "length": 2, "name": "root", "id": "r1"},
+    ]
+    bundle = _write_bundle(tmp_path, "KRV0011C", "甲乙丙丁戊己庚辛", voices=voices)
+
+    bkkx = build_index(bundle)
+
+    conn = sqlite3.connect(str(bkkx))
+    try:
+        rows = conn.execute(
+            "SELECT source_kind, source_offset, source_length, master_offset, "
+            "master_length, name, voice_id, source, text "
+            "FROM voice_search ORDER BY master_offset"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert rows == [
+        ("bucket", 0, 2, 0, 2, "lemma", "dl1", "dictionary", "甲乙"),
+        ("bucket", 2, 2, 2, 2, "title", "t1", None, "丙丁"),
+        ("bucket", 4, 2, 4, 2, "head", "h1", None, "戊己"),
+    ]
+
+
+def test_dedicated_voice_search_skips_general_candidates(tmp_path):
+    voices = [{"offset": 0, "length": 4, "name": "lemma", "id": "dl1"}]
+    bundle = _write_bundle(tmp_path, "KRV0011D", "甲乙丙丁", voices=voices)
+    bkkx = build_index(bundle)
+
+    with Index(bkkx) as ix:
+        ix._candidate_positions = lambda _query: pytest.fail(  # type: ignore[method-assign]
+            "dedicated voice search should not use trigram candidates"
+        )
+        hits = list(ix.search("乙丙", voices={"lemma"}))
+
+    assert len(hits) == 1
+    assert hits[0].match == "乙丙"
+    assert hits[0].voice == "lemma"
+    assert hits[0].matched_via == "master"
+
+
+def test_dedicated_voice_search_preserves_witness_hits(tmp_path):
+    voices = [{"offset": 0, "length": 4, "name": "lemma", "id": "dl1"}]
+    variants = [{"offset": 1, "length": 1, "content": "乙", "SBCK": "X"}]
+    bundle = _write_bundle(
+        tmp_path,
+        "KRV0011E",
+        "甲乙丙丁",
+        voices=voices,
+        variants=variants,
+        editions=[{"short": "SBCK", "label": "SBCK"}],
+    )
+    bkkx = build_index(bundle)
+
+    conn = sqlite3.connect(str(bkkx))
+    try:
+        rows = conn.execute(
+            "SELECT source_kind, text FROM voice_search ORDER BY source_kind"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert rows == [("bucket", "甲乙丙丁"), ("witness", "甲X丙丁")]
+
+    with Index(bkkx) as ix:
+        hits = list(ix.search("X丙", voices={"lemma"}))
+
+    assert len(hits) == 1
+    hit = hits[0]
+    assert hit.matched_via == "SBCK"
+    assert hit.matched_text == "X丙"
+    assert hit.match == "乙丙"
+    assert hit.master_offset == 1
+    assert hit.master_length == 2
+    assert hit.voice == "lemma"
+
+
 def test_build_rejects_voice_out_of_range(tmp_path):
     bad = [{"offset": 0, "length": 99, "name": "root", "id": "r1"}]
     bundle = _write_bundle(tmp_path, "KRV0012", "ABCDE", voices=bad)
@@ -365,6 +450,45 @@ def test_merge_propagates_voice_ranges(tmp_path):
         aaaaa_hits = list(ix.search("AAAAA"))
         assert {h.textid for h in aaaaa_hits} == {"KRV0014", "KRV0015"}
         assert all(h.voice == "root" for h in aaaaa_hits)
+
+
+def test_merge_propagates_dedicated_voice_search_rows(tmp_path):
+    _write_bundle(
+        tmp_path,
+        "KRV0016",
+        "甲乙丙丁",
+        voices=[{"offset": 0, "length": 2, "name": "lemma", "id": "dl1"}],
+    )
+    _write_bundle(
+        tmp_path,
+        "KRV0017",
+        "戊己庚辛",
+        voices=[{"offset": 2, "length": 2, "name": "head", "id": "h1"}],
+    )
+    out = tmp_path / "corpus.bkkx"
+    merge_bundles(tmp_path, out)
+
+    conn = sqlite3.connect(str(out))
+    try:
+        rows = conn.execute(
+            "SELECT j.textid, vs.name, vs.text "
+            "FROM voice_search vs "
+            "JOIN bucket b ON b.bucket_id = vs.bucket_id "
+            "JOIN juan j ON j.juan_id = b.juan_id "
+            "ORDER BY j.textid, vs.name"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert rows == [
+        ("KRV0016", "lemma", "甲乙"),
+        ("KRV0017", "head", "庚辛"),
+    ]
+
+    with Index(out) as ix:
+        lemma_hits = list(ix.search("甲", voices={"lemma"}))
+        head_hits = list(ix.search("辛", voices={"head"}))
+    assert [hit.textid for hit in lemma_hits] == ["KRV0016"]
+    assert [hit.textid for hit in head_hits] == ["KRV0017"]
 
 
 def test_index_rejects_old_schema(tmp_path):

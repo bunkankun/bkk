@@ -154,6 +154,34 @@ def test_search_compound_witness_proximity(tmp_path: Path):
     assert body["hits"][0]["matched_text"] == "Y"
 
 
+def test_search_dedicated_voice_filter_via_api(tmp_path: Path):
+    write_bundle(
+        tmp_path,
+        "TESTLEMMA",
+        "甲乙丙丁",
+        voice_markers=[{"offset": 0, "length": 2, "name": "lemma", "id": "dl1"}],
+    )
+    write_bundle(
+        tmp_path,
+        "TESTHEAD",
+        "甲乙丙丁",
+        voice_markers=[{"offset": 2, "length": 2, "name": "head", "id": "h1"}],
+    )
+    config = ServeConfig(corpus_root=tmp_path, index_path=tmp_path / "_corpus.bkkx")
+    client = TestClient(create_app(config))
+
+    r = client.get("/search", params={"q": "甲", "voice": "lemma"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    assert body["hits"][0]["textid"] == "TESTLEMMA"
+    assert body["hits"][0]["voice"] == "lemma"
+
+    textids = client.get("/search/textids", params={"q": "丁", "voice": "head"})
+    assert textids.status_code == 200
+    assert textids.json()["textids"] == ["TESTHEAD"]
+
+
 def test_search_compound_rejects_malformed(client):
     r = client.get("/search", params={"q": "甲 NEAR 丁 NOT 戊"})
     assert r.status_code == 400

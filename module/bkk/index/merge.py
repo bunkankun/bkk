@@ -256,7 +256,14 @@ def merge_bundles(
                 ("kind", "corpus"),
             ],
         )
-        offsets = {"juan": 0, "bucket": 0, "witness": 0, "variant": 0, "voice_range": 0}
+        offsets = {
+            "juan": 0,
+            "bucket": 0,
+            "witness": 0,
+            "variant": 0,
+            "voice_range": 0,
+            "voice_search": 0,
+        }
         m = len(sources)
         for i, (textid, bkkx) in enumerate(sources, 1):
             t_bundle = time.monotonic()
@@ -328,6 +335,7 @@ def _merge_one(conn: sqlite3.Connection, textid: str, bkkx: Path,
         w = offsets["witness"]
         v = offsets["variant"]
         vr = offsets["voice_range"]
+        vs = offsets["voice_search"]
 
         conn.execute(
             "INSERT INTO juan(juan_id, textid, seq, hash) "
@@ -359,6 +367,18 @@ def _merge_one(conn: sqlite3.Connection, textid: str, bkkx: Path,
             "name, voice_id, responds_to FROM src.voice_range",
             (vr, b),
         )
+        conn.execute(
+            "INSERT INTO voice_search(voice_search_id, bucket_id, source_kind, "
+            "source_id, source_offset, source_length, master_offset, "
+            "master_length, name, voice_id, source, text) "
+            "SELECT voice_search_id + ?, bucket_id + ?, source_kind, "
+            "CASE source_kind "
+            "  WHEN 'bucket'  THEN source_id + ? "
+            "  WHEN 'witness' THEN source_id + ? "
+            "END, source_offset, source_length, master_offset, master_length, "
+            "name, voice_id, source, text FROM src.voice_search",
+            (vs, b, b, w),
+        )
         conn.execute("INSERT INTO toc SELECT * FROM src.toc")
         conn.execute(
             "INSERT INTO trigram(gram, source_kind, source_id, position) "
@@ -388,4 +408,5 @@ def _refresh_offsets(conn: sqlite3.Connection) -> dict[str, int]:
         "witness":     conn.execute("SELECT COALESCE(MAX(witness_id), 0) FROM witness").fetchone()[0],
         "variant":     conn.execute("SELECT COALESCE(MAX(variant_id), 0) FROM variant").fetchone()[0],
         "voice_range": conn.execute("SELECT COALESCE(MAX(voice_range_id), 0) FROM voice_range").fetchone()[0],
+        "voice_search": conn.execute("SELECT COALESCE(MAX(voice_search_id), 0) FROM voice_search").fetchone()[0],
     }

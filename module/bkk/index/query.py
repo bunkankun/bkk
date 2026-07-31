@@ -16,7 +16,7 @@ from bkk.chars.canonicalize import canonicalize_query
 from bkk.chars.refs import CanonicalizationContext
 
 from .ir import Hit, IndexSummary, VariantOverlay
-from .schema import SCHEMA_VERSION
+from .schema import DEDICATED_VOICE_SEARCH_NAMES, SCHEMA_VERSION
 from .witness import Segment, witness_to_master_span
 
 
@@ -116,6 +116,11 @@ class Index:
         """
         query = self._prepare_query(query)
         if not query:
+            return
+        if candidates is None and self.can_use_dedicated_voice_search(voices):
+            yield from self._search_dedicated_voice(
+                query, context, witnesses, textid, voices or set(),
+            )
             return
         if candidates is None:
             candidates = self._candidate_positions(query)
@@ -374,6 +379,10 @@ class Index:
                 "SELECT DISTINCT name FROM voice_range ORDER BY name"
             )
         ]
+
+    def can_use_dedicated_voice_search(self, voices: set[str] | None) -> bool:
+        """True when ``voices`` can be answered wholly from ``voice_search``."""
+        return bool(voices) and set(voices or set()) <= DEDICATED_VOICE_SEARCH_NAMES
 
     def _extensions_from_candidates(
         self,
@@ -863,6 +872,153 @@ class Index:
             if _passes_voice_filter(hit, voices):
                 yield hit
 
+    def _search_dedicated_voice(
+        self,
+        query: str,
+        context: int,
+        witnesses: set[str] | None,
+        textid: str | None,
+        voices: set[str],
+    ) -> Iterator[Hit]:
+        voice_values = sorted(voices)
+        if not voice_values:
+            return
+        placeholders = ",".join("?" * len(voice_values))
+        params: list[object] = [*voice_values, query]
+        sql = (
+            "SELECT vs.*, b.text AS btext, b.kind AS bucket_kind, "
+            "j.seq AS juan_seq, j.textid AS textid, "
+            "w.text AS wtext, w.label AS witness_label, w.segments AS segments "
+            "FROM voice_search vs "
+            "JOIN bucket b ON b.bucket_id = vs.bucket_id "
+            "JOIN juan j ON b.juan_id = j.juan_id "
+            "LEFT JOIN witness w "
+            "  ON vs.source_kind = 'witness' AND w.witness_id = vs.source_id "
+            f"WHERE vs.name IN ({placeholders}) AND instr(vs.text, ?) > 0"
+        )
+        if textid is not None:
+            sql += " AND j.textid = ?"
+            params.append(textid)
+        sql += (
+            " ORDER BY j.textid, j.seq, vs.bucket_id, "
+            "vs.master_offset, vs.source_kind, vs.source_offset"
+        )
+
+        seen: set[tuple[str, int, str, int, int, str, str]] = set()
+        for row in self._conn.execute(sql, params):
+            if row["source_kind"] == "witness":
+                label = row["witness_label"]
+                if witnesses is not None and label not in witnesses:
+                    continue
+                yield from self._dedicated_witness_hits(
+                    row, query, context, voices, seen,
+                )
+            else:
+                yield from self._dedicated_master_hits(
+                    row, query, context, voices, seen,
+                )
+
+    def _dedicated_master_hits(
+        self,
+        row: sqlite3.Row,
+        query: str,
+        context: int,
+        voices: set[str],
+        seen: set[tuple[str, int, str, int, int, str, str]],
+    ) -> Iterator[Hit]:
+        for rel in _find_all(row["text"], query):
+            master_pos = row["source_offset"] + rel
+            hit = self._make_hit(
+                row["textid"],
+                row["juan_seq"],
+                row["bucket_kind"],
+                row["bucket_id"],
+                row["btext"],
+                master_pos,
+                len(query),
+                "master",
+                query,
+                context,
+            )
+            if not _passes_voice_filter(hit, voices):
+                continue
+            key = _hit_identity(hit)
+            if key in seen:
+                continue
+            seen.add(key)
+            yield hit
+
+    def _dedicated_witness_hits(
+        self,
+        row: sqlite3.Row,
+        query: str,
+        context: int,
+        voices: set[str],
+        seen: set[tuple[str, int, str, int, int, str, str]],
+    ) -> Iterator[Hit]:
+        wtext = row["wtext"]
+        if wtext is None or row["segments"] is None:
+            return
+        btext = row["btext"]
+        label = row["witness_label"]
+        segments = _decode_segments(row["segments"])
+        for rel in _find_all(row["text"], query):
+            pos = row["source_offset"] + rel
+            match_hi = pos + len(query)
+            m_off, m_len = witness_to_master_span(segments, pos, match_hi)
+            if btext[m_off:m_off + m_len] == query:
+                continue
+            w_lo = max(0, pos - context)
+            w_hi = match_hi + context
+            ANCHOR_PAD = 6
+            v_left_w_start = None
+            v_right_w_end = None
+            for seg in segments:
+                if seg.is_variant and seg.w_start < match_hi and seg.w_end > pos:
+                    if v_left_w_start is None or seg.w_start < v_left_w_start:
+                        v_left_w_start = seg.w_start
+                    if v_right_w_end is None or seg.w_end > v_right_w_end:
+                        v_right_w_end = seg.w_end
+            if v_left_w_start is not None:
+                w_lo = min(w_lo, max(0, v_left_w_start - ANCHOR_PAD))
+            if v_right_w_end is not None:
+                w_hi = max(w_hi, min(len(wtext), v_right_w_end + ANCHOR_PAD))
+            witness_left = wtext[w_lo:pos]
+            witness_right = wtext[match_hi:w_hi]
+            if v_left_w_start is not None:
+                w_left_var_off = max(0, v_left_w_start - w_lo)
+            else:
+                w_left_var_off = 0
+            if v_right_w_end is not None:
+                w_right_var_end = max(0, min(len(witness_right), v_right_w_end - match_hi))
+            else:
+                w_right_var_end = len(witness_right)
+            matched_text = wtext[pos:match_hi]
+            hit = self._make_hit(
+                row["textid"],
+                row["juan_seq"],
+                row["bucket_kind"],
+                row["bucket_id"],
+                btext,
+                m_off,
+                m_len,
+                label,
+                query,
+                context,
+                witness_text=matched_text,
+                witness_left=witness_left,
+                witness_right=witness_right,
+                witness_left_variant_offset=w_left_var_off,
+                witness_right_variant_end=w_right_var_end,
+            )
+            if not _passes_voice_filter(hit, voices):
+                continue
+            key = _hit_identity(hit)
+            if key in seen:
+                continue
+            seen.add(key)
+            yield hit
+
     def _make_hit(
         self, textid, juan_seq, bucket_kind, bucket_id, bucket_text,
         m_off, m_len, matched_via, query, context, *, witness_text=None,
@@ -966,6 +1122,18 @@ def _passes_voice_filter(hit: Hit, voices: set[str] | None) -> bool:
     if voices is None:
         return True
     return any(name in voices for name in hit.voice_stack)
+
+
+def _hit_identity(hit: Hit) -> tuple[str, int, str, int, int, str, str]:
+    return (
+        hit.textid,
+        hit.juan_seq,
+        hit.bucket,
+        hit.master_offset,
+        hit.master_length,
+        hit.matched_via,
+        hit.matched_text,
+    )
 
 
 def _decode_segments(blob) -> list[Segment]:

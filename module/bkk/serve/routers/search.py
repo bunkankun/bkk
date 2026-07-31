@@ -957,98 +957,122 @@ def _search_hits(
     try:
         all_hits: list[Hit] = []
         if parsed.mode in {"literal", "near", "not"}:
-            prepared: list[tuple[Any, dict, IndexSummary]] = []
-            combined_textids: Counter[str] = Counter()
-            combined_witnesses: Counter[str] = Counter()
-            left_extensions: Counter[str] = Counter()
-            right_extensions: Counter[str] = Counter()
-            total = 0
-            for index in indexes:
-                if parsed.mode == "literal":
-                    candidates, _raw_total = index.candidates_and_total(parsed.literal)
-                    part_summary = index.summarise(
-                        parsed.literal,
-                        candidates=candidates,
-                        textids=scoped_textids or None,
-                        witnesses=witnesses,
-                        master_only=master_only,
-                    )
-                else:
-                    assert parsed.right is not None
-                    candidates, _raw_total = index.compound_candidates_and_total(
-                        parsed.literal,
-                        parsed.mode,
-                        parsed.right,
-                        search_distance,
-                    )
-                    part_summary = index.summarise_candidates(
-                        parsed.literal,
-                        candidates=candidates,
-                        textids=scoped_textids or None,
-                        witnesses=witnesses,
-                        master_only=master_only,
-                        include_extensions=False,
-                    )
-                prepared.append((index, candidates, part_summary))
-                total += part_summary.total
-                combined_textids.update(part_summary.by_textid)
-                combined_witnesses.update(part_summary.by_witness_label)
-                left_extensions.update(dict(part_summary.trigram_left))
-                right_extensions.update(dict(part_summary.trigram_right))
-            summary = IndexSummary(
-                total=total,
-                by_textid=dict(combined_textids),
-                by_witness_label=dict(combined_witnesses),
-                trigram_left=left_extensions.most_common(20),
-                trigram_right=right_extensions.most_common(20),
-            )
-            if total > cap and voices is None:
-                empty_hits: list[Hit] = []
-                meta = _catalog_meta(request, None)
-                return (
-                    empty_hits,
-                    meta,
-                    witnesses,
-                    excluded_witnesses,
-                    voices,
-                    excluded_voices,
-                    categories,
-                    excluded_categories,
-                    selected_left_char,
-                    excluded_left_char,
-                    selected_right_char,
-                    excluded_right_char,
-                    selected_left_bigram,
-                    excluded_left_bigram,
-                    selected_right_bigram,
-                    excluded_right_bigram,
-                    selected_around_binom,
-                    excluded_around_binom,
-                    scoped_textids,
-                    excluded_textids,
-                    None,
-                    summary,
-                )
-            for index, candidates, _part_summary in prepared:
-                if scoped_textids:
-                    for tid in sorted(scoped_textids):
+            if (
+                parsed.mode == "literal"
+                and voices is not None
+                and all(index.can_use_dedicated_voice_search(voices) for index in indexes)
+            ):
+                for index in indexes:
+                    if scoped_textids:
+                        for tid in sorted(scoped_textids):
+                            all_hits.extend(index.search(
+                                parsed.literal,
+                                context=context,
+                                witnesses=witnesses,
+                                textid=tid,
+                                voices=voices,
+                            ))
+                    else:
                         all_hits.extend(index.search(
                             parsed.literal,
                             context=context,
                             witnesses=witnesses,
-                            textid=tid,
+                            textid=textid,
+                            voices=voices,
+                        ))
+            else:
+                prepared: list[tuple[Any, dict, IndexSummary]] = []
+                combined_textids: Counter[str] = Counter()
+                combined_witnesses: Counter[str] = Counter()
+                left_extensions: Counter[str] = Counter()
+                right_extensions: Counter[str] = Counter()
+                total = 0
+                for index in indexes:
+                    if parsed.mode == "literal":
+                        candidates, _raw_total = index.candidates_and_total(parsed.literal)
+                        part_summary = index.summarise(
+                            parsed.literal,
+                            candidates=candidates,
+                            textids=scoped_textids or None,
+                            witnesses=witnesses,
+                            master_only=master_only,
+                        )
+                    else:
+                        assert parsed.right is not None
+                        candidates, _raw_total = index.compound_candidates_and_total(
+                            parsed.literal,
+                            parsed.mode,
+                            parsed.right,
+                            search_distance,
+                        )
+                        part_summary = index.summarise_candidates(
+                            parsed.literal,
+                            candidates=candidates,
+                            textids=scoped_textids or None,
+                            witnesses=witnesses,
+                            master_only=master_only,
+                            include_extensions=False,
+                        )
+                    prepared.append((index, candidates, part_summary))
+                    total += part_summary.total
+                    combined_textids.update(part_summary.by_textid)
+                    combined_witnesses.update(part_summary.by_witness_label)
+                    left_extensions.update(dict(part_summary.trigram_left))
+                    right_extensions.update(dict(part_summary.trigram_right))
+                summary = IndexSummary(
+                    total=total,
+                    by_textid=dict(combined_textids),
+                    by_witness_label=dict(combined_witnesses),
+                    trigram_left=left_extensions.most_common(20),
+                    trigram_right=right_extensions.most_common(20),
+                )
+                if total > cap and voices is None:
+                    empty_hits: list[Hit] = []
+                    meta = _catalog_meta(request, None)
+                    return (
+                        empty_hits,
+                        meta,
+                        witnesses,
+                        excluded_witnesses,
+                        voices,
+                        excluded_voices,
+                        categories,
+                        excluded_categories,
+                        selected_left_char,
+                        excluded_left_char,
+                        selected_right_char,
+                        excluded_right_char,
+                        selected_left_bigram,
+                        excluded_left_bigram,
+                        selected_right_bigram,
+                        excluded_right_bigram,
+                        selected_around_binom,
+                        excluded_around_binom,
+                        scoped_textids,
+                        excluded_textids,
+                        None,
+                        summary,
+                    )
+                for index, candidates, _part_summary in prepared:
+                    if scoped_textids:
+                        for tid in sorted(scoped_textids):
+                            all_hits.extend(index.search(
+                                parsed.literal,
+                                context=context,
+                                witnesses=witnesses,
+                                textid=tid,
+                                voices=voices,
+                                candidates=candidates,
+                            ))
+                    else:
+                        all_hits.extend(index.search(
+                            parsed.literal,
+                            context=context,
+                            witnesses=witnesses,
+                            textid=textid,
                             voices=voices,
                             candidates=candidates,
                         ))
-                else:
-                    all_hits.extend(index.search(
-                        parsed.literal,
-                        context=context,
-                        witnesses=witnesses,
-                        textid=textid,
-                        voices=voices,
-                        candidates=candidates,
-                    ))
         elif regex_scope_textids is not None and not regex_scope_textids:
             all_hits = []
         else:

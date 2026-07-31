@@ -10,6 +10,8 @@ One file per bundle, or one merged file across many bundles. Tables:
 - ``variant``     — flattened variant entries for KWIC overlay rendering
 - ``voice_range`` — ranges tagging stretches of bucket text by voice (root,
                     commentary, …); enables voice-filtered KWIC and stats
+- ``voice_search`` — compact substring-search rows for selected voice types
+                     whose range text is worth searching directly
 - ``toc``         — manifest TOC entries (for KWIC chapter labels)
 - ``trigram``     — character-trigram inverted index over master + witness text
 
@@ -19,7 +21,9 @@ in a browser without translation.
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
+
+DEDICATED_VOICE_SEARCH_NAMES = frozenset({"lemma", "title", "head"})
 
 TABLES_DDL = """
 CREATE TABLE meta (
@@ -76,6 +80,21 @@ CREATE TABLE voice_range (
   responds_to    TEXT                -- juan-local id of the range this glosses; NULL for root
 );
 
+CREATE TABLE voice_search (
+  voice_search_id INTEGER PRIMARY KEY,
+  bucket_id       INTEGER NOT NULL REFERENCES bucket(bucket_id),
+  source_kind     TEXT    NOT NULL,  -- 'bucket' | 'witness'
+  source_id       INTEGER NOT NULL,
+  source_offset   INTEGER NOT NULL,
+  source_length   INTEGER NOT NULL,
+  master_offset   INTEGER NOT NULL,
+  master_length   INTEGER NOT NULL,
+  name            TEXT    NOT NULL,
+  voice_id        TEXT    NOT NULL,
+  source          TEXT,
+  text            TEXT    NOT NULL
+);
+
 CREATE TABLE toc (
   textid     TEXT    NOT NULL,
   juan_seq   INTEGER NOT NULL,
@@ -100,6 +119,8 @@ CREATE TABLE trigram (
 INDICES_DDL = """
 CREATE INDEX idx_variant_overlay ON variant(bucket_id, master_offset);
 CREATE INDEX idx_voice_range_lookup ON voice_range(bucket_id, master_offset);
+CREATE INDEX idx_voice_search_lookup ON voice_search(name, source_kind, source_id);
+CREATE INDEX idx_voice_search_bucket ON voice_search(bucket_id, master_offset);
 CREATE INDEX idx_toc_lookup ON toc(textid, juan_seq, bucket, span_start);
 CREATE INDEX idx_trigram_gram ON trigram(gram);
 """
@@ -114,6 +135,8 @@ def drop_heavy_indices(conn) -> None:
         "idx_toc_lookup",
         "idx_variant_overlay",
         "idx_voice_range_lookup",
+        "idx_voice_search_lookup",
+        "idx_voice_search_bucket",
     ):
         conn.execute(f"DROP INDEX IF EXISTS {name}")
 
