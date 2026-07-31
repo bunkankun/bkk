@@ -1332,6 +1332,13 @@ export function TextViewer({
     // (e.g. visibleBlocks update from IntersectionObserver after scroll)
     // must not re-trigger scroll/flash.
     if (lastFlashedRef.current === pending) return;
+    const targetIdx = blocks.findIndex(
+      (b) =>
+        b.bucket === pending.bucket &&
+        pending.offset >= b.startOffset &&
+        pending.offset < b.endOffset,
+    );
+    if (targetIdx >= 0 && !visibleBlocks.has(targetIdx)) return;
     const start = pending.offset;
     const end = pending.offset + Math.max(1, pending.length);
     const target = jumpTarget(containerRef.current, pending.bucket, start);
