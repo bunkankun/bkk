@@ -283,6 +283,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="write marker assets and manifests; default is dry-run",
     )
 
+    pts = sub.add_parser(
+        "tls-seg-start-ids",
+        help="rename duplicated TLS typed-segment run start marker ids",
+        description="Patch old TLS imports where a synthetic tls:seg-start "
+                    "marker reused the first member tls:seg id. The repaired "
+                    "id uses the current importer convention "
+                    "{first_member_id}_start. Defaults to dry-run.",
+    )
+    _add_bundle_selector(pts)
+    pts.add_argument(
+        "--text-prefix", action="append", default=None, dest="text_prefixes",
+        type=text_prefix_arg,
+        help="scan bundle directories under --out whose text ids start with this prefix; repeatable",
+    )
+    pts.add_argument(
+        "--write", action="store_true",
+        help="write juans, marker assets, and manifests; default is dry-run",
+    )
+
     pvp = sub.add_parser(
         "voice-paren-boundary",
         help="move body offset-0 ')' punctuation markers to the end of front "
@@ -450,6 +469,11 @@ def run(argv: list[str] | None = None) -> int:
         )
     if args.op == "page-break":
         return _run_page_break(
+            args=args,
+            out_root=out_root,
+        )
+    if args.op == "tls-seg-start-ids":
+        return _run_tls_seg_start_ids(
             args=args,
             out_root=out_root,
         )
@@ -1224,6 +1248,83 @@ def _run_page_break(
     mode = "dry-run: " if dry_run else ""
     print(
         f"{mode}{total} page-break marker(s), "
+        f"{scopes_changed} manifest scope(s) changed "
+        f"(scanned {len(bundles)} bundles in {target})"
+    )
+    if dry_run:
+        print("dry-run only; pass --write to update files")
+    return 0
+
+
+def _run_tls_seg_start_ids(
+    *,
+    args: argparse.Namespace,
+    out_root: Path | None,
+) -> int:
+    prefixes = getattr(args, "text_prefixes", None) or []
+    has_single = any((
+        getattr(args, "legacy_bundle", None),
+        getattr(args, "bundle", None),
+        getattr(args, "text_id", None),
+    ))
+    if prefixes and has_single:
+        print(
+            "error: provide either --text-prefix or a single bundle/text id",
+            file=sys.stderr,
+        )
+        return 2
+
+    from .tls_seg_start_ids import repair_tls_seg_start_ids
+
+    try:
+        if has_single:
+            bundle, text_id = _selected_bundle_args(args)
+            bundles = [_resolve_bundle_dir(bundle, out_root, text_id=text_id)]
+            target = "bundle"
+        else:
+            if out_root is None:
+                print(
+                    "error: bundle root not given (--out) and not configured in "
+                    ".bkkrc (repair.out / global.corpus / import.out)",
+                    file=sys.stderr,
+                )
+                return 2
+            root = Path(out_root).expanduser().resolve()
+            if not root.is_dir():
+                print(f"error: bundle root is not a directory: {root}", file=sys.stderr)
+                return 2
+            prefix_tuple = tuple(prefixes) if prefixes else ("",)
+            bundles = sorted(_iter_bundles_in_sections(root, prefix_tuple))
+            target = f"prefixes {list(prefixes)}" if prefixes else "corpus"
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    dry_run = not args.write
+    prefix = "would rename" if dry_run else "renamed"
+    total = 0
+    scopes_changed = 0
+    for bundle_dir in bundles:
+        summary = repair_tls_seg_start_ids(bundle_dir, dry_run=dry_run)
+        bundle_renamed = sum(scope["renamed"] for scope in summary["scopes"])
+        if not bundle_renamed:
+            continue
+        total += bundle_renamed
+        print(f"{bundle_dir.name}:")
+        for scope in summary["scopes"]:
+            if not scope["renamed"]:
+                continue
+            scopes_changed += 1
+            print(
+                f"  {prefix} {scope['manifest']}: "
+                f"{scope['renamed']} tls:seg-start marker id(s)"
+            )
+            for line in scope["lines"]:
+                print(f"    {line}")
+
+    mode = "dry-run: " if dry_run else ""
+    print(
+        f"{mode}{total} tls:seg-start marker id(s), "
         f"{scopes_changed} manifest scope(s) changed "
         f"(scanned {len(bundles)} bundles in {target})"
     )

@@ -50,6 +50,7 @@ type EditScope = { start: number; end: number; protectedText: boolean };
 let nextMarkerKey = 1;
 
 const ADDABLE_MARKER_TYPES = ["voice", "voice:problem"];
+const LEGACY_ID_MARKER_TYPES = new Set(["punctuation"]);
 
 function newMarkerKey(): string {
   return `marker-${nextMarkerKey++}`;
@@ -122,6 +123,10 @@ function scrollTextareaToPosition(textarea: HTMLTextAreaElement, position: numbe
 function markerIdHasValidShape(id: string, textid: string): boolean {
   const parts = id.split("_", 3);
   return parts.length === 3 && parts[0] === textid && parts[2].length > 0;
+}
+
+function markerTypeAllowsLegacyId(type: unknown): boolean {
+  return typeof type === "string" && LEGACY_ID_MARKER_TYPES.has(type);
 }
 
 function valueKind(value: unknown): "string" | "number" | "boolean" | "json" | "null" {
@@ -432,6 +437,7 @@ export function BundleEditor({
         id &&
         marker.data.type !== "tls:ann" &&
         marker.data.type !== "voice" &&
+        !markerTypeAllowsLegacyId(marker.data.type) &&
         !markerIdHasValidShape(id, textid)
       ) {
         return {
@@ -443,6 +449,12 @@ export function BundleEditor({
     return null;
   }, [inactiveMarkers, markers, textLength, textid]);
   const validationError = validationProblem?.message ?? null;
+  const saveDisabledReason =
+    !dirty ? "No unsaved edits."
+      : saving ? "Save is already in progress."
+        : allocatingIds > 0 ? "Marker IDs are still being allocated."
+          : unresolvedCount > 0 ? `${unresolvedCount} unresolved marker${unresolvedCount === 1 ? "" : "s"}.`
+            : validationError;
 
   const reportCursor = () => {
     const textarea = textareaRef.current;
@@ -767,15 +779,15 @@ export function BundleEditor({
   };
 
   const changeEditorText = (nextText: string) => {
-    if (editScope?.protectedText === true) {
-      setError("Text is protected while editing a selected range; marker edits are still allowed.");
-      return;
-    }
     if (showLayoutMarkers) {
       setError("Turn off layout markers before editing text.");
       return;
     }
     if (punctuationSet == null) {
+      if (editScope?.protectedText === true) {
+        setError("Text is protected while editing a selected range; marker edits are still allowed.");
+        return;
+      }
       changeText(nextText);
       return;
     }
@@ -783,16 +795,25 @@ export function BundleEditor({
       setError("Only punctuation can be inserted while punctuation is loaded.");
       return;
     }
-    const parsed = parsePunctuatedText(text, nextText);
+    const parsed = parsePunctuatedText(displayText, nextText);
     if (!parsed.ok) {
       setError(parsed.message);
       return;
     }
+    const punctuation =
+      scopeBase === 0
+        ? parsed.punctuation
+        : new Map(
+            [...parsed.punctuation].map(([offset, content]) => [
+              offset + scopeBase,
+              content,
+            ]),
+          );
     setMarkers((current) =>
       reconcilePunctuationMarkers(
         current,
         punctuationSet,
-        parsed.punctuation,
+        punctuation,
         newMarkerKey,
       )
     );
@@ -1255,13 +1276,8 @@ export function BundleEditor({
           <button
             type="button"
             onClick={save}
-            disabled={
-              !dirty ||
-              saving ||
-              allocatingIds > 0 ||
-              unresolvedCount > 0 ||
-              validationError != null
-            }
+            disabled={saveDisabledReason != null}
+            title={saveDisabledReason ?? "Save edits"}
           >
             {saving ? "Saving…" : "Save"}
           </button>
@@ -1309,7 +1325,7 @@ export function BundleEditor({
           ref={textareaRef}
           value={editorView.text}
           aria-label={`${bucket} text`}
-          readOnly={editScope?.protectedText === true}
+          readOnly={editScope?.protectedText === true && punctuationSet == null}
           spellCheck={false}
           onChange={(event) => changeEditorText(event.target.value)}
           onSelect={reportCursor}

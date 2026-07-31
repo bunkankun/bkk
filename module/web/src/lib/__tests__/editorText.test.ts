@@ -100,6 +100,17 @@ describe("parsePunctuatedText", () => {
     expect(punctuationInputAllowed("甲乙", "甲，乙")).toBe(true);
     expect(punctuationInputAllowed("甲a乙", "甲乙")).toBe(true);
   });
+
+  it("extracts punctuation from a filtered slice using slice-local offsets", () => {
+    const result = parsePunctuatedText("乙丙", "乙，丙。");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect([...result.punctuation]).toEqual([
+        [1, "，"],
+        [2, "。"],
+      ]);
+    }
+  });
 });
 
 describe("reconcilePunctuationMarkers", () => {

@@ -223,11 +223,13 @@ def test_typed_seg_run_folds_consecutive_same_type():
     starts = [m for m in markers if m.type == "tls:seg-start"]
     ends = [m for m in markers if m.type == "tls:seg-end"]
     assert len(starts) == 1 and len(ends) == 1
-    assert starts[0].id == "A"
+    assert starts[0].id == "A_start"
     assert starts[0].extras["seg_type"] == "comm"
     assert starts[0].extras["member_ids"] == ["A", "B", "C"]
     assert ends[0].id == "C_end"
     assert ends[0].extras["seg_type"] == "comm"
+    ids = [m.id for m in markers if m.id]
+    assert len(ids) == len(set(ids))
 
 
 def test_typed_seg_run_breaks_on_different_type():
@@ -241,7 +243,7 @@ def test_typed_seg_run_breaks_on_different_type():
         </p>
     """))
     pairs = _seg_run_pairs(_markers(div))
-    assert pairs == [("A", "B_end"), ("C", "C_end")]
+    assert pairs == [("A_start", "B_end"), ("C_start", "C_end")]
 
 
 def test_typed_seg_run_breaks_on_untyped_seg():
@@ -255,7 +257,7 @@ def test_typed_seg_run_breaks_on_untyped_seg():
         </p>
     """))
     pairs = _seg_run_pairs(_markers(div))
-    assert pairs == [("A", "A_end"), ("C", "C_end")]
+    assert pairs == [("A_start", "A_end"), ("C_start", "C_end")]
 
 
 def test_typed_seg_run_does_not_break_on_pb():
@@ -270,7 +272,7 @@ def test_typed_seg_run_does_not_break_on_pb():
     """))
     markers = _markers(div)
     pairs = _seg_run_pairs(markers)
-    assert pairs == [("A", "B_end")]
+    assert pairs == [("A_start", "B_end")]
     starts = [m for m in markers if m.type == "tls:seg-start"]
     assert starts[0].extras["member_ids"] == ["A", "B"]
 
@@ -286,7 +288,7 @@ def test_typed_seg_run_breaks_on_inline_note_at_p_level():
         </p>
     """))
     pairs = _seg_run_pairs(_markers(div))
-    assert pairs == [("A", "A_end"), ("B", "B_end")]
+    assert pairs == [("A_start", "A_end"), ("B_start", "B_end")]
 
 
 def test_typed_seg_run_closes_at_paragraph_end():
@@ -310,7 +312,7 @@ def test_typed_seg_run_closes_at_paragraph_end():
     # Sequence sanity: never see two tls:seg-end without an intervening
     # tls:seg-start.
     pairs = _seg_run_pairs(_markers(div))
-    assert pairs == [("A", "B_end"), ("C", "C_end")]
+    assert pairs == [("A_start", "B_end"), ("C_start", "C_end")]
 
 
 def test_typed_seg_run_preserves_per_seg_marker():

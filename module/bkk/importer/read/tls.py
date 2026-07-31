@@ -1696,10 +1696,16 @@ def _emit_seg_with_run(seg, state: dict, text_buf: list[str],
     else:
         # Different type (or first typed seg in this <p>): close, then open.
         _close_seg_run(state, markers, offset_fn)
+        start_id, start_extras = _dedup_id(
+            f"{seg_id}_start" if seg_id else "",
+            seen_ids,
+        )
+        start_extras = dict(start_extras)
+        start_extras.update({"seg_type": seg_type, "member_ids": [seg_id]})
         start_marker = Marker(
             type="tls:seg-start", offset=offset_fn(),
-            content="", id=seg_id,
-            extras={"seg_type": seg_type, "member_ids": [seg_id]},
+            content="", id=start_id,
+            extras=start_extras,
         )
         markers.append(start_marker)
         state["run_type"] = seg_type
