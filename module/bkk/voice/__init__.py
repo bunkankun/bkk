@@ -16,9 +16,14 @@ Public surface:
 - :func:`bkk.voice.derive_tls_seg.derive_voice_markers_from_tls_segments`
   — turns typed TLS segment runs into ``root`` / ``commentary`` voices
   when ``tls:seg-start`` carries ``seg_type=root`` or ``seg_type=comm``.
+- :func:`bkk.voice.derive_punctuation.derive_voice_markers_from_punctuation`
+  — turns semantic punctuation pairs such as ``《``...``》`` into source-tagged
+  ``title`` voices. The CLI's default ``parens`` source includes these rules;
+  ``--source punctuation`` applies only these source-tagged rules.
 - ``bkk voice`` CLI — applies the requested derivation
-  (``--source parens|indent|indent-headings|tls-seg|all|auto``) across an
-  already-imported bundle and rewrites each juan with refreshed hashes.
+  (``--source parens|indent|indent-headings|tls-seg|dictionary|punctuation|all|auto``)
+  across an already-imported bundle and rewrites each juan with refreshed
+  hashes.
 
 The derive functions are importer-agnostic so a future KRP-importer pass
 can emit voice markers in the same form without duplicating logic.

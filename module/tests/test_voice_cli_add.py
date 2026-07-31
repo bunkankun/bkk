@@ -238,6 +238,133 @@ def test_add_can_exclude_tls_note_markers(tmp_path: Path) -> None:
     assert not any(marker.get("type") == "voice" for marker in markers)
 
 
+def test_add_parens_also_derives_punctuation_title_voice(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {"type": "punctuation", "offset": 1, "content": "(", "id": ""},
+            {"type": "punctuation", "offset": 3, "content": ")", "id": ""},
+            {"type": "punctuation", "offset": 5, "content": "《", "id": ""},
+            {"type": "punctuation", "offset": 8, "content": "》", "id": ""},
+        ],
+    )
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="parens",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"note": 1, "title": 1}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert {
+        "type": "voice",
+        "offset": 1,
+        "length": 2,
+        "name": "note",
+        "id": "n1",
+    } in markers
+    assert {
+        "type": "voice",
+        "offset": 5,
+        "length": 3,
+        "name": "title",
+        "id": "t1",
+        "source": "punctuation",
+    } in markers
+
+
+def test_add_punctuation_derives_title_voice(tmp_path: Path) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {"type": "punctuation", "offset": 2, "content": "《", "id": ""},
+            {"type": "punctuation", "offset": 8, "content": "》", "id": ""},
+        ],
+    )
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="punctuation",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"title": 1}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert {
+        "type": "voice",
+        "offset": 2,
+        "length": 6,
+        "name": "title",
+        "id": "t1",
+        "source": "punctuation",
+    } in markers
+
+
+def test_add_punctuation_preserves_existing_non_punctuation_voice(
+    tmp_path: Path,
+) -> None:
+    bundle = tmp_path / TEXT_ID
+    manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
+        bundle,
+        TEXT_ID,
+        markers=[
+            {"type": "voice", "offset": 0, "length": 2, "name": "note", "id": "n1"},
+            {"type": "punctuation", "offset": 2, "content": "《", "id": ""},
+            {"type": "punctuation", "offset": 8, "content": "》", "id": ""},
+        ],
+    )
+
+    stats = _process_one(
+        bundle,
+        manifest_path,
+        TEXT_ID,
+        short=None,
+        source="punctuation",
+        force=False,
+        dry_run=False,
+    )
+
+    assert stats["by_name"] == {"title": 1}
+    manifest = yaml.safe_load(
+        (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    markers = _asset_markers(bundle, manifest, 1)
+    assert {
+        "type": "voice",
+        "offset": 0,
+        "length": 2,
+        "name": "note",
+        "id": "n1",
+    } in markers
+    assert {
+        "type": "voice",
+        "offset": 2,
+        "length": 6,
+        "name": "title",
+        "id": "t1",
+        "source": "punctuation",
+    } in markers
+
+
 def test_add_tls_seg_derives_root_and_commentary(tmp_path: Path) -> None:
     bundle = tmp_path / TEXT_ID
     manifest_path, _original_juan_hash = _write_bundle_with_marker_asset_for(
@@ -587,6 +714,20 @@ def test_add_parser_accepts_tls_note_toggle() -> None:
 
     assert disabled.tls_notes is False
     assert enabled.tls_notes is True
+
+
+def test_add_parser_accepts_punctuation_source() -> None:
+    from bkk.voice.cli import build_parser
+
+    args = build_parser().parse_args([
+        "add",
+        "--bundle",
+        "/tmp/TSTV001",
+        "--source",
+        "punctuation",
+    ])
+
+    assert args.source == "punctuation"
 
 
 def test_add_juan_selector_can_stand_in_for_text_id() -> None:

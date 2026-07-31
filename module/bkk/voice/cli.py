@@ -22,6 +22,8 @@ from ``.bkkrc`` unless ``--out`` is passed.
   ``note`` spans for ``(``…``)`` text and ``emphasis`` spans for
   ``▲``…``)`` text. The deriver makes no claim about whether a note span
   is commentary, gloss, or alternate reading — only that it's bracketed.
+  It also includes the semantic punctuation rules from ``punctuation``, such
+  as ``title`` spans for ``《``…``》`` text.
 - ``indent`` — from ``line-break``/``indent`` markers, emits
   ``root``/``commentary``/``head``/``attribution`` for sources whose
   layout indents each textual layer differently.
@@ -32,6 +34,8 @@ from ``.bkkrc`` unless ``--out`` is passed.
 - ``dictionary`` — after generic ``note`` voices exist, detects definition
   notes and emits linked ``lemma``/``def`` spans with
   ``source="dictionary"``.
+- ``punctuation`` — from source punctuation marker pairs, emits
+  ``title`` spans for ``《``…``》`` text with ``source="punctuation"``.
 - ``all`` — parens plus explicit TLS segment voicing when present,
   otherwise indent voicing. Heterogeneous overlaps are written through
   with a per-juan stderr warning.
@@ -100,6 +104,11 @@ from .derive_indent_headings import (
     derive_voice_markers_from_indent_headings,
     has_indent_heading_profile,
 )
+from .derive_punctuation import (
+    PUNCTUATION_VOICE_SOURCE,
+    derive_voice_markers_from_punctuation,
+    derive_voice_markers_from_punctuation_best_effort,
+)
 from .derive_tls_seg import (
     derive_voice_markers_from_tls_segments,
     derive_voice_markers_from_tls_segments_best_effort,
@@ -118,6 +127,7 @@ _VALID_SOURCES = (
     "indent-headings",
     "tls-seg",
     "dictionary",
+    "punctuation",
     "all",
     "auto",
 )
@@ -170,10 +180,13 @@ def build_parser() -> argparse.ArgumentParser:
     _add_bundle_selector(pa)
     pa.add_argument(
         "--source", dest="source", choices=_VALID_SOURCES, default=None,
-        help="derivation source: 'parens' (default; punctuation pairs), "
+        help="derivation source: 'parens' (default; note/emphasis punctuation "
+             "pairs plus semantic punctuation), "
              "'indent' (layout indentation), 'indent-headings' (short "
              "CJK-indent section labels), 'tls-seg' (typed TLS segment "
              "runs), 'dictionary' (lemma spans for lemma-repeat notes), "
+             "'punctuation' (semantic punctuation pairs such as title "
+             "brackets), "
              "'all' (parens + explicit TLS segments, falling back to indent), "
              "or 'auto' (choose TLS, heading indents, or generic indent). "
              "Falls back to voice.source in .bkkrc; otherwise 'parens'.",
@@ -1153,8 +1166,11 @@ def _derive_for_bucket(
     """
     text_len = len(text)
     if source == "parens":
-        return derive_voice_markers(
-            text_len, markers, include_tls_notes=include_tls_notes,
+        return (
+            derive_voice_markers(
+                text_len, markers, include_tls_notes=include_tls_notes,
+            )
+            + derive_voice_markers_from_punctuation(text_len, markers)
         )
     if source == "indent":
         return derive_voice_markers_from_indent(text_len, markers)
@@ -1164,6 +1180,8 @@ def _derive_for_bucket(
         return derive_voice_markers_from_tls_segments(text_len, markers)
     if source == "dictionary":
         return derive_dictionary_voice_markers(text, markers)
+    if source == "punctuation":
+        return derive_voice_markers_from_punctuation(text_len, markers)
     if source == "auto":
         return _derive_auto_for_bucket(text, markers)
     if source == "all":
@@ -1172,12 +1190,15 @@ def _derive_for_bucket(
                 text_len, markers, include_tls_notes=include_tls_notes,
             )
         )
+        punctuation_voices = list(
+            derive_voice_markers_from_punctuation(text_len, markers)
+        )
         tls_voices = list(derive_voice_markers_from_tls_segments(text_len, markers))
         layout_voices = (
             tls_voices if tls_voices
             else list(derive_voice_markers_from_indent(text_len, markers))
         )
-        return paren_voices + layout_voices
+        return paren_voices + punctuation_voices + layout_voices
     raise ValueError(f"unknown voice source: {source!r}")
 
 
@@ -1187,11 +1208,22 @@ def _derive_for_bucket_best_effort(
     """Derive voices and return recoverable problems for ``bkk voice add``."""
     text_len = len(text)
     if source == "parens":
-        return derive_voice_markers_best_effort(
+        paren_voices, paren_problems = derive_voice_markers_best_effort(
             text_len, markers, include_tls_notes=include_tls_notes,
+        )
+        punctuation_voices, punctuation_problems = (
+            derive_voice_markers_from_punctuation_best_effort(text_len, markers)
+        )
+        return (
+            list(paren_voices) + list(punctuation_voices),
+            paren_problems + punctuation_problems,
         )
     if source == "tls-seg":
         return derive_voice_markers_from_tls_segments_best_effort(
+            text_len, markers,
+        )
+    if source == "punctuation":
+        return derive_voice_markers_from_punctuation_best_effort(
             text_len, markers,
         )
     if source == "indent-headings":
@@ -1202,6 +1234,9 @@ def _derive_for_bucket_best_effort(
         paren_voices, problems = derive_voice_markers_best_effort(
             text_len, markers, include_tls_notes=include_tls_notes,
         )
+        punctuation_voices, punctuation_problems = (
+            derive_voice_markers_from_punctuation_best_effort(text_len, markers)
+        )
         tls_voices, tls_problems = derive_voice_markers_from_tls_segments_best_effort(
             text_len, markers,
         )
@@ -1211,8 +1246,9 @@ def _derive_for_bucket_best_effort(
         )
         return (
             list(paren_voices)
+            + list(punctuation_voices)
             + layout_voices,
-            problems + tls_problems,
+            problems + punctuation_problems + tls_problems,
         )
     return _derive_for_bucket(
         source, text, markers, include_tls_notes=include_tls_notes,
@@ -1295,6 +1331,8 @@ def _is_replaceable_voice(marker: object, source: str | None) -> bool:
         return False
     if source == "dictionary":
         return marker.get("source") == "dictionary"
+    if source == "punctuation":
+        return marker.get("source") == PUNCTUATION_VOICE_SOURCE
     if source == "indent-headings":
         return marker.get("source") == HEADING_INDENT_VOICE_SOURCE
     if source == "auto":
