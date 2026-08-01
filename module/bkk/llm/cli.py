@@ -96,10 +96,23 @@ def _add_punctuation_task(parser: argparse.ArgumentParser) -> None:
         default=1,
         help="number of text-level batch workflows to run in parallel",
     )
+    pb.add_argument(
+        "--best-effort",
+        action="store_true",
+        help=(
+            "after all retries, write partial markers plus llm-error markers "
+            "for chunks that still fail"
+        ),
+    )
 
     pc = punct_sub.add_parser("collect", help="collect an async batch result")
     pc.add_argument("state", type=Path, help="state YAML written by submit")
     _add_settings(pc, selection=False)
+    pc.add_argument(
+        "--best-effort",
+        action="store_true",
+        help="write partial markers plus llm-error markers for failed chunks",
+    )
     pi = punct_sub.add_parser(
         "inspect", help="inspect async batch status and diagnostics",
     )
@@ -162,7 +175,10 @@ def run(argv: list[str] | None = None) -> int:
                 retry_state = retry_failed_batch(args.state, settings=settings)
                 print(f"submitted retry batch; state: {retry_state}")
                 return 0
-            return collect_batch(args.state, settings=settings)
+            return collect_batch(
+                args.state, settings=settings,
+                best_effort=bool(getattr(args, "best_effort", False)),
+            )
         settings = settings_from_rc(
             rc,
             model=getattr(args, "model", None),
@@ -184,6 +200,7 @@ def run(argv: list[str] | None = None) -> int:
                     poll_seconds=int(args.poll_seconds),
                     retries=int(args.retries),
                     jobs=int(args.jobs),
+                    best_effort=bool(args.best_effort),
                 ),
             )
         if (

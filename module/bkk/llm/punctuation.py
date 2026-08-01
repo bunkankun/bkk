@@ -145,10 +145,17 @@ class PunctuationValidationError(ValueError):
 
 
 @dataclass(frozen=True)
+class PunctuationScanResult:
+    markers: list[dict[str, Any]]
+    error: PunctuationValidationError | None = None
+
+
+@dataclass(frozen=True)
 class BatchWorkflowOptions:
     poll_seconds: int = DEFAULT_BATCH_POLL_SECONDS
     retries: int = DEFAULT_BATCH_RETRIES
     jobs: int = DEFAULT_BATCH_JOBS
+    best_effort: bool = False
 
 
 @dataclass(frozen=True)
@@ -690,6 +697,16 @@ def _run_batch_workflow_for_bundle(
         if message is None:
             return BatchWorkflowResult(text_id, True, state_path, attempts)
 
+    if options.best_effort and message == "batch had rejected or missing chunks":
+        print(f"[{text_id}] best-effort collection after final retry: {message}")
+        collect_batch(
+            state_path, settings=settings, client=client, best_effort=True,
+        )
+        return BatchWorkflowResult(
+            text_id, True, state_path, attempts,
+            message="best-effort collection wrote partial assets",
+        )
+
     report_path = _write_workflow_failure_report(state_path, message)
     return BatchWorkflowResult(
         text_id, False, state_path, attempts,
@@ -795,6 +812,7 @@ def collect_batch(
     *,
     settings: LlmSettings | None = None,
     client: LlmClient | None = None,
+    best_effort: bool = False,
 ) -> int:
     state = yaml.load(Path(state_path).read_text(encoding="utf-8"), Loader=_YAML_LOADER)
     if not isinstance(state, dict):
@@ -850,6 +868,7 @@ def collect_batch(
             Path(juan_dir), Path(manifest_path), text_id, short,
             scope_tasks, outputs, settings=settings, prompt_text=prompt_text,
             batch_id=batch_id, preexisting_issues=scope_issues,
+            best_effort=best_effort,
         )
         total_markers += result["markers"]
         total_issues += len(result["issues"])
@@ -863,7 +882,7 @@ def collect_batch(
         f"{total_markers} marker(s), {total_issues} rejected chunk(s)"
     )
     print(f"clear-text report: {report_path}")
-    return 1 if total_issues else 0
+    return 0 if best_effort else (1 if total_issues else 0)
 
 
 def inspect_batch(
@@ -999,6 +1018,7 @@ def write_outputs_for_scope(
     prompt_text: str,
     batch_id: str | None,
     preexisting_issues: list[ValidationIssue] | None = None,
+    best_effort: bool = False,
 ) -> dict[str, Any]:
     manifest = _yaml_load(manifest_path)
     tasks_by_seq: dict[int, list[ChunkTask]] = {}
@@ -1025,6 +1045,12 @@ def write_outputs_for_scope(
         for task in seq_tasks:
             existing_issue = issue_by_custom_id.get(task.custom_id)
             if existing_issue is not None:
+                if best_effort:
+                    markers_by_bucket[task.bucket].append(
+                        _llm_error_marker_for_issue(
+                            task, existing_issue, model=settings.model,
+                        )
+                    )
                 chunk_rows.append(_chunk_row(
                     task, status=existing_issue.code,
                     message=existing_issue.message,
@@ -1036,6 +1062,12 @@ def write_outputs_for_scope(
                     task.custom_id, "missing-output",
                     "batch output did not include this custom_id",
                 ))
+                if best_effort:
+                    markers_by_bucket[task.bucket].append(
+                        _llm_error_marker_for_issue(
+                            task, issues[-1], model=settings.model,
+                        )
+                    )
                 chunk_rows.append(_chunk_row(task, status="missing-output"))
                 continue
             try:
@@ -1047,18 +1079,31 @@ def write_outputs_for_scope(
                     include_core_end=task.core_end == task.stream_end,
                 )
             except ValueError as exc:
-                issues.append(_validation_issue_for_output(task, output, exc))
+                issue = _validation_issue_for_output(task, output, exc)
+                issues.append(issue)
+                if best_effort:
+                    scan = best_effort_markers_from_punctuated_output(
+                        task.input_text, output,
+                        context_start=task.context_start,
+                        core_start=task.core_start,
+                        core_end=task.core_end,
+                        include_core_end=task.core_end == task.stream_end,
+                    )
+                    usable_markers = _usable_markers_before_issue(
+                        task, scan.markers, issue,
+                    )
+                    _annotate_llm_markers(usable_markers, model=settings.model)
+                    markers_by_bucket[task.bucket].extend(usable_markers)
+                    markers_by_bucket[task.bucket].append(
+                        _llm_error_marker_for_issue(
+                            task, issue, model=settings.model,
+                        )
+                    )
                 chunk_rows.append(
                     _chunk_row(task, status="rejected", message=str(exc))
                 )
                 continue
-            for marker in markers:
-                marker["source"] = (
-                    settings.model
-                    if marker.get("type") == "variant"
-                    else REFERENCE_ROLE
-                )
-                marker["model"] = settings.model
+            _annotate_llm_markers(markers, model=settings.model)
             markers_by_bucket[task.bucket].extend(markers)
             chunk_rows.append(
                 _chunk_row(task, status="accepted", marker_count=len(markers))
@@ -1129,12 +1174,14 @@ def chunk_region(
 ) -> list[ChunkTask]:
     abs_regions = _split_by_boundaries(region.start, region.end, boundaries)
     out: list[ChunkTask] = []
+    before_overlap = overlap // 2
+    after_overlap = overlap - before_overlap
     for start, end in abs_regions:
         pos = start
         while pos < end:
             core_end = min(pos + chunk_chars, end)
-            context_start = max(region.start, pos - overlap)
-            context_end = min(region.end, core_end + overlap)
+            context_start = max(region.start, pos - before_overlap)
+            context_end = min(region.end, core_end + after_overlap)
             out.append(ChunkTask(
                 custom_id="",
                 text_id=region.text_id,
@@ -1166,13 +1213,75 @@ def markers_from_punctuated_output(
     core_end: int,
     include_core_end: bool = True,
 ) -> list[dict[str, Any]]:
+    return _scan_punctuated_output(
+        original, output,
+        context_start=context_start,
+        core_start=core_start,
+        core_end=core_end,
+        include_core_end=include_core_end,
+        fail_fast=True,
+    ).markers
+
+
+def best_effort_markers_from_punctuated_output(
+    original: str,
+    output: str,
+    *,
+    context_start: int,
+    core_start: int,
+    core_end: int,
+    include_core_end: bool = True,
+) -> PunctuationScanResult:
+    return _scan_punctuated_output(
+        original, output,
+        context_start=context_start,
+        core_start=core_start,
+        core_end=core_end,
+        include_core_end=include_core_end,
+        fail_fast=False,
+    )
+
+
+def _scan_punctuated_output(
+    original: str,
+    output: str,
+    *,
+    context_start: int,
+    core_start: int,
+    core_end: int,
+    include_core_end: bool,
+    fail_fast: bool,
+) -> PunctuationScanResult:
     output = output.replace("\r\n", "\n").replace("\r", "\n")
     markers: list[dict[str, Any]] = []
-    i = 0
-    j = 0
+    core_rel_start = max(0, core_start - context_start)
+    i = core_rel_start
+    j = _output_start_for_core(original, output, core_rel_start)
     variant_run_len = 0
     variant_run_input_start: int | None = None
     variant_run_output_start: int | None = None
+
+    def fail(
+        message: str,
+        *,
+        input_index: int | None = None,
+        output_index: int | None = None,
+        validation_index: int | None = None,
+    ) -> PunctuationScanResult:
+        exc = PunctuationValidationError(
+            message, input_index=input_index, output_index=output_index,
+        )
+        check_index = input_index if validation_index is None else validation_index
+        if check_index is not None:
+            absolute = context_start + check_index
+            if not _in_owned_core(
+                absolute, core_start, core_end, include_core_end,
+            ):
+                return PunctuationScanResult(markers)
+        if fail_fast:
+            raise exc
+        return PunctuationScanResult(markers, exc)
+
     while j < len(output):
         ch = output[j]
         if i < len(original) and ch == original[i]:
@@ -1188,7 +1297,7 @@ def markers_from_punctuated_output(
             while run_end < len(output) and output[run_end] == "\n":
                 run_end += 1
             if run_end - j < 2:
-                raise PunctuationValidationError(
+                return fail(
                     f"unexpected single newline at output index {j}",
                     input_index=i,
                     output_index=j,
@@ -1224,12 +1333,13 @@ def markers_from_punctuated_output(
                     j if variant_run_output_start is None
                     else variant_run_output_start
                 )
-                raise PunctuationValidationError(
+                return fail(
                     "output diverged for more than "
                     f"{MAX_ADJACENT_VARIANT_CHARS} adjacent original "
                     f"character(s) starting at input index {input_start}",
                     input_index=input_start,
                     output_index=output_start,
+                    validation_index=i,
                 )
             if _in_owned_core(absolute, core_start, core_end, include_core_end):
                 markers.append({
@@ -1242,18 +1352,31 @@ def markers_from_punctuated_output(
             i += 1
             j += 1
             continue
-        raise PunctuationValidationError(
+        return fail(
             f"unexpected character {ch!r} at output index {j}",
             input_index=i,
             output_index=j,
         )
     if i != len(original):
-        raise PunctuationValidationError(
+        return fail(
             f"output omitted {len(original) - i} original character(s)",
             input_index=i,
             output_index=len(output),
         )
-    return markers
+    return PunctuationScanResult(markers)
+
+
+def _output_start_for_core(original: str, output: str, core_rel_start: int) -> int:
+    if core_rel_start <= 0:
+        return 0
+    if core_rel_start >= len(original):
+        return len(output)
+    core_prefix = original[core_rel_start:core_rel_start + 4]
+    for size in range(len(core_prefix), 0, -1):
+        pos = output.find(core_prefix[:size])
+        if pos >= 0:
+            return pos
+    return 0
 
 
 def parse_batch_output(output_text: str) -> tuple[dict[str, str], list[ValidationIssue]]:
@@ -1393,6 +1516,73 @@ def _validation_issue_for_output(
     if isinstance(exc, PunctuationValidationError):
         details = _validation_context_details(task, output, exc)
     return ValidationIssue(task.custom_id, "invalid-output", str(exc), details)
+
+
+def _annotate_llm_markers(markers: list[dict[str, Any]], *, model: str) -> None:
+    for marker in markers:
+        marker["source"] = (
+            model if marker.get("type") == "variant" else REFERENCE_ROLE
+        )
+        marker["model"] = model
+
+
+def _usable_markers_before_issue(
+    task: ChunkTask,
+    markers: list[dict[str, Any]],
+    issue: ValidationIssue,
+) -> list[dict[str, Any]]:
+    offending_offset = _issue_absolute_offset(issue)
+    if offending_offset is None:
+        return list(markers)
+    usable: list[dict[str, Any]] = []
+    for marker in markers:
+        offset = _marker_offset(marker)
+        if offset is not None and offset < offending_offset:
+            usable.append(marker)
+    return usable
+
+
+def _llm_error_marker_for_issue(
+    task: ChunkTask,
+    issue: ValidationIssue,
+    *,
+    model: str,
+) -> dict[str, Any]:
+    center = _issue_absolute_offset(issue)
+    if center is None:
+        center = task.core_start
+    center = min(max(center, 0), task.stream_end)
+    start = max(0, center - 10)
+    end = min(task.stream_end, center + 10)
+    if end <= start and task.stream_end > 0:
+        if start >= task.stream_end:
+            start = max(0, task.stream_end - 1)
+        end = min(task.stream_end, start + 1)
+    return {
+        "type": "llm-error",
+        "offset": start,
+        "length": max(0, end - start),
+        "issue": {
+            "code": issue.code,
+            "message": issue.message,
+        },
+        "model": model,
+    }
+
+
+def _issue_absolute_offset(issue: ValidationIssue) -> int | None:
+    details = issue.details or {}
+    input_context = details.get("input_context")
+    if isinstance(input_context, dict):
+        offset = input_context.get("absolute_offset")
+        if isinstance(offset, int):
+            return offset
+    return None
+
+
+def _marker_offset(marker: dict[str, Any]) -> int | None:
+    offset = marker.get("offset")
+    return offset if isinstance(offset, int) else None
 
 
 def _validation_context_details(

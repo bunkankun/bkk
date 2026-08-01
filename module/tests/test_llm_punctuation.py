@@ -194,6 +194,53 @@ def test_punctuated_output_becomes_markers_and_records_variants() -> None:
     else:  # pragma: no cover
         raise AssertionError("extra output character was accepted")
 
+    assert punctuation.markers_from_punctuated_output(
+        "甲乙丙丁",
+        "甲，乙丙丁戊",
+        context_start=0,
+        core_start=0,
+        core_end=3,
+        include_core_end=False,
+    ) == [
+        {"type": "punctuation", "offset": 1, "content": "，"},
+    ]
+
+    assert punctuation.markers_from_punctuated_output(
+        "甲乙丙丁",
+        "甲，乙丙",
+        context_start=0,
+        core_start=0,
+        core_end=3,
+        include_core_end=False,
+    ) == [
+        {"type": "punctuation", "offset": 1, "content": "，"},
+    ]
+
+    try:
+        punctuation.markers_from_punctuated_output(
+            "甲乙丙丁",
+            "甲乙",
+            context_start=0,
+            core_start=0,
+            core_end=3,
+            include_core_end=False,
+        )
+    except ValueError as exc:
+        assert "output omitted" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("omitted core output was accepted")
+
+    assert punctuation.markers_from_punctuated_output(
+        "甲乙丙丁",
+        "X甲乙，丙丁",
+        context_start=0,
+        core_start=1,
+        core_end=3,
+        include_core_end=False,
+    ) == [
+        {"type": "punctuation", "offset": 2, "content": "，"},
+    ]
+
 
 def test_extract_stream_regions_separates_note_and_commentary_and_excludes_head() -> None:
     markers = [
@@ -232,7 +279,7 @@ def test_chunk_region_uses_head_boundaries_and_context_overlap() -> None:
         text="甲乙丙丁戊己庚辛壬癸",
     )
 
-    chunks = punctuation.chunk_region(region, [0, 4, 10], chunk_chars=3, overlap=1)
+    chunks = punctuation.chunk_region(region, [0, 4, 10], chunk_chars=3, overlap=2)
 
     assert [(c.core_start, c.core_end, c.context_start, c.context_end, c.input_text) for c in chunks] == [
         (0, 3, 0, 4, "甲乙丙丁"),
@@ -920,3 +967,88 @@ def test_punctuation_batch_workflow_reports_remaining_problems(
     assert report["status"] == "failed"
     assert report["problems"][0]["id"] == "TEST0007:bkk:001:body:main:1"
     assert report["problems"][0]["status"] == "rejected"
+
+
+def test_punctuate_batch_best_effort_retries_then_writes_partial_markers(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0008", "甲乙丙丁戊己")
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+    submitted: list[str] = []
+
+    class FakeClient:
+        def submit_batch(self, *, requests_path: Path, metadata: dict | None = None) -> dict:
+            submitted.append(requests_path.read_text(encoding="utf-8"))
+            return {"id": f"batch_{len(submitted)}", "status": "validating"}
+
+        def retrieve_batch(self, batch_id: str) -> dict:
+            return {
+                "id": batch_id,
+                "status": "completed",
+                "output_file_id": f"file_{batch_id}",
+                "request_counts": {"completed": 1, "failed": 0, "total": 1},
+            }
+
+        def download_file_text(self, file_id: str) -> str:
+            return json.dumps({
+                "custom_id": "TEST0008:bkk:001:body:main:1",
+                "response": {
+                    "status_code": 200,
+                    "body": {"output_text": "甲，乙丙丁戊"},
+                },
+            }, ensure_ascii=False) + "\n"
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "batch",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+        "--poll-seconds",
+        "0",
+        "--retries",
+        "1",
+        "--best-effort",
+    ])
+
+    assert rc == 0
+    assert len(submitted) == 2
+    out = capsys.readouterr().out
+    assert "retry 1/1" in out
+    assert "best-effort collection after final retry" in out
+    assert not list((bundle / ".bkk-llm").glob("*.workflow-report.yaml"))
+
+    manifest = yaml.safe_load(
+        (bundle / "TEST0008.manifest.yaml").read_text(encoding="utf-8")
+    )
+    ref = manifest["assets"]["references"][0]
+    asset = yaml.safe_load((bundle / ref["filename"]).read_text(encoding="utf-8"))
+    assert asset["status"] == "partial"
+    assert asset["chunks"][0]["status"] == "rejected"
+    body_markers = asset["markers"]["body"]
+    punctuation_marker = next(
+        marker for marker in body_markers if marker["type"] == "punctuation"
+    )
+    assert punctuation_marker["offset"] == 1
+    assert punctuation_marker["content"] == "，"
+    error_marker = next(
+        marker for marker in body_markers if marker["type"] == "llm-error"
+    )
+    assert error_marker["offset"] == 0
+    assert error_marker["length"] == 6
+    assert error_marker["issue"] == {
+        "code": "invalid-output",
+        "message": "output omitted 1 original character(s)",
+    }
+    assert error_marker["model"] == "test-model"
