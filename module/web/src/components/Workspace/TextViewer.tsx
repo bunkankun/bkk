@@ -25,6 +25,10 @@ import type {
 } from "../../api/types";
 import { krRefToChar } from "../../lib/pua";
 import {
+  PAGE_BREAK_RENDER_TOKEN,
+  sortPunctuationRenderOrder,
+} from "../../lib/punctuationOrder";
+import {
   isResizing,
   useWorkspace,
   workspace,
@@ -293,12 +297,19 @@ export function buildRenderedChars(
   const charAtOffset = new Map(chars.map((c) => [c.srcOffset, originals.get(c.srcOffset) ?? c.ch]));
   const voices = voiceRanges(markers);
 
-  type PunctInject = { offset: number; content: string };
-  type PageInject = { offset: number; id: string };
-  type LayoutInject = { offset: number; content: string; type: "indent" };
-  const punctInjects: PunctInject[] = [];
-  const pageInjects: PageInject[] = [];
-  const layoutInjects: LayoutInject[] = [];
+  type RenderInject =
+    | { kind: "punct"; offset: number; ch: string; index: number }
+    | { kind: "page"; offset: number; ch: string; index: number; id: string }
+    | {
+        kind: "layout";
+        offset: number;
+        ch: string;
+        index: number;
+        content: string;
+        type: "indent";
+      };
+  const injects: RenderInject[] = [];
+  let markerIndex = 0;
   for (const m of markers) {
     const off = typeof m.offset === "number" ? m.offset : 0;
     if (m.type === "punctuation") {
@@ -306,75 +317,107 @@ export function buildRenderedChars(
       if (typeof raw !== "string" || raw.length === 0) continue;
       const here = charAtOffset.get(off);
       if (here && PUNCT_RE.test(here)) continue;
-      punctInjects.push({ offset: off, content: raw });
+      const contentChars = Array.from(raw);
+      for (const [contentIndex, ch] of contentChars.entries()) {
+        injects.push({
+          kind: "punct",
+          offset: off,
+          ch,
+          index: markerIndex + contentIndex / Math.max(1, contentChars.length),
+        });
+      }
+      markerIndex++;
     } else if (m.type === "page-break") {
       const id = typeof m.id === "string" ? m.id : "";
       if (!id) continue;
-      pageInjects.push({ offset: off, id });
+      injects.push({
+        kind: "page",
+        offset: off,
+        ch: PAGE_BREAK_RENDER_TOKEN,
+        index: markerIndex,
+        id,
+      });
+      markerIndex++;
     } else if (lineMode === "phrase" && m.type === "indent") {
       const content = typeof m.content === "string" && m.content.length > 0
         ? m.content
         : "\u3000";
-      layoutInjects.push({ offset: off, content, type: "indent" });
+      const contentChars = Array.from(content);
+      for (const [contentIndex, ch] of contentChars.entries()) {
+        injects.push({
+          kind: "layout",
+          offset: off,
+          ch,
+          index: markerIndex + contentIndex / Math.max(1, contentChars.length),
+          content: ch,
+          type: "indent",
+        });
+      }
+      markerIndex++;
     }
   }
-  punctInjects.sort((a, b) => a.offset - b.offset);
-  pageInjects.sort((a, b) => a.offset - b.offset);
-  layoutInjects.sort((a, b) => a.offset - b.offset);
+  injects.sort((a, b) => a.offset - b.offset || a.index - b.index);
+  const orderedInjects: RenderInject[] = [];
+  for (let start = 0; start < injects.length;) {
+    let end = start + 1;
+    while (
+      end < injects.length &&
+      injects[end].offset === injects[start].offset
+    ) {
+      end += 1;
+    }
+    orderedInjects.push(
+      ...sortPunctuationRenderOrder(injects.slice(start, end)),
+    );
+    start = end;
+  }
 
   const out: RenderedChar[] = [];
-  let punctIdx = 0;
-  let pageIdx = 0;
-  let layoutIdx = 0;
+  let injectIdx = 0;
   let charIdx = 0;
   for (let i = 0; i <= bodyLength; i++) {
-    // Page anchors first so they appear at the top of any cluster of
-    // injections — natural reading order makes "current page" track the
-    // newly-entered page before its punctuation/text.
-    while (pageIdx < pageInjects.length && pageInjects[pageIdx].offset === i) {
-      const p = pageInjects[pageIdx];
-      out.push({
-        ch: "",
-        srcOffset: null,
-        srcEndOffset: null,
-        isPunct: false,
-        isNewline: false,
-        markerOffset: p.offset,
-        pageAnchor: { id: p.id, offset: p.offset, label: pageLabel(p.id) },
-      });
-      pageIdx++;
-    }
-    while (layoutIdx < layoutInjects.length && layoutInjects[layoutIdx].offset === i) {
-      const layout = layoutInjects[layoutIdx];
-      const voice = voiceAtOffset(layout.offset, voices, true);
-      out.push({
-        ch: layout.content,
-        srcOffset: null,
-        srcEndOffset: null,
-        isPunct: false,
-        isNewline: false,
-        markerOffset: layout.offset,
-        layout: { type: layout.type },
-        voice,
-        noteVoice: voice === "note",
-      });
-      layoutIdx++;
-    }
-    while (punctIdx < punctInjects.length && punctInjects[punctIdx].offset === i) {
-      const voice = voiceAtOffset(punctInjects[punctIdx].offset, voices, true);
-      for (const ch of [...punctInjects[punctIdx].content]) {
+    while (injectIdx < orderedInjects.length && orderedInjects[injectIdx].offset === i) {
+      const inject = orderedInjects[injectIdx];
+      const voice = voiceAtOffset(inject.offset, voices, true);
+      if (inject.kind === "page") {
         out.push({
-          ch,
+          ch: "",
+          srcOffset: null,
+          srcEndOffset: null,
+          isPunct: false,
+          isNewline: false,
+          markerOffset: inject.offset,
+          pageAnchor: {
+            id: inject.id,
+            offset: inject.offset,
+            label: pageLabel(inject.id),
+          },
+        });
+      } else if (inject.kind === "layout") {
+        out.push({
+          ch: inject.content,
+          srcOffset: null,
+          srcEndOffset: null,
+          isPunct: false,
+          isNewline: false,
+          markerOffset: inject.offset,
+          layout: { type: inject.type },
+          voice,
+          noteVoice: voice === "note",
+        });
+      } else {
+        out.push({
+          ch: inject.ch,
           srcOffset: null,
           srcEndOffset: null,
           isPunct: true,
           isNewline: false,
-          markerOffset: punctInjects[punctIdx].offset,
+          markerOffset: inject.offset,
           voice,
           noteVoice: voice === "note",
         });
       }
-      punctIdx++;
+      injectIdx++;
     }
     while (charIdx < chars.length && chars[charIdx].srcOffset === i) {
       const c = chars[charIdx];

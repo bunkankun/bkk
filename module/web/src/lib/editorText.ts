@@ -1,5 +1,6 @@
 import type { JuanMarker } from "../api/types";
 import type { EditableMarker } from "./editSplices";
+import { sortPunctuationRenderOrder } from "./punctuationOrder";
 
 // An empty string is an internal name for the backward-compatible default
 // punctuation set. Persisted default markers deliberately omit `set`.
@@ -69,6 +70,7 @@ export function punctuationSets(markers: EditableMarker[]): string[] {
 
 function layoutMarkerContent(marker: JuanMarker): string | null {
   if (marker.type === "line-break") return "\n";
+  if (marker.type === "paragraph-break") return "\n";
   if (marker.type === "indent") {
     const content = marker.content;
     return typeof content === "string" && content ? content : "\u3000";
@@ -83,7 +85,14 @@ export function renderEditorText(
   showLayoutMarkers = false,
 ): RenderedEditorText {
   const canonical = Array.from(canonicalText);
-  const atOffset = new Map<number, EditableMarker[]>();
+  type RenderableMarker = {
+    marker: EditableMarker;
+    content: string;
+    kind: RenderedEditorUnit["kind"];
+    index: number;
+  };
+  const atOffset = new Map<number, RenderableMarker[]>();
+  let markerIndex = 0;
   for (const marker of markers) {
     const offset = marker.data.offset;
     if (
@@ -96,9 +105,20 @@ export function renderEditorText(
     const isVisibleLayout =
       showLayoutMarkers && layoutMarkerContent(marker.data) != null;
     if (!isVisiblePunctuation && !isVisibleLayout) continue;
+    const isLayout = showLayoutMarkers && layoutMarkerContent(marker.data) != null;
+    const content = isLayout
+      ? layoutMarkerContent(marker.data)
+      : String(marker.data.content ?? "");
+    if (!content) continue;
     const list = atOffset.get(offset) ?? [];
-    list.push(marker);
+    list.push({
+      marker,
+      content,
+      kind: isLayout ? "layout" : "punctuation",
+      index: markerIndex,
+    });
     atOffset.set(offset, list);
+    markerIndex += 1;
   }
 
   const parts: string[] = [];
@@ -121,17 +141,27 @@ export function renderEditorText(
 
   for (let offset = 0; offset <= canonical.length; offset += 1) {
     caretBefore[offset] = utf16;
-    for (const marker of atOffset.get(offset) ?? []) {
-      const isLayout = showLayoutMarkers && layoutMarkerContent(marker.data) != null;
-      const content = isLayout
-        ? layoutMarkerContent(marker.data)
-        : String(marker.data.content ?? "");
-      if (!content) continue;
-      const start = utf16;
-      for (const ch of Array.from(content)) {
-        append(ch, offset, isLayout ? "layout" : "punctuation", marker.key);
+    const renderables = atOffset.get(offset) ?? [];
+    const units = sortPunctuationRenderOrder(
+      renderables.flatMap((item) =>
+        Array.from(item.content).map((ch, contentIndex) => ({
+          ch,
+          kind: item.kind,
+          markerKey: item.marker.key,
+          index: item.index + contentIndex / Math.max(1, item.content.length),
+        })),
+      ),
+    );
+    for (const unit of units) {
+      append(unit.ch, offset, unit.kind, unit.markerKey);
+      if (unit.markerKey != null) {
+        const span = markerSpans.get(unit.markerKey);
+        if (span) {
+          span.end = utf16;
+        } else {
+          markerSpans.set(unit.markerKey, { start: utf16 - unit.ch.length, end: utf16 });
+        }
       }
-      markerSpans.set(marker.key, { start, end: utf16 });
     }
     charStart[offset] = utf16;
     if (offset < canonical.length) append(canonical[offset], offset, "text");

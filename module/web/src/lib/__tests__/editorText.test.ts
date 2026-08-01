@@ -20,6 +20,38 @@ function marker(
 }
 
 describe("renderEditorText", () => {
+  it("orders same-offset punctuation and line breaks before canonical text", () => {
+    const view = renderEditorText(
+      "甲乙",
+      [
+        marker("open", { type: "punctuation", offset: 1, content: "《『「(：" }),
+        marker("line", { type: "line-break", offset: 1, id: "line-id" }),
+        marker("paragraph", { type: "paragraph-break", offset: 1, id: "para-id" }),
+        marker("indent", { type: "indent", offset: 1, content: "　" }),
+        marker("close", { type: "punctuation", offset: 1, content: ")」』、，。；？》" }),
+      ],
+      DEFAULT_PUNCTUATION_SET,
+      true,
+    );
+
+    expect(view.text).toBe("甲》？；。，、』」：)\n\n　(「『《乙");
+  });
+
+  it("places slash before close paren and breaks", () => {
+    const view = renderEditorText(
+      "甲乙",
+      [
+        marker("line", { type: "line-break", offset: 1, id: "line-id" }),
+        marker("indent", { type: "indent", offset: 1, content: "　" }),
+        marker("punct", { type: "punctuation", offset: 1, content: ")/。" }),
+      ],
+      DEFAULT_PUNCTUATION_SET,
+      true,
+    );
+
+    expect(view.text).toBe("甲。/)\n　乙");
+  });
+
   it("maps codepoint offsets across supplementary characters and punctuation", () => {
     const punctuation = marker("p1", {
       type: "punctuation",
@@ -67,13 +99,13 @@ describe("renderEditorText", () => {
       true,
     );
 
-    expect(view.text).toBe("甲\n　，乙");
-    expect(markerDomSelection(view, lineBreak)).toEqual({ start: 1, end: 2 });
+    expect(view.text).toBe("甲，\n　乙");
+    expect(markerDomSelection(view, lineBreak)).toEqual({ start: 2, end: 3 });
     expect(view.units.map((unit) => unit.kind)).toEqual([
       "text",
-      "layout",
-      "layout",
       "punctuation",
+      "layout",
+      "layout",
       "text",
     ]);
   });

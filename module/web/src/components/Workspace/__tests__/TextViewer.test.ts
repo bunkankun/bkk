@@ -16,6 +16,32 @@ function blockText(
 }
 
 describe("TextViewer phrase blocks", () => {
+  it("orders same-offset injected punctuation for smooth reading", () => {
+    const markers: JuanMarker[] = [
+      { type: "punctuation", offset: 1, content: "《『「(：\n)」』、，。；？》" },
+    ];
+
+    expect(
+      buildRenderedChars("甲乙", markers, "phrase", "canonical")
+        .map((char) => char.ch)
+        .join(""),
+    ).toBe("甲》？；。，、』」：)\n(「『《乙");
+  });
+
+  it("orders page breaks and indents with same-offset punctuation", () => {
+    const markers: JuanMarker[] = [
+      { type: "indent", offset: 1, content: "　　" },
+      { type: "page-break", offset: 1, id: "TEST_WYG_001-1a" },
+      { type: "punctuation", offset: 1, content: "。\n)/》" },
+    ];
+
+    expect(
+      buildRenderedChars("甲乙", markers, "phrase", "canonical")
+        .map((char) => char.pageAnchor ? "<pb>" : char.ch)
+        .join(""),
+    ).toBe("甲》。/)\n<pb>　　乙");
+  });
+
   it("keeps injected trailing punctuation with the preceding phrase", () => {
     const markers: JuanMarker[] = [
       { type: "tls:seg", offset: 2 },
@@ -23,7 +49,7 @@ describe("TextViewer phrase blocks", () => {
     ];
 
     expect(blockText("甲乙丙丁", markers)).toEqual([
-      "甲乙，！」。：．)/",
+      "甲乙，！。」：．/)",
       "丙丁",
     ]);
   });
