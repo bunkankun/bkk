@@ -17,6 +17,7 @@ from .punctuation import (
     BatchWorkflowOptions,
     collect_batch,
     inspect_batch,
+    list_configured_vendors,
     list_available_models,
     retry_failed_batch,
     run_batch_workflow,
@@ -29,8 +30,17 @@ from .punctuation import (
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bkk llm")
     sub = parser.add_subparsers(dest="task", required=True)
-    models = sub.add_parser("models", help="list OpenAI models available to the configured key")
+    vendors = sub.add_parser("vendors", help="list configured LLM vendors")
+    vendors.add_argument("--ai-config", dest="ai_config", type=Path, default=None)
+
+    models = sub.add_parser(
+        "models", help="list models available to the configured key",
+    )
     models.add_argument("--ai-config", dest="ai_config", type=Path, default=None)
+    models.add_argument(
+        "--vendor", default=None,
+        help="configured vendor name (default: openai)",
+    )
     models.add_argument(
         "--contains", default=None,
         help="case-insensitive substring filter for model ids",
@@ -90,7 +100,9 @@ def _add_punctuation_task(parser: argparse.ArgumentParser) -> None:
     pc = punct_sub.add_parser("collect", help="collect an async batch result")
     pc.add_argument("state", type=Path, help="state YAML written by submit")
     _add_settings(pc, selection=False)
-    pi = punct_sub.add_parser("inspect", help="inspect async batch status and diagnostics")
+    pi = punct_sub.add_parser(
+        "inspect", help="inspect async batch status and diagnostics",
+    )
     pi.add_argument("state", type=Path, help="state YAML written by submit")
     _add_settings(pi, selection=False)
     prt = punct_sub.add_parser(
@@ -109,10 +121,16 @@ def run(argv: list[str] | None = None) -> int:
         getattr(args, "out_root", None), rc, (("global", "corpus"),),
     )
     try:
+        if args.task == "vendors":
+            ai_config = _ai_config_path(rc, getattr(args, "ai_config", None))
+            for vendor in list_configured_vendors(ai_config):
+                print(vendor)
+            return 0
         if args.task == "models":
             ai_config = _ai_config_path(rc, getattr(args, "ai_config", None))
             models = list_available_models(
                 ai_config,
+                vendor=_vendor_name(rc, getattr(args, "vendor", None)),
                 contains=getattr(args, "contains", None),
             )
             if getattr(args, "json", False):
@@ -128,9 +146,12 @@ def run(argv: list[str] | None = None) -> int:
             settings = settings_from_rc(
                 rc,
                 model=getattr(args, "model", None) or state.get("model"),
+                vendor=getattr(args, "vendor", None) or state.get("vendor"),
                 ai_config=getattr(args, "ai_config", None),
                 prompt=getattr(args, "prompt", None) or state.get("prompt_path"),
-                chunk_chars=getattr(args, "chunk_chars", None) or state.get("chunk_chars"),
+                chunk_chars=(
+                    getattr(args, "chunk_chars", None) or state.get("chunk_chars")
+                ),
                 overlap=getattr(args, "overlap", None) or state.get("overlap"),
                 min_chars=getattr(args, "min_chars", None) or state.get("min_chars"),
                 cache_dir=getattr(args, "cache_dir", None),
@@ -145,6 +166,7 @@ def run(argv: list[str] | None = None) -> int:
         settings = settings_from_rc(
             rc,
             model=getattr(args, "model", None),
+            vendor=getattr(args, "vendor", None),
             ai_config=getattr(args, "ai_config", None),
             prompt=getattr(args, "prompt", None),
             chunk_chars=getattr(args, "chunk_chars", None),
@@ -164,7 +186,10 @@ def run(argv: list[str] | None = None) -> int:
                     jobs=int(args.jobs),
                 ),
             )
-        if args.op == "submit" or getattr(args, "mode", "direct") in {"batch", "auto"}:
+        if (
+            args.op == "submit"
+            or getattr(args, "mode", "direct") in {"batch", "auto"}
+        ):
             state = submit_batch(
                 bundle, out_root, text_id=text_id, text_prefix=text_prefix,
                 selected_juans=selected_juans, settings=settings,
@@ -207,6 +232,10 @@ def _add_selection(parser: argparse.ArgumentParser) -> None:
 def _add_settings(parser: argparse.ArgumentParser, *, selection: bool = True) -> None:
     del selection
     parser.add_argument("--model", default=None)
+    parser.add_argument(
+        "--vendor", default=None,
+        help="configured vendor name (default: openai)",
+    )
     parser.add_argument("--ai-config", dest="ai_config", type=Path, default=None)
     parser.add_argument("--prompt", type=Path, default=None)
     parser.add_argument("--chunk-chars", type=int, default=None)
@@ -283,6 +312,11 @@ def _ai_config_path(rc: dict, explicit: Path | None) -> Path:
     if value is not None:
         return Path(value).expanduser()
     return Path("~/ai-config.xml").expanduser()
+
+
+def _vendor_name(rc: dict, explicit: str | None) -> str:
+    value = explicit or (rc.get("llm") or {}).get("vendor") or "openai"
+    return str(value).strip().lower().replace("_", "-")
 
 
 def main() -> None:

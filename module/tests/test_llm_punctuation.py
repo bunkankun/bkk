@@ -253,8 +253,14 @@ def test_direct_cli_writes_reference_asset_without_canonical_marker_changes(
             assert text == "裏乙丙丁戊己"
             return "里，乙。丙丁戊己"
 
+    seen: dict[str, str] = {}
+
+    def fake_client(ai_config: Path, vendor: str = "openai") -> FakeClient:
+        seen["vendor"] = vendor
+        return FakeClient()
+
     monkeypatch.setattr(
-        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+        punctuation, "make_openai_client", fake_client,
     )
 
     rc = llm_run([
@@ -264,11 +270,14 @@ def test_direct_cli_writes_reference_asset_without_canonical_marker_changes(
         str(bundle),
         "--model",
         "test-model",
+        "--vendor",
+        "mistral",
         "--ai-config",
         str(tmp_path / "missing.xml"),
     ])
 
     assert rc == 0
+    assert seen["vendor"] == "mistral"
     juan = yaml.safe_load((bundle / "TEST0001_001.yaml").read_text(encoding="utf-8"))
     assert "markers" not in juan["body"] or juan["body"]["markers"] == []
 
@@ -280,6 +289,7 @@ def test_direct_cli_writes_reference_asset_without_canonical_marker_changes(
     assert ref["filename"] == "assets/TEST0001_001.test-model.punctuation.yaml"
 
     asset = yaml.safe_load((bundle / ref["filename"]).read_text(encoding="utf-8"))
+    assert asset["provenance"]["provider"] == "mistral"
     assert asset["markers"]["body"] == [
         {
             "type": "variant",
@@ -319,7 +329,9 @@ def test_models_cli_lists_available_models(monkeypatch, capsys) -> None:
             ]
 
     monkeypatch.setattr(
-        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
     )
 
     rc = llm_run([
@@ -332,6 +344,24 @@ def test_models_cli_lists_available_models(monkeypatch, capsys) -> None:
 
     assert rc == 0
     assert capsys.readouterr().out == "gpt-5-mini\n"
+
+
+def test_vendors_cli_lists_api_token_parent_names(tmp_path: Path, capsys) -> None:
+    path = tmp_path / "ai-config.xml"
+    path.write_text(
+        "<engines>"
+        "<sakana-ai><api-token>sakana-secret</api-token></sakana-ai>"
+        "<mistral-config><api-token>mistral-secret</api-token></mistral-config>"
+        "<openai-config><api-token>openai-secret</api-token></openai-config>"
+        "<mistral-alt><api-token>second-secret</api-token></mistral-alt>"
+        "</engines>",
+        encoding="utf-8",
+    )
+
+    rc = llm_run(["vendors", "--ai-config", str(path)])
+
+    assert rc == 0
+    assert capsys.readouterr().out == "sakana\nmistral\nopenai\n"
 
 
 def test_ai_config_accepts_openai_config_api_token(tmp_path: Path) -> None:
@@ -348,6 +378,26 @@ def test_ai_config_accepts_openai_config_api_token(tmp_path: Path) -> None:
     }
 
 
+def test_ai_config_selects_vendor_by_api_token_parent_name(tmp_path: Path) -> None:
+    path = tmp_path / "ai-config.xml"
+    path.write_text(
+        "<engines>"
+        "<openai-config><api-token>openai-secret</api-token>"
+        "<model>gpt-test</model></openai-config>"
+        "<mistral-config><api-token>mistral-secret</api-token>"
+        "<model>mistral-test</model><base-url>https://example.test/v1</base-url>"
+        "</mistral-config>"
+        "</engines>",
+        encoding="utf-8",
+    )
+
+    assert punctuation.load_ai_config(path, vendor="mistral") == {
+        "api_key": "mistral-secret",
+        "base_url": "https://example.test/v1",
+        "model": "mistral-test",
+    }
+
+
 def test_settings_default_min_chars_and_rc_override(tmp_path: Path) -> None:
     settings = punctuation.settings_from_rc(
         {"llm": {"model": "test-model", "min_chars": 9}},
@@ -356,6 +406,67 @@ def test_settings_default_min_chars_and_rc_override(tmp_path: Path) -> None:
     )
 
     assert settings.min_chars == 9
+
+
+def test_settings_accepts_vendor_override(tmp_path: Path) -> None:
+    path = tmp_path / "ai-config.xml"
+    path.write_text(
+        "<engines><deepseek-config><api-token>secret</api-token>"
+        "<model>deepseek-test</model></deepseek-config></engines>",
+        encoding="utf-8",
+    )
+
+    settings = punctuation.settings_from_rc(
+        {},
+        vendor="deepseek",
+        ai_config=path,
+        prompt=tmp_path / "prompt",
+    )
+
+    assert settings.vendor == "deepseek"
+    assert settings.model == "deepseek-test"
+
+
+def test_submit_batch_state_records_vendor(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0008", "甲乙丙丁戊己")
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+    seen: dict[str, str] = {}
+
+    class FakeClient:
+        def submit_batch(self, *, requests_path: Path, metadata: dict | None = None) -> dict:
+            assert requests_path.exists()
+            return {"id": "batch_1", "status": "validating"}
+
+    def fake_client(ai_config: Path, vendor: str = "openai") -> FakeClient:
+        seen["vendor"] = vendor
+        return FakeClient()
+
+    monkeypatch.setattr(punctuation, "make_openai_client", fake_client)
+
+    rc = llm_run([
+        "punctuation",
+        "submit",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--vendor",
+        "deepseek",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+    ])
+
+    assert rc == 0
+    assert "submitted batch" in capsys.readouterr().out
+    assert seen["vendor"] == "deepseek"
+    states = list((bundle / ".bkk-llm").glob("*.batch.yaml"))
+    assert len(states) == 1
+    state = yaml.safe_load(states[0].read_text(encoding="utf-8"))
+    assert state["vendor"] == "deepseek"
 
 
 def test_run_direct_defaults_to_master_only(tmp_path: Path, capsys) -> None:
@@ -510,7 +621,9 @@ def test_inspect_batch_writes_status_and_error_file(
             return '{"custom_id":"x","error":{"message":"duplicate custom_id"}}\n'
 
     monkeypatch.setattr(
-        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
     )
 
     rc = llm_run([
@@ -573,7 +686,9 @@ def test_collect_batch_writes_clear_text_report_for_rejected_chunk(
             )
 
     monkeypatch.setattr(
-        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
     )
 
     rc = llm_run([
@@ -654,7 +769,9 @@ def test_retry_failed_batch_submits_only_rejected_chunks(
             return {"id": "batch_retry", "status": "validating"}
 
     monkeypatch.setattr(
-        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
     )
 
     rc = llm_run([
@@ -710,7 +827,9 @@ def test_punctuate_batch_workflow_retries_rejected_chunks(
             }, ensure_ascii=False) + "\n"
 
     monkeypatch.setattr(
-        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
     )
 
     rc = llm_run([
@@ -769,7 +888,9 @@ def test_punctuation_batch_workflow_reports_remaining_problems(
             }, ensure_ascii=False) + "\n"
 
     monkeypatch.setattr(
-        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
     )
 
     rc = llm_run([

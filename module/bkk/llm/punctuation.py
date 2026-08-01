@@ -31,6 +31,7 @@ DEFAULT_CHUNK_CHARS = 3000
 DEFAULT_OVERLAP = 50
 DEFAULT_MIN_CHARS = 6
 DEFAULT_AI_CONFIG = Path("~/ai-config.xml")
+DEFAULT_VENDOR = "openai"
 REFERENCE_ROLE = "llm-punctuation"
 STATE_SCHEMA_VERSION = 1
 ASSET_SCHEMA_VERSION = 1
@@ -77,6 +78,7 @@ class LlmSettings:
     model: str
     ai_config: Path
     prompt: Path
+    vendor: str = DEFAULT_VENDOR
     chunk_chars: int = DEFAULT_CHUNK_CHARS
     overlap: int = DEFAULT_OVERLAP
     min_chars: int = DEFAULT_MIN_CHARS
@@ -163,6 +165,7 @@ def settings_from_rc(
     rc: dict[str, Any],
     *,
     model: str | None = None,
+    vendor: str | None = None,
     ai_config: Path | str | None = None,
     prompt: Path | str | None = None,
     chunk_chars: int | None = None,
@@ -176,11 +179,12 @@ def settings_from_rc(
     raw_cache_dir = cache_dir if cache_dir is not None else llm.get("cache_dir")
     config_path = Path(raw_ai_config or DEFAULT_AI_CONFIG).expanduser()
     prompt_path = _resolve_prompt_path(raw_prompt)
-    xml = load_ai_config(config_path)
+    chosen_vendor = _normalize_vendor(vendor or llm.get("vendor") or DEFAULT_VENDOR)
+    xml = load_ai_config(config_path, vendor=chosen_vendor)
     chosen_model = model or llm.get("model") or xml.get("model")
     if not isinstance(chosen_model, str) or not chosen_model.strip():
         raise ValueError(
-            "OpenAI model is required: pass --model, set llm.model, or set "
+            "LLM model is required: pass --model, set llm.model, or set "
             "model in ai-config XML"
         )
     chunk_value = _positive_int(
@@ -205,6 +209,7 @@ def settings_from_rc(
         model=chosen_model.strip(),
         ai_config=config_path,
         prompt=prompt_path,
+        vendor=chosen_vendor,
         chunk_chars=chunk_value,
         overlap=overlap_value,
         min_chars=min_chars_value,
@@ -212,26 +217,35 @@ def settings_from_rc(
     )
 
 
-def load_ai_config(path: Path) -> dict[str, str]:
-    """Load OpenAI credential/config values from XML.
+def load_ai_config(path: Path, *, vendor: str = DEFAULT_VENDOR) -> dict[str, str]:
+    """Load credential/config values for an OpenAI-compatible vendor from XML.
 
     Supported forms are intentionally permissive:
     ``<openai api_key="..." model="..."/>`` or child elements such as
     ``<api_key>...</api_key>`` under either the root or an ``openai`` element.
-    Historical ``<openai-config><api-token>...`` files are accepted too.
+    Historical ``<openai-config><api-token>...`` files are accepted too. For
+    other vendors, a parent containing ``<api-token>`` is selected by the part
+    of its element name before the first ``-``.
     """
     path = Path(path).expanduser()
     if not path.exists():
         return {}
     root = ElementTree.fromstring(path.read_text(encoding="utf-8"))
-    node = _find_ai_config_node(root)
+    normalized_vendor = _normalize_vendor(vendor)
+    node = _find_ai_config_node(root, normalized_vendor)
     if node is None:
-        node = root
+        if normalized_vendor == DEFAULT_VENDOR:
+            node = root
+        else:
+            return {}
     out: dict[str, str] = {}
     aliases = {
         "api_key": ("api_key", "api-key", "api_token", "api-token", "token", "key"),
         "organization": ("organization", "org", "openai-organization"),
         "project": ("project", "openai-project"),
+        "base_url": (
+            "base_url", "base-url", "api_base", "api-base", "endpoint", "url",
+        ),
         "model": ("model",),
     }
     for key, names in aliases.items():
@@ -243,14 +257,54 @@ def load_ai_config(path: Path) -> dict[str, str]:
     return out
 
 
-def _find_ai_config_node(root: ElementTree.Element) -> ElementTree.Element | None:
-    candidates = [root, *list(root.iter())]
-    for node in candidates:
-        tag = _strip_ns(node.tag).lower()
-        normalized = tag.replace("_", "-")
-        if normalized in {"openai", "openai-config", "openai-configs"}:
+def list_configured_vendors(path: Path) -> list[str]:
+    """Return vendor names discovered from parents containing ``<api-token>``."""
+    path = Path(path).expanduser()
+    if not path.exists():
+        return []
+    root = ElementTree.fromstring(path.read_text(encoding="utf-8"))
+    out: list[str] = []
+    seen: set[str] = set()
+    for node in root.iter():
+        if _node_value(node, ("api-token", "api_token")) is None:
+            continue
+        vendor = _vendor_name_from_node(node)
+        if vendor and vendor not in seen:
+            seen.add(vendor)
+            out.append(vendor)
+    return out
+
+
+def _find_ai_config_node(
+    root: ElementTree.Element,
+    vendor: str,
+) -> ElementTree.Element | None:
+    for node in root.iter():
+        if (
+            _vendor_name_from_node(node) == vendor
+            and _node_looks_like_ai_config(node)
+        ):
             return node
     return None
+
+
+def _node_looks_like_ai_config(node: ElementTree.Element) -> bool:
+    return any(
+        _node_value(node, names) is not None
+        for names in (
+            ("api_key", "api-key", "api_token", "api-token", "token", "key"),
+            ("model",),
+        )
+    )
+
+
+def _vendor_name_from_node(node: ElementTree.Element) -> str:
+    normalized = _strip_ns(node.tag).lower().replace("_", "-")
+    return _normalize_vendor(normalized.split("-", 1)[0])
+
+
+def _normalize_vendor(value: str) -> str:
+    return str(value).strip().lower().replace("_", "-")
 
 
 def _node_value(
@@ -270,8 +324,8 @@ def _node_value(
     return None
 
 
-def make_openai_client(ai_config: Path) -> LlmClient:
-    config = load_ai_config(ai_config)
+def make_openai_client(ai_config: Path, vendor: str = DEFAULT_VENDOR) -> LlmClient:
+    config = load_ai_config(ai_config, vendor=vendor)
     try:
         from openai import OpenAI
     except ImportError as exc:  # pragma: no cover - depends on environment
@@ -286,6 +340,8 @@ def make_openai_client(ai_config: Path) -> LlmClient:
         kwargs["organization"] = config["organization"]
     if config.get("project"):
         kwargs["project"] = config["project"]
+    if config.get("base_url"):
+        kwargs["base_url"] = config["base_url"]
     return OpenAiResponsesClient(OpenAI(**kwargs))
 
 
@@ -361,10 +417,11 @@ class OpenAiResponsesClient:
 def list_available_models(
     ai_config: Path,
     *,
+    vendor: str = DEFAULT_VENDOR,
     contains: str | None = None,
     client: LlmClient | None = None,
 ) -> list[dict[str, Any]]:
-    client = client or make_openai_client(ai_config)
+    client = client or make_openai_client(ai_config, vendor)
     models = client.list_models()
     if contains:
         needle = contains.lower()
@@ -388,7 +445,7 @@ def run_direct(
     client: LlmClient | None = None,
 ) -> int:
     if not dry_run:
-        client = client or make_openai_client(settings.ai_config)
+        client = client or make_openai_client(settings.ai_config, settings.vendor)
     prompt_text = _read_prompt(settings.prompt)
     bundle_dirs = _selected_bundle_dirs(bundle, out_root, text_id, text_prefix)
     total_tasks = total_markers = total_issues = 0
@@ -445,7 +502,7 @@ def submit_batch(
     include_editions: bool = False,
     client: LlmClient | None = None,
 ) -> Path:
-    client = client or make_openai_client(settings.ai_config)
+    client = client or make_openai_client(settings.ai_config, settings.vendor)
     prompt_text = _read_prompt(settings.prompt)
     bundle_dirs = _selected_bundle_dirs(bundle, out_root, text_id, text_prefix)
     all_tasks: list[ChunkTask] = []
@@ -481,6 +538,7 @@ def submit_batch(
         "schema": STATE_SCHEMA_VERSION,
         "task": "punctuation",
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "vendor": settings.vendor,
         "model": settings.model,
         "prompt_path": str(settings.prompt),
         "prompt_hash": sha256_text(prompt_text),
@@ -595,7 +653,7 @@ def _run_batch_workflow_for_bundle(
 ) -> BatchWorkflowResult:
     text_id = bundle_dir.name
     print(f"[{text_id}] submitting batch")
-    client = make_openai_client(settings.ai_config)
+    client = make_openai_client(settings.ai_config, settings.vendor)
     state_path = submit_batch(
         bundle_dir,
         None,
@@ -753,11 +811,12 @@ def collect_batch(
             model=model,
             ai_config=DEFAULT_AI_CONFIG.expanduser(),
             prompt=Path(state.get("prompt_path") or _default_prompt_path()),
+            vendor=str(state.get("vendor") or DEFAULT_VENDOR),
             chunk_chars=int(state.get("chunk_chars") or DEFAULT_CHUNK_CHARS),
             overlap=int(state.get("overlap") or DEFAULT_OVERLAP),
             min_chars=int(state.get("min_chars") or DEFAULT_MIN_CHARS),
         )
-    client = client or make_openai_client(settings.ai_config)
+    client = client or make_openai_client(settings.ai_config, settings.vendor)
     batch = client.retrieve_batch(batch_id)
     _save_batch_diagnostics(Path(state_path), state, batch, client)
     status = batch.get("status")
@@ -820,7 +879,7 @@ def inspect_batch(
     batch_id = batch_obj.get("id")
     if not isinstance(batch_id, str) or not batch_id:
         raise RuntimeError(f"{state_path}: missing batch.id")
-    client = client or make_openai_client(settings.ai_config)
+    client = client or make_openai_client(settings.ai_config, settings.vendor)
     batch = client.retrieve_batch(batch_id)
     _save_batch_diagnostics(Path(state_path), state, batch, client)
     print_batch_diagnostics(Path(state_path), batch)
@@ -840,7 +899,7 @@ def retry_failed_batch(
     tasks = [_task_from_dict(t) for t in state.get("tasks") or [] if isinstance(t, dict)]
     if not tasks:
         raise RuntimeError(f"{state_path}: no tasks to retry")
-    client = client or make_openai_client(settings.ai_config)
+    client = client or make_openai_client(settings.ai_config, settings.vendor)
     batch_obj = state.get("batch") or {}
     batch_id = batch_obj.get("id")
     if isinstance(batch_id, str) and batch_id:
@@ -1563,7 +1622,7 @@ def build_llm_punctuation_asset(
         "role": REFERENCE_ROLE,
         "status": status,
         "provenance": {
-            "provider": "openai",
+            "provider": settings.vendor,
             "model": settings.model,
             "prompt_path": str(settings.prompt),
             "prompt_hash": sha256_text(prompt_text),
