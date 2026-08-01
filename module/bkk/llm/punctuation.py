@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import copy
+import concurrent.futures
 import json
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 from xml.etree import ElementTree
 
 import yaml
@@ -32,6 +34,13 @@ DEFAULT_AI_CONFIG = Path("~/ai-config.xml")
 REFERENCE_ROLE = "llm-punctuation"
 STATE_SCHEMA_VERSION = 1
 ASSET_SCHEMA_VERSION = 1
+DEFAULT_BATCH_POLL_SECONDS = 300
+DEFAULT_BATCH_RETRIES = 1
+DEFAULT_BATCH_JOBS = 1
+MAX_ADJACENT_VARIANT_CHARS = 2
+_BATCH_TERMINAL_STATUSES = {
+    "completed", "failed", "expired", "cancelled", "canceled",
+}
 
 _JUAN_RE = re.compile(
     r"^(?P<text_id>.+?)_(?P<seq>\d{3})(?:-(?P<short>[A-Za-z0-9][A-Za-z0-9_-]*))?\.yaml$",
@@ -117,6 +126,37 @@ class ValidationIssue:
     custom_id: str
     code: str
     message: str
+    details: dict[str, Any] | None = None
+
+
+class PunctuationValidationError(ValueError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        input_index: int | None = None,
+        output_index: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.input_index = input_index
+        self.output_index = output_index
+
+
+@dataclass(frozen=True)
+class BatchWorkflowOptions:
+    poll_seconds: int = DEFAULT_BATCH_POLL_SECONDS
+    retries: int = DEFAULT_BATCH_RETRIES
+    jobs: int = DEFAULT_BATCH_JOBS
+
+
+@dataclass(frozen=True)
+class BatchWorkflowResult:
+    text_id: str
+    ok: bool
+    state_path: Path | None
+    attempts: int
+    report_path: Path | None = None
+    message: str | None = None
 
 
 def settings_from_rc(
@@ -422,8 +462,10 @@ def submit_batch(
         raise RuntimeError("no chunk requests to submit")
     state_dir = _state_dir(settings, bundle_dirs[0])
     state_dir.mkdir(parents=True, exist_ok=True)
+    state_text = model_slug(bundle_dirs[0].name)
     state_path = state_dir / (
-        f"punctuation-{_utc_stamp()}-{model_slug(settings.model)}.batch.yaml"
+        f"punctuation-{state_text}-{_utc_stamp()}-"
+        f"{model_slug(settings.model)}.batch.yaml"
     )
     requests_path = state_path.with_suffix(".jsonl")
     requests_path.write_text(
@@ -451,6 +493,243 @@ def submit_batch(
     }
     state_path.write_text(dump(state), encoding="utf-8")
     return state_path
+
+
+def run_batch_workflow(
+    bundle: str | Path | None,
+    out_root: Path | None,
+    *,
+    text_id: str | None,
+    text_prefix: str | None,
+    selected_juans: set[int] | None,
+    settings: LlmSettings,
+    include_editions: bool = False,
+    options: BatchWorkflowOptions | None = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> int:
+    options = options or BatchWorkflowOptions()
+    if options.poll_seconds < 0:
+        raise ValueError("poll seconds must be non-negative")
+    if options.retries < 0:
+        raise ValueError("retries must be non-negative")
+    if options.jobs <= 0:
+        raise ValueError("jobs must be a positive integer")
+
+    bundle_dirs = _selected_bundle_dirs(bundle, out_root, text_id, text_prefix)
+    print(
+        f"batch workflow: {len(bundle_dirs)} text(s), "
+        f"jobs={options.jobs}, retries={options.retries}, "
+        f"poll={options.poll_seconds}s"
+    )
+    results: list[BatchWorkflowResult] = []
+    if options.jobs == 1 or len(bundle_dirs) <= 1:
+        for bundle_dir in bundle_dirs:
+            try:
+                results.append(_run_batch_workflow_for_bundle(
+                    bundle_dir,
+                    selected_juans=selected_juans,
+                    settings=settings,
+                    include_editions=include_editions,
+                    options=options,
+                    sleep_fn=sleep_fn,
+                ))
+            except Exception as exc:  # noqa: BLE001 - keep later texts running
+                results.append(BatchWorkflowResult(
+                    text_id=bundle_dir.name,
+                    ok=False,
+                    state_path=None,
+                    attempts=0,
+                    message=str(exc),
+                ))
+                print(f"[{bundle_dir.name}] failed: {exc}")
+    else:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(options.jobs, len(bundle_dirs)),
+        ) as executor:
+            future_to_bundle = {
+                executor.submit(
+                    _run_batch_workflow_for_bundle,
+                    bundle_dir,
+                    selected_juans=selected_juans,
+                    settings=settings,
+                    include_editions=include_editions,
+                    options=options,
+                    sleep_fn=sleep_fn,
+                ): bundle_dir
+                for bundle_dir in bundle_dirs
+            }
+            for future in concurrent.futures.as_completed(future_to_bundle):
+                bundle_dir = future_to_bundle[future]
+                try:
+                    results.append(future.result())
+                except Exception as exc:  # noqa: BLE001 - keep other jobs running
+                    results.append(BatchWorkflowResult(
+                        text_id=bundle_dir.name,
+                        ok=False,
+                        state_path=None,
+                        attempts=0,
+                        message=str(exc),
+                    ))
+                    print(f"[{bundle_dir.name}] failed: {exc}")
+
+    failed = [result for result in results if not result.ok]
+    print(
+        f"batch workflow complete: {len(results) - len(failed)} succeeded, "
+        f"{len(failed)} failed"
+    )
+    for result in failed:
+        detail = f"; report: {result.report_path}" if result.report_path else ""
+        message = f"; {result.message}" if result.message else ""
+        print(f"  {result.text_id}: failed after {result.attempts} attempt(s){detail}{message}")
+    return 1 if failed else 0
+
+
+def _run_batch_workflow_for_bundle(
+    bundle_dir: Path,
+    *,
+    selected_juans: set[int] | None,
+    settings: LlmSettings,
+    include_editions: bool,
+    options: BatchWorkflowOptions,
+    sleep_fn: Callable[[float], None],
+) -> BatchWorkflowResult:
+    text_id = bundle_dir.name
+    print(f"[{text_id}] submitting batch")
+    client = make_openai_client(settings.ai_config)
+    state_path = submit_batch(
+        bundle_dir,
+        None,
+        text_id=None,
+        text_prefix=None,
+        selected_juans=selected_juans,
+        settings=settings,
+        include_editions=include_editions,
+        client=client,
+    )
+    print(f"[{text_id}] submitted batch; state: {state_path}")
+    attempts = 1
+    state_path, message = _run_batch_attempt(
+        text_id, state_path, settings, client, options, sleep_fn,
+    )
+    if message is None:
+        return BatchWorkflowResult(text_id, True, state_path, attempts)
+
+    for retry_index in range(options.retries):
+        print(f"[{text_id}] retry {retry_index + 1}/{options.retries}: {message}")
+        try:
+            state_path = retry_failed_batch(state_path, settings=settings, client=client)
+        except RuntimeError as exc:
+            report_path = _write_workflow_failure_report(state_path, str(exc))
+            return BatchWorkflowResult(
+                text_id, False, state_path, attempts,
+                report_path=report_path, message=str(exc),
+            )
+        print(f"[{text_id}] submitted retry batch; state: {state_path}")
+        attempts += 1
+        state_path, message = _run_batch_attempt(
+            text_id, state_path, settings, client, options, sleep_fn,
+        )
+        if message is None:
+            return BatchWorkflowResult(text_id, True, state_path, attempts)
+
+    report_path = _write_workflow_failure_report(state_path, message)
+    return BatchWorkflowResult(
+        text_id, False, state_path, attempts,
+        report_path=report_path, message=message,
+    )
+
+
+def _run_batch_attempt(
+    text_id: str,
+    state_path: Path,
+    settings: LlmSettings,
+    client: LlmClient,
+    options: BatchWorkflowOptions,
+    sleep_fn: Callable[[float], None],
+) -> tuple[Path, str | None]:
+    batch = _wait_for_batch_terminal(
+        text_id, state_path, client, options.poll_seconds, sleep_fn,
+    )
+    status = batch.get("status")
+    if status != "completed":
+        return state_path, f"batch status {status or '<unknown>'}"
+    rc = collect_batch(state_path, settings=settings, client=client)
+    if rc == 0:
+        return state_path, None
+    return state_path, "batch had rejected or missing chunks"
+
+
+def _wait_for_batch_terminal(
+    text_id: str,
+    state_path: Path,
+    client: LlmClient,
+    poll_seconds: int,
+    sleep_fn: Callable[[float], None],
+) -> dict[str, Any]:
+    state = yaml.load(state_path.read_text(encoding="utf-8"), Loader=_YAML_LOADER)
+    if not isinstance(state, dict):
+        raise RuntimeError(f"{state_path}: state file is not a mapping")
+    batch_obj = state.get("batch") or {}
+    batch_id = batch_obj.get("id")
+    if not isinstance(batch_id, str) or not batch_id:
+        raise RuntimeError(f"{state_path}: missing batch.id")
+    while True:
+        batch = client.retrieve_batch(batch_id)
+        _save_batch_diagnostics(state_path, state, batch, client)
+        print(f"[{text_id}] ", end="")
+        print_batch_diagnostics(state_path, batch)
+        status = batch.get("status")
+        if status in _BATCH_TERMINAL_STATUSES:
+            return batch
+        if poll_seconds:
+            print(f"[{text_id}] waiting {poll_seconds}s before next poll")
+            sleep_fn(poll_seconds)
+        else:
+            sleep_fn(0)
+
+
+def _write_workflow_failure_report(state_path: Path, message: str | None) -> Path:
+    state = yaml.load(state_path.read_text(encoding="utf-8"), Loader=_YAML_LOADER)
+    if not isinstance(state, dict):
+        state = {}
+    batch_report_path = state_path.with_suffix(".batch-report.yaml")
+    problems: list[dict[str, Any]] = []
+    if batch_report_path.exists():
+        batch_report = yaml.load(
+            batch_report_path.read_text(encoding="utf-8"),
+            Loader=_YAML_LOADER,
+        )
+        if isinstance(batch_report, dict):
+            for chunk in batch_report.get("chunks") or []:
+                if not isinstance(chunk, dict):
+                    continue
+                if chunk.get("status") == "accepted":
+                    continue
+                problems.append({
+                    "id": chunk.get("id"),
+                    "text_id": chunk.get("text_id"),
+                    "edition": chunk.get("edition"),
+                    "seq": chunk.get("seq"),
+                    "bucket": chunk.get("bucket"),
+                    "stream": chunk.get("stream"),
+                    "status": chunk.get("status"),
+                    "issues": chunk.get("issues") or [],
+                })
+    report: dict[str, Any] = {
+        "schema": 1,
+        "task": "punctuation-batch-workflow-report",
+        "status": "failed",
+        "state_file": str(state_path),
+        "batch": state.get("batch"),
+        "message": message,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "problems": problems,
+    }
+    if batch_report_path.exists():
+        report["batch_report"] = str(batch_report_path)
+    report_path = state_path.with_suffix(".workflow-report.yaml")
+    report_path.write_text(dump(report), encoding="utf-8")
+    return report_path
 
 
 def collect_batch(
@@ -709,9 +988,7 @@ def write_outputs_for_scope(
                     include_core_end=task.core_end == task.stream_end,
                 )
             except ValueError as exc:
-                issues.append(ValidationIssue(
-                    task.custom_id, "invalid-output", str(exc),
-                ))
+                issues.append(_validation_issue_for_output(task, output, exc))
                 chunk_rows.append(
                     _chunk_row(task, status="rejected", message=str(exc))
                 )
@@ -834,9 +1111,15 @@ def markers_from_punctuated_output(
     markers: list[dict[str, Any]] = []
     i = 0
     j = 0
+    variant_run_len = 0
+    variant_run_input_start: int | None = None
+    variant_run_output_start: int | None = None
     while j < len(output):
         ch = output[j]
         if i < len(original) and ch == original[i]:
+            variant_run_len = 0
+            variant_run_input_start = None
+            variant_run_output_start = None
             i += 1
             j += 1
             continue
@@ -846,7 +1129,11 @@ def markers_from_punctuated_output(
             while run_end < len(output) and output[run_end] == "\n":
                 run_end += 1
             if run_end - j < 2:
-                raise ValueError(f"unexpected single newline at output index {j}")
+                raise PunctuationValidationError(
+                    f"unexpected single newline at output index {j}",
+                    input_index=i,
+                    output_index=j,
+                )
             if _in_owned_core(absolute, core_start, core_end, include_core_end):
                 markers.append({
                     "type": "paragraph-break",
@@ -865,6 +1152,26 @@ def markers_from_punctuated_output(
             j += 1
             continue
         if i < len(original):
+            if variant_run_len == 0:
+                variant_run_input_start = i
+                variant_run_output_start = j
+            variant_run_len += 1
+            if variant_run_len > MAX_ADJACENT_VARIANT_CHARS:
+                input_start = (
+                    i if variant_run_input_start is None
+                    else variant_run_input_start
+                )
+                output_start = (
+                    j if variant_run_output_start is None
+                    else variant_run_output_start
+                )
+                raise PunctuationValidationError(
+                    "output diverged for more than "
+                    f"{MAX_ADJACENT_VARIANT_CHARS} adjacent original "
+                    f"character(s) starting at input index {input_start}",
+                    input_index=input_start,
+                    output_index=output_start,
+                )
             if _in_owned_core(absolute, core_start, core_end, include_core_end):
                 markers.append({
                     "type": "variant",
@@ -876,10 +1183,16 @@ def markers_from_punctuated_output(
             i += 1
             j += 1
             continue
-        raise ValueError(f"unexpected character {ch!r} at output index {j}")
+        raise PunctuationValidationError(
+            f"unexpected character {ch!r} at output index {j}",
+            input_index=i,
+            output_index=j,
+        )
     if i != len(original):
-        raise ValueError(
-            f"output omitted {len(original) - i} original character(s)"
+        raise PunctuationValidationError(
+            f"output omitted {len(original) - i} original character(s)",
+            input_index=i,
+            output_index=len(output),
         )
     return markers
 
@@ -1008,10 +1321,45 @@ def _validation_issues_for_outputs(
                 include_core_end=task.core_end == task.stream_end,
             )
         except ValueError as exc:
-            issues.append(ValidationIssue(
-                task.custom_id, "invalid-output", str(exc),
-            ))
+            issues.append(_validation_issue_for_output(task, output, exc))
     return issues
+
+
+def _validation_issue_for_output(
+    task: ChunkTask,
+    output: str,
+    exc: ValueError,
+) -> ValidationIssue:
+    details: dict[str, Any] | None = None
+    if isinstance(exc, PunctuationValidationError):
+        details = _validation_context_details(task, output, exc)
+    return ValidationIssue(task.custom_id, "invalid-output", str(exc), details)
+
+
+def _validation_context_details(
+    task: ChunkTask,
+    output: str,
+    exc: PunctuationValidationError,
+) -> dict[str, Any]:
+    details: dict[str, Any] = {"context_chars": 20}
+    if exc.input_index is not None:
+        input_context = _text_index_context(task.input_text, exc.input_index)
+        input_context["absolute_offset"] = task.context_start + exc.input_index
+        details["input_context"] = input_context
+    if exc.output_index is not None:
+        details["output_context"] = _text_index_context(output, exc.output_index)
+    return details
+
+
+def _text_index_context(text: str, index: int, *, radius: int = 20) -> dict[str, Any]:
+    index = min(max(index, 0), len(text))
+    at_end = min(index + 1, len(text))
+    return {
+        "index": index,
+        "before": text[max(0, index - radius):index],
+        "at": text[index:at_end],
+        "after": text[at_end:min(len(text), at_end + radius)],
+    }
 
 
 def _previous_output_files_for_retry(
@@ -1071,7 +1419,7 @@ def _write_batch_text_report(
             row["output_text"] = output
         if task_issues:
             row["issues"] = [
-                {"code": issue.code, "message": issue.message}
+                _issue_report_row(issue)
                 for issue in task_issues
             ]
         chunks.append(row)
@@ -1086,16 +1434,28 @@ def _write_batch_text_report(
     }
     if unmatched:
         report["unmatched_issues"] = [
-            {
-                "custom_id": issue.custom_id,
-                "code": issue.code,
-                "message": issue.message,
-            }
+            _issue_report_row(issue, include_custom_id=True)
             for issue in unmatched
         ]
     report_path = state_path.with_suffix(".batch-report.yaml")
     report_path.write_text(dump(report), encoding="utf-8")
     return report_path
+
+
+def _issue_report_row(
+    issue: ValidationIssue,
+    *,
+    include_custom_id: bool = False,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "code": issue.code,
+        "message": issue.message,
+    }
+    if include_custom_id:
+        row["custom_id"] = issue.custom_id
+    if issue.details:
+        row["details"] = issue.details
+    return row
 
 
 def print_batch_diagnostics(state_path: Path, batch: dict[str, Any]) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import yaml
@@ -155,6 +156,34 @@ def test_punctuated_output_becomes_markers_and_records_variants() -> None:
             "replacement": "里",
         }
     ]
+
+    assert punctuation.markers_from_punctuated_output(
+        "甲乙丙丁", "AB丙丁", context_start=0, core_start=0, core_end=4,
+    ) == [
+        {
+            "type": "variant",
+            "offset": 0,
+            "length": 1,
+            "content": "甲",
+            "replacement": "A",
+        },
+        {
+            "type": "variant",
+            "offset": 1,
+            "length": 1,
+            "content": "乙",
+            "replacement": "B",
+        },
+    ]
+
+    try:
+        punctuation.markers_from_punctuated_output(
+            "甲乙丙丁", "ABC丁", context_start=0, core_start=0, core_end=4,
+        )
+    except ValueError as exc:
+        assert "more than 2 adjacent" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("long divergent run was accepted")
 
     try:
         punctuation.markers_from_punctuated_output(
@@ -540,7 +569,7 @@ def test_collect_batch_writes_clear_text_report_for_rejected_chunk(
             return (
                 '{"custom_id":"TEST0004:bkk:001:body:main:1",'
                 '"response":{"status_code":200,'
-                '"body":{"output_text":"甲X乙"}}}\n'
+                '"body":{"output_text":"甲"}}}\n'
             )
 
     monkeypatch.setattr(
@@ -562,9 +591,24 @@ def test_collect_batch_writes_clear_text_report_for_rejected_chunk(
     )
     chunk = report["chunks"][0]
     assert chunk["input_text"] == "甲乙"
-    assert chunk["output_text"] == "甲X乙"
+    assert chunk["output_text"] == "甲"
     assert chunk["status"] == "rejected"
     assert chunk["issues"][0]["code"] == "invalid-output"
+    assert chunk["issues"][0]["message"] == "output omitted 1 original character(s)"
+    details = chunk["issues"][0]["details"]
+    assert details["input_context"] == {
+        "index": 1,
+        "before": "甲",
+        "at": "乙",
+        "after": "",
+        "absolute_offset": 1,
+    }
+    assert details["output_context"] == {
+        "index": 1,
+        "before": "甲",
+        "at": "",
+        "after": "",
+    }
 
 
 def test_retry_failed_batch_submits_only_rejected_chunks(
@@ -633,3 +677,125 @@ def test_retry_failed_batch_submits_only_rejected_chunks(
     assert retry_state["previous_output_files"] == [
         str(state_path.with_suffix(".batch-output.jsonl"))
     ]
+
+
+def test_punctuate_batch_workflow_retries_rejected_chunks(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0006", "甲乙丙丁戊己")
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+    submitted: list[str] = []
+
+    class FakeClient:
+        def submit_batch(self, *, requests_path: Path, metadata: dict | None = None) -> dict:
+            submitted.append(requests_path.read_text(encoding="utf-8"))
+            return {"id": f"batch_{len(submitted)}", "status": "validating"}
+
+        def retrieve_batch(self, batch_id: str) -> dict:
+            return {
+                "id": batch_id,
+                "status": "completed",
+                "output_file_id": f"file_{batch_id}",
+                "request_counts": {"completed": 1, "failed": 0, "total": 1},
+            }
+
+        def download_file_text(self, file_id: str) -> str:
+            output = "甲X乙丙丁戊己" if file_id == "file_batch_1" else "甲，乙丙丁戊己"
+            return json.dumps({
+                "custom_id": "TEST0006:bkk:001:body:main:1",
+                "response": {
+                    "status_code": 200,
+                    "body": {"output_text": output},
+                },
+            }, ensure_ascii=False) + "\n"
+
+    monkeypatch.setattr(
+        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "batch",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+        "--poll-seconds",
+        "0",
+    ])
+
+    assert rc == 0
+    assert len(submitted) == 2
+    assert "retry 1/1" in capsys.readouterr().out
+    assert not list((bundle / ".bkk-llm").glob("*.workflow-report.yaml"))
+    manifest = yaml.safe_load(
+        (bundle / "TEST0006.manifest.yaml").read_text(encoding="utf-8")
+    )
+    ref = manifest["assets"]["references"][0]
+    asset = yaml.safe_load((bundle / ref["filename"]).read_text(encoding="utf-8"))
+    assert asset["status"] == "complete"
+    assert asset["markers"]["body"][0]["content"] == "，"
+
+
+def test_punctuation_batch_workflow_reports_remaining_problems(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0007", "甲乙丙丁戊己")
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def submit_batch(self, *, requests_path: Path, metadata: dict | None = None) -> dict:
+            return {"id": "batch_bad", "status": "validating"}
+
+        def retrieve_batch(self, batch_id: str) -> dict:
+            return {
+                "id": batch_id,
+                "status": "completed",
+                "output_file_id": "file_bad",
+                "request_counts": {"completed": 1, "failed": 0, "total": 1},
+            }
+
+        def download_file_text(self, file_id: str) -> str:
+            return json.dumps({
+                "custom_id": "TEST0007:bkk:001:body:main:1",
+                "response": {
+                    "status_code": 200,
+                    "body": {"output_text": "甲X乙丙丁戊己"},
+                },
+            }, ensure_ascii=False) + "\n"
+
+    monkeypatch.setattr(
+        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuation",
+        "batch",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+        "--poll-seconds",
+        "0",
+        "--retries",
+        "0",
+        "--jobs",
+        "2",
+    ])
+
+    assert rc == 1
+    assert "workflow complete: 0 succeeded, 1 failed" in capsys.readouterr().out
+    reports = list((bundle / ".bkk-llm").glob("*.workflow-report.yaml"))
+    assert len(reports) == 1
+    report = yaml.safe_load(reports[0].read_text(encoding="utf-8"))
+    assert report["status"] == "failed"
+    assert report["problems"][0]["id"] == "TEST0007:bkk:001:body:main:1"
+    assert report["problems"][0]["status"] == "rejected"

@@ -14,10 +14,12 @@ from bkk.config import load_rc
 from bkk.short_refs import parse_text_juan_selector, text_id_arg, text_or_path_arg
 
 from .punctuation import (
+    BatchWorkflowOptions,
     collect_batch,
     inspect_batch,
     list_available_models,
     retry_failed_batch,
+    run_batch_workflow,
     run_direct,
     settings_from_rc,
     submit_batch,
@@ -35,8 +37,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     models.add_argument("--json", action="store_true", help="emit full JSON records")
 
-    punct = sub.add_parser("punctuation", help="generate LLM punctuation assets")
-    punct_sub = punct.add_subparsers(dest="op", required=True)
+    _add_punctuation_task(
+        sub.add_parser("punctuation", help="generate LLM punctuation assets")
+    )
+    _add_punctuation_task(
+        sub.add_parser("punctuate", help="alias for punctuation")
+    )
+    return parser
+
+
+def _add_punctuation_task(parser: argparse.ArgumentParser) -> None:
+    punct_sub = parser.add_subparsers(dest="op", required=True)
 
     pr = punct_sub.add_parser("run", help="run punctuation requests directly")
     _add_selection(pr)
@@ -51,6 +62,31 @@ def build_parser() -> argparse.ArgumentParser:
     _add_selection(ps)
     _add_settings(ps)
 
+    pb = punct_sub.add_parser(
+        "batch",
+        help="submit, poll, collect, and retry punctuation batches",
+    )
+    _add_selection(pb)
+    _add_settings(pb)
+    pb.add_argument(
+        "--poll-seconds",
+        type=int,
+        default=300,
+        help="seconds between batch status polls (default: 300)",
+    )
+    pb.add_argument(
+        "--retries",
+        type=int,
+        default=1,
+        help="number of failed-chunk retry batches to run (default: 1)",
+    )
+    pb.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="number of text-level batch workflows to run in parallel",
+    )
+
     pc = punct_sub.add_parser("collect", help="collect an async batch result")
     pc.add_argument("state", type=Path, help="state YAML written by submit")
     _add_settings(pc, selection=False)
@@ -63,7 +99,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prt.add_argument("state", type=Path, help="state YAML written by submit or retry")
     _add_settings(prt, selection=False)
-    return parser
 
 
 def run(argv: list[str] | None = None) -> int:
@@ -86,7 +121,7 @@ def run(argv: list[str] | None = None) -> int:
                 for model in models:
                     print(model["id"])
             return 0
-        if args.task != "punctuation":
+        if args.task not in {"punctuation", "punctuate"}:
             parser.error("unknown task")
         if args.op in {"collect", "inspect", "retry"}:
             state = _load_state(args.state)
@@ -118,6 +153,17 @@ def run(argv: list[str] | None = None) -> int:
             cache_dir=getattr(args, "cache_dir", None),
         )
         bundle, text_id, text_prefix, selected_juans = _selected_args(args)
+        if args.op == "batch":
+            return run_batch_workflow(
+                bundle, out_root, text_id=text_id, text_prefix=text_prefix,
+                selected_juans=selected_juans, settings=settings,
+                include_editions=bool(args.include_editions),
+                options=BatchWorkflowOptions(
+                    poll_seconds=int(args.poll_seconds),
+                    retries=int(args.retries),
+                    jobs=int(args.jobs),
+                ),
+            )
         if args.op == "submit" or getattr(args, "mode", "direct") in {"batch", "auto"}:
             state = submit_batch(
                 bundle, out_root, text_id=text_id, text_prefix=text_prefix,
