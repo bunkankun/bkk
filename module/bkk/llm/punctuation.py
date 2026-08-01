@@ -489,7 +489,9 @@ def collect_batch(
     if not isinstance(output_file_id, str) or not output_file_id:
         raise RuntimeError(f"batch {batch_id} completed without output_file_id")
     output_text = client.download_file_text(output_file_id)
-    outputs, issues = parse_batch_output(output_text)
+    combined_output_text = _combined_output_text(Path(state_path), state, output_text)
+    outputs, issues = parse_batch_output(combined_output_text)
+    issues = _unresolved_parse_issues(outputs, issues)
     tasks = [_task_from_dict(t) for t in state.get("tasks") or [] if isinstance(t, dict)]
     prompt_text = _read_prompt(settings.prompt)
     grouped: dict[tuple[str, str, str | None], list[ChunkTask]] = {}
@@ -500,6 +502,7 @@ def collect_batch(
     all_task_ids = {task.custom_id for task in tasks}
     total_markers = 0
     total_issues = len([issue for issue in issues if issue.custom_id not in all_task_ids])
+    report_issues = [issue for issue in issues if issue.custom_id not in all_task_ids]
     total_assets = 0
     for (juan_dir, manifest_path, short), scope_tasks in grouped.items():
         text_id = scope_tasks[0].text_id
@@ -512,11 +515,16 @@ def collect_batch(
         )
         total_markers += result["markers"]
         total_issues += len(result["issues"])
+        report_issues.extend(result["issues"])
         total_assets += result["assets"]
+    report_path = _write_batch_text_report(
+        Path(state_path), state, tasks, outputs, report_issues,
+    )
     print(
         f"collected batch {batch_id}: wrote {total_assets} asset(s), "
         f"{total_markers} marker(s), {total_issues} rejected chunk(s)"
     )
+    print(f"clear-text report: {report_path}")
     return 1 if total_issues else 0
 
 
@@ -538,6 +546,61 @@ def inspect_batch(
     _save_batch_diagnostics(Path(state_path), state, batch, client)
     print_batch_diagnostics(Path(state_path), batch)
     return 0
+
+
+def retry_failed_batch(
+    state_path: Path,
+    *,
+    settings: LlmSettings,
+    client: LlmClient | None = None,
+) -> Path:
+    state_path = Path(state_path)
+    state = yaml.load(state_path.read_text(encoding="utf-8"), Loader=_YAML_LOADER)
+    if not isinstance(state, dict):
+        raise RuntimeError(f"{state_path}: state file is not a mapping")
+    tasks = [_task_from_dict(t) for t in state.get("tasks") or [] if isinstance(t, dict)]
+    if not tasks:
+        raise RuntimeError(f"{state_path}: no tasks to retry")
+    client = client or make_openai_client(settings.ai_config)
+    batch_obj = state.get("batch") or {}
+    batch_id = batch_obj.get("id")
+    if isinstance(batch_id, str) and batch_id:
+        batch = client.retrieve_batch(batch_id)
+        _save_batch_diagnostics(state_path, state, batch, client)
+    failed_ids = _failed_custom_ids_for_state(state_path, state, tasks)
+    if not failed_ids:
+        raise RuntimeError(f"{state_path}: no failed chunks to retry")
+    failed_tasks = [task for task in tasks if task.custom_id in failed_ids]
+    prompt_text = _read_prompt(settings.prompt)
+    retry_path = state_path.with_name(
+        f"{state_path.stem}.retry-{_utc_stamp()}.batch.yaml"
+    )
+    requests_path = retry_path.with_suffix(".jsonl")
+    requests_path.write_text(
+        "".join(_batch_request_line(task, settings.model, prompt_text)
+                for task in failed_tasks),
+        encoding="utf-8",
+    )
+    batch = client.submit_batch(
+        requests_path=requests_path,
+        metadata={
+            "bkk_task": "punctuation-retry",
+            "model": settings.model[:512],
+            "retry_of": str(state_path.name)[:512],
+        },
+    )
+    previous_output_files = _previous_output_files_for_retry(state_path, state)
+    retry_state = {
+        **state,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "batch": batch,
+        "requests_file": str(requests_path),
+        "retry_of": str(state_path),
+        "retry_custom_ids": sorted(failed_ids),
+        "previous_output_files": previous_output_files,
+    }
+    retry_path.write_text(dump(retry_state), encoding="utf-8")
+    return retry_path
 
 
 def build_tasks_for_scope(
@@ -654,7 +717,11 @@ def write_outputs_for_scope(
                 )
                 continue
             for marker in markers:
-                marker["source"] = REFERENCE_ROLE
+                marker["source"] = (
+                    settings.model
+                    if marker.get("type") == "variant"
+                    else REFERENCE_ROLE
+                )
                 marker["model"] = settings.model
             markers_by_bucket[task.bucket].extend(markers)
             chunk_rows.append(
@@ -797,6 +864,18 @@ def markers_from_punctuated_output(
                 })
             j += 1
             continue
+        if i < len(original):
+            if _in_owned_core(absolute, core_start, core_end, include_core_end):
+                markers.append({
+                    "type": "variant",
+                    "offset": absolute,
+                    "length": 1,
+                    "content": original[i],
+                    "replacement": ch,
+                })
+            i += 1
+            j += 1
+            continue
         raise ValueError(f"unexpected character {ch!r} at output index {j}")
     if i != len(original):
         raise ValueError(
@@ -843,6 +922,182 @@ def parse_batch_output(output_text: str) -> tuple[dict[str, str], list[Validatio
     return outputs, issues
 
 
+def _combined_output_text(
+    state_path: Path,
+    state: dict[str, Any],
+    current_output_text: str,
+) -> str:
+    parts: list[str] = []
+    for raw in state.get("previous_output_files") or []:
+        if not isinstance(raw, str) or not raw:
+            continue
+        path = Path(raw).expanduser()
+        if not path.is_absolute():
+            path = state_path.parent / path
+        if path.exists():
+            parts.append(path.read_text(encoding="utf-8"))
+    parts.append(current_output_text)
+    return "\n".join(part.rstrip("\n") for part in parts if part is not None) + "\n"
+
+
+def _unresolved_parse_issues(
+    outputs: dict[str, str],
+    issues: list[ValidationIssue],
+) -> list[ValidationIssue]:
+    # Retry collection parses older output first and retry output last. If the
+    # retry supplies a valid response for a custom_id that previously had a
+    # request-level error, drop the stale request issue.
+    return [
+        issue for issue in issues
+        if issue.custom_id not in outputs or issue.custom_id.startswith("line-")
+    ]
+
+
+def _failed_custom_ids_for_state(
+    state_path: Path,
+    state: dict[str, Any],
+    tasks: list[ChunkTask],
+) -> set[str]:
+    texts: list[str] = []
+    for suffix in (".batch-output.jsonl", ".batch-error.jsonl"):
+        path = state_path.with_suffix(suffix)
+        if path.exists():
+            texts.append(path.read_text(encoding="utf-8"))
+    combined = _combined_output_text(state_path, state, "\n".join(texts))
+    outputs, issues = parse_batch_output(combined)
+    issues = _unresolved_parse_issues(outputs, issues)
+    failed = {
+        issue.custom_id for issue in issues
+        if issue.custom_id and not issue.custom_id.startswith("line-")
+    }
+    for task in tasks:
+        output = outputs.get(task.custom_id)
+        if output is None:
+            failed.add(task.custom_id)
+            continue
+        try:
+            markers_from_punctuated_output(
+                task.input_text,
+                output,
+                context_start=task.context_start,
+                core_start=task.core_start,
+                core_end=task.core_end,
+                include_core_end=task.core_end == task.stream_end,
+            )
+        except ValueError:
+            failed.add(task.custom_id)
+    return failed
+
+
+def _validation_issues_for_outputs(
+    tasks: list[ChunkTask],
+    outputs: dict[str, str],
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for task in tasks:
+        output = outputs.get(task.custom_id)
+        if output is None:
+            continue
+        try:
+            markers_from_punctuated_output(
+                task.input_text,
+                output,
+                context_start=task.context_start,
+                core_start=task.core_start,
+                core_end=task.core_end,
+                include_core_end=task.core_end == task.stream_end,
+            )
+        except ValueError as exc:
+            issues.append(ValidationIssue(
+                task.custom_id, "invalid-output", str(exc),
+            ))
+    return issues
+
+
+def _previous_output_files_for_retry(
+    state_path: Path,
+    state: dict[str, Any],
+) -> list[str]:
+    out: list[str] = []
+    for raw in state.get("previous_output_files") or []:
+        if isinstance(raw, str) and raw and raw not in out:
+            out.append(raw)
+    current = state_path.with_suffix(".batch-output.jsonl")
+    if current.exists():
+        value = str(current)
+        if value not in out:
+            out.append(value)
+    return out
+
+
+def _write_batch_text_report(
+    state_path: Path,
+    state: dict[str, Any],
+    tasks: list[ChunkTask],
+    outputs: dict[str, str],
+    issues: list[ValidationIssue],
+) -> Path:
+    issues_by_id: dict[str, list[ValidationIssue]] = {}
+    unmatched: list[ValidationIssue] = []
+    task_ids = {task.custom_id for task in tasks}
+    for issue in issues:
+        if issue.custom_id in task_ids:
+            issues_by_id.setdefault(issue.custom_id, []).append(issue)
+        else:
+            unmatched.append(issue)
+    chunks: list[dict[str, Any]] = []
+    for task in tasks:
+        task_issues = issues_by_id.get(task.custom_id, [])
+        if task_issues:
+            status = "rejected"
+        elif task.custom_id in outputs:
+            status = "accepted"
+        else:
+            status = "missing-output"
+        row: dict[str, Any] = {
+            "id": task.custom_id,
+            "text_id": task.text_id,
+            "edition": task.edition,
+            "seq": task.seq,
+            "bucket": task.bucket,
+            "stream": task.stream,
+            "core": [task.core_start, task.core_end],
+            "context": [task.context_start, task.context_end],
+            "status": status,
+            "input_text": task.input_text,
+        }
+        output = outputs.get(task.custom_id)
+        if output is not None:
+            row["output_text"] = output
+        if task_issues:
+            row["issues"] = [
+                {"code": issue.code, "message": issue.message}
+                for issue in task_issues
+            ]
+        chunks.append(row)
+    report: dict[str, Any] = {
+        "schema": 1,
+        "task": "punctuation-batch-report",
+        "state_file": str(state_path),
+        "model": state.get("model"),
+        "batch": state.get("batch"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "chunks": chunks,
+    }
+    if unmatched:
+        report["unmatched_issues"] = [
+            {
+                "custom_id": issue.custom_id,
+                "code": issue.code,
+                "message": issue.message,
+            }
+            for issue in unmatched
+        ]
+    report_path = state_path.with_suffix(".batch-report.yaml")
+    report_path.write_text(dump(report), encoding="utf-8")
+    return report_path
+
+
 def print_batch_diagnostics(state_path: Path, batch: dict[str, Any]) -> None:
     batch_id = batch.get("id") or "<unknown>"
     status = batch.get("status") or "<unknown>"
@@ -874,6 +1129,9 @@ def print_batch_diagnostics(state_path: Path, batch: dict[str, Any]) -> None:
             print(f"  {key}: {file_id}")
             print(f"  saved: {state_path.with_suffix(suffix)}")
     print(f"  saved status: {state_path.with_suffix('.batch-status.yaml')}")
+    report_path = state_path.with_suffix(".batch-report.yaml")
+    if report_path.exists():
+        print(f"  clear-text report: {report_path}")
 
 
 def _save_batch_diagnostics(
@@ -904,6 +1162,17 @@ def _save_batch_diagnostics(
             )
             continue
         target.write_text(text, encoding="utf-8")
+    tasks = [_task_from_dict(t) for t in state.get("tasks") or [] if isinstance(t, dict)]
+    texts: list[str] = []
+    for suffix in (".batch-output.jsonl", ".batch-error.jsonl"):
+        path = state_path.with_suffix(suffix)
+        if path.exists():
+            texts.append(path.read_text(encoding="utf-8"))
+    if tasks and texts:
+        outputs, issues = parse_batch_output("\n".join(texts))
+        issues = _unresolved_parse_issues(outputs, issues)
+        issues.extend(_validation_issues_for_outputs(tasks, outputs))
+        _write_batch_text_report(state_path, state, tasks, outputs, issues)
 
 
 def _compact_json(data: Any) -> str:

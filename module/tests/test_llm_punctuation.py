@@ -103,7 +103,33 @@ def _add_edition(bundle: Path, text_id: str, short: str, text: str) -> None:
     )
 
 
-def test_punctuated_output_becomes_markers_and_rejects_variants() -> None:
+def _task_dict(
+    custom_id: str,
+    text_id: str,
+    input_text: str,
+    *,
+    core_end: int | None = None,
+) -> dict:
+    end = len(input_text) if core_end is None else core_end
+    return {
+        "custom_id": custom_id,
+        "text_id": text_id,
+        "edition": None,
+        "juan_dir": "",
+        "manifest_path": "",
+        "seq": 1,
+        "bucket": "body",
+        "stream": "main",
+        "core_start": 0,
+        "core_end": end,
+        "context_start": 0,
+        "context_end": len(input_text),
+        "stream_end": len(input_text),
+        "input_text": input_text,
+    }
+
+
+def test_punctuated_output_becomes_markers_and_records_variants() -> None:
     markers = punctuation.markers_from_punctuated_output(
         "甲乙丙",
         "甲，乙。\n\n丙",
@@ -118,14 +144,26 @@ def test_punctuated_output_becomes_markers_and_rejects_variants() -> None:
         {"type": "paragraph-break", "offset": 12, "content": ""},
     ]
 
+    assert punctuation.markers_from_punctuated_output(
+        "裏", "里", context_start=0, core_start=0, core_end=1,
+    ) == [
+        {
+            "type": "variant",
+            "offset": 0,
+            "length": 1,
+            "content": "裏",
+            "replacement": "里",
+        }
+    ]
+
     try:
         punctuation.markers_from_punctuated_output(
-            "裏", "里", context_start=0, core_start=0, core_end=1,
+            "甲乙", "甲X乙", context_start=0, core_start=0, core_end=2,
         )
     except ValueError as exc:
         assert "unexpected character" in str(exc)
     else:  # pragma: no cover
-        raise AssertionError("variant substitution was accepted")
+        raise AssertionError("extra output character was accepted")
 
 
 def test_extract_stream_regions_separates_note_and_commentary_and_excludes_head() -> None:
@@ -178,13 +216,13 @@ def test_chunk_region_uses_head_boundaries_and_context_overlap() -> None:
 def test_direct_cli_writes_reference_asset_without_canonical_marker_changes(
     tmp_path: Path, monkeypatch,
 ) -> None:
-    bundle = _write_bundle(tmp_path, "TEST0001", "甲乙丙丁戊己")
+    bundle = _write_bundle(tmp_path, "TEST0001", "裏乙丙丁戊己")
 
     class FakeClient:
         def create_response(self, *, model: str, prompt: str, text: str) -> str:
             assert model == "test-model"
-            assert text == "甲乙丙丁戊己"
-            return "甲，乙。丙丁戊己"
+            assert text == "裏乙丙丁戊己"
+            return "里，乙。丙丁戊己"
 
     monkeypatch.setattr(
         punctuation, "make_openai_client", lambda ai_config: FakeClient(),
@@ -214,6 +252,16 @@ def test_direct_cli_writes_reference_asset_without_canonical_marker_changes(
 
     asset = yaml.safe_load((bundle / ref["filename"]).read_text(encoding="utf-8"))
     assert asset["markers"]["body"] == [
+        {
+            "type": "variant",
+            "offset": 0,
+            "length": 1,
+            "content": "裏",
+            "replacement": "里",
+            "source": "test-model",
+            "model": "test-model",
+            "id": "TEST0001_bkk_001-bkkvar1",
+        },
         {
             "type": "punctuation",
             "offset": 1,
@@ -452,3 +500,136 @@ def test_inspect_batch_writes_status_and_error_file(
     assert state_path.with_suffix(".batch-error.jsonl").read_text(
         encoding="utf-8",
     ).startswith('{"custom_id"')
+
+
+def test_collect_batch_writes_clear_text_report_for_rejected_chunk(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0004", "甲乙")
+    state_path = tmp_path / "punctuation.batch.yaml"
+    task = _task_dict("TEST0004:bkk:001:body:main:1", "TEST0004", "甲乙")
+    task["juan_dir"] = str(bundle)
+    task["manifest_path"] = str(bundle / "TEST0004.manifest.yaml")
+    state_path.write_text(
+        yaml.safe_dump({
+            "schema": 1,
+            "task": "punctuation",
+            "model": "test-model",
+            "prompt_path": str(tmp_path / "prompt"),
+            "chunk_chars": 3000,
+            "overlap": 50,
+            "batch": {"id": "batch_1"},
+            "tasks": [task],
+        }),
+        encoding="utf-8",
+    )
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def retrieve_batch(self, batch_id: str) -> dict:
+            assert batch_id == "batch_1"
+            return {
+                "id": "batch_1",
+                "status": "completed",
+                "output_file_id": "file_output",
+                "request_counts": {"completed": 1, "failed": 0, "total": 1},
+            }
+
+        def download_file_text(self, file_id: str) -> str:
+            assert file_id == "file_output"
+            return (
+                '{"custom_id":"TEST0004:bkk:001:body:main:1",'
+                '"response":{"status_code":200,'
+                '"body":{"output_text":"甲X乙"}}}\n'
+            )
+
+    monkeypatch.setattr(
+        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuation",
+        "collect",
+        str(state_path),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+    ])
+
+    assert rc == 1
+    assert "clear-text report" in capsys.readouterr().out
+    report = yaml.safe_load(
+        state_path.with_suffix(".batch-report.yaml").read_text(encoding="utf-8")
+    )
+    chunk = report["chunks"][0]
+    assert chunk["input_text"] == "甲乙"
+    assert chunk["output_text"] == "甲X乙"
+    assert chunk["status"] == "rejected"
+    assert chunk["issues"][0]["code"] == "invalid-output"
+
+
+def test_retry_failed_batch_submits_only_rejected_chunks(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    state_path = tmp_path / "punctuation.batch.yaml"
+    state_path.write_text(
+        yaml.safe_dump({
+            "schema": 1,
+            "task": "punctuation",
+            "model": "test-model",
+            "prompt_path": str(tmp_path / "prompt"),
+            "chunk_chars": 3000,
+            "overlap": 50,
+            "batch": {"id": "batch_1"},
+            "tasks": [
+                _task_dict("ok", "TEST0005", "甲乙"),
+                _task_dict("bad", "TEST0005", "丙丁"),
+            ],
+        }),
+        encoding="utf-8",
+    )
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+    state_path.with_suffix(".batch-output.jsonl").write_text(
+        "\n".join([
+            '{"custom_id":"ok","response":{"status_code":200,'
+            '"body":{"output_text":"甲，乙"}}}',
+            '{"custom_id":"bad","response":{"status_code":200,'
+            '"body":{"output_text":"丙X丁"}}}',
+        ]) + "\n",
+        encoding="utf-8",
+    )
+    submitted: dict[str, str] = {}
+
+    class FakeClient:
+        def retrieve_batch(self, batch_id: str) -> dict:
+            assert batch_id == "batch_1"
+            return {"id": "batch_1", "status": "completed"}
+
+        def submit_batch(self, *, requests_path: Path, metadata: dict | None = None) -> dict:
+            submitted["body"] = requests_path.read_text(encoding="utf-8")
+            submitted["metadata_task"] = (metadata or {}).get("bkk_task", "")
+            return {"id": "batch_retry", "status": "validating"}
+
+    monkeypatch.setattr(
+        punctuation, "make_openai_client", lambda ai_config: FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuation",
+        "retry",
+        str(state_path),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+    ])
+
+    assert rc == 0
+    assert "submitted retry batch" in capsys.readouterr().out
+    assert submitted["metadata_task"] == "punctuation-retry"
+    assert '"custom_id":"bad"' in submitted["body"]
+    assert '"custom_id":"ok"' not in submitted["body"]
+    retry_states = sorted(tmp_path.glob("punctuation.batch.retry-*.batch.yaml"))
+    assert len(retry_states) == 1
+    retry_state = yaml.safe_load(retry_states[0].read_text(encoding="utf-8"))
+    assert retry_state["retry_custom_ids"] == ["bad"]
+    assert retry_state["previous_output_files"] == [
+        str(state_path.with_suffix(".batch-output.jsonl"))
+    ]

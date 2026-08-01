@@ -17,6 +17,7 @@ from .punctuation import (
     collect_batch,
     inspect_batch,
     list_available_models,
+    retry_failed_batch,
     run_direct,
     settings_from_rc,
     submit_batch,
@@ -56,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
     pi = punct_sub.add_parser("inspect", help="inspect async batch status and diagnostics")
     pi.add_argument("state", type=Path, help="state YAML written by submit")
     _add_settings(pi, selection=False)
+    prt = punct_sub.add_parser(
+        "retry",
+        help="submit a new async batch for chunks that failed or were rejected",
+    )
+    prt.add_argument("state", type=Path, help="state YAML written by submit or retry")
+    _add_settings(prt, selection=False)
     return parser
 
 
@@ -81,7 +88,7 @@ def run(argv: list[str] | None = None) -> int:
             return 0
         if args.task != "punctuation":
             parser.error("unknown task")
-        if args.op in {"collect", "inspect"}:
+        if args.op in {"collect", "inspect", "retry"}:
             state = _load_state(args.state)
             settings = settings_from_rc(
                 rc,
@@ -95,6 +102,10 @@ def run(argv: list[str] | None = None) -> int:
             )
             if args.op == "inspect":
                 return inspect_batch(args.state, settings=settings)
+            if args.op == "retry":
+                retry_state = retry_failed_batch(args.state, settings=settings)
+                print(f"submitted retry batch; state: {retry_state}")
+                return 0
             return collect_batch(args.state, settings=settings)
         settings = settings_from_rc(
             rc,
