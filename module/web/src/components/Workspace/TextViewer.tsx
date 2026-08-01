@@ -255,6 +255,7 @@ function voiceAtOffset(
   offset: number,
   ranges: VoiceRange[],
   includeEnd = false,
+  skipRange?: (range: VoiceRange) => boolean,
 ): string {
   let lo = 0;
   let hi = ranges.length - 1;
@@ -270,12 +271,40 @@ function voiceAtOffset(
   }
   for (let i = best; i >= 0; i--) {
     const range = ranges[i];
+    if (skipRange?.(range)) continue;
     if (range.start > offset) continue;
     if (includeEnd ? offset <= range.end : offset < range.end) {
       return range.name;
     }
   }
   return "default";
+}
+
+function noteBoundaryPunctuationVoice(
+  offset: number,
+  ch: string,
+  ranges: VoiceRange[],
+): string {
+  const noteAtBoundary = ranges.some((range) =>
+    range.name === "note" &&
+    (range.start === offset || range.end === offset)
+  );
+  if (!noteAtBoundary) return voiceAtOffset(offset, ranges, true);
+
+  if (
+    (ch === "(" && ranges.some((range) => range.name === "note" && range.start === offset)) ||
+    (ch === ")" && ranges.some((range) => range.name === "note" && range.end === offset))
+  ) {
+    return "note";
+  }
+
+  return voiceAtOffset(
+    offset,
+    ranges,
+    true,
+    (range) => range.name === "note" &&
+      (range.start === offset || range.end === offset),
+  );
 }
 
 // Build the rendered char stream: decode PUA refs, then inject punctuation
@@ -378,7 +407,6 @@ export function buildRenderedChars(
   for (let i = 0; i <= bodyLength; i++) {
     while (injectIdx < orderedInjects.length && orderedInjects[injectIdx].offset === i) {
       const inject = orderedInjects[injectIdx];
-      const voice = voiceAtOffset(inject.offset, voices, true);
       if (inject.kind === "page") {
         out.push({
           ch: "",
@@ -394,6 +422,7 @@ export function buildRenderedChars(
           },
         });
       } else if (inject.kind === "layout") {
+        const voice = voiceAtOffset(inject.offset, voices, true);
         out.push({
           ch: inject.content,
           srcOffset: null,
@@ -406,6 +435,11 @@ export function buildRenderedChars(
           noteVoice: voice === "note",
         });
       } else {
+        const voice = noteBoundaryPunctuationVoice(
+          inject.offset,
+          inject.ch,
+          voices,
+        );
         out.push({
           ch: inject.ch,
           srcOffset: null,

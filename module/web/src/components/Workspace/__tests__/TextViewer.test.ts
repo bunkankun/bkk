@@ -125,4 +125,25 @@ describe("TextViewer phrase blocks", () => {
         "default",
       ]);
   });
+
+  it("keeps same-offset punctuation outside note paren fences", () => {
+    const markers: JuanMarker[] = [
+      { type: "voice", offset: 1, length: 2, name: "note" },
+      { type: "punctuation", offset: 1, content: "：(" },
+      { type: "punctuation", offset: 3, content: "。)" },
+    ];
+
+    expect(buildRenderedChars("甲乙丙丁", markers, "phrase", "canonical")
+      .map((char) => `${char.ch}:${char.noteVoice === true ? "note" : "plain"}`))
+      .toEqual([
+        "甲:plain",
+        "：:plain",
+        "(:note",
+        "乙:note",
+        "丙:note",
+        "。:plain",
+        "):note",
+        "丁:plain",
+      ]);
+  });
 });
