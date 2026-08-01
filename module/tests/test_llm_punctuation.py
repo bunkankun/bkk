@@ -368,29 +368,39 @@ def test_direct_cli_writes_reference_asset_without_canonical_marker_changes(
 
 
 def test_models_cli_lists_available_models(monkeypatch, capsys) -> None:
+    seen: dict[str, str] = {}
+
     class FakeClient:
         def list_models(self) -> list[dict]:
             return [
-                {"id": "gpt-5-mini", "owned_by": "openai"},
-                {"id": "gpt-4.1", "owned_by": "openai"},
+                {"id": "mistral-large-latest", "owned_by": "mistral"},
+                {"id": "open-mistral-nemo", "owned_by": "mistral"},
             ]
+
+    def fake_client(ai_config: Path, vendor: str = "openai") -> FakeClient:
+        seen["ai_config"] = str(ai_config)
+        seen["vendor"] = vendor
+        return FakeClient()
 
     monkeypatch.setattr(
         punctuation,
         "make_openai_client",
-        lambda ai_config, vendor="openai": FakeClient(),
+        fake_client,
     )
 
     rc = llm_run([
         "models",
         "--ai-config",
         "/tmp/missing.xml",
+        "--vendor",
+        "mistral",
         "--contains",
-        "5",
+        "large",
     ])
 
     assert rc == 0
-    assert capsys.readouterr().out == "gpt-5-mini\n"
+    assert seen == {"ai_config": "/tmp/missing.xml", "vendor": "mistral"}
+    assert capsys.readouterr().out == "mistral-large-latest\n"
 
 
 def test_vendors_cli_lists_api_token_parent_names(tmp_path: Path, capsys) -> None:
@@ -443,6 +453,61 @@ def test_ai_config_selects_vendor_by_api_token_parent_name(tmp_path: Path) -> No
         "base_url": "https://example.test/v1",
         "model": "mistral-test",
     }
+
+
+def test_client_config_adds_known_vendor_base_url_defaults(tmp_path: Path) -> None:
+    path = tmp_path / "ai-config.xml"
+    path.write_text(
+        "<engines>"
+        "<mistral-config><api-token>mistral-secret</api-token>"
+        "<model>mistral-test</model></mistral-config>"
+        "<deepseek-config><api-token>deepseek-secret</api-token>"
+        "<model>deepseek-test</model></deepseek-config>"
+        "<sakana-config><api-token>sakana-secret</api-token>"
+        "<model>fugu-ultra</model></sakana-config>"
+        "</engines>",
+        encoding="utf-8",
+    )
+
+    assert punctuation._client_config_for_vendor(path, "mistral")["base_url"] == (
+        "https://api.mistral.ai/v1"
+    )
+    assert punctuation._client_config_for_vendor(path, "deepseek")["base_url"] == (
+        "https://api.deepseek.com"
+    )
+    assert punctuation._client_config_for_vendor(path, "sakana")["base_url"] == (
+        "https://api.sakana.ai/v1"
+    )
+
+
+def test_client_config_preserves_explicit_vendor_base_url(tmp_path: Path) -> None:
+    path = tmp_path / "ai-config.xml"
+    path.write_text(
+        "<engines><mistral-config><api-token>mistral-secret</api-token>"
+        "<base-url>https://proxy.example/v1</base-url>"
+        "</mistral-config></engines>",
+        encoding="utf-8",
+    )
+
+    assert punctuation._client_config_for_vendor(path, "mistral")["base_url"] == (
+        "https://proxy.example/v1"
+    )
+
+
+def test_client_config_rejects_unknown_vendor_without_base_url(tmp_path: Path) -> None:
+    path = tmp_path / "ai-config.xml"
+    path.write_text(
+        "<engines><custom-config><api-token>custom-secret</api-token>"
+        "<model>custom-model</model></custom-config></engines>",
+        encoding="utf-8",
+    )
+
+    try:
+        punctuation._client_config_for_vendor(path, "custom")
+    except ValueError as exc:
+        assert "requires a base_url/base-url" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("unknown vendor defaulted to OpenAI")
 
 
 def test_settings_default_min_chars_and_rc_override(tmp_path: Path) -> None:
@@ -541,6 +606,132 @@ def test_run_direct_defaults_to_master_only(tmp_path: Path, capsys) -> None:
     assert "[master]" in out
     assert "edition W" not in out
     assert "would submit 1 chunk request(s)" in out
+
+
+def test_punctuate_run_cli_defaults_to_master_only(tmp_path: Path, capsys) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0004", "甲乙丙丁戊己")
+    _add_edition(bundle, "TEST0004", "W", "庚辛壬癸子丑")
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    rc = llm_run([
+        "punctuate",
+        "run",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+        "--dry-run",
+    ])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "[master]" in out
+    assert "edition W" not in out
+    assert "would submit 1 chunk request(s)" in out
+
+
+def test_punctuate_run_writes_clear_text_report_for_rejected_chunk(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0009", "甲乙丙丁戊己")
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def create_response(self, *, model: str, prompt: str, text: str) -> str:
+            return "甲乙丙丁戊"
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "run",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+    ])
+
+    assert rc == 1
+    assert "clear-text report" in capsys.readouterr().out
+    reports = list((bundle / ".bkk-llm").glob("*.direct-report.yaml"))
+    assert len(reports) == 1
+    report = yaml.safe_load(reports[0].read_text(encoding="utf-8"))
+    assert report["task"] == "punctuation-direct-report"
+    assert report["best_effort"] is False
+    chunk = report["chunks"][0]
+    assert chunk["status"] == "rejected"
+    assert chunk["input_text"] == "甲乙丙丁戊己"
+    assert chunk["output_text"] == "甲乙丙丁戊"
+    assert chunk["issues"][0]["code"] == "invalid-output"
+    assert chunk["issues"][0]["message"] == "output omitted 1 original character(s)"
+
+
+def test_punctuate_run_best_effort_writes_error_marker(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0010", "甲乙丙丁戊己")
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def create_response(self, *, model: str, prompt: str, text: str) -> str:
+            return "甲乙丙丁戊"
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "run",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+        "--best-effort",
+    ])
+
+    assert rc == 0
+    assert "clear-text report" in capsys.readouterr().out
+    report = yaml.safe_load(
+        next((bundle / ".bkk-llm").glob("*.direct-report.yaml")).read_text(
+            encoding="utf-8",
+        )
+    )
+    assert report["best_effort"] is True
+    manifest = yaml.safe_load(
+        (bundle / "TEST0010.manifest.yaml").read_text(encoding="utf-8")
+    )
+    ref = manifest["assets"]["references"][0]
+    asset = yaml.safe_load((bundle / ref["filename"]).read_text(encoding="utf-8"))
+    error_marker = next(
+        marker for marker in asset["markers"]["body"]
+        if marker["type"] == "llm-error"
+    )
+    assert error_marker["offset"] == 0
+    assert error_marker["length"] == 6
+    assert error_marker["issue"] == {
+        "code": "invalid-output",
+        "message": "output omitted 1 original character(s)",
+    }
+    assert error_marker["model"] == "test-model"
 
 
 def test_run_direct_include_editions_opt_in(tmp_path: Path, capsys) -> None:

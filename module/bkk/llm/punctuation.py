@@ -39,6 +39,11 @@ DEFAULT_BATCH_POLL_SECONDS = 300
 DEFAULT_BATCH_RETRIES = 1
 DEFAULT_BATCH_JOBS = 1
 MAX_ADJACENT_VARIANT_CHARS = 2
+DEFAULT_VENDOR_BASE_URLS = {
+    "mistral": "https://api.mistral.ai/v1",
+    "deepseek": "https://api.deepseek.com",
+    "sakana": "https://api.sakana.ai/v1",
+}
 _BATCH_TERMINAL_STATUSES = {
     "completed", "failed", "expired", "cancelled", "canceled",
 }
@@ -332,7 +337,7 @@ def _node_value(
 
 
 def make_openai_client(ai_config: Path, vendor: str = DEFAULT_VENDOR) -> LlmClient:
-    config = load_ai_config(ai_config, vendor=vendor)
+    config = _client_config_for_vendor(ai_config, vendor)
     try:
         from openai import OpenAI
     except ImportError as exc:  # pragma: no cover - depends on environment
@@ -350,6 +355,24 @@ def make_openai_client(ai_config: Path, vendor: str = DEFAULT_VENDOR) -> LlmClie
     if config.get("base_url"):
         kwargs["base_url"] = config["base_url"]
     return OpenAiResponsesClient(OpenAI(**kwargs))
+
+
+def _client_config_for_vendor(
+    ai_config: Path,
+    vendor: str = DEFAULT_VENDOR,
+) -> dict[str, str]:
+    config = load_ai_config(ai_config, vendor=vendor)
+    normalized_vendor = _normalize_vendor(vendor)
+    if not config.get("base_url"):
+        default_base_url = DEFAULT_VENDOR_BASE_URLS.get(normalized_vendor)
+        if default_base_url:
+            config["base_url"] = default_base_url
+        elif normalized_vendor != DEFAULT_VENDOR:
+            raise ValueError(
+                f"vendor {normalized_vendor!r} requires a base_url/base-url "
+                "in the AI config"
+            )
+    return config
 
 
 class OpenAiResponsesClient:
@@ -449,6 +472,7 @@ def run_direct(
     settings: LlmSettings,
     dry_run: bool,
     include_editions: bool = False,
+    best_effort: bool = False,
     client: LlmClient | None = None,
 ) -> int:
     if not dry_run:
@@ -456,8 +480,12 @@ def run_direct(
     prompt_text = _read_prompt(settings.prompt)
     bundle_dirs = _selected_bundle_dirs(bundle, out_root, text_id, text_prefix)
     total_tasks = total_markers = total_issues = 0
+    run_stamp = _utc_stamp()
     for bundle_dir in bundle_dirs:
         print(f"[bundle {bundle_dir.name}]")
+        bundle_tasks: list[ChunkTask] = []
+        bundle_outputs: dict[str, str] = {}
+        bundle_issues: list[ValidationIssue] = []
         for scope in _scope_targets(bundle_dir, include_editions=include_editions):
             print(f"[{scope_label(scope[2])}]")
             tasks = build_tasks_for_scope(
@@ -465,29 +493,50 @@ def run_direct(
                 settings=settings, prompt_text=prompt_text,
                 selected_juans=selected_juans,
             )
+            bundle_tasks.extend(tasks)
             outputs: dict[str, str] = {}
+            request_issues: list[ValidationIssue] = []
             total_tasks += len(tasks)
             if dry_run:
                 print(f"  would submit {len(tasks)} chunk request(s)")
             else:
                 assert client is not None
                 for task in tasks:
-                    outputs[task.custom_id] = client.create_response(
-                        model=settings.model, prompt=prompt_text,
-                        text=task.input_text,
-                    )
+                    try:
+                        outputs[task.custom_id] = client.create_response(
+                            model=settings.model, prompt=prompt_text,
+                            text=task.input_text,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - diagnose per chunk
+                        request_issues.append(ValidationIssue(
+                            task.custom_id, "request-error", str(exc),
+                        ))
+                bundle_outputs.update(outputs)
                 result = write_outputs_for_scope(
                     scope[0], scope[1], bundle_dir.name, scope[2], tasks,
                     outputs, settings=settings, prompt_text=prompt_text,
-                    batch_id=None,
+                    batch_id=None, preexisting_issues=request_issues,
+                    best_effort=best_effort,
                 )
                 total_markers += result["markers"]
                 total_issues += len(result["issues"])
+                bundle_issues.extend(result["issues"])
                 print(
                     f"  wrote {result['assets']} asset(s), "
                     f"{result['markers']} marker(s), "
                     f"{len(result['issues'])} rejected chunk(s)"
                 )
+        if not dry_run and bundle_tasks:
+            report_path = _write_direct_text_report(
+                _direct_report_path(bundle_dir, settings, run_stamp),
+                settings=settings,
+                bundle_dir=bundle_dir,
+                tasks=bundle_tasks,
+                outputs=bundle_outputs,
+                issues=bundle_issues,
+                best_effort=best_effort,
+            )
+            print(f"clear-text report: {report_path}")
     if dry_run:
         print(f"would submit {total_tasks} chunk request(s)")
         return 0
@@ -495,7 +544,7 @@ def run_direct(
         f"generated {total_markers} marker(s) from {total_tasks} chunk "
         f"request(s)"
     )
-    return 1 if total_issues else 0
+    return 0 if best_effort else (1 if total_issues else 0)
 
 
 def submit_batch(
@@ -1634,6 +1683,58 @@ def _write_batch_text_report(
     outputs: dict[str, str],
     issues: list[ValidationIssue],
 ) -> Path:
+    report_path = state_path.with_suffix(".batch-report.yaml")
+    _write_punctuation_text_report(
+        report_path,
+        task_name="punctuation-batch-report",
+        model=state.get("model"),
+        tasks=tasks,
+        outputs=outputs,
+        issues=issues,
+        extra={
+            "state_file": str(state_path),
+            "batch": state.get("batch"),
+        },
+    )
+    return report_path
+
+
+def _write_direct_text_report(
+    report_path: Path,
+    *,
+    settings: LlmSettings,
+    bundle_dir: Path,
+    tasks: list[ChunkTask],
+    outputs: dict[str, str],
+    issues: list[ValidationIssue],
+    best_effort: bool,
+) -> Path:
+    _write_punctuation_text_report(
+        report_path,
+        task_name="punctuation-direct-report",
+        model=settings.model,
+        tasks=tasks,
+        outputs=outputs,
+        issues=issues,
+        extra={
+            "bundle": str(bundle_dir),
+            "vendor": settings.vendor,
+            "best_effort": best_effort,
+        },
+    )
+    return report_path
+
+
+def _write_punctuation_text_report(
+    report_path: Path,
+    *,
+    task_name: str,
+    model: Any,
+    tasks: list[ChunkTask],
+    outputs: dict[str, str],
+    issues: list[ValidationIssue],
+    extra: dict[str, Any],
+) -> None:
     issues_by_id: dict[str, list[ValidationIssue]] = {}
     unmatched: list[ValidationIssue] = []
     task_ids = {task.custom_id for task in tasks}
@@ -1674,10 +1775,9 @@ def _write_batch_text_report(
         chunks.append(row)
     report: dict[str, Any] = {
         "schema": 1,
-        "task": "punctuation-batch-report",
-        "state_file": str(state_path),
-        "model": state.get("model"),
-        "batch": state.get("batch"),
+        "task": task_name,
+        **extra,
+        "model": model,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "chunks": chunks,
     }
@@ -1686,9 +1786,21 @@ def _write_batch_text_report(
             _issue_report_row(issue, include_custom_id=True)
             for issue in unmatched
         ]
-    report_path = state_path.with_suffix(".batch-report.yaml")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(dump(report), encoding="utf-8")
-    return report_path
+
+
+def _direct_report_path(
+    bundle_dir: Path,
+    settings: LlmSettings,
+    run_stamp: str,
+) -> Path:
+    state_dir = _state_dir(settings, bundle_dir)
+    filename = (
+        f"punctuation-direct-{model_slug(bundle_dir.name)}-{run_stamp}-"
+        f"{model_slug(settings.model)}.direct-report.yaml"
+    )
+    return state_dir / filename
 
 
 def _issue_report_row(
@@ -1891,7 +2003,7 @@ def _selected_bundle_dirs(
 def _scope_targets(
     bundle_dir: Path,
     *,
-    include_editions: bool = True,
+    include_editions: bool = False,
 ) -> list[tuple[Path, Path, str | None]]:
     text_id = bundle_dir.name
     manifest = bundle_dir / f"{text_id}.manifest.yaml"

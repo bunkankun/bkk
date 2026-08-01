@@ -67,6 +67,11 @@ def _add_punctuation_task(parser: argparse.ArgumentParser) -> None:
         help="direct runs now; batch/auto submit an async batch job",
     )
     pr.add_argument("--dry-run", action="store_true")
+    pr.add_argument(
+        "--best-effort",
+        action="store_true",
+        help="write partial markers plus llm-error markers for failed chunks",
+    )
 
     ps = punct_sub.add_parser("submit", help="submit an async OpenAI batch")
     _add_selection(ps)
@@ -219,6 +224,7 @@ def run(argv: list[str] | None = None) -> int:
             selected_juans=selected_juans, settings=settings,
             dry_run=bool(args.dry_run),
             include_editions=bool(args.include_editions),
+            best_effort=bool(getattr(args, "best_effort", False)),
         )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
