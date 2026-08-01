@@ -78,6 +78,30 @@ def test_from_env_reads_parallels_root(
     assert config.parallels_root == env_root.resolve()
 
 
+def test_from_env_reads_punctuation_root(
+    corpus: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    rc_root = tmp_path / "rc-punctuation"
+    env_root = tmp_path / "env-punctuation"
+    monkeypatch.delenv("BKK_PUNCTUATION_ROOT", raising=False)
+
+    config = ServeConfig.from_env(
+        corpus_root=corpus, rc={"punctuation_root": "assets"},
+    )
+    assert config.punctuation_root is None
+
+    config = ServeConfig.from_env(
+        corpus_root=corpus, rc={"punctuation_root": rc_root},
+    )
+    assert config.punctuation_root == rc_root.resolve()
+
+    monkeypatch.setenv("BKK_PUNCTUATION_ROOT", str(env_root))
+    config = ServeConfig.from_env(
+        corpus_root=corpus, rc={"punctuation_root": rc_root},
+    )
+    assert config.punctuation_root == env_root.resolve()
+
+
 def test_from_env_enables_bluesky_only_on_exact_true(
     corpus: Path, monkeypatch: pytest.MonkeyPatch,
 ):

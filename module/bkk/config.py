@@ -26,7 +26,7 @@ _PATH_KEYS = frozenset(
      "annotations_out", "annotations_root", "annotations_index",
      "parallels_root",
      "comments_root", "translations_root",
-     "source_root", "ai_config", "prompt",
+     "source_root", "ai_config", "prompt", "punctuation_root",
      "report"}
 )
 
@@ -52,6 +52,9 @@ def _resolve_section_paths(section: dict, rc_dir: Path) -> dict:
     """Expand ~ and resolve relative path strings for known path keys."""
     result = {}
     for k, v in section.items():
+        if k == "punctuation_root" and isinstance(v, str) and v.strip() == "assets":
+            result[k] = "assets"
+            continue
         if k in _PATH_KEYS and isinstance(v, str):
             p = Path(v).expanduser()
             if not p.is_absolute():

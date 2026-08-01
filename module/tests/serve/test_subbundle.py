@@ -205,6 +205,53 @@ def test_list_punctuation_sidecars(tmp_path: Path):
     ]
 
 
+def test_list_punctuation_sidecars_from_external_root(tmp_path: Path):
+    corpus = tmp_path / "corpus"
+    section = corpus / "AST0"
+    section.mkdir(parents=True)
+    punctuation_root = tmp_path / "punctuation"
+    filename = "AST0004_001.test-model.punctuation.yaml"
+    write_bundle(
+        section,
+        "AST0004",
+        "甲乙丙",
+    )
+    asset_path = punctuation_root / "AST0" / "AST0004" / filename
+    asset_path.parent.mkdir(parents=True)
+    asset_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema": 1,
+                "status": "complete",
+                "markers": {
+                    "body": [
+                        {"type": "punctuation", "offset": 1, "content": "。"}
+                    ]
+                },
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(
+            ServeConfig(
+                corpus_root=corpus,
+                index_path=corpus / "_corpus.bkkx",
+                punctuation_root=punctuation_root,
+            )
+        )
+    )
+
+    r = client.get("/bundles/AST0004/juan/1/punctuation-sidecars")
+
+    assert r.status_code == 200
+    sidecar = r.json()["sidecars"][0]
+    assert sidecar["name"] == filename
+    assert sidecar["status"] == "complete"
+    assert sidecar["markers"]["body"][0]["content"] == "。"
+
+
 def test_get_asset_not_declared(assets_client: TestClient):
     r = assets_client.get("/bundles/AST0001/assets/secrets.txt")
     assert r.status_code == 400

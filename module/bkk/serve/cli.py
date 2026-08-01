@@ -109,6 +109,8 @@ def run(argv: list[str] | None = None) -> int:
     from bkk.config import load_rc
     rc = load_rc()
     rc_serve = {**rc.get("global", {}), **rc.get("serve", {}), **rc.get("annotations", {})}
+    if "punctuation_root" in (rc.get("llm") or {}):
+        rc_serve["punctuation_root"] = rc["llm"]["punctuation_root"]
     rc_core = rc.get("core", {})
     rc_duplications = rc.get("duplications", {})
     rc_voice = rc.get("voice", {})
@@ -168,6 +170,8 @@ def run(argv: list[str] | None = None) -> int:
             os.environ["BKK_ANNOTATIONS_INDEX_PATH"] = str(config.annotations_index_path)
         if config.parallels_root is not None:
             os.environ["BKK_PARALLELS_ROOT"] = str(config.parallels_root)
+        if config.punctuation_root is not None:
+            os.environ["BKK_PUNCTUATION_ROOT"] = str(config.punctuation_root)
         os.environ["BKK_HOST"] = config.host
         os.environ["BKK_PORT"] = str(config.port)
         os.environ["BKK_ADMIN_TEAM"] = config.admin_team

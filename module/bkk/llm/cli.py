@@ -173,6 +173,7 @@ def run(argv: list[str] | None = None) -> int:
                 overlap=getattr(args, "overlap", None) or state.get("overlap"),
                 min_chars=getattr(args, "min_chars", None) or state.get("min_chars"),
                 cache_dir=getattr(args, "cache_dir", None),
+                punctuation_root=state.get("punctuation_root"),
             )
             if args.op == "inspect":
                 return inspect_batch(args.state, settings=settings)

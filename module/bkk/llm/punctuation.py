@@ -7,6 +7,8 @@ import concurrent.futures
 import json
 import re
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +34,7 @@ DEFAULT_OVERLAP = 50
 DEFAULT_MIN_CHARS = 6
 DEFAULT_AI_CONFIG = Path("~/ai-config.xml")
 DEFAULT_VENDOR = "openai"
+DEFAULT_PUNCTUATION_ROOT = "assets"
 REFERENCE_ROLE = "llm-punctuation"
 STATE_SCHEMA_VERSION = 1
 ASSET_SCHEMA_VERSION = 1
@@ -43,6 +46,7 @@ DEFAULT_VENDOR_BASE_URLS = {
     "mistral": "https://api.mistral.ai/v1",
     "deepseek": "https://api.deepseek.com",
     "sakana": "https://api.sakana.ai/v1",
+    "or": "https://openrouter.ai/api/v1",
 }
 _BATCH_TERMINAL_STATUSES = {
     "completed", "failed", "expired", "cancelled", "canceled",
@@ -88,6 +92,7 @@ class LlmSettings:
     overlap: int = DEFAULT_OVERLAP
     min_chars: int = DEFAULT_MIN_CHARS
     cache_dir: Path | None = None
+    punctuation_root: str | Path = DEFAULT_PUNCTUATION_ROOT
 
 
 @dataclass(frozen=True)
@@ -184,11 +189,16 @@ def settings_from_rc(
     overlap: int | None = None,
     min_chars: int | None = None,
     cache_dir: Path | str | None = None,
+    punctuation_root: Path | str | None = None,
 ) -> LlmSettings:
     llm = rc.get("llm") or {}
     raw_ai_config = ai_config if ai_config is not None else llm.get("ai_config")
     raw_prompt = prompt if prompt is not None else llm.get("prompt")
     raw_cache_dir = cache_dir if cache_dir is not None else llm.get("cache_dir")
+    raw_punctuation_root = (
+        punctuation_root if punctuation_root is not None
+        else llm.get("punctuation_root")
+    )
     config_path = Path(raw_ai_config or DEFAULT_AI_CONFIG).expanduser()
     prompt_path = _resolve_prompt_path(raw_prompt)
     chosen_vendor = _normalize_vendor(vendor or llm.get("vendor") or DEFAULT_VENDOR)
@@ -226,6 +236,7 @@ def settings_from_rc(
         overlap=overlap_value,
         min_chars=min_chars_value,
         cache_dir=resolved_cache,
+        punctuation_root=_normalize_punctuation_root(raw_punctuation_root),
     )
 
 
@@ -338,6 +349,7 @@ def _node_value(
 
 def make_openai_client(ai_config: Path, vendor: str = DEFAULT_VENDOR) -> LlmClient:
     config = _client_config_for_vendor(ai_config, vendor)
+    normalized_vendor = _normalize_vendor(vendor)
     try:
         from openai import OpenAI
     except ImportError as exc:  # pragma: no cover - depends on environment
@@ -354,7 +366,15 @@ def make_openai_client(ai_config: Path, vendor: str = DEFAULT_VENDOR) -> LlmClie
         kwargs["project"] = config["project"]
     if config.get("base_url"):
         kwargs["base_url"] = config["base_url"]
-    return OpenAiResponsesClient(OpenAI(**kwargs))
+    openai_client = OpenAI(**kwargs)
+    if normalized_vendor == "or":
+        api_key = config.get("api_key")
+        if not api_key:
+            raise ValueError("vendor 'or' requires an api_key/api-token")
+        return OpenRouterResponsesClient(
+            openai_client, api_key=api_key, base_url=config["base_url"],
+        )
+    return OpenAiResponsesClient(openai_client)
 
 
 def _client_config_for_vendor(
@@ -444,6 +464,118 @@ class OpenAiResponsesClient:
         return str(content)
 
 
+class OpenRouterResponsesClient(OpenAiResponsesClient):
+    def __init__(self, client: Any, *, api_key: str, base_url: str) -> None:
+        super().__init__(client)
+        self.api_key = api_key
+        self.base_url = base_url
+
+    def submit_batch(
+        self, *, requests_path: Path, metadata: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        del metadata
+        payload = _openrouter_batch_payload(requests_path)
+        return self._request_json("POST", "/api/beta/batches", payload)
+
+    def retrieve_batch(self, batch_id: str) -> dict[str, Any]:
+        return self._request_json("GET", f"/api/beta/batches/{batch_id}")
+
+    def _request_json(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        body = None
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        if payload is not None:
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(
+            _openrouter_beta_url(self.base_url, path),
+            data=body,
+            headers=headers,
+            method=method,
+        )
+        try:
+            with urllib.request.urlopen(request) as response:  # noqa: S310
+                data = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"OpenRouter batch {method} {path} failed with "
+                f"HTTP {exc.code}: {detail}"
+            ) from exc
+        parsed = json.loads(data)
+        if not isinstance(parsed, dict):
+            raise RuntimeError("OpenRouter batch response was not a JSON object")
+        return parsed
+
+
+def _openrouter_batch_payload(requests_path: Path) -> dict[str, Any]:
+    endpoint: str | None = None
+    model: str | None = None
+    requests: list[dict[str, Any]] = []
+    for line_no, line in enumerate(requests_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if not isinstance(row, dict):
+            raise RuntimeError(f"{requests_path}: line {line_no} is not an object")
+        custom_id = row.get("custom_id")
+        url = row.get("url")
+        body = row.get("body")
+        if not isinstance(custom_id, str) or not custom_id:
+            raise RuntimeError(f"{requests_path}: line {line_no} missing custom_id")
+        if not isinstance(url, str) or not url:
+            raise RuntimeError(f"{requests_path}: line {line_no} missing url")
+        if not isinstance(body, dict):
+            raise RuntimeError(f"{requests_path}: line {line_no} missing body")
+        if endpoint is None:
+            endpoint = url
+        elif endpoint != url:
+            raise RuntimeError(
+                f"{requests_path}: OpenRouter batch cannot mix endpoints "
+                f"{endpoint!r} and {url!r}"
+            )
+        body_model = body.get("model")
+        if isinstance(body_model, str) and body_model:
+            if model is None:
+                model = body_model
+            elif model != body_model:
+                raise RuntimeError(
+                    f"{requests_path}: OpenRouter batch cannot mix models "
+                    f"{model!r} and {body_model!r}"
+                )
+        next_body = dict(body)
+        next_body.pop("model", None)
+        requests.append({"custom_id": custom_id, "body": next_body})
+    if endpoint is None or model is None or not requests:
+        raise RuntimeError(f"{requests_path}: no OpenRouter batch requests")
+    return {"endpoint": endpoint, "model": model, "requests": requests}
+
+
+def _openrouter_beta_url(base_url: str, path: str) -> str:
+    normalized = base_url.rstrip("/")
+    for suffix in ("/api/v1", "/api"):
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)]
+            break
+    return f"{normalized}{path}"
+
+
+def _inline_batch_results_output_text(batch: dict[str, Any]) -> str | None:
+    results = batch.get("results")
+    if not isinstance(results, list):
+        return None
+    rows = [
+        json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+        for result in results
+        if isinstance(result, dict)
+    ]
+    return "\n".join(rows) + ("\n" if rows else "")
+
+
 def list_available_models(
     ai_config: Path,
     *,
@@ -517,6 +649,7 @@ def run_direct(
                     outputs, settings=settings, prompt_text=prompt_text,
                     batch_id=None, preexisting_issues=request_issues,
                     best_effort=best_effort,
+                    corpus_root=out_root,
                 )
                 total_markers += result["markers"]
                 total_issues += len(result["issues"])
@@ -601,6 +734,8 @@ def submit_batch(
         "chunk_chars": settings.chunk_chars,
         "overlap": settings.overlap,
         "min_chars": settings.min_chars,
+        "punctuation_root": _punctuation_root_state_value(settings),
+        "corpus_root": str(out_root) if out_root is not None else None,
         "batch": batch,
         "requests_file": str(requests_path),
         "tasks": [_task_to_dict(task) for task in all_tasks],
@@ -882,6 +1017,9 @@ def collect_batch(
             chunk_chars=int(state.get("chunk_chars") or DEFAULT_CHUNK_CHARS),
             overlap=int(state.get("overlap") or DEFAULT_OVERLAP),
             min_chars=int(state.get("min_chars") or DEFAULT_MIN_CHARS),
+            punctuation_root=_normalize_punctuation_root(
+                state.get("punctuation_root"),
+            ),
         )
     client = client or make_openai_client(settings.ai_config, settings.vendor)
     batch = client.retrieve_batch(batch_id)
@@ -890,10 +1028,7 @@ def collect_batch(
     if status != "completed":
         print_batch_diagnostics(Path(state_path), batch)
         return 1
-    output_file_id = batch.get("output_file_id")
-    if not isinstance(output_file_id, str) or not output_file_id:
-        raise RuntimeError(f"batch {batch_id} completed without output_file_id")
-    output_text = client.download_file_text(output_file_id)
+    output_text = _batch_output_text(Path(state_path), batch, client)
     combined_output_text = _combined_output_text(Path(state_path), state, output_text)
     outputs, issues = parse_batch_output(combined_output_text)
     issues = _unresolved_parse_issues(outputs, issues)
@@ -918,6 +1053,7 @@ def collect_batch(
             scope_tasks, outputs, settings=settings, prompt_text=prompt_text,
             batch_id=batch_id, preexisting_issues=scope_issues,
             best_effort=best_effort,
+            corpus_root=_state_corpus_root(state),
         )
         total_markers += result["markers"]
         total_issues += len(result["issues"])
@@ -932,6 +1068,22 @@ def collect_batch(
     )
     print(f"clear-text report: {report_path}")
     return 0 if best_effort else (1 if total_issues else 0)
+
+
+def _batch_output_text(
+    state_path: Path,
+    batch: dict[str, Any],
+    client: LlmClient,
+) -> str:
+    del state_path
+    inline = _inline_batch_results_output_text(batch)
+    if inline is not None:
+        return inline
+    output_file_id = batch.get("output_file_id")
+    if isinstance(output_file_id, str) and output_file_id:
+        return client.download_file_text(output_file_id)
+    batch_id = batch.get("id") or "<unknown>"
+    raise RuntimeError(f"batch {batch_id} completed without output_file_id or results")
 
 
 def inspect_batch(
@@ -1068,6 +1220,7 @@ def write_outputs_for_scope(
     batch_id: str | None,
     preexisting_issues: list[ValidationIssue] | None = None,
     best_effort: bool = False,
+    corpus_root: Path | None = None,
 ) -> dict[str, Any]:
     manifest = _yaml_load(manifest_path)
     tasks_by_seq: dict[int, list[ChunkTask]] = {}
@@ -1174,8 +1327,15 @@ def write_outputs_for_scope(
             markers_by_bucket=markers_by_bucket, chunks=chunk_rows,
             batch_id=batch_id,
         )
-        filename = llm_punctuation_asset_filename(text_id, seq, short, settings.model)
-        files.append((juan_dir / filename, asset))
+        filename = llm_punctuation_asset_filename(
+            text_id, seq, short, settings.model,
+            punctuation_root=settings.punctuation_root,
+        )
+        path = llm_punctuation_asset_path(
+            juan_dir, text_id, seq, short, settings,
+            corpus_root=corpus_root,
+        )
+        files.append((path, asset))
         marker_hashes[seq] = (filename, asset["hash"])
         total_assets += 1
         total_markers += marker_count
@@ -1183,7 +1343,8 @@ def write_outputs_for_scope(
         for path, asset in files:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(dump(asset), encoding="utf-8")
-        _update_manifest_references(manifest_path, marker_hashes, settings.model)
+        if _punctuation_root_is_assets(settings.punctuation_root):
+            _update_manifest_references(manifest_path, marker_hashes, settings.model)
     return {"assets": total_assets, "markers": total_markers, "issues": issues}
 
 
@@ -1849,6 +2010,8 @@ def print_batch_diagnostics(state_path: Path, batch: dict[str, Any]) -> None:
         if isinstance(file_id, str) and file_id:
             print(f"  {key}: {file_id}")
             print(f"  saved: {state_path.with_suffix(suffix)}")
+    if isinstance(batch.get("results"), list):
+        print(f"  inline results saved: {state_path.with_suffix('.batch-output.jsonl')}")
     print(f"  saved status: {state_path.with_suffix('.batch-status.yaml')}")
     report_path = state_path.with_suffix(".batch-report.yaml")
     if report_path.exists():
@@ -1883,6 +2046,11 @@ def _save_batch_diagnostics(
             )
             continue
         target.write_text(text, encoding="utf-8")
+    inline_output = _inline_batch_results_output_text(batch)
+    if inline_output is not None:
+        target = state_path.with_suffix(".batch-output.jsonl")
+        if not target.exists():
+            target.write_text(inline_output, encoding="utf-8")
     tasks = [_task_from_dict(t) for t in state.get("tasks") or [] if isinstance(t, dict)]
     texts: list[str] = []
     for suffix in (".batch-output.jsonl", ".batch-error.jsonl"):
@@ -1955,10 +2123,44 @@ def reference_asset_hash(asset: dict[str, Any]) -> str:
 
 
 def llm_punctuation_asset_filename(
+    text_id: str,
+    seq: int,
+    short: str | None,
+    model: str,
+    *,
+    punctuation_root: str | Path = DEFAULT_PUNCTUATION_ROOT,
+) -> str:
+    base = llm_punctuation_asset_basename(text_id, seq, short, model)
+    if _punctuation_root_is_assets(punctuation_root):
+        return f"assets/{base}"
+    return base
+
+
+def llm_punctuation_asset_basename(
     text_id: str, seq: int, short: str | None, model: str,
 ) -> str:
     suffix = f"-{short}" if short else ""
-    return f"assets/{text_id}_{seq:03d}{suffix}.{model_slug(model)}.punctuation.yaml"
+    return f"{text_id}_{seq:03d}{suffix}.{model_slug(model)}.punctuation.yaml"
+
+
+def llm_punctuation_asset_path(
+    juan_dir: Path,
+    text_id: str,
+    seq: int,
+    short: str | None,
+    settings: LlmSettings,
+    *,
+    corpus_root: Path | None = None,
+) -> Path:
+    filename = llm_punctuation_asset_filename(
+        text_id, seq, short, settings.model,
+        punctuation_root=settings.punctuation_root,
+    )
+    if _punctuation_root_is_assets(settings.punctuation_root):
+        return juan_dir / filename
+    root = Path(settings.punctuation_root)
+    bundle_dir = _scope_bundle_dir(juan_dir, text_id)
+    return root / _bundle_relative_dir(bundle_dir, text_id, corpus_root) / filename
 
 
 def llm_punctuation_canonical_identifier(
@@ -1978,6 +2180,59 @@ def model_slug(model: str) -> str:
 
 def scope_label(short: str | None) -> str:
     return "master" if short is None else f"edition {short}"
+
+
+def _normalize_punctuation_root(value: Any) -> str | Path:
+    if value is None:
+        return DEFAULT_PUNCTUATION_ROOT
+    if isinstance(value, str) and value.strip() == DEFAULT_PUNCTUATION_ROOT:
+        return DEFAULT_PUNCTUATION_ROOT
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = path.resolve()
+    return path
+
+
+def _punctuation_root_is_assets(value: str | Path) -> bool:
+    return isinstance(value, str) and value == DEFAULT_PUNCTUATION_ROOT
+
+
+def _punctuation_root_state_value(settings: LlmSettings) -> str:
+    if _punctuation_root_is_assets(settings.punctuation_root):
+        return DEFAULT_PUNCTUATION_ROOT
+    return str(settings.punctuation_root)
+
+
+def _state_corpus_root(state: dict[str, Any]) -> Path | None:
+    value = state.get("corpus_root")
+    if not value:
+        return None
+    return Path(value)
+
+
+def _scope_bundle_dir(juan_dir: Path, text_id: str) -> Path:
+    if juan_dir.name == text_id:
+        return juan_dir
+    if (
+        juan_dir.parent.name == "editions"
+        and juan_dir.parent.parent.name == text_id
+    ):
+        return juan_dir.parent.parent
+    return juan_dir
+
+
+def _bundle_relative_dir(
+    bundle_dir: Path, text_id: str, corpus_root: Path | None = None,
+) -> Path:
+    if corpus_root is not None:
+        try:
+            return bundle_dir.resolve().relative_to(Path(corpus_root).resolve())
+        except ValueError:
+            pass
+    section = text_id[:4]
+    if bundle_dir.parent.name == section:
+        return Path(section) / text_id
+    return Path(text_id)
 
 
 def _selected_bundle_dirs(

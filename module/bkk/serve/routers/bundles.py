@@ -408,20 +408,15 @@ def list_punctuation_sidecars(
         description="documentary edition short id; omitted reads the root surface edition",
     ),
 ) -> PunctuationSidecarsResponse:
+    state: AppState = request.app.state.bkk
     rec = _record(request, textid)
     bundle_dir, manifest = selection.load_manifest_for_edition_scope(
         rec.bundle_dir, rec.manifest, rec.textid, edition,
     )
     sidecars: list[PunctuationSidecar] = []
-    for entry in _asset_entries(manifest):
-        if entry.get("role") != "llm-punctuation":
-            continue
-        if entry.get("seq") != seq:
-            continue
-        name = entry.get("filename") or entry.get("name")
-        if not isinstance(name, str):
-            continue
-        path = _declared_asset_path(bundle_dir, name)
+    for name, path, entry in _punctuation_sidecar_entries(
+        state, bundle_dir, manifest, rec.textid, seq,
+    ):
         if not path.exists() or not path.is_file():
             sidecars.append(
                 PunctuationSidecar(
@@ -605,11 +600,103 @@ def _asset_entries(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return [r for r in refs if isinstance(r, dict)]
 
 
-def _declared_asset_path(bundle_dir: Path, name: str) -> Path:
+def _declared_asset_path(
+    state: AppState, bundle_dir: Path, textid: str, name: str,
+) -> Path:
     asset_path = Path(name)
     if asset_path.is_absolute() or ".." in asset_path.parts:
         raise errors.bad_request("bad_asset_name", name=name)
+    if state.punctuation_root is not None and asset_path.parts[:1] != ("assets",):
+        return (
+            state.punctuation_root
+            / _punctuation_bundle_relative_dir(state, bundle_dir, textid)
+            / name
+        )
     return bundle_dir / name
+
+
+def _punctuation_sidecar_entries(
+    state: AppState,
+    bundle_dir: Path,
+    manifest: dict[str, Any],
+    textid: str,
+    seq: int,
+) -> list[tuple[str, Path, dict[str, Any]]]:
+    out: list[tuple[str, Path, dict[str, Any]]] = []
+    seen: set[str] = set()
+    for entry in _asset_entries(manifest):
+        if entry.get("role") != "llm-punctuation":
+            continue
+        if entry.get("seq") != seq:
+            continue
+        name = entry.get("filename") or entry.get("name")
+        if not isinstance(name, str):
+            continue
+        path = _declared_asset_path(state, bundle_dir, textid, name)
+        out.append((name, path, entry))
+        seen.add(name)
+    if state.punctuation_root is None:
+        return out
+    pattern = f"{textid}_{seq:03d}*.punctuation.yaml"
+    root = (
+        state.punctuation_root
+        / _punctuation_bundle_relative_dir(state, bundle_dir, textid)
+    )
+    for path in sorted(root.glob(pattern)):
+        name = path.name
+        if name in seen:
+            continue
+        out.append((
+            name,
+            path,
+            {
+                "seq": seq,
+                "role": "llm-punctuation",
+                "filename": name,
+                "model": _model_from_punctuation_filename(textid, seq, name),
+            },
+        ))
+    return out
+
+
+def _model_from_punctuation_filename(textid: str, seq: int, name: str) -> str | None:
+    prefix = f"{textid}_{seq:03d}"
+    if not name.startswith(prefix) or not name.endswith(".punctuation.yaml"):
+        return None
+    stem = name[len(prefix): -len(".punctuation.yaml")]
+    if stem.startswith("-"):
+        parts = stem.split(".", 1)
+        if len(parts) != 2:
+            return None
+        stem = parts[1]
+    elif stem.startswith("."):
+        stem = stem[1:]
+    return stem or None
+
+
+def _punctuation_bundle_relative_dir(
+    state: AppState, bundle_dir: Path, textid: str,
+) -> Path:
+    source_dir = _scope_bundle_dir(bundle_dir, textid)
+    try:
+        return source_dir.resolve().relative_to(state.corpus_root.resolve())
+    except ValueError:
+        pass
+    section = textid[:4]
+    if source_dir.parent.name == section:
+        return Path(section) / textid
+    return Path(textid)
+
+
+def _scope_bundle_dir(bundle_dir: Path, textid: str) -> Path:
+    if bundle_dir.name == textid:
+        return bundle_dir
+    if (
+        bundle_dir.parent.name == "editions"
+        and bundle_dir.parent.parent.name == textid
+    ):
+        return bundle_dir.parent.parent
+    return bundle_dir
 
 
 def _marker_buckets(value: Any) -> dict[str, list[dict[str, Any]]]:
@@ -646,13 +733,14 @@ def _entry_model(entry: dict[str, Any], data: dict[str, Any] | None = None) -> s
 def list_assets(
     request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)
 ) -> BundleAssetsResponse:
+    state: AppState = request.app.state.bkk
     rec = _record(request, textid)
     out: list[BundleAsset] = []
     for entry in _asset_entries(rec.manifest):
         name = entry.get("filename") or entry.get("name")
         if not isinstance(name, str):
             continue
-        path = rec.bundle_dir / name
+        path = _declared_asset_path(state, rec.bundle_dir, rec.textid, name)
         size = path.stat().st_size if path.exists() else None
         out.append(
             BundleAsset(
@@ -677,6 +765,7 @@ def get_asset(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     name: str = PathParam(..., openapi_examples=ex.ASSET_NAME),
 ) -> Response:
+    state: AppState = request.app.state.bkk
     rec = _record(request, textid)
     declared = {
         entry.get("filename") or entry.get("name")
@@ -689,7 +778,7 @@ def get_asset(
     asset_path = Path(name)
     if asset_path.is_absolute() or ".." in asset_path.parts:
         raise errors.bad_request("bad_asset_name", name=name)
-    path = _declared_asset_path(rec.bundle_dir, name)
+    path = _declared_asset_path(state, rec.bundle_dir, rec.textid, name)
     if not path.exists() or not path.is_file():
         raise errors.bad_request(
             "asset_missing_on_disk", textid=textid, name=name

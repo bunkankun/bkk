@@ -275,6 +275,10 @@ class AppState:
         return self.config.parallels_root
 
     @property
+    def punctuation_root(self) -> Path | None:
+        return self.config.punctuation_root
+
+    @property
     def core_root(self) -> Path | None:
         return self.config.core_root
 

@@ -20,6 +20,7 @@ class ServeConfig:
     annotations_root: Path | None = None
     annotations_index_path: Path | None = None
     parallels_root: Path | None = None
+    punctuation_root: Path | None = None
     comments_root: Path | None = None
     translations_root: Path | None = None
     annotation_dids: tuple[str, ...] = ()
@@ -184,6 +185,15 @@ class ServeConfig:
             parallels_root = Path(rc_parallels_root).resolve()
         else:
             parallels_root = None
+
+        env_punctuation_root = os.environ.get("BKK_PUNCTUATION_ROOT")
+        rc_punctuation_root = rc.get("punctuation_root")
+        if env_punctuation_root and env_punctuation_root != "assets":
+            punctuation_root: Path | None = Path(env_punctuation_root).resolve()
+        elif rc_punctuation_root and str(rc_punctuation_root) != "assets":
+            punctuation_root = Path(rc_punctuation_root).resolve()
+        else:
+            punctuation_root = None
 
         rc_dids = rc.get("dids") or ()
         if isinstance(rc_dids, str):
@@ -389,6 +399,7 @@ class ServeConfig:
             annotations_root=annotations_root,
             annotations_index_path=annotations_index,
             parallels_root=parallels_root,
+            punctuation_root=punctuation_root,
             comments_root=comments_root,
             translations_root=translations_root,
             annotation_dids=annotation_dids,
@@ -434,6 +445,7 @@ class ServeConfig:
         annotations_root: Path | str | None = None,
         annotations_index_path: Path | str | None = None,
         parallels_root: Path | str | None = None,
+        punctuation_root: Path | str | None = None,
         host: str | None = None,
         port: int | None = None,
         admin_team: str | None = None,
@@ -477,6 +489,8 @@ class ServeConfig:
             updates["annotations_index_path"] = Path(annotations_index_path).resolve()
         if parallels_root is not None:
             updates["parallels_root"] = Path(parallels_root).resolve()
+        if punctuation_root is not None:
+            updates["punctuation_root"] = Path(punctuation_root).resolve()
         if host is not None:
             updates["host"] = host
         if port is not None:

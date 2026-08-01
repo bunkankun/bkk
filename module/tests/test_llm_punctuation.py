@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import yaml
@@ -367,6 +368,53 @@ def test_direct_cli_writes_reference_asset_without_canonical_marker_changes(
     ]
 
 
+def test_direct_run_writes_external_punctuation_root_by_section(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    corpus = tmp_path / "corpus"
+    (corpus / "KR1a").mkdir(parents=True)
+    bundle = _write_bundle(corpus / "KR1a", "KR1a0001", "甲乙丙丁戊己")
+    punctuation_root = tmp_path / "punctuation"
+
+    class FakeClient:
+        def create_response(self, *, model: str, prompt: str, text: str) -> str:
+            return "甲，乙丙丁戊己"
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    settings = punctuation.LlmSettings(
+        model="test-model",
+        ai_config=tmp_path / "missing.xml",
+        prompt=tmp_path / "prompt",
+        punctuation_root=punctuation_root,
+    )
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    rc = punctuation.run_direct(
+        bundle,
+        corpus,
+        text_id=None,
+        text_prefix=None,
+        selected_juans=None,
+        settings=settings,
+        dry_run=False,
+    )
+
+    assert rc == 0
+    manifest = yaml.safe_load(
+        (bundle / "KR1a0001.manifest.yaml").read_text(encoding="utf-8")
+    )
+    assert "references" not in manifest["assets"]
+    filename = "KR1a0001_001.test-model.punctuation.yaml"
+    asset_path = punctuation_root / "KR1a" / "KR1a0001" / filename
+    assert asset_path.is_file()
+    assert not (bundle / "assets").exists()
+
+
 def test_models_cli_lists_available_models(monkeypatch, capsys) -> None:
     seen: dict[str, str] = {}
 
@@ -465,6 +513,8 @@ def test_client_config_adds_known_vendor_base_url_defaults(tmp_path: Path) -> No
         "<model>deepseek-test</model></deepseek-config>"
         "<sakana-config><api-token>sakana-secret</api-token>"
         "<model>fugu-ultra</model></sakana-config>"
+        "<or-config><api-token>or-secret</api-token>"
+        "<model>openai/gpt-4o</model></or-config>"
         "</engines>",
         encoding="utf-8",
     )
@@ -478,6 +528,66 @@ def test_client_config_adds_known_vendor_base_url_defaults(tmp_path: Path) -> No
     assert punctuation._client_config_for_vendor(path, "sakana")["base_url"] == (
         "https://api.sakana.ai/v1"
     )
+    assert punctuation._client_config_for_vendor(path, "or")["base_url"] == (
+        "https://openrouter.ai/api/v1"
+    )
+
+
+def test_make_client_uses_openrouter_batch_client_for_or_vendor(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    path = tmp_path / "ai-config.xml"
+    path.write_text(
+        "<engines><or-config><api-token>or-secret</api-token>"
+        "<model>openai/gpt-4o</model></or-config></engines>",
+        encoding="utf-8",
+    )
+    seen: dict[str, str] = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs: str) -> None:
+            seen.update(kwargs)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "openai",
+        type("OpenAiModule", (), {"OpenAI": FakeOpenAI}),
+    )
+
+    client = punctuation.make_openai_client(path, vendor="or")
+
+    assert isinstance(client, punctuation.OpenRouterResponsesClient)
+    assert seen["api_key"] == "or-secret"
+    assert seen["base_url"] == "https://openrouter.ai/api/v1"
+
+
+def test_openrouter_batch_payload_converts_jsonl_requests(tmp_path: Path) -> None:
+    requests_path = tmp_path / "requests.jsonl"
+    requests_path.write_text(
+        json.dumps({
+            "custom_id": "req-1",
+            "method": "POST",
+            "url": "/v1/responses",
+            "body": {
+                "model": "openai/gpt-4o",
+                "input": [{"role": "user", "content": "甲乙"}],
+            },
+        }) + "\n",
+        encoding="utf-8",
+    )
+
+    assert punctuation._openrouter_batch_payload(requests_path) == {
+        "endpoint": "/v1/responses",
+        "model": "openai/gpt-4o",
+        "requests": [
+            {
+                "custom_id": "req-1",
+                "body": {
+                    "input": [{"role": "user", "content": "甲乙"}],
+                },
+            }
+        ],
+    }
 
 
 def test_client_config_preserves_explicit_vendor_base_url(tmp_path: Path) -> None:
@@ -962,6 +1072,79 @@ def test_collect_batch_writes_clear_text_report_for_rejected_chunk(
         "at": "",
         "after": "",
     }
+
+
+def test_collect_batch_accepts_openrouter_inline_results(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0011", "甲乙丙丁戊己")
+    state_path = tmp_path / "punctuation.batch.yaml"
+    task = _task_dict(
+        "TEST0011:bkk:001:body:main:1", "TEST0011", "甲乙丙丁戊己",
+    )
+    task["juan_dir"] = str(bundle)
+    task["manifest_path"] = str(bundle / "TEST0011.manifest.yaml")
+    state_path.write_text(
+        yaml.safe_dump({
+            "schema": 1,
+            "task": "punctuation",
+            "vendor": "or",
+            "model": "openai/gpt-4o",
+            "prompt_path": str(tmp_path / "prompt"),
+            "chunk_chars": 3000,
+            "overlap": 50,
+            "batch": {"id": "batch_or"},
+            "tasks": [task],
+        }),
+        encoding="utf-8",
+    )
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def retrieve_batch(self, batch_id: str) -> dict:
+            assert batch_id == "batch_or"
+            return {
+                "id": "batch_or",
+                "status": "completed",
+                "request_counts": {"completed": 1, "failed": 0, "total": 1},
+                "results": [
+                    {
+                        "custom_id": "TEST0011:bkk:001:body:main:1",
+                        "response": {
+                            "status_code": 200,
+                            "body": {"output_text": "甲，乙丙丁戊己"},
+                        },
+                        "error": None,
+                    }
+                ],
+            }
+
+        def download_file_text(self, file_id: str) -> str:  # pragma: no cover
+            raise AssertionError("OpenRouter inline results should not download files")
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuation",
+        "collect",
+        str(state_path),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+    ])
+
+    assert rc == 0
+    assert "collected batch batch_or" in capsys.readouterr().out
+    assert state_path.with_suffix(".batch-output.jsonl").exists()
+    manifest = yaml.safe_load(
+        (bundle / "TEST0011.manifest.yaml").read_text(encoding="utf-8")
+    )
+    ref = manifest["assets"]["references"][0]
+    asset = yaml.safe_load((bundle / ref["filename"]).read_text(encoding="utf-8"))
+    assert asset["markers"]["body"][0]["content"] == "，"
 
 
 def test_retry_failed_batch_submits_only_rejected_chunks(
