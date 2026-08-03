@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   allocateBundleMarkerIds,
   getBundleEdit,
+  getPunctuationSidecars,
   moveBundleSection,
   saveBundleEdit,
 } from "../../api/client";
@@ -10,6 +11,7 @@ import type {
   BundleEditSaveResponse,
   BundleTextSplice,
   JuanMarker,
+  PunctuationSidecar,
 } from "../../api/types";
 import {
   codepoints,
@@ -26,6 +28,7 @@ import {
   markerDomSelection,
   parsePunctuatedText,
   punctuationInputAllowed,
+  punctuationSetOf,
   punctuationSetLabel,
   punctuationSets,
   reconcilePunctuationMarkers,
@@ -46,6 +49,7 @@ type MoveDraft = {
   candidates: BucketName[];
 };
 type EditScope = { start: number; end: number; protectedText: boolean };
+type PunctuationOption = { value: string; label: string; sidecarName?: string };
 
 let nextMarkerKey = 1;
 
@@ -109,6 +113,49 @@ function displayMarker(marker: EditableMarker, scope: EditScope | null): Editabl
       offset: offset - scope.start,
     },
   };
+}
+
+function punctuationSidecarLabel(sidecar: PunctuationSidecar): string {
+  const model = typeof sidecar.model === "string" ? sidecar.model.trim() : "";
+  if (model) return `LLM: ${model}`;
+  const name = sidecar.name.split("/").pop() ?? sidecar.name;
+  return `LLM: ${name.replace(/\.punctuation\.ya?ml$/i, "")}`;
+}
+
+function punctuationSidecarSet(sidecar: PunctuationSidecar): string {
+  const model = typeof sidecar.model === "string" ? sidecar.model.trim() : "";
+  if (model) return `llm:${model}`;
+  const name = sidecar.name.split("/").pop() ?? sidecar.name;
+  return `llm:${name.replace(/\.punctuation\.ya?ml$/i, "")}`;
+}
+
+function sidecarHasPunctuation(sidecar: PunctuationSidecar, bucket: BucketName): boolean {
+  return ((sidecar.markers[bucket] ?? []) as JuanMarker[]).some((marker) =>
+    marker.type === "punctuation" || marker.type === "paragraph-break"
+  );
+}
+
+function sidecarDisplayMarkers(
+  sidecar: PunctuationSidecar | null,
+  bucket: BucketName,
+  set: string | null,
+): EditableMarker[] {
+  if (sidecar == null || set == null) return [];
+  return ((sidecar.markers[bucket] ?? []) as JuanMarker[]).flatMap((marker, index) => {
+    let data: JuanMarker | null = null;
+    if (marker.type === "punctuation") {
+      data = { ...marker, set };
+    } else if (marker.type === "paragraph-break") {
+      data = { ...marker, type: "punctuation", content: "\n\n", set };
+    }
+    if (data == null) return [];
+    return [{
+      key: `sidecar-${sidecar.name}-${bucket}-${index}`,
+      data,
+      originalId: null,
+      unresolved: false,
+    }];
+  });
 }
 
 function scrollTextareaToPosition(textarea: HTMLTextAreaElement, position: number) {
@@ -266,6 +313,7 @@ export function BundleEditor({
   const [saved, setSaved] = useState<BundleEditSaveResponse | null>(null);
   const [tocDeleteAcknowledged, setTocDeleteAcknowledged] = useState(false);
   const [punctuationSet, setPunctuationSet] = useState<string | null>(null);
+  const [punctuationSidecars, setPunctuationSidecars] = useState<PunctuationSidecar[]>([]);
   const [showLayoutMarkers, setShowLayoutMarkers] = useState(false);
   const [idFind, setIdFind] = useState("");
   const [idReplace, setIdReplace] = useState("");
@@ -344,6 +392,24 @@ export function BundleEditor({
   }, [textid, seq, editTarget?.edition]);
   useEffect(reload, [textid, seq, editEdition]);
   useEffect(() => {
+    let cancelled = false;
+    setPunctuationSidecars([]);
+    getPunctuationSidecars(textid, seq, editEdition)
+      .then((response) => {
+        if (cancelled) return;
+        setPunctuationSidecars(
+          response.sidecars.filter((sidecar) => sidecar.error == null),
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPunctuationSidecars([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [textid, seq, editEdition]);
+  useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (!dirty) return;
       event.preventDefault();
@@ -376,15 +442,56 @@ export function BundleEditor({
     if (editScope == null) return text;
     return codepoints(text).slice(editScope.start, editScope.end).join("");
   }, [editScope, text]);
-  const displayMarkers = useMemo(
-    () => markers.map((marker) => displayMarker(marker, editScope)),
-    [editScope, markers],
-  );
   const displayTextLength = useMemo(() => codepoints(displayText).length, [displayText]);
   const scopeBase = editScope?.start ?? 0;
-  const availablePunctuationSets = useMemo(
-    () => punctuationSets(markers),
-    [markers],
+  const sidecarOptions = useMemo(() => {
+    const seen = new Set(punctuationSets(markers));
+    const options: PunctuationOption[] = [];
+    for (const sidecar of punctuationSidecars) {
+      if (!sidecarHasPunctuation(sidecar, bucket)) continue;
+      let value = punctuationSidecarSet(sidecar);
+      if (seen.has(value)) {
+        const suffix = sidecar.name.split("/").pop() ?? sidecar.name;
+        value = `${value}:${suffix.replace(/\.punctuation\.ya?ml$/i, "")}`;
+      }
+      seen.add(value);
+      options.push({ value, label: punctuationSidecarLabel(sidecar), sidecarName: sidecar.name });
+    }
+    return options;
+  }, [bucket, markers, punctuationSidecars]);
+  const availablePunctuationOptions = useMemo(
+    () => [
+      ...punctuationSets(markers).map((set) => ({
+        value: set,
+        label: punctuationSetLabel(set),
+      })),
+      ...sidecarOptions,
+    ],
+    [markers, sidecarOptions],
+  );
+  const selectedSidecar = useMemo(() => {
+    if (punctuationSet == null) return null;
+    const option = sidecarOptions.find((candidate) => candidate.value === punctuationSet);
+    if (option == null) return null;
+    return punctuationSidecars.find((sidecar) => sidecar.name === option.sidecarName) ?? null;
+  }, [punctuationSet, punctuationSidecars, sidecarOptions]);
+  const selectedSetHasCanonicalMarkers = useMemo(
+    () =>
+      punctuationSet != null &&
+      markers.some((marker) => punctuationSetOf(marker.data) === punctuationSet),
+    [markers, punctuationSet],
+  );
+  const displayMarkers = useMemo(
+    () => {
+      const base = markers.map((marker) => displayMarker(marker, editScope));
+      const sidecar =
+        selectedSetHasCanonicalMarkers
+          ? []
+          : sidecarDisplayMarkers(selectedSidecar, bucket, punctuationSet)
+              .map((marker) => displayMarker(marker, editScope));
+      return [...base, ...sidecar];
+    },
+    [bucket, editScope, markers, punctuationSet, selectedSetHasCanonicalMarkers, selectedSidecar],
   );
   const editorView = useMemo(
     () => renderEditorText(displayText, displayMarkers, punctuationSet, showLayoutMarkers),
@@ -1230,9 +1337,9 @@ export function BundleEditor({
               }}
             >
               <option value="__off__">Off</option>
-              {availablePunctuationSets.map((set) => (
-                <option key={set || "__default__"} value={set}>
-                  {punctuationSetLabel(set)}
+              {availablePunctuationOptions.map((option) => (
+                <option key={option.value || "__default__"} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
