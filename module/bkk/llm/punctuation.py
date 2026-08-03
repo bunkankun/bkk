@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Callable, Protocol
 from xml.etree import ElementTree
@@ -42,6 +43,13 @@ DEFAULT_BATCH_POLL_SECONDS = 300
 DEFAULT_BATCH_RETRIES = 1
 DEFAULT_BATCH_JOBS = 1
 MAX_ADJACENT_VARIANT_CHARS = 2
+BEST_EFFORT_REALIGN_CHARS = 6
+EXISTING_PUNCTUATION_COMMA = "，"
+EXISTING_PUNCTUATION_COMMA_THRESHOLD = 3
+SKIP_MODE_ALL = "all"
+SKIP_MODE_ASSET_ONLY = "asset-only"
+SKIP_MODE_CHOICES = (SKIP_MODE_ALL, SKIP_MODE_ASSET_ONLY)
+DEFAULT_SKIP_MODE = SKIP_MODE_ALL
 DEFAULT_VENDOR_BASE_URLS = {
     "mistral": "https://api.mistral.ai/v1",
     "deepseek": "https://api.deepseek.com",
@@ -166,6 +174,8 @@ class BatchWorkflowOptions:
     retries: int = DEFAULT_BATCH_RETRIES
     jobs: int = DEFAULT_BATCH_JOBS
     best_effort: bool = False
+    force: bool = False
+    skip_mode: str = DEFAULT_SKIP_MODE
 
 
 @dataclass(frozen=True)
@@ -176,6 +186,12 @@ class BatchWorkflowResult:
     attempts: int
     report_path: Path | None = None
     message: str | None = None
+
+
+@dataclass(frozen=True)
+class ExistingPunctuationAssetSummary:
+    comma_markers: int
+    skip_mode: str
 
 
 def settings_from_rc(
@@ -605,12 +621,18 @@ def run_direct(
     dry_run: bool,
     include_editions: bool = False,
     best_effort: bool = False,
+    force: bool = False,
+    skip_mode: str = DEFAULT_SKIP_MODE,
     client: LlmClient | None = None,
 ) -> int:
-    if not dry_run:
-        client = client or make_openai_client(settings.ai_config, settings.vendor)
-    prompt_text = _read_prompt(settings.prompt)
     bundle_dirs = _selected_bundle_dirs(bundle, out_root, text_id, text_prefix)
+    bundle_dirs = _filter_runnable_bundle_dirs(
+        bundle_dirs, settings, corpus_root=out_root,
+        force=force, skip_mode=skip_mode,
+    )
+    prompt_text = _read_prompt(settings.prompt) if bundle_dirs else ""
+    if not dry_run and bundle_dirs:
+        client = client or make_openai_client(settings.ai_config, settings.vendor)
     total_tasks = total_markers = total_issues = 0
     run_stamp = _utc_stamp()
     for bundle_dir in bundle_dirs:
@@ -689,11 +711,18 @@ def submit_batch(
     selected_juans: set[int] | None,
     settings: LlmSettings,
     include_editions: bool = False,
+    force: bool = False,
+    skip_mode: str = DEFAULT_SKIP_MODE,
     client: LlmClient | None = None,
-) -> Path:
-    client = client or make_openai_client(settings.ai_config, settings.vendor)
-    prompt_text = _read_prompt(settings.prompt)
+) -> Path | None:
     bundle_dirs = _selected_bundle_dirs(bundle, out_root, text_id, text_prefix)
+    bundle_dirs = _filter_runnable_bundle_dirs(
+        bundle_dirs, settings, corpus_root=out_root,
+        force=force, skip_mode=skip_mode,
+    )
+    if not bundle_dirs:
+        return None
+    prompt_text = _read_prompt(settings.prompt)
     all_tasks: list[ChunkTask] = []
     for bundle_dir in bundle_dirs:
         for juan_dir, manifest_path, short in _scope_targets(
@@ -706,6 +735,7 @@ def submit_batch(
             ))
     if not all_tasks:
         raise RuntimeError("no chunk requests to submit")
+    client = client or make_openai_client(settings.ai_config, settings.vendor)
     state_dir = _state_dir(settings, bundle_dirs[0])
     state_dir.mkdir(parents=True, exist_ok=True)
     state_text = model_slug(bundle_dirs[0].name)
@@ -765,12 +795,19 @@ def run_batch_workflow(
         raise ValueError("jobs must be a positive integer")
 
     bundle_dirs = _selected_bundle_dirs(bundle, out_root, text_id, text_prefix)
+    bundle_dirs = _filter_runnable_bundle_dirs(
+        bundle_dirs, settings, corpus_root=out_root,
+        force=options.force, skip_mode=options.skip_mode,
+    )
     print(
         f"batch workflow: {len(bundle_dirs)} text(s), "
         f"jobs={options.jobs}, retries={options.retries}, "
         f"poll={options.poll_seconds}s"
     )
     results: list[BatchWorkflowResult] = []
+    if not bundle_dirs:
+        print("batch workflow complete: 0 succeeded, 0 failed")
+        return 0
     if options.jobs == 1 or len(bundle_dirs) <= 1:
         for bundle_dir in bundle_dirs:
             try:
@@ -853,6 +890,7 @@ def _run_batch_workflow_for_bundle(
         selected_juans=selected_juans,
         settings=settings,
         include_editions=include_editions,
+        force=True,
         client=client,
     )
     print(f"[{text_id}] submitted batch; state: {state_path}")
@@ -866,7 +904,9 @@ def _run_batch_workflow_for_bundle(
     for retry_index in range(options.retries):
         print(f"[{text_id}] retry {retry_index + 1}/{options.retries}: {message}")
         try:
-            state_path = retry_failed_batch(state_path, settings=settings, client=client)
+            state_path = retry_failed_batch(
+                state_path, settings=settings, client=client,
+            )
         except RuntimeError as exc:
             report_path = _write_workflow_failure_report(state_path, str(exc))
             return BatchWorkflowResult(
@@ -1291,9 +1331,7 @@ def write_outputs_for_scope(
                         core_end=task.core_end,
                         include_core_end=task.core_end == task.stream_end,
                     )
-                    usable_markers = _usable_markers_before_issue(
-                        task, scan.markers, issue,
-                    )
+                    usable_markers = scan.markers
                     _annotate_llm_markers(usable_markers, model=settings.model)
                     markers_by_bucket[task.bucket].extend(usable_markers)
                     markers_by_bucket[task.bucket].append(
@@ -1470,6 +1508,7 @@ def _scan_punctuated_output(
     variant_run_len = 0
     variant_run_input_start: int | None = None
     variant_run_output_start: int | None = None
+    first_error: PunctuationValidationError | None = None
 
     def fail(
         message: str,
@@ -1490,14 +1529,111 @@ def _scan_punctuated_output(
                 return PunctuationScanResult(markers)
         if fail_fast:
             raise exc
-        return PunctuationScanResult(markers, exc)
+        return PunctuationScanResult(markers, first_error or exc)
+
+    def recover_after_error(
+        result: PunctuationScanResult,
+        *,
+        input_start: int,
+        output_start: int,
+    ) -> tuple[int, int] | PunctuationScanResult:
+        nonlocal first_error, markers
+        if fail_fast:
+            return result
+        if result.error is None:
+            return result
+        if first_error is None:
+            first_error = result.error
+        absolute_start = context_start + input_start
+        markers = [
+            marker for marker in markers
+            if (
+                (offset := _marker_offset(marker)) is None
+                or offset < absolute_start
+            )
+        ]
+        resync = _find_punctuation_resync(
+            original, output,
+            input_start=input_start,
+            output_start=output_start,
+        )
+        if resync is None:
+            return PunctuationScanResult(markers, first_error)
+        return resync
+
+    def reset_variant_run() -> None:
+        nonlocal variant_run_len, variant_run_input_start, variant_run_output_start
+        variant_run_len = 0
+        variant_run_input_start = None
+        variant_run_output_start = None
+
+    def note_variant_step(
+        *,
+        input_index: int,
+        output_index: int,
+        validation_index: int,
+    ) -> tuple[int, int] | PunctuationScanResult | None:
+        nonlocal variant_run_len, variant_run_input_start, variant_run_output_start
+        if variant_run_len == 0:
+            variant_run_input_start = input_index
+            variant_run_output_start = output_index
+        variant_run_len += 1
+        if variant_run_len <= MAX_ADJACENT_VARIANT_CHARS:
+            return None
+        input_start = (
+            input_index if variant_run_input_start is None
+            else variant_run_input_start
+        )
+        output_start = (
+            output_index if variant_run_output_start is None
+            else variant_run_output_start
+        )
+        result = fail(
+            "output diverged for more than "
+            f"{MAX_ADJACENT_VARIANT_CHARS} adjacent original "
+            f"character(s) starting at input index {input_start}",
+            input_index=input_start,
+            output_index=output_start,
+            validation_index=validation_index,
+        )
+        if fail_fast:
+            return result
+        if result.error is None:
+            return result
+        recovery = recover_after_error(
+            result, input_start=input_start, output_start=output_start,
+        )
+        if isinstance(recovery, PunctuationScanResult):
+            return recovery
+        reset_variant_run()
+        return recovery
+
+    def append_variant_marker(
+        *,
+        offset: int,
+        length: int,
+        content: str,
+        replacement: str,
+    ) -> None:
+        if _in_owned_core(offset, core_start, core_end, include_core_end):
+            markers.append({
+                "type": "variant",
+                "offset": offset,
+                "length": length,
+                "content": content,
+                "replacement": replacement,
+            })
+
+    def output_realigns_after_insertion(start: int, expected: str) -> bool:
+        pos = start
+        while pos < len(output) and output[pos] in ALLOWED_PUNCTUATION:
+            pos += 1
+        return pos < len(output) and output[pos] == expected
 
     while j < len(output):
         ch = output[j]
         if i < len(original) and ch == original[i]:
-            variant_run_len = 0
-            variant_run_input_start = None
-            variant_run_output_start = None
+            reset_variant_run()
             i += 1
             j += 1
             continue
@@ -1507,11 +1643,19 @@ def _scan_punctuated_output(
             while run_end < len(output) and output[run_end] == "\n":
                 run_end += 1
             if run_end - j < 2:
-                return fail(
+                result = fail(
                     f"unexpected single newline at output index {j}",
                     input_index=i,
                     output_index=j,
                 )
+                recovery = recover_after_error(
+                    result, input_start=i, output_start=j,
+                )
+                if isinstance(recovery, PunctuationScanResult):
+                    return recovery
+                i, j = recovery
+                reset_variant_run()
+                continue
             if _in_owned_core(absolute, core_start, core_end, include_core_end):
                 markers.append({
                     "type": "paragraph-break",
@@ -1530,50 +1674,111 @@ def _scan_punctuated_output(
             j += 1
             continue
         if i < len(original):
-            if variant_run_len == 0:
-                variant_run_input_start = i
-                variant_run_output_start = j
-            variant_run_len += 1
-            if variant_run_len > MAX_ADJACENT_VARIANT_CHARS:
-                input_start = (
-                    i if variant_run_input_start is None
-                    else variant_run_input_start
+            # A single raw character inserted or deleted by the model should be
+            # represented as a variant, not as a run of shifted substitutions.
+            # Detect these before falling back to 1:1 replacement handling.
+            if output_realigns_after_insertion(j + 1, original[i]):
+                recovery = note_variant_step(
+                    input_index=i, output_index=j, validation_index=i,
                 )
-                output_start = (
-                    j if variant_run_output_start is None
-                    else variant_run_output_start
+                if isinstance(recovery, PunctuationScanResult):
+                    return recovery
+                if recovery is not None:
+                    i, j = recovery
+                    continue
+                append_variant_marker(
+                    offset=absolute, length=0, content="", replacement=ch,
                 )
-                return fail(
-                    "output diverged for more than "
-                    f"{MAX_ADJACENT_VARIANT_CHARS} adjacent original "
-                    f"character(s) starting at input index {input_start}",
-                    input_index=input_start,
-                    output_index=output_start,
-                    validation_index=i,
+                j += 1
+                continue
+            if i + 1 < len(original) and ch == original[i + 1]:
+                recovery = note_variant_step(
+                    input_index=i, output_index=j, validation_index=i,
                 )
-            if _in_owned_core(absolute, core_start, core_end, include_core_end):
-                markers.append({
-                    "type": "variant",
-                    "offset": absolute,
-                    "length": 1,
-                    "content": original[i],
-                    "replacement": ch,
-                })
+                if isinstance(recovery, PunctuationScanResult):
+                    return recovery
+                if recovery is not None:
+                    i, j = recovery
+                    continue
+                append_variant_marker(
+                    offset=absolute,
+                    length=1,
+                    content=original[i],
+                    replacement="",
+                )
+                i += 1
+                continue
+            recovery = note_variant_step(
+                input_index=i, output_index=j, validation_index=i,
+            )
+            if isinstance(recovery, PunctuationScanResult):
+                return recovery
+            if recovery is not None:
+                i, j = recovery
+                continue
+            append_variant_marker(
+                offset=absolute, length=1, content=original[i], replacement=ch,
+            )
             i += 1
             j += 1
             continue
-        return fail(
-            f"unexpected character {ch!r} at output index {j}",
-            input_index=i,
-            output_index=j,
+        recovery = note_variant_step(
+            input_index=i, output_index=j, validation_index=i,
         )
-    if i != len(original):
-        return fail(
-            f"output omitted {len(original) - i} original character(s)",
-            input_index=i,
-            output_index=len(output),
+        if isinstance(recovery, PunctuationScanResult):
+            return recovery
+        if recovery is not None:
+            i, j = recovery
+            continue
+        append_variant_marker(
+            offset=absolute, length=0, content="", replacement=ch,
         )
-    return PunctuationScanResult(markers)
+        j += 1
+    while i < len(original):
+        recovery = note_variant_step(
+            input_index=i, output_index=len(output), validation_index=i,
+        )
+        if isinstance(recovery, PunctuationScanResult):
+            return recovery
+        if recovery is not None:
+            i, j = recovery
+            continue
+        append_variant_marker(
+            offset=context_start + i,
+            length=1,
+            content=original[i],
+            replacement="",
+        )
+        i += 1
+    return PunctuationScanResult(markers, first_error)
+
+
+def _find_punctuation_resync(
+    original: str,
+    output: str,
+    *,
+    input_start: int,
+    output_start: int,
+) -> tuple[int, int] | None:
+    filtered_output: list[tuple[int, str]] = [
+        (pos, ch)
+        for pos, ch in enumerate(output[output_start:], start=output_start)
+        if ch not in ALLOWED_PUNCTUATION and ch != "\n"
+    ]
+    if not filtered_output:
+        return None
+    original_tail = original[input_start:]
+    output_tail = "".join(ch for _, ch in filtered_output)
+    matcher = SequenceMatcher(None, original_tail, output_tail, autojunk=False)
+    for block in matcher.get_matching_blocks():
+        if block.size <= MAX_ADJACENT_VARIANT_CHARS:
+            continue
+        candidate_i = input_start + block.a
+        candidate_j = filtered_output[block.b][0]
+        required = min(BEST_EFFORT_REALIGN_CHARS, len(original) - candidate_i)
+        if block.size >= required:
+            return candidate_i, candidate_j
+    return None
 
 
 def _output_start_for_core(original: str, output: str, core_rel_start: int) -> int:
@@ -1734,22 +1939,6 @@ def _annotate_llm_markers(markers: list[dict[str, Any]], *, model: str) -> None:
             model if marker.get("type") == "variant" else REFERENCE_ROLE
         )
         marker["model"] = model
-
-
-def _usable_markers_before_issue(
-    task: ChunkTask,
-    markers: list[dict[str, Any]],
-    issue: ValidationIssue,
-) -> list[dict[str, Any]]:
-    offending_offset = _issue_absolute_offset(issue)
-    if offending_offset is None:
-        return list(markers)
-    usable: list[dict[str, Any]] = []
-    for marker in markers:
-        offset = _marker_offset(marker)
-        if offset is not None and offset < offending_offset:
-            usable.append(marker)
-    return usable
 
 
 def _llm_error_marker_for_issue(
@@ -2208,6 +2397,180 @@ def _state_corpus_root(state: dict[str, Any]) -> Path | None:
     if not value:
         return None
     return Path(value)
+
+
+def _filter_runnable_bundle_dirs(
+    bundle_dirs: list[Path],
+    settings: LlmSettings,
+    *,
+    corpus_root: Path | None,
+    force: bool,
+    skip_mode: str = DEFAULT_SKIP_MODE,
+) -> list[Path]:
+    if force:
+        return bundle_dirs
+    runnable: list[Path] = []
+    for bundle_dir in bundle_dirs:
+        summary = inspect_existing_punctuation_assets(
+            bundle_dir, settings, corpus_root=corpus_root, skip_mode=skip_mode,
+        )
+        if _existing_assets_exceed_skip_threshold(summary):
+            _print_existing_assets_skip(bundle_dir, summary)
+            continue
+        runnable.append(bundle_dir)
+    return runnable
+
+
+def _existing_assets_exceed_skip_threshold(
+    summary: ExistingPunctuationAssetSummary,
+) -> bool:
+    return summary.comma_markers > EXISTING_PUNCTUATION_COMMA_THRESHOLD
+
+
+def _print_existing_assets_skip(
+    bundle_dir: Path,
+    summary: ExistingPunctuationAssetSummary,
+) -> None:
+    print(
+        f"[bundle {bundle_dir.name}] skipping: existing punctuation assets "
+        f"contain {summary.comma_markers} "
+        f"{EXISTING_PUNCTUATION_COMMA!r} marker(s) (--skip {summary.skip_mode}); "
+        f"pass --force to run anyway"
+    )
+
+
+def inspect_existing_punctuation_assets(
+    bundle_dir: Path,
+    settings: LlmSettings,
+    *,
+    corpus_root: Path | None = None,
+    skip_mode: str = DEFAULT_SKIP_MODE,
+) -> ExistingPunctuationAssetSummary:
+    if skip_mode not in SKIP_MODE_CHOICES:
+        raise ValueError(f"unknown skip mode: {skip_mode!r}")
+    comma_markers = _core_asset_comma_marker_count(bundle_dir)
+    if skip_mode == SKIP_MODE_ALL:
+        paths = _existing_punctuation_asset_paths(
+            bundle_dir, settings, corpus_root=corpus_root,
+        )
+        comma_markers += sum(
+            _comma_marker_count_in_asset(path) for path in paths
+        )
+    return ExistingPunctuationAssetSummary(comma_markers, skip_mode)
+
+
+def _core_asset_comma_marker_count(bundle_dir: Path) -> int:
+    """Count ``，`` markers in the bundle's own core assets.
+
+    "Core assets" are the canonical markers that belong to the bundle itself:
+    inline juan-bucket markers plus any ``assets.markers`` marker asset files.
+    Generated ``llm-punctuation`` reference sidecars are intentionally excluded
+    here; they are only added on top when ``skip_mode`` is ``all``.
+    """
+    try:
+        targets = _scope_targets(bundle_dir, include_editions=True)
+    except FileNotFoundError:
+        return 0
+    total = 0
+    for juan_dir, manifest_path, short in targets:
+        manifest = _load_yaml_mapping_or_none(manifest_path) or {}
+        try:
+            entries = _juan_entries(juan_dir, bundle_dir.name, short, None)
+        except FileNotFoundError:
+            continue
+        for seq, juan_path in entries:
+            data = _load_yaml_mapping_or_none(juan_path)
+            if data is None:
+                continue
+            marker_asset = load_marker_asset(juan_dir, manifest, seq)
+            for bucket in VALID_BUCKETS:
+                for marker in effective_markers_for_bucket(
+                    data, bucket, marker_asset,
+                ):
+                    if marker.get("content") == EXISTING_PUNCTUATION_COMMA:
+                        total += 1
+    return total
+
+
+def _existing_punctuation_asset_paths(
+    bundle_dir: Path,
+    settings: LlmSettings,
+    *,
+    corpus_root: Path | None,
+) -> list[Path]:
+    seen: set[str] = set()
+    paths: list[Path] = []
+
+    def add(path: Path) -> None:
+        if not path.is_file():
+            return
+        key = str(path.resolve(strict=False))
+        if key in seen:
+            return
+        seen.add(key)
+        paths.append(path)
+
+    for manifest_path in sorted(bundle_dir.rglob("*.manifest.yaml")):
+        manifest = _load_yaml_mapping_or_none(manifest_path)
+        if manifest is None:
+            continue
+        assets = manifest.get("assets") or {}
+        references = assets.get("references") or []
+        if not isinstance(references, list):
+            continue
+        for ref in references:
+            if not isinstance(ref, dict):
+                continue
+            filename = ref.get("filename")
+            if not isinstance(filename, str):
+                continue
+            if (
+                ref.get("role") == REFERENCE_ROLE
+                or filename.endswith(".punctuation.yaml")
+            ):
+                add(manifest_path.parent / filename)
+
+    for path in sorted(bundle_dir.rglob("*.punctuation.yaml")):
+        add(path)
+
+    if not _punctuation_root_is_assets(settings.punctuation_root):
+        root = Path(settings.punctuation_root)
+        external_dir = root / _bundle_relative_dir(
+            bundle_dir, bundle_dir.name, corpus_root,
+        )
+        if external_dir.is_dir():
+            for path in sorted(external_dir.glob("*.punctuation.yaml")):
+                add(path)
+
+    return paths
+
+
+def _comma_marker_count_in_asset(path: Path) -> int:
+    asset = _load_yaml_mapping_or_none(path)
+    if asset is None:
+        return 0
+    markers_obj = asset.get("markers") or {}
+    if not isinstance(markers_obj, dict):
+        return 0
+    total = 0
+    for markers in markers_obj.values():
+        if not isinstance(markers, list):
+            continue
+        for marker in markers:
+            if (
+                isinstance(marker, dict)
+                and marker.get("content") == EXISTING_PUNCTUATION_COMMA
+            ):
+                total += 1
+    return total
+
+
+def _load_yaml_mapping_or_none(path: Path) -> dict[str, Any] | None:
+    try:
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=_YAML_LOADER)
+    except (OSError, yaml.YAMLError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def _scope_bundle_dir(juan_dir: Path, text_id: str) -> Path:

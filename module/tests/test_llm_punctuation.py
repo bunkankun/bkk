@@ -4,10 +4,17 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
+from bkk.llm import cli as llm_cli
 from bkk.llm import punctuation
 from bkk.llm.cli import run as llm_run
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cli_rc(monkeypatch) -> None:
+    monkeypatch.setattr(llm_cli, "load_rc", lambda: {})
 
 
 def _write_bundle(root: Path, text_id: str, text: str, markers: list[dict] | None = None) -> Path:
@@ -105,6 +112,56 @@ def _add_edition(bundle: Path, text_id: str, short: str, text: str) -> None:
     )
 
 
+def _write_existing_punctuation_asset(
+    bundle: Path,
+    text_id: str,
+    *,
+    comma_count: int = 4,
+    model: str = "existing-model",
+) -> Path:
+    asset_path = bundle / "assets" / f"{text_id}_001.{model}.punctuation.yaml"
+    asset_path.parent.mkdir()
+    markers = [
+        {
+            "type": "punctuation",
+            "offset": index,
+            "content": "，",
+            "id": f"existing-pn{index + 1}",
+        }
+        for index in range(comma_count)
+    ]
+    asset_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema": 1,
+                "seq": 1,
+                "role": "llm-punctuation",
+                "markers": {"front": [], "body": markers, "back": []},
+                "hash": "sha256:existing",
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = bundle / f"{text_id}.manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    manifest["assets"]["references"] = [
+        {
+            "seq": 1,
+            "role": "llm-punctuation",
+            "model": model,
+            "filename": f"assets/{asset_path.name}",
+            "hash": "sha256:existing",
+        }
+    ]
+    manifest_path.write_text(
+        yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    return asset_path
+
+
 def _task_dict(
     custom_id: str,
     text_id: str,
@@ -186,14 +243,96 @@ def test_punctuated_output_becomes_markers_and_records_variants() -> None:
     else:  # pragma: no cover
         raise AssertionError("long divergent run was accepted")
 
-    try:
-        punctuation.markers_from_punctuated_output(
-            "甲乙", "甲X乙", context_start=0, core_start=0, core_end=2,
-        )
-    except ValueError as exc:
-        assert "unexpected character" in str(exc)
-    else:  # pragma: no cover
-        raise AssertionError("extra output character was accepted")
+    scan = punctuation.best_effort_markers_from_punctuated_output(
+        "甲乙丙丁戊己庚辛壬癸",
+        "甲，乙ABC己，庚辛。壬癸",
+        context_start=0,
+        core_start=0,
+        core_end=10,
+    )
+    assert scan.error is not None
+    assert "more than 2 adjacent" in str(scan.error)
+    assert scan.markers == [
+        {"type": "punctuation", "offset": 1, "content": "，"},
+        {"type": "punctuation", "offset": 6, "content": "，"},
+        {"type": "punctuation", "offset": 8, "content": "。"},
+    ]
+
+    scan = punctuation.best_effort_markers_from_punctuated_output(
+        "甲乙丙丁戊己庚辛壬癸",
+        "甲，乙\n丙丁戊己，庚辛。壬癸",
+        context_start=0,
+        core_start=0,
+        core_end=10,
+    )
+    assert scan.error is not None
+    assert "unexpected single newline" in str(scan.error)
+    assert scan.markers == [
+        {"type": "punctuation", "offset": 1, "content": "，"},
+        {"type": "punctuation", "offset": 6, "content": "，"},
+        {"type": "punctuation", "offset": 8, "content": "。"},
+    ]
+
+    assert punctuation.markers_from_punctuated_output(
+        "甲乙", "甲X乙", context_start=0, core_start=0, core_end=2,
+    ) == [
+        {
+            "type": "variant",
+            "offset": 1,
+            "length": 0,
+            "content": "",
+            "replacement": "X",
+        }
+    ]
+
+    assert punctuation.markers_from_punctuated_output(
+        "甲乙", "甲X，乙", context_start=0, core_start=0, core_end=2,
+    ) == [
+        {
+            "type": "variant",
+            "offset": 1,
+            "length": 0,
+            "content": "",
+            "replacement": "X",
+        },
+        {"type": "punctuation", "offset": 1, "content": "，"},
+    ]
+
+    assert punctuation.markers_from_punctuated_output(
+        "甲乙丙", "甲丙", context_start=0, core_start=0, core_end=3,
+    ) == [
+        {
+            "type": "variant",
+            "offset": 1,
+            "length": 1,
+            "content": "乙",
+            "replacement": "",
+        }
+    ]
+
+    assert punctuation.markers_from_punctuated_output(
+        "甲乙", "甲乙X", context_start=0, core_start=0, core_end=2,
+    ) == [
+        {
+            "type": "variant",
+            "offset": 2,
+            "length": 0,
+            "content": "",
+            "replacement": "X",
+        }
+    ]
+
+    assert punctuation.markers_from_punctuated_output(
+        "甲乙", "甲", context_start=0, core_start=0, core_end=2,
+    ) == [
+        {
+            "type": "variant",
+            "offset": 1,
+            "length": 1,
+            "content": "乙",
+            "replacement": "",
+        }
+    ]
 
     assert punctuation.markers_from_punctuated_output(
         "甲乙丙丁",
@@ -220,14 +359,14 @@ def test_punctuated_output_becomes_markers_and_records_variants() -> None:
     try:
         punctuation.markers_from_punctuated_output(
             "甲乙丙丁",
-            "甲乙",
+            "甲",
             context_start=0,
             core_start=0,
-            core_end=3,
+            core_end=4,
             include_core_end=False,
         )
     except ValueError as exc:
-        assert "output omitted" in str(exc)
+        assert "more than 2 adjacent" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("omitted core output was accepted")
 
@@ -413,6 +552,162 @@ def test_direct_run_writes_external_punctuation_root_by_section(
     asset_path = punctuation_root / "KR1a" / "KR1a0001" / filename
     assert asset_path.is_file()
     assert not (bundle / "assets").exists()
+
+
+def test_punctuate_run_skips_bundle_with_existing_comma_assets(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0013", "甲乙丙丁戊己")
+    _write_existing_punctuation_asset(bundle, "TEST0013", comma_count=4)
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def create_response(self, *, model: str, prompt: str, text: str) -> str:
+            raise AssertionError("skipped bundles should not call the LLM")
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "run",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+    ])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "skipping: existing punctuation assets contain 4" in out
+    assert "generated 0 marker(s) from 0 chunk request(s)" in out
+    assert not list((bundle / ".bkk-llm").glob("*.direct-report.yaml"))
+
+
+def test_punctuate_run_force_ignores_existing_comma_assets(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0014", "甲乙丙丁戊己")
+    _write_existing_punctuation_asset(bundle, "TEST0014", comma_count=4)
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+    calls: list[str] = []
+
+    class FakeClient:
+        def create_response(self, *, model: str, prompt: str, text: str) -> str:
+            calls.append(text)
+            return "甲，乙丙丁戊己"
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "run",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+        "--force",
+    ])
+
+    assert rc == 0
+    assert calls == ["甲乙丙丁戊己"]
+    assert "skipping:" not in capsys.readouterr().out
+
+
+def test_punctuate_run_skip_asset_only_ignores_generated_assets(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0018", "甲乙丙丁戊己")
+    _write_existing_punctuation_asset(bundle, "TEST0018", comma_count=4)
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+    calls: list[str] = []
+
+    class FakeClient:
+        def create_response(self, *, model: str, prompt: str, text: str) -> str:
+            calls.append(text)
+            return "甲，乙丙丁戊己"
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "run",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+        "--skip",
+        "asset-only",
+    ])
+
+    assert rc == 0
+    assert calls == ["甲乙丙丁戊己"]
+    assert "skipping:" not in capsys.readouterr().out
+
+
+def test_punctuate_run_skip_asset_only_skips_on_core_markers(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    markers = [
+        {"type": "punctuation", "offset": index, "content": "，", "id": f"pn{index}"}
+        for index in range(4)
+    ]
+    bundle = _write_bundle(tmp_path, "TEST0019", "甲乙丙丁戊己", markers=markers)
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def create_response(self, *, model: str, prompt: str, text: str) -> str:
+            raise AssertionError("skipped bundles should not call the LLM")
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "run",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+        "--skip",
+        "asset-only",
+    ])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "skipping: existing punctuation assets contain 4" in out
+    assert "(--skip asset-only)" in out
+    assert "generated 0 marker(s) from 0 chunk request(s)" in out
 
 
 def test_models_cli_lists_available_models(monkeypatch, capsys) -> None:
@@ -691,6 +986,43 @@ def test_submit_batch_state_records_vendor(
     assert state["vendor"] == "deepseek"
 
 
+def test_submit_batch_skips_bundle_with_existing_comma_assets(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0015", "甲乙丙丁戊己")
+    _write_existing_punctuation_asset(bundle, "TEST0015", comma_count=4)
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def submit_batch(self, *, requests_path: Path, metadata: dict | None = None) -> dict:
+            raise AssertionError("skipped bundles should not submit a batch")
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "submit",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+    ])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "skipping: existing punctuation assets contain 4" in out
+    assert "no batch submitted" in out
+    assert not list((bundle / ".bkk-llm").glob("*.batch.yaml"))
+
+
 def test_run_direct_defaults_to_master_only(tmp_path: Path, capsys) -> None:
     bundle = _write_bundle(tmp_path, "TEST0004", "甲乙丙丁戊己")
     _add_edition(bundle, "TEST0004", "W", "庚辛壬癸子丑")
@@ -752,7 +1084,7 @@ def test_punctuate_run_writes_clear_text_report_for_rejected_chunk(
 
     class FakeClient:
         def create_response(self, *, model: str, prompt: str, text: str) -> str:
-            return "甲乙丙丁戊"
+            return "甲乙丙"
 
     monkeypatch.setattr(
         punctuation,
@@ -783,9 +1115,9 @@ def test_punctuate_run_writes_clear_text_report_for_rejected_chunk(
     chunk = report["chunks"][0]
     assert chunk["status"] == "rejected"
     assert chunk["input_text"] == "甲乙丙丁戊己"
-    assert chunk["output_text"] == "甲乙丙丁戊"
+    assert chunk["output_text"] == "甲乙丙"
     assert chunk["issues"][0]["code"] == "invalid-output"
-    assert chunk["issues"][0]["message"] == "output omitted 1 original character(s)"
+    assert "more than 2 adjacent" in chunk["issues"][0]["message"]
 
 
 def test_punctuate_run_best_effort_writes_error_marker(
@@ -796,7 +1128,7 @@ def test_punctuate_run_best_effort_writes_error_marker(
 
     class FakeClient:
         def create_response(self, *, model: str, prompt: str, text: str) -> str:
-            return "甲乙丙丁戊"
+            return "甲乙丙"
 
     monkeypatch.setattr(
         punctuation,
@@ -804,19 +1136,22 @@ def test_punctuate_run_best_effort_writes_error_marker(
         lambda ai_config, vendor="openai": FakeClient(),
     )
 
-    rc = llm_run([
-        "punctuate",
-        "run",
-        "--bundle",
-        str(bundle),
-        "--model",
-        "test-model",
-        "--prompt",
-        str(tmp_path / "prompt"),
-        "--ai-config",
-        str(tmp_path / "missing.xml"),
-        "--best-effort",
-    ])
+    settings = punctuation.LlmSettings(
+        model="test-model",
+        ai_config=tmp_path / "missing.xml",
+        prompt=tmp_path / "prompt",
+    )
+
+    rc = punctuation.run_direct(
+        bundle,
+        None,
+        text_id=None,
+        text_prefix=None,
+        selected_juans=None,
+        settings=settings,
+        dry_run=False,
+        best_effort=True,
+    )
 
     assert rc == 0
     assert "clear-text report" in capsys.readouterr().out
@@ -839,9 +1174,58 @@ def test_punctuate_run_best_effort_writes_error_marker(
     assert error_marker["length"] == 6
     assert error_marker["issue"] == {
         "code": "invalid-output",
-        "message": "output omitted 1 original character(s)",
+        "message": "output diverged for more than 2 adjacent original character(s) starting at input index 3",
     }
     assert error_marker["model"] == "test-model"
+
+
+def test_punctuate_run_best_effort_writes_recovered_markers_after_resync(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0012", "甲乙丙丁戊己庚辛壬癸")
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def create_response(self, *, model: str, prompt: str, text: str) -> str:
+            return "甲，乙ABC己，庚辛。壬癸"
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    settings = punctuation.LlmSettings(
+        model="test-model",
+        ai_config=tmp_path / "missing.xml",
+        prompt=tmp_path / "prompt",
+    )
+    rc = punctuation.run_direct(
+        bundle,
+        None,
+        text_id=None,
+        text_prefix=None,
+        selected_juans=None,
+        settings=settings,
+        dry_run=False,
+        best_effort=True,
+    )
+
+    assert rc == 0
+    assert "clear-text report" in capsys.readouterr().out
+    manifest = yaml.safe_load(
+        (bundle / "TEST0012.manifest.yaml").read_text(encoding="utf-8")
+    )
+    ref = manifest["assets"]["references"][0]
+    asset = yaml.safe_load((bundle / ref["filename"]).read_text(encoding="utf-8"))
+    body_markers = asset["markers"]["body"]
+    punctuation_markers = [
+        marker for marker in body_markers if marker["type"] == "punctuation"
+    ]
+    assert [
+        (marker["offset"], marker["content"]) for marker in punctuation_markers
+    ] == [(1, "，"), (6, "，"), (8, "。")]
+    assert any(marker["type"] == "llm-error" for marker in body_markers)
 
 
 def test_run_direct_include_editions_opt_in(tmp_path: Path, capsys) -> None:
@@ -995,9 +1379,9 @@ def test_inspect_batch_writes_status_and_error_file(
 def test_collect_batch_writes_clear_text_report_for_rejected_chunk(
     tmp_path: Path, monkeypatch, capsys,
 ) -> None:
-    bundle = _write_bundle(tmp_path, "TEST0004", "甲乙")
+    bundle = _write_bundle(tmp_path, "TEST0004", "甲乙丙丁")
     state_path = tmp_path / "punctuation.batch.yaml"
-    task = _task_dict("TEST0004:bkk:001:body:main:1", "TEST0004", "甲乙")
+    task = _task_dict("TEST0004:bkk:001:body:main:1", "TEST0004", "甲乙丙丁")
     task["juan_dir"] = str(bundle)
     task["manifest_path"] = str(bundle / "TEST0004.manifest.yaml")
     state_path.write_text(
@@ -1053,17 +1437,17 @@ def test_collect_batch_writes_clear_text_report_for_rejected_chunk(
         state_path.with_suffix(".batch-report.yaml").read_text(encoding="utf-8")
     )
     chunk = report["chunks"][0]
-    assert chunk["input_text"] == "甲乙"
+    assert chunk["input_text"] == "甲乙丙丁"
     assert chunk["output_text"] == "甲"
     assert chunk["status"] == "rejected"
     assert chunk["issues"][0]["code"] == "invalid-output"
-    assert chunk["issues"][0]["message"] == "output omitted 1 original character(s)"
+    assert "more than 2 adjacent" in chunk["issues"][0]["message"]
     details = chunk["issues"][0]["details"]
     assert details["input_context"] == {
         "index": 1,
         "before": "甲",
         "at": "乙",
-        "after": "",
+        "after": "丙丁",
         "absolute_offset": 1,
     }
     assert details["output_context"] == {
@@ -1162,7 +1546,7 @@ def test_retry_failed_batch_submits_only_rejected_chunks(
             "batch": {"id": "batch_1"},
             "tasks": [
                 _task_dict("ok", "TEST0005", "甲乙"),
-                _task_dict("bad", "TEST0005", "丙丁"),
+                _task_dict("bad", "TEST0005", "丙丁戊己"),
             ],
         }),
         encoding="utf-8",
@@ -1173,7 +1557,7 @@ def test_retry_failed_batch_submits_only_rejected_chunks(
             '{"custom_id":"ok","response":{"status_code":200,'
             '"body":{"output_text":"甲，乙"}}}',
             '{"custom_id":"bad","response":{"status_code":200,'
-            '"body":{"output_text":"丙X丁"}}}',
+            '"body":{"output_text":"ABC己"}}}',
         ]) + "\n",
         encoding="utf-8",
     )
@@ -1238,7 +1622,7 @@ def test_punctuate_batch_workflow_retries_rejected_chunks(
             }
 
         def download_file_text(self, file_id: str) -> str:
-            output = "甲X乙丙丁戊己" if file_id == "file_batch_1" else "甲，乙丙丁戊己"
+            output = "ABC丁戊己" if file_id == "file_batch_1" else "甲，乙丙丁戊己"
             return json.dumps({
                 "custom_id": "TEST0006:bkk:001:body:main:1",
                 "response": {
@@ -1281,6 +1665,45 @@ def test_punctuate_batch_workflow_retries_rejected_chunks(
     assert asset["markers"]["body"][0]["content"] == "，"
 
 
+def test_punctuate_batch_workflow_skips_existing_comma_assets(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    bundle = _write_bundle(tmp_path, "TEST0017", "甲乙丙丁戊己")
+    _write_existing_punctuation_asset(bundle, "TEST0017", comma_count=4)
+    (tmp_path / "prompt").write_text("prompt", encoding="utf-8")
+
+    class FakeClient:
+        def submit_batch(self, *, requests_path: Path, metadata: dict | None = None) -> dict:
+            raise AssertionError("skipped bundles should not submit")
+
+    monkeypatch.setattr(
+        punctuation,
+        "make_openai_client",
+        lambda ai_config, vendor="openai": FakeClient(),
+    )
+
+    rc = llm_run([
+        "punctuate",
+        "batch",
+        "--bundle",
+        str(bundle),
+        "--model",
+        "test-model",
+        "--prompt",
+        str(tmp_path / "prompt"),
+        "--ai-config",
+        str(tmp_path / "missing.xml"),
+        "--poll-seconds",
+        "0",
+    ])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "skipping: existing punctuation assets contain 4" in out
+    assert "batch workflow: 0 text(s)" in out
+    assert "batch workflow complete: 0 succeeded, 0 failed" in out
+
+
 def test_punctuation_batch_workflow_reports_remaining_problems(
     tmp_path: Path, monkeypatch, capsys,
 ) -> None:
@@ -1304,7 +1727,7 @@ def test_punctuation_batch_workflow_reports_remaining_problems(
                 "custom_id": "TEST0007:bkk:001:body:main:1",
                 "response": {
                     "status_code": 200,
-                    "body": {"output_text": "甲X乙丙丁戊己"},
+                    "body": {"output_text": "ABC丁戊己"},
                 },
             }, ensure_ascii=False) + "\n"
 
@@ -1368,7 +1791,7 @@ def test_punctuate_batch_best_effort_retries_then_writes_partial_markers(
                 "custom_id": "TEST0008:bkk:001:body:main:1",
                 "response": {
                     "status_code": 200,
-                    "body": {"output_text": "甲，乙丙丁戊"},
+                    "body": {"output_text": "甲，乙丙"},
                 },
             }, ensure_ascii=False) + "\n"
 
@@ -1423,6 +1846,6 @@ def test_punctuate_batch_best_effort_retries_then_writes_partial_markers(
     assert error_marker["length"] == 6
     assert error_marker["issue"] == {
         "code": "invalid-output",
-        "message": "output omitted 1 original character(s)",
+        "message": "output diverged for more than 2 adjacent original character(s) starting at input index 3",
     }
     assert error_marker["model"] == "test-model"

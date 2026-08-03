@@ -15,6 +15,8 @@ from bkk.short_refs import parse_text_juan_selector, text_id_arg, text_or_path_a
 
 from .punctuation import (
     BatchWorkflowOptions,
+    DEFAULT_SKIP_MODE,
+    SKIP_MODE_CHOICES,
     collect_batch,
     inspect_batch,
     list_configured_vendors,
@@ -68,6 +70,12 @@ def _add_punctuation_task(parser: argparse.ArgumentParser) -> None:
     )
     pr.add_argument("--dry-run", action="store_true")
     pr.add_argument(
+        "--force",
+        action="store_true",
+        help="run even when existing punctuation assets look complete",
+    )
+    _add_skip_option(pr)
+    pr.add_argument(
         "--best-effort",
         action="store_true",
         help="write partial markers plus llm-error markers for failed chunks",
@@ -76,6 +84,12 @@ def _add_punctuation_task(parser: argparse.ArgumentParser) -> None:
     ps = punct_sub.add_parser("submit", help="submit an async OpenAI batch")
     _add_selection(ps)
     _add_settings(ps)
+    ps.add_argument(
+        "--force",
+        action="store_true",
+        help="submit even when existing punctuation assets look complete",
+    )
+    _add_skip_option(ps)
 
     pb = punct_sub.add_parser(
         "batch",
@@ -83,6 +97,12 @@ def _add_punctuation_task(parser: argparse.ArgumentParser) -> None:
     )
     _add_selection(pb)
     _add_settings(pb)
+    pb.add_argument(
+        "--force",
+        action="store_true",
+        help="run even when existing punctuation assets look complete",
+    )
+    _add_skip_option(pb)
     pb.add_argument(
         "--poll-seconds",
         type=int,
@@ -129,6 +149,20 @@ def _add_punctuation_task(parser: argparse.ArgumentParser) -> None:
     )
     prt.add_argument("state", type=Path, help="state YAML written by submit or retry")
     _add_settings(prt, selection=False)
+
+
+def _add_skip_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--skip",
+        dest="skip_mode",
+        choices=SKIP_MODE_CHOICES,
+        default=DEFAULT_SKIP_MODE,
+        help=(
+            "which existing markers count toward the skip check: 'all' "
+            "(core bundle markers plus generated punctuation assets) or "
+            "'asset-only' (core bundle markers only)"
+        ),
+    )
 
 
 def run(argv: list[str] | None = None) -> int:
@@ -207,6 +241,8 @@ def run(argv: list[str] | None = None) -> int:
                     retries=int(args.retries),
                     jobs=int(args.jobs),
                     best_effort=bool(args.best_effort),
+                    force=bool(args.force),
+                    skip_mode=str(args.skip_mode),
                 ),
             )
         if (
@@ -217,7 +253,12 @@ def run(argv: list[str] | None = None) -> int:
                 bundle, out_root, text_id=text_id, text_prefix=text_prefix,
                 selected_juans=selected_juans, settings=settings,
                 include_editions=bool(args.include_editions),
+                force=bool(args.force),
+                skip_mode=str(args.skip_mode),
             )
+            if state is None:
+                print("no batch submitted")
+                return 0
             print(f"submitted batch; state: {state}")
             return 0
         return run_direct(
@@ -226,6 +267,8 @@ def run(argv: list[str] | None = None) -> int:
             dry_run=bool(args.dry_run),
             include_editions=bool(args.include_editions),
             best_effort=bool(getattr(args, "best_effort", False)),
+            force=bool(getattr(args, "force", False)),
+            skip_mode=str(getattr(args, "skip_mode", DEFAULT_SKIP_MODE)),
         )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
