@@ -22,6 +22,8 @@ from bkk.serve.resolver import CorpusCache, IdentifierResolver
 from bkk.serve.schemas import JuanSliceOut, RecipeRequest
 from bkk.serve.selection import load_manifest
 
+from .punc_report import PuncReportError, build_punctuation_report
+
 
 class RecipeRenderError(RuntimeError):
     """Raised when a render recipe cannot be parsed or rendered."""
@@ -43,14 +45,32 @@ def load_recipe(path: Path) -> dict[str, Any]:
     return data
 
 
-def render_recipe_file(path: Path, *, corpus_root: Path) -> RenderedRecipe:
-    return render_recipe(load_recipe(path), corpus_root=corpus_root)
+def render_recipe_file(
+    path: Path,
+    *,
+    corpus_root: Path,
+    input_path: Path | None = None,
+    punctuation_root: str | Path | None = None,
+) -> RenderedRecipe:
+    input_recipe = load_recipe(input_path) if input_path is not None else None
+    return render_recipe(
+        load_recipe(path),
+        corpus_root=corpus_root,
+        input_recipe=input_recipe,
+        punctuation_root=punctuation_root,
+    )
 
 
-def render_recipe(recipe: dict[str, Any], *, corpus_root: Path) -> RenderedRecipe:
-    pins_raw = recipe.get("pins")
-    if not isinstance(pins_raw, list) or not pins_raw:
-        raise RecipeRenderError("render recipe requires a non-empty pins list")
+def render_recipe(
+    recipe: dict[str, Any],
+    *,
+    corpus_root: Path,
+    input_recipe: dict[str, Any] | None = None,
+    punctuation_root: str | Path | None = None,
+) -> RenderedRecipe:
+    pins_raw = recipe.get("pins") or []
+    if not isinstance(pins_raw, list):
+        raise RecipeRenderError("render recipe pins must be a list")
 
     render = recipe.get("render")
     if not isinstance(render, dict):
@@ -75,11 +95,19 @@ def render_recipe(recipe: dict[str, Any], *, corpus_root: Path) -> RenderedRecip
         for idx, raw in enumerate(pins_raw)
         if isinstance(raw, dict) and isinstance(raw.get("name"), str)
     }
-    datasets = _build_datasets(recipe.get("datasets") or {}, fulfilled.results, pin_names)
+    datasets = _build_datasets(
+        recipe.get("datasets") or {},
+        fulfilled.results,
+        pin_names,
+        corpus_root=corpus_root,
+        input_recipe=input_recipe,
+        punctuation_root=punctuation_root,
+    )
     context = {
         "kind": recipe.get("kind"),
         "pins": pin_context,
         "datasets": datasets,
+        "input": input_recipe or {},
         "errors": fulfilled.errors,
         "resolved_recipe": fulfilled.resolved_recipe,
     }
@@ -152,16 +180,36 @@ def _slice_contexts(content: Any) -> list[dict[str, Any]]:
 
 def _build_datasets(
     datasets_spec: Any, results: list[Any], pin_names: dict[str, int],
+    *,
+    corpus_root: Path,
+    input_recipe: dict[str, Any] | None,
+    punctuation_root: str | Path | None,
 ) -> dict[str, list[dict[str, Any]]]:
     if not isinstance(datasets_spec, dict):
         raise RecipeRenderError("datasets must be a mapping")
-    out: dict[str, list[dict[str, Any]]] = {}
+    out: dict[str, Any] = {}
     for name, spec in datasets_spec.items():
         if not isinstance(name, str) or not name:
             raise RecipeRenderError("dataset names must be non-empty strings")
         if not isinstance(spec, dict):
             raise RecipeRenderError(f"dataset {name!r} must be a mapping")
-        if spec.get("collect") != "markers":
+        collect = spec.get("collect")
+        if collect == "punctuation_report":
+            if input_recipe is None:
+                raise RecipeRenderError(
+                    f"dataset {name!r} needs an input recipe; pass one to "
+                    f"`bkk recipe render`"
+                )
+            try:
+                out[name] = build_punctuation_report(
+                    input_recipe,
+                    corpus_root=corpus_root,
+                    punctuation_root=punctuation_root,
+                )
+            except PuncReportError as exc:
+                raise RecipeRenderError(f"dataset {name!r}: {exc}") from exc
+            continue
+        if collect != "markers":
             raise RecipeRenderError(
                 f"dataset {name!r} has unsupported collect={spec.get('collect')!r}"
             )

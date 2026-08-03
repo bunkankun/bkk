@@ -257,3 +257,57 @@ They cannot access the filesystem, shell, Python imports, or host objects.
 
 See [module/recipes/voice-inspection.yaml](../module/recipes/voice-inspection.yaml)
 for a ready-to-edit voice inspection recipe.
+
+## Punctuation comparison reports
+
+`punc-report` compares every available set of punctuation for a text id or juan
+side by side. It has two pieces:
+
+- a generic template recipe,
+  [module/recipes/punc-report.yaml](../module/recipes/punc-report.yaml), that
+  contains only the output logic, and
+- a generated *input recipe* that lists the target selection and the
+  punctuation sets to compare.
+
+Generate the input with:
+
+```bash
+bkk recipe make punc-report --text-id KR3a0001 [--juan 1] [--bucket body] \
+  [--width 40] [--out KR3a0001.punc-report.input.yaml] --corpus /path/to/corpus
+```
+
+This discovers the bundle's own (core) punctuation markers plus any
+`llm-punctuation` sidecars — declared in the manifest, sitting in-bundle, or
+living under the configured `[llm].punctuation_root` — and writes an input file:
+
+```yaml
+kind: bkk.recipe-input/v1
+for_template: punc-report
+target:
+  textid: KR3a0001
+  juans: [1]
+  bucket: body
+layout:
+  width: 40
+sets:
+  - {sigil: base, label: Bundle punctuation, source: core}
+  - {sigil: gpt4o, label: gpt-4o, source: llm-punctuation, model: gpt-4o}
+```
+
+The file is editable: drop or reorder `sets` before rendering. Each set has a
+stable **sigil** used as the line prefix.
+
+Render by passing the input as the second positional argument:
+
+```bash
+bkk recipe render module/recipes/punc-report.yaml \
+  KR3a0001.punc-report.input.yaml --corpus /path/to/corpus --out report.md
+```
+
+The template's `punctuation_report` dataset prints the selected text in
+fixed-width windows of `width` base characters. The windows are *intersected*:
+for every window, one line per punctuation set is emitted (prefixed by its
+sigil), so all sets can be compared for the same span. Each group carries a
+small header with the bucket-relative offset. Inserted punctuation does not
+count against the width, and any missing/unreadable set is reported in a
+`warnings` section rather than aborting the render.

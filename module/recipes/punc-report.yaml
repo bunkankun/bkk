@@ -1,0 +1,48 @@
+kind: bkk.recipe/v1
+# Generic punctuation-comparison template.
+#
+# It carries only the output logic; the concrete text-id/juan selection and the
+# list of punctuation sets come from an input recipe generated with:
+#
+#   bkk recipe make punc-report --text-id KRxxxxxx [--juan N] [--width 40]
+#
+# Render with the generated input file as the second positional argument:
+#
+#   bkk recipe render module/recipes/punc-report.yaml KRxxxxxx.punc-report.input.yaml \
+#     --corpus /path/to/corpus --out report.md
+#
+# Every punctuation set selected in the input produces one line per fixed-width
+# window of base text. The windows are intersected so all sets are shown side by
+# side for the same span of characters; each line is prefixed with the set's
+# sigil and each group carries a small offset header.
+datasets:
+  report:
+    collect: punctuation_report
+
+render:
+  format: markdown
+  template: |
+    # Punctuation comparison — {{ input.target.textid }}
+
+    Bucket: `{{ datasets.report.target.bucket }}` · width: {{ datasets.report.width }} chars/line
+
+    Sets:
+    {% for s in datasets.report.sets %}
+    - `{{ s.sigil }}` — {{ s.label }}
+    {% endfor %}
+    {% for g in datasets.report.groups %}
+
+    ## juan {{ "%03d"|format(g.juan_seq) }} @{{ "%06d"|format(g.offset) }}–{{ "%06d"|format(g.end) }}
+    ```
+    {% for line in g.lines %}
+    {{ line.sigil }}	{{ line.text }}
+    {% endfor %}
+    ```
+    {% endfor %}
+    {% if datasets.report.warnings %}
+
+    ## warnings
+    {% for w in datasets.report.warnings %}
+    - {{ w }}
+    {% endfor %}
+    {% endif %}
