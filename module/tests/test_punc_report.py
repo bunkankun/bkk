@@ -164,6 +164,27 @@ def test_build_report_fixed_width_and_intersected(tmp_path: Path):
     assert report["warnings"] == []
 
 
+def test_build_report_orders_same_offset_punctuation(tmp_path: Path):
+    _write_bundle(
+        tmp_path,
+        "TST0010",
+        {1: "甲乙"},
+        core_markers={
+            1: [
+                _punct(1, "《『「(：\n)"),
+                _punct(1, "」』、，。；？》"),
+            ]
+        },
+    )
+
+    data = make_punc_report_input(corpus_root=tmp_path, textid="TST0010", width=4)
+    report = build_punctuation_report(data, corpus_root=tmp_path)
+
+    assert report["groups"][0]["lines"][0]["text"] == (
+        "甲》？；。』」，、：)\n(「『《乙"
+    )
+
+
 def test_build_report_missing_sidecar_warns(tmp_path: Path):
     _write_bundle(
         tmp_path,

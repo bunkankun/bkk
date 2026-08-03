@@ -1,0 +1,52 @@
+"""Punctuation rendering helpers."""
+
+from __future__ import annotations
+
+from bkk.rendering.punctuation import (
+    PAGE_BREAK_RENDER_TOKEN,
+    RenderInjection,
+    RenderUnit,
+    render_text_with_punctuation,
+    sort_punctuation_render_order,
+)
+
+
+def test_sort_punctuation_render_order_matches_web_ui_sequence():
+    chars = list("《『「(：\n)」』、，。；？》")
+    units = [
+        RenderUnit(ch=ch, index=index / len(chars))
+        for index, ch in enumerate(chars)
+    ]
+
+    assert "".join(unit.ch for unit in sort_punctuation_render_order(units)) == (
+        "》？；。』」，、：)\n(「『《"
+    )
+
+
+def test_sort_punctuation_render_order_includes_layout_tokens():
+    units = [
+        RenderUnit(ch=ch, index=index)
+        for index, ch in enumerate(f"。\n)/》{PAGE_BREAK_RENDER_TOKEN}\u3000\u3000")
+    ]
+
+    assert "".join(unit.ch for unit in sort_punctuation_render_order(units)) == (
+        f"》。/)\n{PAGE_BREAK_RENDER_TOKEN}\u3000\u3000"
+    )
+
+
+def test_render_text_with_punctuation_orders_same_offset_injections():
+    injections = [
+        RenderInjection(offset=1, content="《『「(：\n)"),
+        RenderInjection(offset=1, content="」』、，。；？》", index=1),
+    ]
+
+    assert render_text_with_punctuation("甲乙", injections) == (
+        "甲》？；。』」，、：)\n(「『《乙"
+    )
+
+
+def test_render_text_with_punctuation_keeps_trailing_marker_in_final_window():
+    injections = [RenderInjection(offset=4, content="。")]
+
+    assert render_text_with_punctuation("甲乙丙丁", injections, 0, 2) == "甲乙"
+    assert render_text_with_punctuation("甲乙丙丁", injections, 2, 4) == "丙丁。"

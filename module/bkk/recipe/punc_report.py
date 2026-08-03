@@ -24,6 +24,10 @@ import yaml
 
 from bkk.index.merge import find_bundle
 from bkk.marker_assets import effective_markers_for_bucket, load_marker_asset
+from bkk.rendering.punctuation import (
+    punctuation_injections_from_markers,
+    render_text_with_punctuation,
+)
 
 VALID_BUCKETS = ("front", "body", "back")
 DEFAULT_WIDTH = 40
@@ -400,49 +404,6 @@ def make_punc_report_input(
 # --------------------------------------------------------------------------
 
 
-def _injections(markers: list[dict[str, Any]], text_len: int) -> list[tuple[int, str]]:
-    out: list[tuple[int, str]] = []
-    for m in markers:
-        off = m.get("offset")
-        content = m.get("content")
-        if not isinstance(off, int) or not isinstance(content, str) or not content:
-            continue
-        if off < 0 or off > text_len:
-            continue
-        out.append((off, content))
-    out.sort(key=lambda p: p[0])
-    return out
-
-
-def _render_window(
-    text: str, injections: list[tuple[int, str]], start: int, end: int, text_len: int,
-) -> str:
-    """``text[start:end]`` with punctuation inserted before each char at its offset.
-
-    A punctuation marker at offset ``O`` renders immediately before the base
-    character at ``O`` and belongs to the window that contains that character
-    (``start <= O < end``). Trailing punctuation at ``O == text_len`` renders
-    in the final window.
-    """
-    parts: list[str] = []
-    cursor = start
-    include_trailing = end >= text_len
-    for off, content in injections:
-        if off < start:
-            continue
-        if off > end:
-            break
-        if off == end and not (off == text_len and include_trailing):
-            break
-        if off > cursor:
-            parts.append(text[cursor:off])
-            cursor = off
-        parts.append(content)
-    if cursor < end:
-        parts.append(text[cursor:end])
-    return "".join(parts)
-
-
 def _resolve_set_markers(
     corpus_root: Path,
     bundle_dir: Path,
@@ -537,13 +498,16 @@ def build_punctuation_report(
             continue
         text_len = len(text)
 
-        set_injections: list[tuple[dict[str, Any], list[tuple[int, str]]]] = []
+        set_injections = []
         for pset in sets:
             markers = _resolve_set_markers(
                 corpus_root, bundle_dir, manifest, textid, seq, bucket, juan, pset,
                 punctuation_root=punctuation_root, warnings=warnings,
             )
-            set_injections.append((pset, _injections(markers, text_len)))
+            set_injections.append((
+                pset,
+                punctuation_injections_from_markers(markers, text_len),
+            ))
 
         for start in range(0, text_len, width):
             end = min(start + width, text_len)
@@ -555,7 +519,7 @@ def build_punctuation_report(
                     ReportLine(
                         sigil=pset.get("sigil") or "?",
                         label=pset.get("label") or pset.get("sigil") or "?",
-                        text=_render_window(text, injections, start, end, text_len),
+                        text=render_text_with_punctuation(text, injections, start, end),
                     )
                 )
             groups.append(group)
