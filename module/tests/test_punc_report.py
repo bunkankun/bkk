@@ -164,6 +164,24 @@ def test_build_report_fixed_width_and_intersected(tmp_path: Path):
     assert report["warnings"] == []
 
 
+def test_build_report_keeps_boundary_punctuation_on_previous_line(tmp_path: Path):
+    _write_bundle(
+        tmp_path,
+        "TST0011",
+        {1: "甲乙丙丁戊己"},
+        core_markers={1: [_punct(2, "，"), _punct(4, "。")]},
+    )
+
+    data = make_punc_report_input(corpus_root=tmp_path, textid="TST0011", width=2)
+    report = build_punctuation_report(data, corpus_root=tmp_path)
+
+    assert [g["lines"][0]["text"] for g in report["groups"]] == [
+        "甲乙，",
+        "丙丁。",
+        "戊己",
+    ]
+
+
 def test_build_report_orders_same_offset_punctuation(tmp_path: Path):
     _write_bundle(
         tmp_path,

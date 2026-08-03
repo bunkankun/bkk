@@ -50,3 +50,24 @@ def test_render_text_with_punctuation_keeps_trailing_marker_in_final_window():
 
     assert render_text_with_punctuation("甲乙丙丁", injections, 0, 2) == "甲乙"
     assert render_text_with_punctuation("甲乙丙丁", injections, 2, 4) == "丙丁。"
+
+
+def test_render_text_with_punctuation_can_attach_boundaries_to_previous_window():
+    injections = [
+        RenderInjection(offset=0, content="「"),
+        RenderInjection(offset=2, content="，"),
+        RenderInjection(offset=4, content="。"),
+    ]
+
+    assert (
+        render_text_with_punctuation(
+            "甲乙丙丁", injections, 0, 2, boundary="trailing",
+        )
+        == "「甲乙，"
+    )
+    assert (
+        render_text_with_punctuation(
+            "甲乙丙丁", injections, 2, 4, boundary="trailing",
+        )
+        == "丙丁。"
+    )

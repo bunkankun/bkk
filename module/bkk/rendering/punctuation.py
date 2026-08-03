@@ -117,16 +117,21 @@ def punctuation_injections_from_markers(
 
 def render_text_with_punctuation(
     text: str, injections: Iterable[RenderInjection], start: int = 0,
-    end: int | None = None,
+    end: int | None = None, boundary: str = "leading",
 ) -> str:
     """Render ``text[start:end]`` with punctuation injected by offset.
 
     A marker at offset ``O`` renders immediately before the base character at
-    ``O``. It belongs to the window containing that character
-    (``start <= O < end``); trailing punctuation at ``O == len(text)`` renders
-    in the final window. Same-offset injected characters are displayed in the
-    logical order shared with the Web UI.
+    ``O``. With the default ``boundary="leading"``, it belongs to the window
+    containing that character (``start <= O < end``); trailing punctuation at
+    ``O == len(text)`` renders in the final window. With
+    ``boundary="trailing"``, punctuation exactly at a nonzero window boundary
+    belongs to the preceding window instead. Same-offset injected characters
+    are displayed in the logical order shared with the Web UI.
     """
+
+    if boundary not in {"leading", "trailing"}:
+        raise ValueError("boundary must be 'leading' or 'trailing'")
 
     text_len = len(text)
     if end is None:
@@ -141,7 +146,9 @@ def render_text_with_punctuation(
             continue
         if off > end:
             continue
-        if off == end and off != text_len:
+        if boundary == "leading" and off == end and off != text_len:
+            continue
+        if boundary == "trailing" and off == start and start != 0:
             continue
         if off < 0 or off > text_len:
             continue
@@ -168,4 +175,3 @@ def render_text_with_punctuation(
     if cursor < end:
         parts.append(text[cursor:end])
     return "".join(parts)
-

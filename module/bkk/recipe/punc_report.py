@@ -519,7 +519,9 @@ def build_punctuation_report(
                     ReportLine(
                         sigil=pset.get("sigil") or "?",
                         label=pset.get("label") or pset.get("sigil") or "?",
-                        text=render_text_with_punctuation(text, injections, start, end),
+                        text=render_text_with_punctuation(
+                            text, injections, start, end, boundary="trailing",
+                        ),
                     )
                 )
             groups.append(group)
