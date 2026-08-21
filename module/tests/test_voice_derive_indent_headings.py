@@ -20,6 +20,10 @@ def _punct(offset: int, content: str) -> dict:
     return {"type": "punctuation", "offset": offset, "content": content, "id": ""}
 
 
+def _note(offset: int, length: int) -> dict:
+    return {"type": "voice", "offset": offset, "length": length, "name": "note", "id": ""}
+
+
 def test_kr3a0013_style_headings_are_derived() -> None:
     text = "傅子晉傅玄撰正心篇本文仁論篇"
     markers = [
@@ -107,6 +111,49 @@ def test_punctuation_bearing_toc_entry_is_rejected() -> None:
     out = derive_voice_markers_from_indent_headings(len(text), markers, text)
 
     assert [marker["offset"] for marker in out] == [6]
+
+
+def test_attached_note_does_not_hide_heading_text() -> None:
+    text = "正心篇一本作正心正文西施詠河嶽英靈集"
+    markers = [
+        _lb(0), _indent(0, 2),
+        _punct(3, "("), _note(3, 5), _punct(5, "/"), _punct(8, ")"),
+        _lb(8),
+        _lb(10), _indent(10, 2),
+        _punct(13, "("), _note(13, 5), _punct(15, "/"), _punct(18, ")"),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["length"], marker["indent_depth"])
+        for marker in out
+    ] == [
+        (0, 3, 2),
+        (10, 3, 2),
+    ]
+    assert has_indent_heading_profile(len(text), markers, text) is True
+
+
+def test_early_one_indent_count_line_is_section_heading() -> None:
+    text = "王右丞集箋注卷一仁和趙殿成撰古詩十首奉和聖製天長節賜宰臣歌應制"
+    markers = [
+        _lb(0), _indent(0, 1),
+        _lb(8), _indent(8, 12),
+        _lb(14), _indent(14, 1),
+        _lb(18), _indent(18, 2),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["length"], marker["indent_depth"])
+        for marker in out
+    ] == [
+        (0, 8, 1),
+        (14, 4, 1),
+    ]
+    assert has_indent_heading_profile(len(text), markers, text) is True
 
 
 def test_closing_title_repeat_is_skipped() -> None:
