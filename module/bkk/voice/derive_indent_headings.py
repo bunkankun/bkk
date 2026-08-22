@@ -85,7 +85,9 @@ def _heading_candidates(
     out: list[_Candidate] = []
     seen_title_like: set[str] = set()
     emitted_title_like = False
-    for index, line in enumerate(lines):
+    index = 0
+    while index < len(lines):
+        line, next_index = _depth_two_overrun_line(lines, index, text)
         candidates = _candidates_for_line(
             line,
             allow_title_like=not emitted_title_like,
@@ -93,15 +95,59 @@ def _heading_candidates(
             seen_title_like=seen_title_like,
         )
         if not candidates:
+            index = next_index
             continue
         out.extend(candidates)
-        if any(candidate.kind == "title" for candidate in candidates):
+        if any(candidate.depth == 1 for candidate in candidates):
             emitted_title_like = True
             seen_title_like.update(
                 candidate.text for candidate in candidates
-                if candidate.kind == "title"
+                if candidate.depth == 1
             )
+        index = next_index
     return out
+
+
+def _depth_two_overrun_line(
+    lines: list[_Line],
+    index: int,
+    text: str,
+) -> tuple[_Line, int]:
+    line = lines[index]
+    if line.depth != 2:
+        return line, index + 1
+    end_index = index + 1
+    while (
+        end_index < len(lines)
+        and lines[end_index].depth == 2
+        and lines[end_index].start == lines[end_index - 1].end
+    ):
+        group = lines[index:end_index + 1]
+        if not any(len(item.text) > _MAX_HEADING_LEN for item in group):
+            break
+        end_index += 1
+    if end_index == index + 1:
+        return line, end_index
+    group = lines[index:end_index]
+    start = line.start
+    end = group[-1].end
+    return _Line(
+        start=start,
+        end=end,
+        depth=2,
+        text=text[start:end],
+        internal_indent_offsets=(),
+        punctuation_offsets=tuple(
+            offset
+            for item in group
+            for offset in item.punctuation_offsets
+        ),
+        note_spans=tuple(
+            span
+            for item in group
+            for span in item.note_spans
+        ),
+    ), end_index
 
 
 def _lines(text_len: int, markers: list[dict], text: str) -> list[_Line]:
@@ -236,6 +282,8 @@ def _candidate_for_span(
     allow_early_section: bool,
     seen_title_like: set[str],
 ) -> _Candidate | None:
+    if _span_covered_by_note(start, end, note_spans):
+        return None
     candidate = _candidate_for_clean_span(
         start,
         end,
@@ -253,6 +301,11 @@ def _candidate_for_span(
     if content_span is None:
         return None
     content_start, content_end, content_text = content_span
+    if depth == 1 and note_spans:
+        # A depth-1 lemma adjacent to commentary parentheses is visually
+        # heading-like but remains part of the commentary stream, not a new
+        # section heading. This includes lemmas between two note spans.
+        return None
     return _candidate_for_clean_span(
         content_start,
         content_end,
@@ -278,7 +331,9 @@ def _candidate_for_clean_span(
 ) -> _Candidate | None:
     if depth != 3 and any(start < offset < end for offset in punctuation_offsets):
         return None
-    if not (_MIN_HEADING_LEN <= len(span_text) <= _MAX_HEADING_LEN):
+    if len(span_text) < _MIN_HEADING_LEN:
+        return None
+    if depth != 2 and len(span_text) > _MAX_HEADING_LEN:
         return None
     if _looks_like_attribution(span_text):
         return None
@@ -339,6 +394,17 @@ def _single_non_note_span(
     if len(segments) != 1:
         return None
     return segments[0]
+
+
+def _span_covered_by_note(
+    start: int,
+    end: int,
+    note_spans: tuple[tuple[int, int], ...],
+) -> bool:
+    return any(
+        note_start <= start and end <= note_end
+        for note_start, note_end in note_spans
+    )
 
 
 def _looks_like_attribution(text: str) -> bool:

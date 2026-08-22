@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+from collections.abc import Sequence
 from typing import Any
 
 
@@ -38,6 +39,78 @@ def _valid_serial_width(section: str, serial: str) -> bool:
 
 def _canonical_textid(section: str, serial: str) -> str:
     return f"KR{section}{serial.zfill(_serial_width(section))}"
+
+
+def compact_text_id(text_id: str) -> str:
+    """Return the compact KR spelling for ``text_id`` when possible.
+
+    ``KR4c0022`` becomes ``4c22``. Identifiers outside the KR pattern are
+    returned unchanged so callers can use the helper in generic code paths.
+    """
+    match = _TEXTID_RE.fullmatch(text_id.strip())
+    if match is None:
+        return text_id
+    section = match.group("section")
+    serial = str(int(match.group("serial")))
+    return f"{section}{serial}"
+
+
+def text_family_id(text_id: str, *, compact: bool = False) -> str:
+    """Return the KR section parent for a text id when possible."""
+    match = _TEXTID_RE.fullmatch(text_id.strip())
+    if match is None:
+        return ""
+    section = match.group("section")
+    return section if compact else f"KR{section}"
+
+
+def format_short_ref(
+    text_id: str,
+    juan: int,
+    *,
+    offset: int | None = None,
+    length: int | None = None,
+    bucket: str = "body",
+    compact: bool = False,
+) -> str:
+    """Format a parser-compatible text/juan/bucket slice reference."""
+    ref_text_id = compact_text_id(text_id) if compact else text_id
+    ref = f"{ref_text_id}/{juan}"
+    explicit_bucket = bucket if bucket != "body" else ""
+    if offset is None and length is None:
+        if explicit_bucket:
+            return f"{ref}/{explicit_bucket}"
+        return ref
+    if offset is None or length is None:
+        raise ValueError("offset and length must be supplied together")
+    if offset < 0 or length < 0:
+        raise ValueError("offset and length must be non-negative")
+    return f"{ref}/{explicit_bucket}@{offset}+{length}"
+
+
+def format_ctf_node_ref(
+    text_id: str,
+    juan: int,
+    sequence_path: int | Sequence[int],
+    *,
+    offset: int,
+    length: int,
+    bucket: str = "body",
+    compact: bool = False,
+) -> str:
+    """Format a CTF node id with a full hierarchical sequence path."""
+    if isinstance(sequence_path, int):
+        path_parts = (sequence_path,)
+    else:
+        path_parts = tuple(sequence_path)
+    if not path_parts or any(part <= 0 for part in path_parts):
+        raise ValueError("sequence path must contain positive integers")
+    ref_text_id = compact_text_id(text_id) if compact else text_id
+    explicit_bucket = bucket if bucket != "body" else ""
+    if offset < 0 or length < 0:
+        raise ValueError("offset and length must be non-negative")
+    path = "/".join(str(part) for part in path_parts)
+    return f"{ref_text_id}/{juan}/{path}/{explicit_bucket}@{offset}+{length}"
 
 
 def parse_short_ref(ref: str) -> tuple[str, dict[str, Any]]:

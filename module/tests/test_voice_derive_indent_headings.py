@@ -135,6 +135,101 @@ def test_attached_note_does_not_hide_heading_text() -> None:
     assert has_indent_heading_profile(len(text), markers, text) is True
 
 
+def test_depth_one_commentary_lemma_before_note_is_rejected() -> None:
+    text = "春過賀遂員外藥園藥園唐李華賀遂員外藥園小山池記"
+    markers = [
+        _lb(0), _indent(0, 2),
+        _lb(8), _indent(8, 1),
+        _punct(10, "("), _note(10, 21), _punct(31, ")"),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["length"], marker["indent_depth"])
+        for marker in out
+    ] == [
+        (0, 8, 2),
+    ]
+
+
+def test_depth_one_commentary_lemma_between_notes_is_rejected() -> None:
+    text = "前文善卷後文"
+    markers = [
+        _lb(0), _indent(0, 1),
+        _punct(2, ")"), _note(0, 2),
+        _punct(4, "("), _note(4, 2),
+    ]
+
+    assert derive_voice_markers_from_indent_headings(len(text), markers, text) == []
+
+
+def test_short_line_inside_note_is_rejected() -> None:
+    text = "前文詩之後後文"
+    markers = [
+        _lb(2), _indent(2, 3),
+        _lb(5),
+        _punct(4, "/"),
+        _note(0, 5),
+    ]
+
+    assert derive_voice_markers_from_indent_headings(len(text), markers, text) == []
+
+
+def test_later_depth_one_title_like_line_after_section_is_rejected() -> None:
+    text = "近體詩十六首春過賀遂員外藥園槿籬一本作槿籬"
+    markers = [
+        _lb(0), _indent(0, 1),
+        _lb(6), _indent(6, 2),
+        _lb(14), _indent(14, 1),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["length"], marker["indent_depth"])
+        for marker in out
+    ] == [
+        (0, 6, 1),
+        (6, 8, 2),
+    ]
+
+
+def test_long_depth_two_line_is_heading() -> None:
+    text = "河南嚴尹弟見宿弊廬訪别人賦十韻本文"
+    markers = [
+        _lb(0), _indent(0, 2),
+        _lb(15),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["length"], marker["indent_depth"])
+        for marker in out
+    ] == [
+        (0, 15, 2),
+    ]
+
+
+def test_depth_two_heading_overrun_merges_next_depth_two_line() -> None:
+    text = "送祕書朝監還日本國并序還極元集唐詩品彚俱無國字正文"
+    markers = [
+        _lb(0), _indent(0, 2),
+        _lb(16), _indent(16, 2),
+        _lb(26),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["length"], marker["indent_depth"])
+        for marker in out
+    ] == [
+        (0, 26, 2),
+    ]
+
+
 def test_early_one_indent_count_line_is_section_heading() -> None:
     text = "王右丞集箋注卷一仁和趙殿成撰古詩十首奉和聖製天長節賜宰臣歌應制"
     markers = [

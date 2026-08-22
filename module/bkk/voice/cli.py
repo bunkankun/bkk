@@ -113,6 +113,7 @@ from .derive_tls_seg import (
     derive_voice_markers_from_tls_segments,
     derive_voice_markers_from_tls_segments_best_effort,
 )
+from .ctf import build_ctf_asset, ctf_tsv_text
 from .problems import (
     VoiceProblemReportError,
     find_voice_problems,
@@ -230,6 +231,66 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", dest="dry_run", action="store_true",
         help="report what would be removed without modifying files",
     )
+    pc = sub.add_parser(
+        "ctf",
+        help="write standalone citation tree fragment sidecars from "
+             "indent-heading voice markers",
+    )
+    _add_bundle_selector(pc)
+    for action in pc._actions:
+        if action.dest == "out_root":
+            action.help = (
+                "with --tsv, root for <section>/<text-id>.ctf.tsv "
+                "(overrides global.ctf_root); otherwise bundle output root "
+                "used to resolve --text-id/--text-prefix"
+            )
+            break
+    pc.add_argument(
+        "--juan",
+        dest="juan_selectors",
+        action="append",
+        default=None,
+        help=(
+            "restrict CTF export to one complete juan; repeatable. Accepts "
+            "KR refs like KR3k0059/147 as a standalone selector, or a "
+            "bare seq like 147 with --bundle/--text-id/--text-prefix."
+        ),
+    )
+    pc.add_argument(
+        "--out-dir",
+        dest="out_dir",
+        type=Path,
+        default=None,
+        help="directory for CTF files (defaults to the bundle assets directory)",
+    )
+    pc.add_argument(
+        "--heading-source",
+        dest="heading_source",
+        choices=("auto", "voices", "derive"),
+        default="auto",
+        help="heading source: existing indent-heading voices, fresh derivation, "
+             "or auto existing-first (default)",
+    )
+    pc.add_argument(
+        "--short",
+        dest="short_refs",
+        action="store_true",
+        help="emit compact refs such as 4c22/1/@8+37 instead of canonical refs",
+    )
+    pc.add_argument(
+        "--tsv",
+        dest="tsv",
+        action="store_true",
+        help="write one whole-text TSV containing id, parent_id, and label",
+    )
+    pc.add_argument(
+        "--force", action="store_true",
+        help="overwrite existing CTF files",
+    )
+    pc.add_argument(
+        "--dry-run", dest="dry_run", action="store_true",
+        help="report what would be written without modifying files",
+    )
     pp = sub.add_parser(
         "problems",
         help="write a precomputed report of persisted voice:problem markers",
@@ -286,6 +347,37 @@ def run(argv: list[str] | None = None) -> int:
             )
         return _run_remove(
             bundle, out_root, text_id=text_id, dry_run=args.dry_run,
+        )
+
+    if args.op == "ctf":
+        ctf_out_root = None
+        ctf_bundle_root = out_root
+        if args.tsv:
+            ctf_out_root = args.out_root
+            if args.out_root is not None:
+                from bkk.config import load_rc
+                rc = load_rc()
+                ctf_bundle_root = resolve_rc_path(
+                    None, rc, (("global", "corpus"),),
+                )
+        try:
+            bundle, text_id, text_prefix, selected_juans = _selected_add_args(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if text_prefix is not None:
+            return _run_ctf(
+                bundle, ctf_bundle_root, text_id=text_id, text_prefix=text_prefix,
+                selected_juans=selected_juans, out_dir=args.out_dir,
+                tsv=args.tsv, tsv_out_root=ctf_out_root,
+                heading_source=args.heading_source, short_refs=args.short_refs,
+                force=args.force, dry_run=args.dry_run,
+            )
+        return _run_ctf(
+            bundle, ctf_bundle_root, text_id=text_id, selected_juans=selected_juans,
+            out_dir=args.out_dir, tsv=args.tsv, tsv_out_root=ctf_out_root,
+            heading_source=args.heading_source, short_refs=args.short_refs,
+            force=args.force, dry_run=args.dry_run,
         )
 
     source = args.source
@@ -949,6 +1041,367 @@ def _run_remove(
         from bkk.repair.markers import externalize_markers
         externalize_markers(bundle_dir, dry_run=False)
     return 0
+
+
+def _run_ctf(
+    bundle: str | Path | None,
+    out_root,
+    *,
+    text_id: str | None = None,
+    text_prefix: str | None = None,
+    selected_juans: set[int] | None = None,
+    out_dir: Path | None,
+    tsv: bool,
+    tsv_out_root: Path | None,
+    heading_source: str,
+    short_refs: bool,
+    force: bool,
+    dry_run: bool,
+) -> int:
+    if text_prefix is not None:
+        try:
+            bundle_dirs = _resolve_bundle_dirs_for_prefix(out_root, text_prefix)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        rc = 0
+        for bundle_dir in bundle_dirs:
+            print(f"[bundle {bundle_dir.name}]")
+            bundle_rc = _run_ctf(
+                bundle_dir, out_root, selected_juans=selected_juans,
+                out_dir=out_dir, tsv=tsv, tsv_out_root=tsv_out_root,
+                heading_source=heading_source,
+                short_refs=short_refs, force=force, dry_run=dry_run,
+            )
+            if bundle_rc:
+                rc = 1 if rc == 0 else rc
+        return rc
+
+    try:
+        bundle_dir = _resolve_bundle_dir(bundle, out_root, text_id=text_id)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    text_id = bundle_dir.name
+    manifest_path = bundle_dir / f"{text_id}.manifest.yaml"
+    if not manifest_path.exists():
+        print(f"error: master manifest not found: {manifest_path}", file=sys.stderr)
+        return 2
+
+    print("[master]")
+    if tsv:
+        return _run_one_ctf_tsv(
+            bundle_dir,
+            manifest_path,
+            text_id,
+            selected_juans=selected_juans,
+            tsv_out_root=tsv_out_root,
+            heading_source=heading_source,
+            short_refs=short_refs,
+            force=force,
+            dry_run=dry_run,
+        )
+    try:
+        stats = _process_one_ctf(
+            bundle_dir,
+            manifest_path,
+            text_id,
+            selected_juans=selected_juans,
+            out_dir=out_dir,
+            heading_source=heading_source,
+            short_refs=short_refs,
+            force=force,
+            dry_run=dry_run,
+        )
+    except (RuntimeError, ValueError) as exc:
+        print(f"  error: {exc}", file=sys.stderr)
+        print("  master skipped; no files written for this scope")
+        return 1
+
+    for line in stats["lines"]:
+        print(line)
+    verb = "would write" if dry_run else "wrote"
+    skip_verb = "would skip" if dry_run else "skipped"
+    print(
+        f"{verb} {stats['written']} CTF file(s); "
+        f"{skip_verb} {stats['skipped']} existing file(s) "
+        f"across {stats['juans']} juan file(s)"
+    )
+    return 0
+
+
+def _run_one_ctf_tsv(
+    juan_dir: Path,
+    manifest_path: Path,
+    text_id: str,
+    *,
+    selected_juans: set[int] | None,
+    tsv_out_root: Path | None,
+    heading_source: str,
+    short_refs: bool,
+    force: bool,
+    dry_run: bool,
+) -> int:
+    try:
+        stats = _process_one_ctf_tsv(
+            juan_dir,
+            manifest_path,
+            text_id,
+            selected_juans=selected_juans,
+            tsv_out_root=tsv_out_root,
+            heading_source=heading_source,
+            short_refs=short_refs,
+            force=force,
+            dry_run=dry_run,
+        )
+    except (RuntimeError, ValueError) as exc:
+        print(f"  error: {exc}", file=sys.stderr)
+        print("  master skipped; no files written for this scope")
+        return 1
+    for line in stats["lines"]:
+        print(line)
+    if dry_run:
+        print(
+            f"would write {stats['written']} CTF TSV file(s); "
+            f"would skip {stats['skipped']} existing file(s)"
+        )
+    else:
+        print(
+            f"wrote {stats['written']} CTF TSV file(s); "
+            f"skipped {stats['skipped']} existing file(s)"
+        )
+    return 0
+
+
+def _process_one_ctf(
+    juan_dir: Path,
+    manifest_path: Path,
+    text_id: str,
+    *,
+    selected_juans: set[int] | None = None,
+    out_dir: Path | None,
+    heading_source: str,
+    short_refs: bool,
+    force: bool,
+    dry_run: bool,
+) -> dict:
+    juan_entries: list[tuple[int, Path]] = []
+    for entry in sorted(juan_dir.iterdir()):
+        if not entry.is_file():
+            continue
+        name = entry.name
+        if name.endswith(".manifest.yaml") or name.endswith(".ann.yaml"):
+            continue
+        m = _JUAN_RE.match(name)
+        if not m or m.group("text_id") != text_id:
+            continue
+        if m.group("short") is not None:
+            continue
+        seq = int(m.group("seq"))
+        if selected_juans is not None and seq not in selected_juans:
+            continue
+        juan_entries.append((seq, entry))
+    juan_entries.sort(key=lambda t: t[0])
+
+    if not juan_entries:
+        if selected_juans is not None:
+            selected = ", ".join(str(seq) for seq in sorted(selected_juans))
+            raise RuntimeError(
+                f"no selected juan files found under {juan_dir}: {selected}"
+            )
+        raise RuntimeError(f"no juan files found under {juan_dir}")
+
+    manifest = _yaml_load_text(manifest_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(manifest, dict):
+        raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
+    manifest_hash_value = manifest.get("hash")
+    if not isinstance(manifest_hash_value, str):
+        manifest_hash_value = None
+
+    lines: list[str] = []
+    written = 0
+    skipped = 0
+    pending: list[tuple[Path, dict]] = []
+    target_dir = out_dir if out_dir is not None else juan_dir / "assets"
+
+    for seq, juan_path in juan_entries:
+        output_path = target_dir / f"{text_id}_{seq:03d}.ctf.yaml"
+        if output_path.exists() and not force:
+            skipped += 1
+            if not dry_run:
+                lines.append(
+                    f"  juan {seq:03d}: {output_path}; already exists; skipped"
+                )
+            continue
+
+        if dry_run:
+            written += 1
+            continue
+
+        data = _yaml_load_text(juan_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
+        body = data.get("body")
+        if not isinstance(body, dict):
+            raise RuntimeError(f"{juan_path.name}: missing body bucket")
+        text = body.get("text")
+        if not isinstance(text, str):
+            raise RuntimeError(f"{juan_path.name}: body.text is not a string")
+        bucket_hash = body.get("hash")
+        if not isinstance(bucket_hash, str):
+            bucket_hash = None
+
+        marker_asset = load_marker_asset(juan_dir, manifest, seq)
+        markers = effective_markers_for_bucket(data, "body", marker_asset)
+        ctf = build_ctf_asset(
+            text_id=text_id,
+            seq=seq,
+            bucket_name="body",
+            text=text,
+            markers=markers,
+            manifest_hash=manifest_hash_value,
+            bucket_hash=bucket_hash,
+            heading_source=heading_source,
+            short_refs=short_refs,
+        )
+        written += 1
+        pending.append((output_path, ctf))
+        action = "would write" if dry_run else "wrote"
+        lines.append(
+            f"  juan {seq:03d}: {action} {output_path} "
+            f"({len(ctf['nodes'])} node(s))"
+        )
+
+    if not dry_run:
+        for output_path, ctf in pending:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(dump(ctf), encoding="utf-8")
+
+    return {
+        "juans": len(juan_entries),
+        "written": written,
+        "skipped": skipped,
+        "lines": lines,
+    }
+
+
+def _process_one_ctf_tsv(
+    juan_dir: Path,
+    manifest_path: Path,
+    text_id: str,
+    *,
+    selected_juans: set[int] | None,
+    tsv_out_root: Path | None,
+    heading_source: str,
+    short_refs: bool,
+    force: bool,
+    dry_run: bool,
+) -> dict:
+    output_root = _resolve_ctf_tsv_root(tsv_out_root)
+    output_path = _ctf_tsv_output_path(output_root, text_id)
+
+    juan_entries: list[tuple[int, Path]] = []
+    for entry in sorted(juan_dir.iterdir()):
+        if not entry.is_file():
+            continue
+        name = entry.name
+        if name.endswith(".manifest.yaml") or name.endswith(".ann.yaml"):
+            continue
+        m = _JUAN_RE.match(name)
+        if not m or m.group("text_id") != text_id:
+            continue
+        if m.group("short") is not None:
+            continue
+        seq = int(m.group("seq"))
+        if selected_juans is not None and seq not in selected_juans:
+            continue
+        juan_entries.append((seq, entry))
+    juan_entries.sort(key=lambda t: t[0])
+    if not juan_entries:
+        if selected_juans is not None:
+            selected = ", ".join(str(seq) for seq in sorted(selected_juans))
+            raise RuntimeError(
+                f"no selected juan files found under {juan_dir}: {selected}"
+            )
+        raise RuntimeError(f"no juan files found under {juan_dir}")
+    if output_path.exists() and not force:
+        return {"written": 0, "skipped": 1, "lines": []}
+    if dry_run:
+        return {"written": 1, "skipped": 0, "lines": []}
+
+    manifest = _yaml_load_text(manifest_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(manifest, dict):
+        raise RuntimeError(f"{manifest_path.name}: manifest top level is not a mapping")
+    manifest_hash_value = manifest.get("hash")
+    if not isinstance(manifest_hash_value, str):
+        manifest_hash_value = None
+    title = (manifest.get("metadata") or {}).get("title")
+    title = title if isinstance(title, str) and title else None
+
+    all_nodes: list[dict] = []
+    for seq, juan_path in juan_entries:
+        data = _yaml_load_text(juan_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise RuntimeError(f"{juan_path.name}: top-level YAML is not a mapping")
+        body = data.get("body")
+        if not isinstance(body, dict):
+            raise RuntimeError(f"{juan_path.name}: missing body bucket")
+        text = body.get("text")
+        if not isinstance(text, str):
+            raise RuntimeError(f"{juan_path.name}: body.text is not a string")
+        bucket_hash = body.get("hash")
+        if not isinstance(bucket_hash, str):
+            bucket_hash = None
+        marker_asset = load_marker_asset(juan_dir, manifest, seq)
+        ctf = build_ctf_asset(
+            text_id=text_id,
+            seq=seq,
+            bucket_name="body",
+            text=text,
+            markers=effective_markers_for_bucket(data, "body", marker_asset),
+            manifest_hash=manifest_hash_value,
+            bucket_hash=bucket_hash,
+            heading_source=heading_source,
+            short_refs=short_refs,
+        )
+        all_nodes.extend(ctf["nodes"])
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        ctf_tsv_text(
+            text_id=text_id,
+            text_label=title,
+            nodes=all_nodes,
+            short_refs=short_refs,
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "written": 1,
+        "skipped": 0,
+        "lines": [
+            f"  wrote {output_path} ({len(all_nodes)} node row(s) + text root)"
+        ],
+    }
+
+
+def _resolve_ctf_tsv_root(explicit: Path | None) -> Path:
+    if explicit is not None:
+        return explicit
+    from bkk.config import load_rc
+    rc = load_rc()
+    root = resolve_rc_path(None, rc, (("global", "ctf_root"),))
+    if root is None:
+        raise RuntimeError(
+            "CTF TSV output root is required: pass --out or configure global.ctf_root"
+        )
+    return root
+
+
+def _ctf_tsv_output_path(output_root: Path, text_id: str) -> Path:
+    section = text_id[:4]
+    return output_root / section / f"{text_id}.ctf.tsv"
 
 
 def _resolve_bundle_dirs_for_prefix(

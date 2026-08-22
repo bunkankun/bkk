@@ -505,9 +505,10 @@ def test_add_indent_headings_force_replaces_only_heading_source(
             {"type": "indent", "offset": 0, "content": "\u3000", "id": "i1"},
             {"type": "line-break", "offset": 2, "content": "", "id": "l2"},
             {"type": "indent", "offset": 2, "content": "\u3000\u3000", "id": "i2"},
-            {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"},
+            {"type": "line-break", "offset": 5, "content": "", "id": "l3"},
+            {"type": "voice", "offset": 5, "length": 2, "name": "note", "id": "n1"},
         ],
-        body_text="傅子正心篇",
+        body_text="傅子正心篇注文",
     )
     assert _process_one(
         bundle,
@@ -538,7 +539,7 @@ def test_add_indent_headings_force_replaces_only_heading_source(
         marker for marker in markers
         if marker.get("type") == "voice" and marker.get("name") == "note"
     ] == [
-        {"type": "voice", "offset": 2, "length": 3, "name": "note", "id": "n1"},
+        {"type": "voice", "offset": 5, "length": 2, "name": "note", "id": "n1"},
     ]
     assert len([
         marker for marker in markers

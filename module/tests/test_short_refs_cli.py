@@ -7,8 +7,12 @@ import argparse
 import pytest
 
 from bkk.short_refs import (
+    compact_text_id,
+    format_ctf_node_ref,
+    format_short_ref,
     normalize_text_id,
     parse_text_juan_selector,
+    text_family_id,
     text_id_arg,
     text_prefix_arg,
 )
@@ -28,6 +32,29 @@ from bkk.short_refs import (
 )
 def test_normalize_text_id(value, expected):
     assert normalize_text_id(value) == expected
+
+
+def test_compact_text_id_and_format_short_ref():
+    assert compact_text_id("KR4c0022") == "4c22"
+    assert compact_text_id("KR3eq051") == "3eq51"
+    assert compact_text_id("J01nA001") == "J01nA001"
+    assert text_family_id("KR4c0022") == "KR4c"
+    assert text_family_id("KR4c0022", compact=True) == "4c"
+    assert format_short_ref("KR4c0022", 1, offset=8, length=37) == (
+        "KR4c0022/1/@8+37"
+    )
+    assert format_short_ref(
+        "KR4c0022", 1, offset=8, length=37, compact=True,
+    ) == "4c22/1/@8+37"
+    assert format_ctf_node_ref(
+        "KR4c0022", 2, 1, offset=19, length=7,
+    ) == "KR4c0022/2/1/@19+7"
+    assert format_ctf_node_ref(
+        "KR4c0022", 2, (1, 2), offset=19, length=7,
+    ) == "KR4c0022/2/1/2/@19+7"
+    assert format_ctf_node_ref(
+        "KR4c0022", 2, 1, offset=19, length=7, compact=True,
+    ) == "4c22/2/1/@19+7"
 
 
 def test_text_only_argument_rejects_juan_selector():
