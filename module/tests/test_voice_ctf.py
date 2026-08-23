@@ -38,6 +38,8 @@ def _write_ctf_bundle(
     body_text: str,
     markers: list[dict],
     toc: list[dict] | None = None,
+    source_path: Path | None = None,
+    source_repository: str = "cbeta",
 ) -> Path:
     bundle_dir.mkdir(parents=True, exist_ok=True)
     body = {"text": body_text, "hash": sha256_text(body_text)}
@@ -88,6 +90,15 @@ def _write_ctf_bundle(
         "table_of_contents": toc or [],
         "hash": ZERO_HASH,
     }
+    if source_path is not None:
+        manifest["metadata"]["source"] = {
+            "repository": source_repository,
+            "path": str(source_path),
+            "old_id": source_path.stem,
+        }
+        if source_repository == "cbeta":
+            manifest["metadata"]["identifiers"]["cbeta"] = source_path.stem
+            manifest["metadata"]["identifiers"]["cbeta_old_id"] = source_path.stem
     manifest["hash"] = manifest_hash(manifest)
     manifest_path = bundle_dir / f"{text_id}.manifest.yaml"
     manifest_path.write_text(dump(manifest), encoding="utf-8")
@@ -689,7 +700,7 @@ def test_run_ctf_tsv_uses_global_ctf_root(
     assert (ctf_root / "KR4c" / f"{TEXT_ID}.ctf.tsv").exists()
 
 
-def test_repair_ctf_defaults_to_manifest_source(tmp_path: Path) -> None:
+def test_repair_ctf_can_use_manifest_source_explicitly(tmp_path: Path) -> None:
     from bkk.repair.cli import run as repair_run
 
     bundle = tmp_path / TEXT_ID
@@ -719,7 +730,13 @@ def test_repair_ctf_defaults_to_manifest_source(tmp_path: Path) -> None:
         ],
     )
 
-    assert repair_run(["ctf", "--bundle", str(bundle)]) == 0
+    assert repair_run([
+        "ctf",
+        "--bundle",
+        str(bundle),
+        "--heading-source",
+        "manifest",
+    ]) == 0
 
     output = bundle / "assets" / f"{TEXT_ID}_001.ctf.yaml"
     data = yaml.safe_load(output.read_text(encoding="utf-8"))
@@ -730,7 +747,154 @@ def test_repair_ctf_defaults_to_manifest_source(tmp_path: Path) -> None:
     ]
 
 
-def test_repair_ctf_parser_defaults_heading_source_to_manifest() -> None:
+def test_repair_ctf_defaults_to_source_xml_when_manifest_toc_is_broken(
+    tmp_path: Path,
+) -> None:
+    from bkk.repair.cli import run as repair_run
+
+    xml = tmp_path / "T01n0001.xml"
+    xml.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"
+     xmlns:cb="http://www.cbeta.org/ns/1.0"
+     xml:id="T01n0001">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title xml:lang="zh-Hant">測試經</title></titleStmt>
+      <publicationStmt><p/></publicationStmt>
+      <sourceDesc><p/></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <cb:juan fun="open" n="1"/>
+      <cb:div>
+        <cb:mulu level="1" type="其他">類一</cb:mulu><head>類一</head>
+        <cb:div>
+          <cb:mulu level="2" type="其他">子一</cb:mulu><head>子一</head><p>正文</p>
+          <cb:mulu level="2" type="其他">子二</cb:mulu><head>子二</head><p>正文</p>
+        </cb:div>
+      </cb:div>
+      <cb:juan fun="close" n="1"/>
+    </body>
+  </text>
+</TEI>
+""",
+        encoding="utf-8",
+    )
+    bundle = tmp_path / TEXT_ID
+    _write_ctf_bundle(
+        bundle,
+        body_text="類一子一正文子二正文",
+        markers=[],
+        toc=[],
+        source_path=xml,
+    )
+
+    assert repair_run(["ctf", "--bundle", str(bundle)]) == 0
+
+    output = bundle / "assets" / f"{TEXT_ID}_001.ctf.yaml"
+    data = yaml.safe_load(output.read_text(encoding="utf-8"))
+    assert data["source"]["mode"] == "source-xml"
+    assert data["source"]["voice_source"] == "xml"
+    citations = _citation_nodes(data["nodes"])
+    assert [node["label"] for node in citations] == ["子一", "子二"]
+    assert [node["span_ref"] for node in citations] == [
+        f"{TEXT_ID}/1/@2+4",
+        f"{TEXT_ID}/1/@6+4",
+    ]
+
+
+def test_repair_ctf_recovers_tls_relative_source_xml(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from bkk.repair.cli import run as repair_run
+
+    text_id = "KR6q0002"
+    tls_root = tmp_path / "tls-root"
+    relative_source = Path("data/tls/KR6q0002.xml")
+    xml = tls_root / "tls-texts" / relative_source
+    xml.parent.mkdir(parents=True)
+    xml.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     xml:id="KR6q0002">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title>Test</title></titleStmt>
+      <publicationStmt><publisher>x</publisher></publicationStmt>
+      <sourceDesc><p>x</p></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div n="01" type="juan">
+        <head><seg xml:id="KR6q0002_T_01-d1h1s1">卷一</seg></head>
+        <p><seg xml:id="KR6q0002_T_01-d1d1p1s1">正文</seg></p>
+        <div>
+          <head><seg xml:id="KR6q0002_T_01-d1d2h1s1">章一</seg></head>
+          <p><seg xml:id="KR6q0002_T_01-d1d2d1p1s1">細文</seg></p>
+        </div>
+      </div>
+    </body>
+  </text>
+</TEI>
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "bkk.config.load_rc",
+        lambda: {"global": {"tls_root": tls_root}},
+    )
+
+    bundle = tmp_path / text_id
+    _write_ctf_bundle(
+        bundle,
+        text_id=text_id,
+        body_text="卷一正文章一細文",
+        markers=[],
+        toc=[],
+        source_path=relative_source,
+        source_repository="tls-texts",
+    )
+
+    assert repair_run(["ctf", "--bundle", str(bundle)]) == 0
+
+    output = bundle / "assets" / f"{text_id}_001.ctf.yaml"
+    data = yaml.safe_load(output.read_text(encoding="utf-8"))
+    assert data["source"]["mode"] == "source-xml"
+    citations = _citation_nodes(data["nodes"])
+    assert [node["label"] for node in citations] == ["章一"]
+    assert citations[0]["span_ref"] == f"{text_id}/1/@4+4"
+
+
+def test_repair_ctf_reports_missing_source_xml_without_traceback(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    from bkk.repair.cli import run as repair_run
+
+    bundle = tmp_path / TEXT_ID
+    missing = tmp_path / "missing.xml"
+    _write_ctf_bundle(
+        bundle,
+        body_text="類一子一正文",
+        markers=[],
+        toc=[],
+        source_path=missing,
+    )
+
+    assert repair_run(["ctf", "--bundle", str(bundle)]) == 1
+
+    captured = capsys.readouterr()
+    assert "source XML not found" in captured.err
+    assert "Traceback" not in captured.err
+    assert not (bundle / "assets" / f"{TEXT_ID}_001.ctf.yaml").exists()
+
+
+def test_repair_ctf_parser_defaults_heading_source_to_source_xml() -> None:
     from bkk.repair.cli import build_parser
 
     args = build_parser().parse_args([
@@ -748,7 +912,7 @@ def test_repair_ctf_parser_defaults_heading_source_to_manifest() -> None:
     ])
 
     assert args.op == "ctf"
-    assert args.heading_source == "manifest"
+    assert args.heading_source == "source-xml"
     assert args.short_refs is True
     assert args.tsv is True
     assert str(args.out_root) == "/tmp/ctf"

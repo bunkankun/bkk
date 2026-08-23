@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 from bkk.importer.hashing import ZERO_HASH, sha256_jcs
@@ -21,7 +22,7 @@ from .derive_indent_headings import (
     heading_sequence_paths,
 )
 
-HeadingSource = Literal["auto", "voices", "derive", "manifest"]
+HeadingSource = Literal["auto", "voices", "derive", "manifest", "source-xml"]
 _JUAN_STARTER_RE = re.compile(
     r"^(.{1,40}?卷[一二三四五六七八九十百千兩〇零]+)"
 )
@@ -155,6 +156,144 @@ def collect_manifest_headings(
     return sorted(out, key=lambda h: (h.offset, h.index))
 
 
+def recover_cbeta_source_xml_headings(
+    manifest: dict[str, Any],
+    *,
+    text_id: str,
+) -> dict[int, list[HeadingRecord]]:
+    """Recover CBETA XML ``<head>`` hierarchy from the original source file.
+
+    This is intentionally a repair/stopgap path.  Older manifests may have
+    incomplete or flattened TOC data, while ``metadata.source.path`` still
+    points at the original CBETA XML.  Re-reading that XML with the direct
+    CBETA reader recovers the same ``source: xml`` heading markers now emitted
+    by fresh imports.
+    """
+    source_path = _manifest_source_path(manifest)
+    if source_path is None:
+        raise ValueError("manifest has no metadata.source.path")
+    _require_source_xml_file(source_path)
+
+    from bkk.importer.read.cbeta import read_cbeta
+
+    metadata = manifest.get("metadata") or {}
+    title = metadata.get("title") if isinstance(metadata, dict) else None
+    old_id = _manifest_cbeta_old_id(manifest) or source_path.stem
+    bundle = read_cbeta(
+        source_path,
+        {
+            "kr_id": text_id,
+            "old_id": old_id,
+            "title": title if isinstance(title, str) else "",
+        },
+    )
+
+    out: dict[int, list[HeadingRecord]] = {}
+    for juan in bundle.juans:
+        records: list[HeadingRecord] = []
+        marker_index = 0
+        for section in juan.sections:
+            if section.bucket != "body":
+                continue
+            for marker in section.markers:
+                if marker.type != "voice":
+                    continue
+                extras = marker.extras or {}
+                if extras.get("name") != "head" or extras.get("source") != "xml":
+                    continue
+                length = _coerce_positive_int(extras.get("length"))
+                if length is None:
+                    continue
+                path = _coerce_heading_path(extras.get("path"))
+                level = len(path) if path is not None else 1
+                label = None
+                if marker.offset >= 0 and marker.offset + length <= len(section.text):
+                    label = section.text[marker.offset:marker.offset + length]
+                records.append(HeadingRecord(
+                    offset=marker.offset,
+                    length=length,
+                    level=level,
+                    marker_id=marker.id or None,
+                    index=marker_index,
+                    path=path,
+                    label=label,
+                ))
+                marker_index += 1
+        if records:
+            out[juan.seq] = sorted(records, key=lambda h: (h.offset, h.index))
+    return out
+
+
+def recover_source_xml_headings(
+    manifest: dict[str, Any],
+    *,
+    text_id: str,
+) -> dict[int, list[HeadingRecord]]:
+    """Recover heading records from the original source XML in the manifest."""
+    source = _manifest_source(manifest)
+    repository = source.get("repository") if source is not None else None
+    if repository == "tls-texts":
+        source_path = _manifest_source_path(manifest)
+        if source_path is None:
+            raise ValueError("manifest has no metadata.source.path")
+        _require_source_xml_file(source_path)
+        return _recover_tls_source_xml_headings(source_path, text_id=text_id)
+    return recover_cbeta_source_xml_headings(manifest, text_id=text_id)
+
+
+def _recover_tls_source_xml_headings(
+    source_path: Path,
+    *,
+    text_id: str,
+) -> dict[int, list[HeadingRecord]]:
+    """Recover classic TLS section and nested-div headings from source XML."""
+    from bkk.importer.classify import bucket_sections
+    from bkk.importer.read.tls import read_tls
+
+    bundle = read_tls(source_path, None, None, text_id)
+    out: dict[int, list[HeadingRecord]] = {}
+    for juan in bundle.juans:
+        records: list[HeadingRecord] = []
+        marker_index = 0
+        _front, body_secs, _back = bucket_sections(juan.sections)
+        cursor = 0
+        for section in body_secs:
+            start = cursor
+            cursor += len(section.text)
+            if section.head_text:
+                records.append(HeadingRecord(
+                    offset=start,
+                    length=len(section.head_text),
+                    level=1,
+                    marker_id=section.head_marker_id or None,
+                    index=marker_index,
+                    label=section.head_text,
+                ))
+                marker_index += 1
+            for marker in section.markers:
+                if marker.type != "tls:div-start":
+                    continue
+                extras = marker.extras or {}
+                head_text = extras.get("head_text")
+                if not isinstance(head_text, str) or not head_text:
+                    continue
+                level = _coerce_positive_int(extras.get("level"))
+                if level is None or level < 2:
+                    continue
+                records.append(HeadingRecord(
+                    offset=start + marker.offset,
+                    length=len(head_text),
+                    level=level,
+                    marker_id=marker.id or None,
+                    index=marker_index,
+                    label=head_text,
+                ))
+                marker_index += 1
+        if records:
+            out[juan.seq] = sorted(records, key=lambda h: (h.offset, h.index))
+    return out
+
+
 def ctf_hash(asset: dict[str, Any]) -> str:
     data = copy.deepcopy(asset)
     data["hash"] = ZERO_HASH
@@ -171,19 +310,35 @@ def build_ctf_asset(
     manifest_hash: str | None,
     bucket_hash: str | None,
     manifest: dict[str, Any] | None = None,
+    source_xml_headings: list[HeadingRecord] | None = None,
     heading_source: HeadingSource = "auto",
     short_refs: bool = False,
 ) -> dict[str, Any]:
     """Build one CTF asset for a juan bucket."""
     if bucket_name != "body":
         raise ValueError("CTF v1 only supports the body bucket")
-    if heading_source not in {"auto", "voices", "derive", "manifest"}:
+    if heading_source not in {"auto", "voices", "derive", "manifest", "source-xml"}:
         raise ValueError(f"unknown heading source: {heading_source!r}")
 
     existing = collect_indent_heading_voices(markers, text_len=len(text))
     mode = "voices"
     headings = existing
-    if heading_source == "manifest":
+    if heading_source == "source-xml":
+        if source_xml_headings is None:
+            if manifest is None:
+                raise ValueError("heading source 'source-xml' requires a manifest")
+            source_xml_headings = recover_source_xml_headings(
+                manifest,
+                text_id=text_id,
+            ).get(seq, [])
+        headings = [
+            heading for heading in source_xml_headings
+            if heading.offset >= 0
+            and heading.length > 0
+            and heading.offset + heading.length <= len(text)
+        ]
+        mode = "source-xml"
+    elif heading_source == "manifest":
         if manifest is None:
             raise ValueError("heading source 'manifest' requires a manifest")
         headings = collect_manifest_headings(
@@ -226,7 +381,9 @@ def build_ctf_asset(
         "source": {
             "mode": mode,
             "voice_source": (
-                "manifest" if mode == "manifest" else HEADING_INDENT_VOICE_SOURCE
+                "manifest" if mode == "manifest"
+                else "xml" if mode == "source-xml"
+                else HEADING_INDENT_VOICE_SOURCE
             ),
             "manifest_hash": manifest_hash,
             "bucket_hash": bucket_hash,
@@ -493,6 +650,73 @@ def _heading_label(text: str, heading: HeadingRecord) -> str:
     if heading.label is not None:
         return heading.label
     return text[heading.offset:heading.offset + heading.length]
+
+
+def _manifest_source(manifest: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = manifest.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        return None
+    source = metadata.get("source") or {}
+    if not isinstance(source, dict):
+        return None
+    return source
+
+
+def _manifest_source_path(manifest: dict[str, Any]) -> Path | None:
+    source = _manifest_source(manifest)
+    if source is None:
+        return None
+    raw = source.get("path")
+    if not isinstance(raw, str) or not raw:
+        return None
+    path = Path(raw).expanduser()
+    if path.is_absolute():
+        return path
+    repository = source.get("repository")
+    if repository == "tls-texts":
+        tls_root = _configured_tls_root()
+        if tls_root is not None:
+            return tls_root / repository / path
+    return path
+
+
+def _configured_tls_root() -> Path | None:
+    from bkk.config import load_rc
+
+    rc = load_rc()
+    global_section = rc.get("global") or {}
+    if not isinstance(global_section, dict):
+        return None
+    root = global_section.get("tls_root")
+    if isinstance(root, Path):
+        return root
+    if isinstance(root, str) and root:
+        return Path(root).expanduser()
+    return None
+
+
+def _require_source_xml_file(path: Path) -> None:
+    if path.is_file():
+        return
+    raise FileNotFoundError(f"source XML not found: {path}")
+
+
+def _manifest_cbeta_old_id(manifest: dict[str, Any]) -> str | None:
+    metadata = manifest.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        return None
+    source = metadata.get("source") or {}
+    if isinstance(source, dict):
+        old_id = source.get("old_id")
+        if isinstance(old_id, str) and old_id:
+            return old_id
+    identifiers = metadata.get("identifiers") or {}
+    if isinstance(identifiers, dict):
+        for key in ("cbeta_old_id", "cbeta"):
+            value = identifiers.get(key)
+            if isinstance(value, str) and value:
+                return value
+    return None
 
 
 def _format_ctf_path_ref(

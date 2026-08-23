@@ -121,10 +121,10 @@ def build_parser() -> argparse.ArgumentParser:
     pc.add_argument(
         "--heading-source",
         dest="heading_source",
-        choices=("manifest", "auto", "voices", "derive"),
-        default="manifest",
-        help="heading source: manifest TOC (default), existing voices, fresh "
-             "derivation, or auto existing-first",
+        choices=("source-xml", "manifest", "auto", "voices", "derive"),
+        default="source-xml",
+        help="heading source: original source XML (default), manifest TOC, "
+             "existing voices, fresh derivation, or auto existing-first",
     )
     pc.add_argument(
         "--short",

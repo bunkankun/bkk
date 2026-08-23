@@ -216,7 +216,6 @@ def _toc_from_juans(
 ) -> list[dict]:
     toc: list[dict] = []
     for seq, _fn, _h, data in juans:
-        flavor = ((data.get("metadata") or {}).get("flavor"))
         marker_asset = marker_assets.get(seq)
         for bucket_name in ("front", "body", "back"):
             bucket = data.get(bucket_name)
@@ -224,11 +223,23 @@ def _toc_from_juans(
                 continue
             text = bucket.get("text") or ""
             markers = effective_markers_for_bucket(data, bucket_name, marker_asset)
-            if flavor == "cbeta":
+            if _is_cbeta_bucket(data, markers):
                 toc.extend(_toc_cbeta_bucket(seq, bucket_name, text, markers))
             else:
                 toc.extend(_toc_classic_bucket(seq, bucket_name, text, markers))
     return toc
+
+
+def _is_cbeta_bucket(juan: dict, markers: list) -> bool:
+    metadata = juan.get("metadata") or {}
+    if isinstance(metadata, dict) and metadata.get("flavor") == "cbeta":
+        return True
+    return any(
+        isinstance(marker, dict)
+        and isinstance(marker.get("type"), str)
+        and marker["type"].startswith("cbeta:")
+        for marker in markers
+    )
 
 
 def _toc_classic_bucket(

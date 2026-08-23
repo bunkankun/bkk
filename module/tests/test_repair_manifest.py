@@ -14,9 +14,10 @@ from pathlib import Path
 
 import yaml
 
-from bkk.importer.hashing import ZERO_HASH, sha256_jcs
+from bkk.importer.hashing import ZERO_HASH, manifest_hash, sha256_jcs, sha256_text
 from bkk.importer.ir import Bundle, Juan, Marker, Section
 from bkk.importer.write.bundle import write_bundle
+from bkk.importer.write.yaml_writer import dump, marker_to_flow
 from bkk.repair.cli import run as repair_run
 from bkk.repair.manifest import rebuild_manifests
 
@@ -137,6 +138,87 @@ def test_rebuild_toc_labels_match_head_markers(tmp_path: Path):
     labels = [entry["label"] for entry in mf["table_of_contents"]]
     assert "卷一" in labels
     assert "卷二" in labels
+
+
+def test_rebuild_detects_cbeta_without_flavor_metadata(tmp_path: Path):
+    text_id = "KR6q9999"
+    bundle_dir = tmp_path / text_id
+    bundle_dir.mkdir()
+    text = "大類小目正文第二目正文"
+    juan = {
+        "canonical_identifier": f"bkk:krp/{text_id}/x/v1/juan/1",
+        "seq": 1,
+        "front": {"text": "", "hash": ZERO_HASH},
+        "body": {
+            "text": text,
+            "hash": sha256_text(text),
+            "markers": [
+                marker_to_flow({
+                    "type": "cbeta:juan-start",
+                    "offset": 0,
+                    "content": "卷一",
+                    "id": f"{text_id}_X_001-juan-start",
+                    "jhead": "卷一",
+                }),
+                marker_to_flow({
+                    "type": "cbeta:mulu",
+                    "offset": 0,
+                    "content": "大類",
+                    "id": f"{text_id}_X_001-mulu-1",
+                    "level": "1",
+                }),
+                marker_to_flow({
+                    "type": "cbeta:mulu",
+                    "offset": 2,
+                    "content": "小目",
+                    "id": f"{text_id}_X_001-mulu-2",
+                    "level": "2",
+                }),
+            ],
+        },
+        "metadata": {
+            "title": "CBETA Repair",
+            "edition": {"short": "x"},
+        },
+        "hash": ZERO_HASH,
+    }
+    juan["hash"] = sha256_jcs(juan)
+    juan_name = f"{text_id}_001.yaml"
+    (bundle_dir / juan_name).write_text(dump(juan), encoding="utf-8")
+    manifest = {
+        "canonical_identifier": f"bkk:krp/{text_id}/v1",
+        "metadata": {
+            "title": "CBETA Repair",
+            "edition": {"short": "bkk"},
+        },
+        "assets": {
+            "parts": [
+                marker_to_flow({
+                    "seq": 1,
+                    "filename": juan_name,
+                    "hash": juan["hash"],
+                }),
+            ],
+        },
+        "table_of_contents": [],
+        "hash": ZERO_HASH,
+    }
+    manifest["hash"] = manifest_hash(manifest)
+    (bundle_dir / f"{text_id}.manifest.yaml").write_text(
+        dump(manifest),
+        encoding="utf-8",
+    )
+
+    summary = rebuild_manifests(bundle_dir)
+
+    assert summary["master"]["toc"] == 3
+    mf = yaml.safe_load(
+        (bundle_dir / f"{text_id}.manifest.yaml").read_text(encoding="utf-8")
+    )
+    toc = mf["table_of_contents"]
+    assert [entry["type"] for entry in toc] == ["juan", "mulu", "mulu"]
+    assert [entry["label"] for entry in toc] == ["卷一", "大類", "小目"]
+    assert [entry["level"] for entry in toc] == [1, 1, 2]
 
 
 def test_cli_resolves_bare_text_id_via_rc(tmp_path: Path, monkeypatch):

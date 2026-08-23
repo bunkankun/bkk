@@ -114,7 +114,7 @@ from .derive_tls_seg import (
     derive_voice_markers_from_tls_segments,
     derive_voice_markers_from_tls_segments_best_effort,
 )
-from .ctf import build_ctf_asset, ctf_tsv_text
+from .ctf import build_ctf_asset, ctf_tsv_text, recover_source_xml_headings
 from .problems import (
     VoiceProblemReportError,
     find_voice_problems,
@@ -267,10 +267,10 @@ def build_parser() -> argparse.ArgumentParser:
     pc.add_argument(
         "--heading-source",
         dest="heading_source",
-        choices=("auto", "voices", "derive", "manifest"),
+        choices=("auto", "voices", "derive", "manifest", "source-xml"),
         default="auto",
         help="heading source: existing indent-heading voices, fresh derivation, "
-             "manifest TOC, or auto existing-first (default)",
+             "manifest TOC, original source XML, or auto existing-first (default)",
     )
     pc.add_argument(
         "--short",
@@ -1115,7 +1115,7 @@ def _run_ctf(
             force=force,
             dry_run=dry_run,
         )
-    except (RuntimeError, ValueError) as exc:
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"  error: {exc}", file=sys.stderr)
         print("  master skipped; no files written for this scope")
         return 1
@@ -1156,7 +1156,7 @@ def _run_one_ctf_tsv(
             force=force,
             dry_run=dry_run,
         )
-    except (RuntimeError, ValueError) as exc:
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"  error: {exc}", file=sys.stderr)
         print("  master skipped; no files written for this scope")
         return 1
@@ -1219,6 +1219,7 @@ def _process_one_ctf(
     manifest_hash_value = manifest.get("hash")
     if not isinstance(manifest_hash_value, str):
         manifest_hash_value = None
+    source_xml_headings = None
 
     lines: list[str] = []
     written = 0
@@ -1253,6 +1254,12 @@ def _process_one_ctf(
         if not isinstance(bucket_hash, str):
             bucket_hash = None
 
+        if heading_source == "source-xml" and source_xml_headings is None:
+            source_xml_headings = recover_source_xml_headings(
+                manifest,
+                text_id=text_id,
+            )
+
         marker_asset = load_marker_asset(juan_dir, manifest, seq)
         markers = effective_markers_for_bucket(data, "body", marker_asset)
         ctf = build_ctf_asset(
@@ -1264,6 +1271,11 @@ def _process_one_ctf(
             manifest_hash=manifest_hash_value,
             bucket_hash=bucket_hash,
             manifest=manifest,
+            source_xml_headings=(
+                source_xml_headings.get(seq, [])
+                if source_xml_headings is not None
+                else None
+            ),
             heading_source=heading_source,
             short_refs=short_refs,
         )
@@ -1340,6 +1352,12 @@ def _process_one_ctf_tsv(
         manifest_hash_value = None
     title = (manifest.get("metadata") or {}).get("title")
     title = title if isinstance(title, str) and title else None
+    source_xml_headings = None
+    if heading_source == "source-xml":
+        source_xml_headings = recover_source_xml_headings(
+            manifest,
+            text_id=text_id,
+        )
 
     all_nodes: list[dict] = []
     juan_labels: dict[int, str] = {}
@@ -1366,6 +1384,11 @@ def _process_one_ctf_tsv(
             manifest_hash=manifest_hash_value,
             bucket_hash=bucket_hash,
             manifest=manifest,
+            source_xml_headings=(
+                source_xml_headings.get(seq, [])
+                if source_xml_headings is not None
+                else None
+            ),
             heading_source=heading_source,
             short_refs=short_refs,
         )
