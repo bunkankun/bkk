@@ -489,6 +489,7 @@ def test_add_indent_headings_preserves_existing_note_voice(tmp_path: Path) -> No
             "id": "h2",
             "source": "indent-headings",
             "indent_depth": 2,
+            "path": [1],
         },
     ]
 

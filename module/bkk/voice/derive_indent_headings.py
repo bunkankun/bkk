@@ -44,6 +44,12 @@ class _Candidate:
     kind: str
 
 
+@dataclass(frozen=True)
+class HeadingPath:
+    path: tuple[int, ...] | None
+    level: int
+
+
 def derive_voice_markers_from_indent_headings(
     text_len: int,
     markers: list[dict],
@@ -51,9 +57,12 @@ def derive_voice_markers_from_indent_headings(
 ) -> list[dict]:
     """Return ``head`` voice markers derived from opening CJK indents."""
     candidates = _heading_candidates(text_len, markers, text)
+    paths = heading_sequence_paths(
+        [(candidate.start, candidate.depth) for candidate in candidates]
+    )
     out: list[dict] = []
-    for index, candidate in enumerate(candidates, 1):
-        out.append({
+    for index, (candidate, path) in enumerate(zip(candidates, paths), 1):
+        marker = {
             "type": "voice",
             "offset": candidate.start,
             "length": candidate.end - candidate.start,
@@ -61,7 +70,57 @@ def derive_voice_markers_from_indent_headings(
             "id": f"h{index}",
             "source": HEADING_INDENT_VOICE_SOURCE,
             "indent_depth": candidate.depth,
-        })
+        }
+        if path.path is not None:
+            marker["path"] = list(path.path)
+        out.append(marker)
+    return out
+
+
+def heading_sequence_paths(headings: list[tuple[int, int]]) -> list[HeadingPath]:
+    """Return CTF-style sequence paths for ``(offset, indent_depth)`` pairs.
+
+    A body-bucket juan starter at offset 0 is a label, not a citation node.
+    After that, a sole first level-1 heading is likewise a category label.
+    Lower headings below labels are promoted one rank for citation paths.
+    """
+    label_indexes: set[int] = set()
+    remaining_start = 0
+    if headings and headings[0] == (0, 1):
+        label_indexes.add(0)
+        remaining_start = 1
+
+    remaining = headings[remaining_start:]
+    remaining_level_one_count = sum(1 for _, depth in remaining if depth == 1)
+    has_category_label = (
+        bool(remaining)
+        and remaining[0][1] == 1
+        and remaining_level_one_count == 1
+    )
+    if has_category_label:
+        label_indexes.add(remaining_start)
+
+    promote = (
+        has_category_label
+        or (remaining_start == 1 and remaining_level_one_count == 0)
+    )
+    stack: list[tuple[int, tuple[int, ...]]] = []
+
+    child_counts: dict[tuple[int, ...], int] = {}
+    out: list[HeadingPath] = []
+    for index, (_offset, depth) in enumerate(headings):
+        if index in label_indexes:
+            out.append(HeadingPath(path=None, level=0))
+            continue
+        level = max(1, depth - 1) if promote else depth
+        while stack and stack[-1][0] >= level:
+            stack.pop()
+        parent_path = stack[-1][1] if stack else ()
+        position = child_counts.get(parent_path, 0) + 1
+        child_counts[parent_path] = position
+        path = parent_path + (position,)
+        out.append(HeadingPath(path=path, level=level))
+        stack.append((level, path))
     return out
 
 

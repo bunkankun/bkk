@@ -54,6 +54,7 @@ def test_kr3a0013_style_headings_are_derived() -> None:
             "id": "h2",
             "source": "indent-headings",
             "indent_depth": 2,
+            "path": [1],
         },
         {
             "type": "voice",
@@ -63,6 +64,7 @@ def test_kr3a0013_style_headings_are_derived() -> None:
             "id": "h3",
             "source": "indent-headings",
             "indent_depth": 2,
+            "path": [2],
         },
     ]
 
@@ -97,6 +99,7 @@ def test_long_prefatory_prose_and_deep_indent_are_rejected() -> None:
             "id": "h1",
             "source": "indent-headings",
             "indent_depth": 2,
+            "path": [1],
         },
     ]
 
@@ -249,6 +252,45 @@ def test_early_one_indent_count_line_is_section_heading() -> None:
         (14, 4, 1),
     ]
     assert has_indent_heading_profile(len(text), markers, text) is True
+
+
+def test_single_initial_level_one_heading_is_label_not_citation_path() -> None:
+    text = "王右丞集箋注卷二積雨輞川莊作正文"
+    markers = [
+        _lb(0), _indent(0, 1),
+        _lb(8), _indent(8, 2),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["indent_depth"], marker.get("path"))
+        for marker in out
+    ] == [
+        (0, 1, None),
+        (8, 2, [1]),
+    ]
+
+
+def test_juan_starter_and_single_category_heading_are_labels() -> None:
+    text = "王右丞集箋注卷十近體詩二十六首奉和聖製從蓬萊正文"
+    markers = [
+        _lb(0), _indent(0, 1),
+        _lb(8), _indent(8, 1),
+        _lb(15), _indent(15, 2),
+        _lb(25),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["indent_depth"], marker.get("path"))
+        for marker in out
+    ] == [
+        (0, 1, None),
+        (8, 1, None),
+        (15, 2, [1]),
+    ]
 
 
 def test_closing_title_repeat_is_skipped() -> None:

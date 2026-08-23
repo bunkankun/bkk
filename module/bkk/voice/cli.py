@@ -1340,6 +1340,7 @@ def _process_one_ctf_tsv(
     title = title if isinstance(title, str) and title else None
 
     all_nodes: list[dict] = []
+    juan_labels: dict[int, str] = {}
     for seq, juan_path in juan_entries:
         data = _yaml_load_text(juan_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
@@ -1365,6 +1366,9 @@ def _process_one_ctf_tsv(
             heading_source=heading_source,
             short_refs=short_refs,
         )
+        label = ctf.get("label")
+        if isinstance(label, str) and label:
+            juan_labels[seq] = label
         all_nodes.extend(ctf["nodes"])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1373,6 +1377,7 @@ def _process_one_ctf_tsv(
             text_id=text_id,
             text_label=title,
             nodes=all_nodes,
+            juan_labels=juan_labels,
             short_refs=short_refs,
         ),
         encoding="utf-8",

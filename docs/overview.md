@@ -62,6 +62,11 @@ client submits to the backend to ask for an assembled composition, and
 what a scholar can attach to an article so that a later reader can fetch
 the exact materials cited.
 
+Citation Tree Fragments provide a derived table of contents for citation
+use. They are generated from heading voices as per-juan YAML sidecars and
+as whole-text TSV parent tables; see
+[Citation Tree Fragments](citation-tree-fragments.md).
+
 Conceptually, four layers live in four address spaces:
 
 ```
