@@ -3,6 +3,7 @@ import type { JuanMarker } from "../../../api/types";
 import {
   buildBlocks,
   buildRenderedChars,
+  headSequenceLabel,
   voiceDisplaySegments,
 } from "../TextViewer";
 
@@ -25,7 +26,7 @@ describe("TextViewer phrase blocks", () => {
       buildRenderedChars("甲乙", markers, "phrase", "canonical")
         .map((char) => char.ch)
         .join(""),
-    ).toBe("甲》？；。，、』」：)\n(「『《乙");
+    ).toBe("甲》？；。』」，、：)\n(「『《乙");
   });
 
   it("orders page breaks and indents with same-offset punctuation", () => {
@@ -49,7 +50,7 @@ describe("TextViewer phrase blocks", () => {
     ];
 
     expect(blockText("甲乙丙丁", markers)).toEqual([
-      "甲乙，！。」：．/)",
+      "甲乙！。」，：．/)",
       "丙丁",
     ]);
   });
@@ -109,6 +110,64 @@ describe("TextViewer phrase blocks", () => {
       { voice: "root", text: "甲乙。" },
       { voice: "commentary", text: "丙丁" },
     ]);
+  });
+
+  it("carries KRP head paths for sequence labels", () => {
+    const markers: JuanMarker[] = [
+      { type: "voice", offset: 0, length: 2, name: "head", path: [5] },
+      { type: "voice", offset: 2, length: 2, name: "head", path: [5, 1] },
+    ];
+    const chars = buildRenderedChars("甲乙丙丁", markers, "phrase", "canonical");
+
+    expect(
+      voiceDisplaySegments(chars).map((segment) => ({
+        voice: segment.voice,
+        text: segment.chars.map((char) => char.ch).join(""),
+        label: headSequenceLabel(12, segment.voicePath),
+      })),
+    ).toEqual([
+      { voice: "head", text: "甲乙", label: "12.5" },
+      { voice: "head", text: "丙丁", label: "12.5.1" },
+    ]);
+  });
+
+  it("keeps a heading note after the heading when the previous note closes at the same offset", () => {
+    const markers: JuanMarker[] = [
+      { type: "voice", offset: 0, length: 2, name: "note" },
+      { type: "punctuation", offset: 0, content: "(" },
+      { type: "punctuation", offset: 2, content: ")" },
+      { type: "line-break", offset: 2 },
+      { type: "indent", offset: 2, content: "　　" },
+      { type: "voice", offset: 2, length: 4, name: "head", path: [6] },
+      { type: "punctuation", offset: 2, content: "。" },
+      { type: "punctuation", offset: 6, content: "(" },
+      { type: "punctuation", offset: 6, content: "《" },
+      { type: "voice", offset: 6, length: 15, name: "note" },
+      { type: "punctuation", offset: 14, content: "/" },
+      { type: "punctuation", offset: 21, content: ")" },
+      { type: "line-break", offset: 21 },
+    ];
+
+    const chars = buildRenderedChars(
+      "上關被出濟州河嶽英靈集作初出濟州别城中故人正文",
+      markers,
+      "phrase",
+      "canonical",
+    );
+
+    const segments = voiceDisplaySegments(chars).map((segment) => ({
+      voice: segment.voice,
+      text: segment.chars.map((char) => char.ch).join(""),
+      label: headSequenceLabel(9, segment.voicePath),
+    }));
+
+    expect(segments.filter((segment) => segment.label === "9.6")).toEqual([
+      { voice: "head", text: "　　被出濟州", label: "9.6" },
+    ]);
+    expect(segments.some((segment) =>
+      segment.label === null &&
+      segment.text.includes("(《河嶽英靈集作初出/濟州别城中故人)")
+    )).toBe(true);
   });
 
   it("labels rendered chars with their voice", () => {

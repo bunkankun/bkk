@@ -1591,6 +1591,22 @@ button {
   font-size: 1.08em;
   font-weight: 600;
 }
+.voice-head {
+  display: inline;
+  margin-left: 0;
+  font-size: 1.14em;
+  font-weight: 700;
+  color: var(--t1);
+}
+.voice-head-seq {
+  display: inline-block;
+  margin-right: 0.7ch;
+  color: var(--amb);
+  font-family: var(--fm);
+  font-size: 0.9em;
+  font-weight: 700;
+  letter-spacing: 0;
+}
 .voice-commentary {
   margin-left: 2ch;
   padding: 0.03em 0.18em;

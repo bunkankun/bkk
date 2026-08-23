@@ -34,7 +34,7 @@ describe("renderEditorText", () => {
       true,
     );
 
-    expect(view.text).toBe("甲》？；。，、』」：)\n\n　(「『《乙");
+    expect(view.text).toBe("甲》？；。』」，、：)\n\n　(「『《乙");
   });
 
   it("places slash before close paren and breaks", () => {

@@ -44,11 +44,13 @@ const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；�
 const PHRASE_END_RE = /[。！？；，：]/;
 const PHRASE_LINE_OPENER_RE = /^[「『《〈（(〔【]$/;
 const PHRASE_LINE_NONSTART_RE = /^[，、。：；！？．/」』》〉）\)〕】]$/;
+const NOTE_OPEN_PUNCT = new Set(["(", "（", "「", "『", "《", "〈", "〔", "【"]);
+const NOTE_CLOSE_PUNCT = new Set([")", "）", "」", "』", "》", "〉", "〕", "】"]);
 const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
 const BUCKETS = ["front", "body", "back"] as const;
 
 type BucketName = (typeof BUCKETS)[number];
-type VoiceRange = { start: number; end: number; name: string };
+type VoiceRange = { start: number; end: number; name: string; path?: number[] };
 type EditionSelection = string | null;
 
 interface EditionOption {
@@ -101,6 +103,7 @@ interface RenderedChar {
   markerOffset?: number;
   layout?: { type: "indent" };
   voice?: string;
+  voicePath?: number[];
   noteVoice?: boolean;
 }
 
@@ -114,12 +117,13 @@ interface Block {
   tagName: "div" | "p";
 }
 
-type VoiceBlockName = "lemma" | "def" | "root" | "commentary";
+type VoiceBlockName = "lemma" | "def" | "root" | "commentary" | "head";
 
 interface VoiceDisplaySegment {
   voice: VoiceBlockName | null;
   start: number;
   chars: RenderedChar[];
+  voicePath?: number[];
 }
 
 const FALLBACK_LINE_HEIGHT = 38;
@@ -131,6 +135,7 @@ const DISPLAY_VOICE_NAMES = new Set<string>([
   "def",
   "root",
   "commentary",
+  "head",
 ]);
 
 function isDisplayVoiceName(voice: string | undefined): voice is VoiceBlockName {
@@ -224,10 +229,31 @@ function voiceRanges(markers: JuanMarker[]): VoiceRange[] {
       ? m.name.trim()
       : null;
     if (start == null || length == null || length <= 0) continue;
-    ranges.push({ start, end: start + length, name: name ?? "default" });
+    ranges.push({
+      start,
+      end: start + length,
+      name: name ?? "default",
+      path: coerceVoicePath(m.path),
+    });
   }
   ranges.sort((a, b) => a.start - b.start || b.end - a.end);
   return ranges;
+}
+
+function coerceVoicePath(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const path: number[] = [];
+  for (const part of value) {
+    if (
+      typeof part !== "number" ||
+      !Number.isInteger(part) ||
+      part <= 0
+    ) {
+      return undefined;
+    }
+    path.push(part);
+  }
+  return path.length > 0 ? path : undefined;
 }
 
 function substitutionOriginals(markers: JuanMarker[]): Map<number, string> {
@@ -251,12 +277,12 @@ function substitutionOriginals(markers: JuanMarker[]): Map<number, string> {
   return out;
 }
 
-function voiceAtOffset(
+function voiceRangeAtOffset(
   offset: number,
   ranges: VoiceRange[],
   includeEnd = false,
   skipRange?: (range: VoiceRange) => boolean,
-): string {
+): VoiceRange | null {
   let lo = 0;
   let hi = ranges.length - 1;
   let best = -1;
@@ -274,37 +300,49 @@ function voiceAtOffset(
     if (skipRange?.(range)) continue;
     if (range.start > offset) continue;
     if (includeEnd ? offset <= range.end : offset < range.end) {
-      return range.name;
+      return range;
     }
   }
-  return "default";
+  return null;
 }
 
-function noteBoundaryPunctuationVoice(
+function noteBoundaryPunctuationVoiceRange(
   offset: number,
   ch: string,
   ranges: VoiceRange[],
-): string {
+): VoiceRange | null {
   const noteAtBoundary = ranges.some((range) =>
     range.name === "note" &&
     (range.start === offset || range.end === offset)
   );
-  if (!noteAtBoundary) return voiceAtOffset(offset, ranges, true);
+  if (!noteAtBoundary) return voiceRangeAtOffset(offset, ranges, true);
 
   if (
-    (ch === "(" && ranges.some((range) => range.name === "note" && range.start === offset)) ||
-    (ch === ")" && ranges.some((range) => range.name === "note" && range.end === offset))
+    (NOTE_OPEN_PUNCT.has(ch) && ranges.some((range) => range.name === "note" && range.start === offset)) ||
+    (NOTE_CLOSE_PUNCT.has(ch) && ranges.some((range) => range.name === "note" && range.end === offset))
   ) {
-    return "note";
+    return ranges.find((range) =>
+      range.name === "note" &&
+      (range.start === offset || range.end === offset)
+    ) ?? null;
   }
 
-  return voiceAtOffset(
+  return voiceRangeAtOffset(
     offset,
     ranges,
     true,
     (range) => range.name === "note" &&
       (range.start === offset || range.end === offset),
   );
+}
+
+function headingPath(range: VoiceRange | null): number[] | undefined {
+  return range?.name === "head" ? range.path : undefined;
+}
+
+function sameVoicePath(a: number[] | undefined, b: number[] | undefined): boolean {
+  if (a == null || b == null) return a == null && b == null;
+  return a.length === b.length && a.every((part, index) => part === b[index]);
 }
 
 // Build the rendered char stream: decode PUA refs, then inject punctuation
@@ -422,7 +460,8 @@ export function buildRenderedChars(
           },
         });
       } else if (inject.kind === "layout") {
-        const voice = voiceAtOffset(inject.offset, voices, true);
+        const voiceRange = voiceRangeAtOffset(inject.offset, voices, true);
+        const voice = voiceRange?.name ?? "default";
         out.push({
           ch: inject.content,
           srcOffset: null,
@@ -432,14 +471,16 @@ export function buildRenderedChars(
           markerOffset: inject.offset,
           layout: { type: inject.type },
           voice,
+          voicePath: headingPath(voiceRange),
           noteVoice: voice === "note",
         });
       } else {
-        const voice = noteBoundaryPunctuationVoice(
+        const voiceRange = noteBoundaryPunctuationVoiceRange(
           inject.offset,
           inject.ch,
           voices,
         );
+        const voice = voiceRange?.name ?? "default";
         out.push({
           ch: inject.ch,
           srcOffset: null,
@@ -448,6 +489,7 @@ export function buildRenderedChars(
           isNewline: false,
           markerOffset: inject.offset,
           voice,
+          voicePath: headingPath(voiceRange),
           noteVoice: voice === "note",
         });
       }
@@ -456,7 +498,8 @@ export function buildRenderedChars(
     while (charIdx < chars.length && chars[charIdx].srcOffset === i) {
       const c = chars[charIdx];
       const ch = originals.get(c.srcOffset) ?? c.ch;
-      const voice = voiceAtOffset(c.srcOffset, voices);
+      const voiceRange = voiceRangeAtOffset(c.srcOffset, voices);
+      const voice = voiceRange?.name ?? "default";
       out.push({
         ch,
         srcOffset: c.srcOffset,
@@ -464,6 +507,7 @@ export function buildRenderedChars(
         isPunct: PUNCT_RE.test(ch),
         isNewline: ch === "\n",
         voice,
+        voicePath: headingPath(voiceRange),
         noteVoice: voice === "note",
       });
       charIdx++;
@@ -748,7 +792,14 @@ export function voiceDisplaySegments(chars: RenderedChar[]): VoiceDisplaySegment
     run: RenderedChar[],
   ) => {
     if (run.length === 0) return;
-    segments.push({ voice, start, chars: run });
+    segments.push({
+      voice,
+      start,
+      chars: run,
+      voicePath: voice === "head"
+        ? run.find((char) => char.voicePath != null)?.voicePath
+        : undefined,
+    });
   };
 
   const appendToPrevious = (start: number, run: RenderedChar[]) => {
@@ -765,7 +816,14 @@ export function voiceDisplaySegments(chars: RenderedChar[]): VoiceDisplaySegment
     const voice = chars[i].voice;
     if (isDisplayVoiceName(voice)) {
       const start = i;
-      while (i < chars.length && chars[i].voice === voice) i++;
+      const voicePath = chars[i].voicePath;
+      while (
+        i < chars.length &&
+        chars[i].voice === voice &&
+        sameVoicePath(chars[i].voicePath, voicePath)
+      ) {
+        i++;
+      }
       let bodyStart = start;
       while (bodyStart < i && isLineNonStartChar(chars[bodyStart])) bodyStart++;
       appendToPrevious(start, chars.slice(start, bodyStart));
@@ -784,6 +842,11 @@ export function voiceDisplaySegments(chars: RenderedChar[]): VoiceDisplaySegment
   }
 
   return segments;
+}
+
+export function headSequenceLabel(seq: number, path: number[] | undefined): string | null {
+  if (!path || path.length === 0) return null;
+  return [seq, ...path].join(".");
 }
 
 function pageLocation(markerId: string | null): string | null {
@@ -1945,11 +2008,17 @@ function BlockView({
     return voiceDisplaySegments(block.chars).flatMap((segment, index) => {
       const keyPrefix = `seg:${index}:${segment.start}`;
       if (segment.voice) {
+        const headLabel = segment.voice === "head"
+          ? headSequenceLabel(seq, segment.voicePath)
+          : null;
         return (
           <span
             key={keyPrefix}
             className={`voice-run voice-${segment.voice}`}
           >
+            {headLabel ? (
+              <span className="voice-head-seq">{headLabel}</span>
+            ) : null}
             {renderInlineChars(segment.chars, segment.start, keyPrefix)}
           </span>
         );
