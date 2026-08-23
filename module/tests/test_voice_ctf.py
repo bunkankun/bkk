@@ -16,6 +16,7 @@ from bkk.voice.ctf import (
     build_ctf_asset,
     build_ctf_nodes,
     collect_indent_heading_voices,
+    collect_manifest_headings,
     ctf_hash,
     ctf_tsv_text,
 )
@@ -36,6 +37,7 @@ def _write_ctf_bundle(
     text_id: str = TEXT_ID,
     body_text: str,
     markers: list[dict],
+    toc: list[dict] | None = None,
 ) -> Path:
     bundle_dir.mkdir(parents=True, exist_ok=True)
     body = {"text": body_text, "hash": sha256_text(body_text)}
@@ -83,6 +85,7 @@ def _write_ctf_bundle(
             "identifiers": {"krp": text_id},
             "edition": {"short": "bkk"},
         },
+        "table_of_contents": toc or [],
         "hash": ZERO_HASH,
     }
     manifest["hash"] = manifest_hash(manifest)
@@ -360,6 +363,72 @@ def test_build_ctf_asset_auto_uses_derived_when_existing_is_incomplete() -> None
     assert all(node["parent_id"] == "KR4c0022/12" for node in _citation_nodes(asset["nodes"]))
 
 
+def test_build_ctf_asset_manifest_source_ignores_broken_span_end() -> None:
+    text = "類一子一正文子二正文類二正文"
+    manifest = {
+        "table_of_contents": [
+            {
+                "ref": {"seq": 2, "marker_id": "m1", "span": ["body", 0, 0]},
+                "label": "類一",
+                "type": "mulu",
+                "level": 1,
+            },
+            {
+                "ref": {"seq": 2, "marker_id": "m2", "span": ["body", 2, 2]},
+                "label": "子一",
+                "type": "mulu",
+                "level": 2,
+            },
+            {
+                "ref": {"seq": 2, "marker_id": "m3", "span": ["body", 6, 6]},
+                "label": "子二",
+                "type": "mulu",
+                "level": 2,
+            },
+            {
+                "ref": {"seq": 2, "marker_id": "m4", "span": ["body", 10, 10]},
+                "label": "類二",
+                "type": "mulu",
+                "level": 1,
+            },
+        ],
+    }
+
+    headings = collect_manifest_headings(
+        manifest,
+        seq=2,
+        bucket_name="body",
+        text_len=len(text),
+    )
+    assert [(h.offset, h.length, h.level, h.label) for h in headings] == [
+        (0, 2, 1, "類一"),
+        (2, 2, 2, "子一"),
+        (6, 2, 2, "子二"),
+        (10, 2, 1, "類二"),
+    ]
+
+    asset = build_ctf_asset(
+        text_id=TEXT_ID,
+        seq=2,
+        bucket_name="body",
+        text=text,
+        markers=[],
+        manifest_hash="sha256:manifest",
+        bucket_hash="sha256:bucket",
+        manifest=manifest,
+        heading_source="manifest",
+    )
+
+    assert asset["source"]["mode"] == "manifest"
+    citations = _citation_nodes(asset["nodes"])
+    assert [node["label"] for node in citations] == ["子一", "子二", "類二"]
+    assert [node["span_ref"] for node in citations] == [
+        f"{TEXT_ID}/2/@2+4",
+        f"{TEXT_ID}/2/@6+4",
+        f"{TEXT_ID}/2/@10+{len(text) - 10}",
+    ]
+
+
 def test_build_ctf_asset_labels_prefix_juan_starter_and_category() -> None:
     text = "王右丞集箋注卷十二仁和趙殿成撰近體詩十六首春過賀遂員外藥園正文"
     asset = build_ctf_asset(
@@ -618,6 +687,71 @@ def test_run_ctf_tsv_uses_global_ctf_root(
     ) == 0
 
     assert (ctf_root / "KR4c" / f"{TEXT_ID}.ctf.tsv").exists()
+
+
+def test_repair_ctf_defaults_to_manifest_source(tmp_path: Path) -> None:
+    from bkk.repair.cli import run as repair_run
+
+    bundle = tmp_path / TEXT_ID
+    _write_ctf_bundle(
+        bundle,
+        body_text="類一子一正文子二正文",
+        markers=[],
+        toc=[
+            {
+                "ref": {"seq": 1, "marker_id": "m1", "span": ["body", 0, 0]},
+                "label": "類一",
+                "type": "mulu",
+                "level": 1,
+            },
+            {
+                "ref": {"seq": 1, "marker_id": "m2", "span": ["body", 2, 2]},
+                "label": "子一",
+                "type": "mulu",
+                "level": 2,
+            },
+            {
+                "ref": {"seq": 1, "marker_id": "m3", "span": ["body", 6, 6]},
+                "label": "子二",
+                "type": "mulu",
+                "level": 2,
+            },
+        ],
+    )
+
+    assert repair_run(["ctf", "--bundle", str(bundle)]) == 0
+
+    output = bundle / "assets" / f"{TEXT_ID}_001.ctf.yaml"
+    data = yaml.safe_load(output.read_text(encoding="utf-8"))
+    assert data["source"]["mode"] == "manifest"
+    assert [node["label"] for node in _citation_nodes(data["nodes"])] == [
+        "子一",
+        "子二",
+    ]
+
+
+def test_repair_ctf_parser_defaults_heading_source_to_manifest() -> None:
+    from bkk.repair.cli import build_parser
+
+    args = build_parser().parse_args([
+        "ctf",
+        "--bundle",
+        "/tmp/KR4c0022",
+        "--juan",
+        "1",
+        "--short",
+        "--tsv",
+        "--out",
+        "/tmp/ctf",
+        "--force",
+        "--dry-run",
+    ])
+
+    assert args.op == "ctf"
+    assert args.heading_source == "manifest"
+    assert args.short_refs is True
+    assert args.tsv is True
+    assert str(args.out_root) == "/tmp/ctf"
 
 
 def test_ctf_parser_accepts_options() -> None:

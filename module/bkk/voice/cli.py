@@ -267,10 +267,10 @@ def build_parser() -> argparse.ArgumentParser:
     pc.add_argument(
         "--heading-source",
         dest="heading_source",
-        choices=("auto", "voices", "derive"),
+        choices=("auto", "voices", "derive", "manifest"),
         default="auto",
         help="heading source: existing indent-heading voices, fresh derivation, "
-             "or auto existing-first (default)",
+             "manifest TOC, or auto existing-first (default)",
     )
     pc.add_argument(
         "--short",
@@ -1263,6 +1263,7 @@ def _process_one_ctf(
             markers=markers,
             manifest_hash=manifest_hash_value,
             bucket_hash=bucket_hash,
+            manifest=manifest,
             heading_source=heading_source,
             short_refs=short_refs,
         )
@@ -1364,6 +1365,7 @@ def _process_one_ctf_tsv(
             markers=effective_markers_for_bucket(data, "body", marker_asset),
             manifest_hash=manifest_hash_value,
             bucket_hash=bucket_hash,
+            manifest=manifest,
             heading_source=heading_source,
             short_refs=short_refs,
         )

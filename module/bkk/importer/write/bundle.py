@@ -285,9 +285,18 @@ def _build_toc_cbeta(
                     }),
                     "label": m.content,
                     "type": "mulu",
-                    "level": 1,
+                    "level": _positive_int(m.extras.get("level")) or 1,
                 })
     return toc
+
+
+def _positive_int(value) -> int | None:
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str) and value.isdigit():
+        parsed = int(value)
+        return parsed if parsed > 0 else None
+    return None
 
 
 def build_manifest(

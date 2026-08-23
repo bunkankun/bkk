@@ -21,7 +21,7 @@ from .derive_indent_headings import (
     heading_sequence_paths,
 )
 
-HeadingSource = Literal["auto", "voices", "derive"]
+HeadingSource = Literal["auto", "voices", "derive", "manifest"]
 _JUAN_STARTER_RE = re.compile(
     r"^(.{1,40}?卷[一二三四五六七八九十百千兩〇零]+)"
 )
@@ -36,6 +36,7 @@ class HeadingRecord:
     index: int
     path: tuple[int, ...] | None = None
     name: str = "head"
+    label: str | None = None
 
 
 def collect_indent_heading_voices(
@@ -98,6 +99,62 @@ def collect_indent_heading_voices(
     return sorted(out, key=lambda h: (h.offset, h.index))
 
 
+def collect_manifest_headings(
+    manifest: dict[str, Any],
+    *,
+    seq: int,
+    bucket_name: str,
+    text_len: int,
+) -> list[HeadingRecord]:
+    """Return heading records derived from manifest TOC entries.
+
+    Older CBETA imports wrote ``mulu`` TOC spans as point spans.  For CTF
+    purposes only the start offset, level, marker id, and label are trusted;
+    the heading length is the label length, and the node span is inferred
+    later from the next heading at the same or a shallower level.
+    """
+    toc = manifest.get("table_of_contents")
+    if not isinstance(toc, list):
+        return []
+    out: list[HeadingRecord] = []
+    for index, entry in enumerate(toc):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") == "juan":
+            continue
+        ref = entry.get("ref")
+        if not isinstance(ref, dict) or ref.get("seq") != seq:
+            continue
+        span = ref.get("span")
+        if (
+            not isinstance(span, list)
+            or len(span) < 2
+            or span[0] != bucket_name
+            or not isinstance(span[1], int)
+        ):
+            continue
+        label = entry.get("label")
+        if not isinstance(label, str) or not label:
+            continue
+        level = _coerce_positive_int(entry.get("level"))
+        if level is None:
+            continue
+        offset = span[1]
+        length = len(label)
+        if offset < 0 or length <= 0 or offset + length > text_len:
+            continue
+        marker_id = ref.get("marker_id")
+        out.append(HeadingRecord(
+            offset=offset,
+            length=length,
+            level=level,
+            marker_id=marker_id if isinstance(marker_id, str) and marker_id else None,
+            index=index,
+            label=label,
+        ))
+    return sorted(out, key=lambda h: (h.offset, h.index))
+
+
 def ctf_hash(asset: dict[str, Any]) -> str:
     data = copy.deepcopy(asset)
     data["hash"] = ZERO_HASH
@@ -113,19 +170,30 @@ def build_ctf_asset(
     markers: list[dict[str, Any]],
     manifest_hash: str | None,
     bucket_hash: str | None,
+    manifest: dict[str, Any] | None = None,
     heading_source: HeadingSource = "auto",
     short_refs: bool = False,
 ) -> dict[str, Any]:
     """Build one CTF asset for a juan bucket."""
     if bucket_name != "body":
         raise ValueError("CTF v1 only supports the body bucket")
-    if heading_source not in {"auto", "voices", "derive"}:
+    if heading_source not in {"auto", "voices", "derive", "manifest"}:
         raise ValueError(f"unknown heading source: {heading_source!r}")
 
     existing = collect_indent_heading_voices(markers, text_len=len(text))
     mode = "voices"
     headings = existing
-    if heading_source == "derive":
+    if heading_source == "manifest":
+        if manifest is None:
+            raise ValueError("heading source 'manifest' requires a manifest")
+        headings = collect_manifest_headings(
+            manifest,
+            seq=seq,
+            bucket_name=bucket_name,
+            text_len=len(text),
+        )
+        mode = "manifest"
+    elif heading_source == "derive":
         derived = derive_voice_markers_from_indent_headings(len(text), markers, text)
         headings = collect_indent_heading_voices(derived, text_len=len(text))
         mode = "derive"
@@ -157,7 +225,9 @@ def build_ctf_asset(
         "bucket": bucket_name,
         "source": {
             "mode": mode,
-            "voice_source": HEADING_INDENT_VOICE_SOURCE,
+            "voice_source": (
+                "manifest" if mode == "manifest" else HEADING_INDENT_VOICE_SOURCE
+            ),
             "manifest_hash": manifest_hash,
             "bucket_hash": bucket_hash,
         },
@@ -196,7 +266,7 @@ def build_ctf_juan_label(
     for assignment, heading in zip(assignments, unique):
         if assignment.path is not None:
             continue
-        label = text[heading.offset:heading.offset + heading.length]
+        label = _heading_label(text, heading)
         if label and label not in parts:
             parts.append(label)
     return "\u3000".join(parts) if parts else None
@@ -243,7 +313,7 @@ def build_ctf_nodes(
                     bucket=bucket_name,
                     compact=short_refs,
                 ),
-                "label": text[heading.offset:heading.offset + heading.length],
+                "label": _heading_label(text, heading),
                 "level": 0,
                 "parent_id": juan_id,
             }
@@ -282,7 +352,7 @@ def build_ctf_nodes(
         span_length = max(0, span_end - heading.offset)
         node: dict[str, Any] = {
             "id": node_id,
-            "label": text[heading.offset:heading.offset + heading.length],
+            "label": _heading_label(text, heading),
             "level": assignment.level,
             "parent_id": parent_id,
         }
@@ -408,6 +478,21 @@ def _coerce_heading_path(value: Any) -> tuple[int, ...] | None:
             return None
         path.append(part)
     return tuple(path) if path else None
+
+
+def _coerce_positive_int(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str) and value.isdigit():
+        coerced = int(value)
+        return coerced if coerced > 0 else None
+    return None
+
+
+def _heading_label(text: str, heading: HeadingRecord) -> str:
+    if heading.label is not None:
+        return heading.label
+    return text[heading.offset:heading.offset + heading.length]
 
 
 def _format_ctf_path_ref(

@@ -16,7 +16,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from bkk.cli_common import resolve_bundle_dir, resolve_rc_path, warn_deprecated
+from bkk.cli_common import (
+    add_text_prefix,
+    resolve_bundle_dir,
+    resolve_rc_path,
+    warn_deprecated,
+)
 from bkk.repair.overlong_front import DEFAULT_MIN_CHARS
 from bkk.short_refs import text_id_arg, text_or_path_arg, text_prefix_arg
 
@@ -46,6 +51,33 @@ def _add_bundle_selector(sp: argparse.ArgumentParser, *, dry_run: bool = False) 
         )
 
 
+def _add_ctf_bundle_selector(sp: argparse.ArgumentParser) -> None:
+    sp.add_argument(
+        "legacy_bundle", nargs="?", type=text_or_path_arg,
+        help=argparse.SUPPRESS,
+    )
+    sp.add_argument(
+        "--bundle", dest="bundle", type=Path, default=None,
+        help="bundle directory",
+    )
+    sp.add_argument(
+        "--text-id", dest="text_id", type=text_id_arg, default=None,
+        help="text id to resolve against repair.out / global.corpus / import.out",
+    )
+    add_text_prefix(
+        sp,
+        help="restrict to text ids starting with this prefix",
+    )
+    sp.add_argument(
+        "--out", dest="out_root", type=Path, default=None,
+        help=(
+            "with --tsv, root for <section>/<text-id>.ctf.tsv "
+            "(overrides global.ctf_root); otherwise bundle output root "
+            "used to resolve --text-id/--text-prefix"
+        ),
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="bkk repair")
     sub = p.add_subparsers(dest="op", required=True)
@@ -62,6 +94,58 @@ def build_parser() -> argparse.ArgumentParser:
         help="move bulky inline juan markers into per-juan assets/*.markers.yaml files",
     )
     _add_bundle_selector(px, dry_run=True)
+
+    pc = sub.add_parser(
+        "ctf",
+        help="write citation tree fragment sidecars from manifest TOC entries",
+    )
+    _add_ctf_bundle_selector(pc)
+    pc.add_argument(
+        "--juan",
+        dest="juan_selectors",
+        action="append",
+        default=None,
+        help=(
+            "restrict CTF export to one complete juan; repeatable. Accepts "
+            "KR refs like KR3k0059/147 as a standalone selector, or a "
+            "bare seq like 147 with --bundle/--text-id/--text-prefix."
+        ),
+    )
+    pc.add_argument(
+        "--out-dir",
+        dest="out_dir",
+        type=Path,
+        default=None,
+        help="directory for CTF files (defaults to the bundle assets directory)",
+    )
+    pc.add_argument(
+        "--heading-source",
+        dest="heading_source",
+        choices=("manifest", "auto", "voices", "derive"),
+        default="manifest",
+        help="heading source: manifest TOC (default), existing voices, fresh "
+             "derivation, or auto existing-first",
+    )
+    pc.add_argument(
+        "--short",
+        dest="short_refs",
+        action="store_true",
+        help="emit compact refs such as 4c22/1/@8+37 instead of canonical refs",
+    )
+    pc.add_argument(
+        "--tsv",
+        dest="tsv",
+        action="store_true",
+        help="write one whole-text TSV containing id, parent_id, and label",
+    )
+    pc.add_argument(
+        "--force", action="store_true",
+        help="overwrite existing CTF files",
+    )
+    pc.add_argument(
+        "--dry-run", dest="dry_run", action="store_true",
+        help="report what would be written without modifying files",
+    )
 
     ped = sub.add_parser(
         "remove-edition",
@@ -368,6 +452,8 @@ def run(argv: list[str] | None = None) -> int:
         return _run_externalize_markers(
             bundle, out_root, text_id=text_id, dry_run=args.dry_run,
         )
+    if args.op == "ctf":
+        return _run_ctf_repair(args=args, out_root=out_root)
     if args.op == "remove-edition":
         try:
             bundle, text_id = _selected_bundle_args(args)
@@ -576,6 +662,62 @@ def _run_externalize_markers(
         for line in scope["lines"]:
             print(f"  {line}")
     return 0
+
+
+def _run_ctf_repair(
+    *,
+    args: argparse.Namespace,
+    out_root: Path | None,
+) -> int:
+    from bkk.voice.cli import _run_ctf, _selected_add_args
+
+    ctf_out_root = None
+    ctf_bundle_root = out_root
+    if args.tsv:
+        ctf_out_root = args.out_root
+        if args.out_root is not None:
+            from bkk.config import load_rc
+            rc = load_rc()
+            ctf_bundle_root = resolve_rc_path(
+                None,
+                rc,
+                (("repair", "out"), ("global", "corpus"), ("import", "out")),
+            )
+
+    try:
+        bundle, text_id, text_prefix, selected_juans = _selected_add_args(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if text_prefix is not None:
+        return _run_ctf(
+            bundle,
+            ctf_bundle_root,
+            text_id=text_id,
+            text_prefix=text_prefix,
+            selected_juans=selected_juans,
+            out_dir=args.out_dir,
+            tsv=args.tsv,
+            tsv_out_root=ctf_out_root,
+            heading_source=args.heading_source,
+            short_refs=args.short_refs,
+            force=args.force,
+            dry_run=args.dry_run,
+        )
+    return _run_ctf(
+        bundle,
+        ctf_bundle_root,
+        text_id=text_id,
+        selected_juans=selected_juans,
+        out_dir=args.out_dir,
+        tsv=args.tsv,
+        tsv_out_root=ctf_out_root,
+        heading_source=args.heading_source,
+        short_refs=args.short_refs,
+        force=args.force,
+        dry_run=args.dry_run,
+    )
 
 
 def _run_remove_edition(
