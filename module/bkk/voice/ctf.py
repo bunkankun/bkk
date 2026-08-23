@@ -539,7 +539,10 @@ def ctf_tsv_text(
     root_id = compact_text_id(text_id) if short_refs else text_id
     root_parent_id = text_family_id(text_id, compact=short_refs)
     root_label = text_label or text_id
-    rows = [("id", "parent_id", "label"), (root_id, root_parent_id, root_label)]
+    rows = [
+        ("id", "parent_id", "label", "end"),
+        (root_id, root_parent_id, root_label, ""),
+    ]
     nodes_by_seq: dict[int, list[dict[str, Any]]] = {}
     juan_nodes: dict[int, dict[str, Any]] = {}
     for node in nodes:
@@ -568,7 +571,7 @@ def ctf_tsv_text(
                 juan_parent = parent_id
             if isinstance(label, str) and label:
                 juan_label = label
-        rows.append((juan_id, juan_parent, juan_label))
+        rows.append((juan_id, juan_parent, juan_label, ""))
         for node in nodes_by_seq.get(seq, []):
             node_id = node.get("id")
             parent_id = node.get("parent_id")
@@ -577,7 +580,12 @@ def ctf_tsv_text(
                 continue
             if parent_id == root_id:
                 parent_id = juan_id
-            rows.append((node_id, parent_id, label if isinstance(label, str) else ""))
+            rows.append((
+                node_id,
+                parent_id,
+                label if isinstance(label, str) else "",
+                _ctf_tsv_span_end(node),
+            ))
     return "".join(
         "\t".join(_tsv_cell(cell) for cell in row) + "\n"
         for row in rows
@@ -620,6 +628,19 @@ def _ctf_tsv_juan_seq(node_id: str, root_id: str) -> int | None:
         return None
     rest = node_id[len(prefix):]
     return int(rest) if rest.isdigit() else None
+
+
+def _ctf_tsv_span_end(node: dict[str, Any]) -> str:
+    span_ref = node.get("span_ref")
+    if not isinstance(span_ref, str):
+        return ""
+    _head, sep, tail = span_ref.rpartition("@")
+    if not sep:
+        return ""
+    offset_s, plus, length_s = tail.partition("+")
+    if not plus or not offset_s.isdigit() or not length_s.isdigit():
+        return ""
+    return str(int(offset_s) + int(length_s))
 
 
 def _tsv_cell(value: str) -> str:

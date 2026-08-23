@@ -9,7 +9,7 @@ CTF has two representations:
 
 - a per-juan YAML sidecar with offsets, spans, source hashes, and node
   metadata;
-- a whole-text TSV projection with only `id`, `parent_id`, and `label`,
+- a whole-text TSV projection with `id`, `parent_id`, `label`, and `end`,
   intended for lightweight lookup and import into systems that need a flat
   parent table.
 
@@ -268,10 +268,10 @@ category label.
 
 ## TSV Projection
 
-The TSV representation contains three columns:
+The TSV representation contains four columns:
 
 ```text
-id	parent_id	label
+id	parent_id	label	end
 ```
 
 It is one file per text, not one file per juan. It includes four kinds of
@@ -285,13 +285,13 @@ row:
 Example:
 
 ```text
-id	parent_id	label
-KR4c0022	KR4c	王右丞集箋注
-KR4c0022/12	KR4c0022	王右丞集箋注卷十二　近體詩十六首
-KR4c0022/12/@0+9	KR4c0022/12	王右丞集箋注卷十二
-KR4c0022/12/@15+6	KR4c0022/12	近體詩十六首
-KR4c0022/12/1/@21+8	KR4c0022/12	春過賀遂員外藥園
-KR4c0022/12/2/@927+15	KR4c0022/12	河南嚴尹弟見宿弊廬訪别人賦十韻
+id	parent_id	label	end
+KR4c0022	KR4c	王右丞集箋注	
+KR4c0022/12	KR4c0022	王右丞集箋注卷十二　近體詩十六首	
+KR4c0022/12/@0+9	KR4c0022/12	王右丞集箋注卷十二	
+KR4c0022/12/@15+6	KR4c0022/12	近體詩十六首	
+KR4c0022/12/1/@21+8	KR4c0022/12	春過賀遂員外藥園	927
+KR4c0022/12/2/@927+15	KR4c0022/12	河南嚴尹弟見宿弊廬訪别人賦十韻	1497
 ```
 
 The parent of the text root is the text family. For `KR4c0022`, that is
@@ -306,13 +306,17 @@ The parent of a top-level citation node is also the juan row.
 With `--short`, the same table uses compact IDs:
 
 ```text
-id	parent_id	label
-4c22	4c	王右丞集箋注
-4c22/12	4c22	王右丞集箋注卷十二　近體詩十六首
-4c22/12/@0+9	4c22/12	王右丞集箋注卷十二
-4c22/12/@15+6	4c22/12	近體詩十六首
-4c22/12/1/@21+8	4c22/12	春過賀遂員外藥園
+id	parent_id	label	end
+4c22	4c	王右丞集箋注	
+4c22/12	4c22	王右丞集箋注卷十二　近體詩十六首	
+4c22/12/@0+9	4c22/12	王右丞集箋注卷十二	
+4c22/12/@15+6	4c22/12	近體詩十六首	
+4c22/12/1/@21+8	4c22/12	春過賀遂員外藥園	927
 ```
+
+The `end` column is the exclusive end offset of a citation fragment,
+computed from the YAML `span_ref`. It is empty for the text root, juan rows,
+and level-0 label nodes because those rows do not have `span_ref`.
 
 TSV cells are sanitized by replacing tabs and newlines with spaces.
 

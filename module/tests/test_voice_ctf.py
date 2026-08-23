@@ -483,16 +483,17 @@ def test_ctf_tsv_text_includes_text_root_and_heading_rows() -> None:
                 "id": "KR4c0022/1/1/@0+8",
                 "parent_id": "KR4c0022/1",
                 "label": "王右丞集箋注卷一",
+                "span_ref": "KR4c0022/1/@0+12",
             },
         ],
         juan_labels={1: "王右丞集箋注卷一"},
     )
 
     assert text.splitlines() == [
-        "id\tparent_id\tlabel",
-        "KR4c0022\tKR4c\t王右丞集箋注",
-        "KR4c0022/1\tKR4c0022\t王右丞集箋注卷一",
-        "KR4c0022/1/1/@0+8\tKR4c0022/1\t王右丞集箋注卷一",
+        "id\tparent_id\tlabel\tend",
+        "KR4c0022\tKR4c\t王右丞集箋注\t",
+        "KR4c0022/1\tKR4c0022\t王右丞集箋注卷一\t",
+        "KR4c0022/1/1/@0+8\tKR4c0022/1\t王右丞集箋注卷一\t12",
     ]
 
 
@@ -510,6 +511,7 @@ def test_ctf_tsv_text_uses_implicit_juan_parent_for_short_refs() -> None:
                 "id": "4c22/12/1/@21+8",
                 "parent_id": "4c22/12",
                 "label": "春過賀遂員外藥園",
+                "span_ref": "4c22/12/@21+906",
             },
         ],
         juan_labels={12: "王右丞集箋注卷十二\u3000近體詩十六首"},
@@ -517,10 +519,10 @@ def test_ctf_tsv_text_uses_implicit_juan_parent_for_short_refs() -> None:
     )
 
     assert text.splitlines() == [
-        "id\tparent_id\tlabel",
-        "4c22\t4c\tKR4c0022",
-        "4c22/12\t4c22\t王右丞集箋注卷十二\u3000近體詩十六首",
-        "4c22/12/1/@21+8\t4c22/12\t春過賀遂員外藥園",
+        "id\tparent_id\tlabel\tend",
+        "4c22\t4c\tKR4c0022\t",
+        "4c22/12\t4c22\t王右丞集箋注卷十二\u3000近體詩十六首\t",
+        "4c22/12/1/@21+8\t4c22/12\t春過賀遂員外藥園\t927",
     ]
 
 
@@ -660,11 +662,11 @@ def test_run_ctf_tsv_writes_whole_text_file_to_out_root(tmp_path: Path) -> None:
 
     output = tsv_root / "KR4c" / f"{TEXT_ID}.ctf.tsv"
     assert output.read_text(encoding="utf-8").splitlines() == [
-        "id\tparent_id\tlabel",
-        f"{TEXT_ID}\tKR4c\tTest",
-        f"{TEXT_ID}/1\t{TEXT_ID}\t王右丞集箋注卷一",
-        f"{TEXT_ID}/1/@0+8\t{TEXT_ID}/1\t王右丞集箋注卷一",
-        f"{TEXT_ID}/1/1/@8+2\t{TEXT_ID}/1\t古詩",
+        "id\tparent_id\tlabel\tend",
+        f"{TEXT_ID}\tKR4c\tTest\t",
+        f"{TEXT_ID}/1\t{TEXT_ID}\t王右丞集箋注卷一\t",
+        f"{TEXT_ID}/1/@0+8\t{TEXT_ID}/1\t王右丞集箋注卷一\t",
+        f"{TEXT_ID}/1/1/@8+2\t{TEXT_ID}/1\t古詩\t12",
     ]
     assert not (bundle / "assets" / f"{TEXT_ID}_001.ctf.yaml").exists()
 

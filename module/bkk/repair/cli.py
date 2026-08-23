@@ -136,7 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--tsv",
         dest="tsv",
         action="store_true",
-        help="write one whole-text TSV containing id, parent_id, and label",
+        help="write one whole-text TSV containing id, parent_id, label, and end",
     )
     pc.add_argument(
         "--force", action="store_true",
