@@ -22,6 +22,28 @@ const PUNCTUATION_RENDER_ORDER = [
   "《",
 ];
 
+export const NOTE_OPEN_PUNCT: ReadonlySet<string> = new Set([
+  "(",
+  "（",
+  "「",
+  "『",
+  "《",
+  "〈",
+  "〔",
+  "【",
+]);
+
+export const NOTE_CLOSE_PUNCT: ReadonlySet<string> = new Set([
+  ")",
+  "）",
+  "」",
+  "』",
+  "》",
+  "〉",
+  "〕",
+  "】",
+]);
+
 const PUNCTUATION_RENDER_RANK = new Map(
   PUNCTUATION_RENDER_ORDER.map((ch, index) => [ch, index]),
 );

@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from bkk.rendering.punctuation import (
+    NOTE_CLOSE_PUNCT,
+    NOTE_OPEN_PUNCT,
     PAGE_BREAK_RENDER_TOKEN,
     RenderInjection,
     RenderUnit,
+    is_note_close_punctuation,
+    is_note_open_punctuation,
     render_text_with_punctuation,
     sort_punctuation_render_order,
 )
@@ -71,3 +75,12 @@ def test_render_text_with_punctuation_can_attach_boundaries_to_previous_window()
         )
         == "丙丁。"
     )
+
+
+def test_note_boundary_punctuation_matches_web_ui_set():
+    assert NOTE_OPEN_PUNCT == frozenset(("(", "（", "「", "『", "《", "〈", "〔", "【"))
+    assert NOTE_CLOSE_PUNCT == frozenset((")", "）", "」", "』", "》", "〉", "〕", "】"))
+    assert is_note_open_punctuation("《") is True
+    assert is_note_close_punctuation("》") is True
+    assert is_note_open_punctuation("。") is False
+    assert is_note_close_punctuation("。") is False

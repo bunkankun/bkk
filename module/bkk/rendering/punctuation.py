@@ -30,6 +30,9 @@ PUNCTUATION_RENDER_ORDER = (
     "《",
 )
 
+NOTE_OPEN_PUNCT = frozenset(("(", "（", "「", "『", "《", "〈", "〔", "【"))
+NOTE_CLOSE_PUNCT = frozenset((")", "）", "」", "』", "》", "〉", "〕", "】"))
+
 _PUNCTUATION_RENDER_RANK = {
     ch: index for index, ch in enumerate(PUNCTUATION_RENDER_ORDER)
 }
@@ -56,6 +59,18 @@ def punctuation_render_rank(ch: str) -> int | None:
     """Return the logical render rank for a punctuation character."""
 
     return _PUNCTUATION_RENDER_RANK.get(ch)
+
+
+def is_note_open_punctuation(ch: str) -> bool:
+    """Return whether ``ch`` is a note-opening boundary punctuation mark."""
+
+    return ch in NOTE_OPEN_PUNCT
+
+
+def is_note_close_punctuation(ch: str) -> bool:
+    """Return whether ``ch`` is a note-closing boundary punctuation mark."""
+
+    return ch in NOTE_CLOSE_PUNCT
 
 
 def sort_punctuation_render_order(units: Sequence[RenderUnit]) -> list[RenderUnit]:

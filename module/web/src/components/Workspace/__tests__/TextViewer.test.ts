@@ -170,6 +170,36 @@ describe("TextViewer phrase blocks", () => {
     )).toBe(true);
   });
 
+  it("does not repeat a heading label for an opener after the heading line", () => {
+    const markers: JuanMarker[] = [
+      { type: "line-break", offset: 0 },
+      { type: "indent", offset: 0, content: "　　" },
+      { type: "voice", offset: 0, length: 6, name: "head", path: [4] },
+      { type: "line-break", offset: 6 },
+      { type: "punctuation", offset: 6, content: "《" },
+      { type: "punctuation", offset: 10, content: "》" },
+    ];
+
+    const text = "登河北城樓作井邑傅巖上";
+    const chars = buildRenderedChars(text, markers, "phrase", "canonical");
+    const blocks = buildBlocks("body", chars, markers, "phrase", [...text].length);
+    const segments = blocks.flatMap((block) =>
+      voiceDisplaySegments(block.chars).map((segment) => ({
+        voice: segment.voice,
+        text: segment.chars.map((char) => char.ch).join(""),
+        label: headSequenceLabel(9, segment.voicePath),
+      })),
+    );
+
+    expect(segments.filter((segment) => segment.label === "9.4")).toEqual([
+      { voice: "head", text: "　　登河北城樓作", label: "9.4" },
+    ]);
+    expect(segments.some((segment) =>
+      segment.label === null &&
+      segment.text.includes("《井邑傅巖》上")
+    )).toBe(true);
+  });
+
   it("labels rendered chars with their voice", () => {
     const markers: JuanMarker[] = [
       { type: "voice", offset: 1, length: 2, name: "note" },

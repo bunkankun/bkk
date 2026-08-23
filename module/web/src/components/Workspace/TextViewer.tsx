@@ -25,6 +25,8 @@ import type {
 } from "../../api/types";
 import { krRefToChar } from "../../lib/pua";
 import {
+  NOTE_CLOSE_PUNCT,
+  NOTE_OPEN_PUNCT,
   PAGE_BREAK_RENDER_TOKEN,
   sortPunctuationRenderOrder,
 } from "../../lib/punctuationOrder";
@@ -44,8 +46,6 @@ const PUNCT_RE = /[\u3000-\u303F\uFF00-\uFFEF：「」『』，。、！？；�
 const PHRASE_END_RE = /[。！？；，：]/;
 const PHRASE_LINE_OPENER_RE = /^[「『《〈（(〔【]$/;
 const PHRASE_LINE_NONSTART_RE = /^[，、。：；！？．/」』》〉）\)〕】]$/;
-const NOTE_OPEN_PUNCT = new Set(["(", "（", "「", "『", "《", "〈", "〔", "【"]);
-const NOTE_CLOSE_PUNCT = new Set([")", "）", "」", "』", "》", "〉", "〕", "】"]);
 const CJK_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
 const BUCKETS = ["front", "body", "back"] as const;
 
@@ -311,11 +311,17 @@ function noteBoundaryPunctuationVoiceRange(
   ch: string,
   ranges: VoiceRange[],
 ): VoiceRange | null {
+  const skipHeadEndOpener = (range: VoiceRange) =>
+    range.name === "head" &&
+    range.end === offset &&
+    PHRASE_LINE_OPENER_RE.test(ch);
   const noteAtBoundary = ranges.some((range) =>
     range.name === "note" &&
     (range.start === offset || range.end === offset)
   );
-  if (!noteAtBoundary) return voiceRangeAtOffset(offset, ranges, true);
+  if (!noteAtBoundary) {
+    return voiceRangeAtOffset(offset, ranges, true, skipHeadEndOpener);
+  }
 
   if (
     (NOTE_OPEN_PUNCT.has(ch) && ranges.some((range) => range.name === "note" && range.start === offset)) ||
@@ -331,8 +337,12 @@ function noteBoundaryPunctuationVoiceRange(
     offset,
     ranges,
     true,
-    (range) => range.name === "note" &&
-      (range.start === offset || range.end === offset),
+    (range) =>
+      (
+        range.name === "note" &&
+        (range.start === offset || range.end === offset)
+      ) ||
+      skipHeadEndOpener(range),
   );
 }
 
