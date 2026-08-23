@@ -35,6 +35,7 @@ class HeadingRecord:
     marker_id: str | None
     index: int
     path: tuple[int, ...] | None = None
+    name: str = "head"
 
 
 def collect_indent_heading_voices(
@@ -61,7 +62,7 @@ def collect_indent_heading_voices(
             continue
         if (
             marker.get("type") != "voice"
-            or marker.get("name") != "head"
+            or marker.get("name") not in {"head", "label"}
             or marker.get("source") != HEADING_INDENT_VOICE_SOURCE
         ):
             continue
@@ -84,6 +85,7 @@ def collect_indent_heading_voices(
             continue
         marker_id = marker.get("id")
         path = _coerce_heading_path(marker.get("path"))
+        name = marker.get("name")
         out.append(HeadingRecord(
             offset=offset,
             length=length,
@@ -91,6 +93,7 @@ def collect_indent_heading_voices(
             marker_id=marker_id if isinstance(marker_id, str) and marker_id else None,
             index=index,
             path=path,
+            name=name if name in {"head", "label"} else "head",
         ))
     return sorted(out, key=lambda h: (h.offset, h.index))
 
@@ -143,6 +146,7 @@ def build_ctf_asset(
         bucket_name=bucket_name,
         text=text,
         headings=headings,
+        juan_label=label,
         short_refs=short_refs,
     )
     asset: dict[str, Any] = {
@@ -205,24 +209,51 @@ def build_ctf_nodes(
     bucket_name: str,
     text: str,
     headings: list[HeadingRecord],
+    juan_label: str | None = None,
     short_refs: bool = False,
 ) -> list[dict[str, Any]]:
     unique = _unique_headings(headings)
 
     root_id = compact_text_id(text_id) if short_refs else text_id
-    nodes: list[dict[str, Any]] = []
+    juan_id = f"{root_id}/{seq}"
+    nodes: list[dict[str, Any]] = [{
+        "id": juan_id,
+        "label": juan_label or juan_id,
+        "level": 0,
+        "parent_id": root_id,
+    }]
     assignments = heading_sequence_paths([
         (heading.offset, heading.level) for heading in unique
     ])
     node_ids_by_path: dict[tuple[int, ...], str] = {}
+    citation_indexes: list[int] = [
+        index for index, assignment in enumerate(assignments)
+        if assignment.path is not None
+    ]
     for index, heading in enumerate(unique):
         assignment = assignments[index]
         sequence_path = assignment.path
         if sequence_path is None:
+            node: dict[str, Any] = {
+                "id": format_short_ref(
+                    text_id,
+                    seq,
+                    offset=heading.offset,
+                    length=heading.length,
+                    bucket=bucket_name,
+                    compact=short_refs,
+                ),
+                "label": text[heading.offset:heading.offset + heading.length],
+                "level": 0,
+                "parent_id": juan_id,
+            }
+            if heading.marker_id is not None:
+                node["marker_id"] = heading.marker_id
+            nodes.append(node)
             continue
         parent_path = sequence_path[:-1]
         if not parent_path:
-            parent_id = root_id
+            parent_id = juan_id
         else:
             parent_id = node_ids_by_path.get(parent_path)
             if parent_id is None:
@@ -240,9 +271,11 @@ def build_ctf_nodes(
         )
 
         span_end = len(text)
-        for later_assignment, later in zip(
-            assignments[index + 1:], unique[index + 1:],
-        ):
+        for later_index in citation_indexes:
+            if later_index <= index:
+                continue
+            later_assignment = assignments[later_index]
+            later = unique[later_index]
             if later_assignment.level <= assignment.level:
                 span_end = later.offset
                 break
@@ -281,9 +314,14 @@ def ctf_tsv_text(
     root_label = text_label or text_id
     rows = [("id", "parent_id", "label"), (root_id, root_parent_id, root_label)]
     nodes_by_seq: dict[int, list[dict[str, Any]]] = {}
+    juan_nodes: dict[int, dict[str, Any]] = {}
     for node in nodes:
         node_id = node.get("id")
         if not isinstance(node_id, str):
+            continue
+        seq = _ctf_tsv_juan_seq(node_id, root_id)
+        if seq is not None:
+            juan_nodes[seq] = node
             continue
         seq = _ctf_tsv_node_seq(node_id, root_id)
         if seq is None:
@@ -291,9 +329,19 @@ def ctf_tsv_text(
         nodes_by_seq.setdefault(seq, []).append(node)
 
     labels = juan_labels or {}
-    for seq in sorted(set(nodes_by_seq) | set(labels)):
+    for seq in sorted(set(nodes_by_seq) | set(labels) | set(juan_nodes)):
         juan_id = f"{root_id}/{seq}"
-        rows.append((juan_id, root_id, labels.get(seq) or juan_id))
+        juan_node = juan_nodes.get(seq)
+        juan_parent = root_id
+        juan_label = labels.get(seq) or juan_id
+        if juan_node is not None:
+            parent_id = juan_node.get("parent_id")
+            label = juan_node.get("label")
+            if isinstance(parent_id, str):
+                juan_parent = parent_id
+            if isinstance(label, str) and label:
+                juan_label = label
+        rows.append((juan_id, juan_parent, juan_label))
         for node in nodes_by_seq.get(seq, []):
             node_id = node.get("id")
             parent_id = node.get("parent_id")
@@ -337,6 +385,14 @@ def _ctf_tsv_node_seq(node_id: str, root_id: str) -> int | None:
     if not sep or not juan.isdigit():
         return None
     return int(juan)
+
+
+def _ctf_tsv_juan_seq(node_id: str, root_id: str) -> int | None:
+    prefix = f"{root_id}/"
+    if not node_id.startswith(prefix):
+        return None
+    rest = node_id[len(prefix):]
+    return int(rest) if rest.isdigit() else None
 
 
 def _tsv_cell(value: str) -> str:

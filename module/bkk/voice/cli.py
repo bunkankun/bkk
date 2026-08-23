@@ -28,7 +28,8 @@ from ``.bkkrc`` unless ``--out`` is passed.
   ``root``/``commentary``/``head``/``attribution`` for sources whose
   layout indents each textual layer differently.
 - ``indent-headings`` — from short lines opened by CJK ``indent`` markers,
-  emits ``head`` spans for tractat-style section labels.
+  emits ``head`` spans for citation headings and ``label`` spans for
+  juan/category containers.
 - ``tls-seg`` — from ``tls:seg-start``/``tls:seg-end`` runs carrying
   ``seg_type=root`` or ``seg_type=comm``, emits ``root``/``commentary``.
 - ``dictionary`` — after generic ``note`` voices exist, detects definition

@@ -12,7 +12,8 @@ Public surface:
   (root / commentary / head / attribution) by indent depth. Used for
   sources that distinguish layers by layout indentation (e.g. KR5c0095).
 - :func:`bkk.voice.derive_indent_headings.derive_voice_markers_from_indent_headings`
-  — turns short CJK-indented tractat section labels into ``head`` voices.
+  — turns short CJK-indented tractat section labels into ``head`` voices,
+  with juan/category containers emitted as ``label`` voices.
 - :func:`bkk.voice.derive_tls_seg.derive_voice_markers_from_tls_segments`
   — turns typed TLS segment runs into ``root`` / ``commentary`` voices
   when ``tls:seg-start`` carries ``seg_type=root`` or ``seg_type=comm``.

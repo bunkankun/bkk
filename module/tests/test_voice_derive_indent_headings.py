@@ -41,7 +41,7 @@ def test_kr3a0013_style_headings_are_derived() -> None:
             "type": "voice",
             "offset": 0,
             "length": 2,
-            "name": "head",
+            "name": "label",
             "id": "h1",
             "source": "indent-headings",
             "indent_depth": 1,
@@ -264,11 +264,11 @@ def test_single_initial_level_one_heading_is_label_not_citation_path() -> None:
     out = derive_voice_markers_from_indent_headings(len(text), markers, text)
 
     assert [
-        (marker["offset"], marker["indent_depth"], marker.get("path"))
+        (marker["offset"], marker["name"], marker["indent_depth"], marker.get("path"))
         for marker in out
     ] == [
-        (0, 1, None),
-        (8, 2, [1]),
+        (0, "label", 1, None),
+        (8, "head", 2, [1]),
     ]
 
 
@@ -284,12 +284,32 @@ def test_juan_starter_and_single_category_heading_are_labels() -> None:
     out = derive_voice_markers_from_indent_headings(len(text), markers, text)
 
     assert [
-        (marker["offset"], marker["indent_depth"], marker.get("path"))
+        (marker["offset"], marker["name"], marker["indent_depth"], marker.get("path"))
         for marker in out
     ] == [
-        (0, 1, None),
-        (8, 1, None),
-        (15, 2, [1]),
+        (0, "label", 1, None),
+        (8, "label", 1, None),
+        (15, "head", 2, [1]),
+    ]
+
+
+def test_juan_starter_without_indent_is_label() -> None:
+    text = "王右丞集箋注卷十二仁和趙殿成撰近體詩十六首春過賀遂員外藥園正文"
+    markers = [
+        _lb(15), _indent(15, 1),
+        _lb(21), _indent(21, 2),
+        _lb(29),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["length"], marker["name"], marker.get("path"))
+        for marker in out
+    ] == [
+        (0, 9, "label", None),
+        (15, 6, "label", None),
+        (21, 8, "head", [1]),
     ]
 
 

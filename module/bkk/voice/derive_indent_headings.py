@@ -2,13 +2,15 @@
 
 Some KRP tractat-style texts mark section labels only by opening
 ideographic-space indentation.  This deriver is intentionally narrower than
-``derive_indent``: it emits only ``name: head`` voice spans for short
-heading-like lines and rejects common layout uses such as TOC rows and long
-prefatory prose.
+``derive_indent``: it emits only short heading-like ``voice`` spans and
+rejects common layout uses such as TOC rows and long prefatory prose.
+Citation headings are emitted as ``name: head``; juan/category labels that
+do not become citation nodes are emitted as ``name: label``.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -22,6 +24,9 @@ _ATTRIBUTION_SUFFIXES = ("撰", "著", "注", "註", "箋", "校", "纂", "譯",
 _ATTRIBUTION_CHARS = {"臣"}
 _COUNT_HEADING_SUFFIXES = ("首",)
 _COUNT_CHARS = set("一二三四五六七八九十百千兩〇零")
+_JUAN_STARTER_RE = re.compile(
+    r"^(.{1,40}?卷[一二三四五六七八九十百千兩〇零]+)"
+)
 
 
 @dataclass(frozen=True)
@@ -55,7 +60,7 @@ def derive_voice_markers_from_indent_headings(
     markers: list[dict],
     text: str,
 ) -> list[dict]:
-    """Return ``head`` voice markers derived from opening CJK indents."""
+    """Return heading/label voice markers derived from opening CJK indents."""
     candidates = _heading_candidates(text_len, markers, text)
     paths = heading_sequence_paths(
         [(candidate.start, candidate.depth) for candidate in candidates]
@@ -66,7 +71,7 @@ def derive_voice_markers_from_indent_headings(
             "type": "voice",
             "offset": candidate.start,
             "length": candidate.end - candidate.start,
-            "name": "head",
+            "name": "label" if path.path is None else "head",
             "id": f"h{index}",
             "source": HEADING_INDENT_VOICE_SOURCE,
             "indent_depth": candidate.depth,
@@ -140,10 +145,16 @@ def _heading_candidates(
     if text_len <= 0:
         return []
 
-    lines = _lines(text_len, markers, text)
     out: list[_Candidate] = []
+    starter = _prefix_juan_starter_candidate(text)
+    if starter is not None:
+        out.append(starter)
+
+    lines = _lines(text_len, markers, text)
     seen_title_like: set[str] = set()
-    emitted_title_like = False
+    emitted_title_like = starter is not None
+    if starter is not None:
+        seen_title_like.add(starter.text)
     index = 0
     while index < len(lines):
         line, next_index = _depth_two_overrun_line(lines, index, text)
@@ -156,7 +167,10 @@ def _heading_candidates(
         if not candidates:
             index = next_index
             continue
-        out.extend(candidates)
+        out.extend(
+            candidate for candidate in candidates
+            if not (candidate.start == 0 and starter is not None)
+        )
         if any(candidate.depth == 1 for candidate in candidates):
             emitted_title_like = True
             seen_title_like.update(
@@ -165,6 +179,20 @@ def _heading_candidates(
             )
         index = next_index
     return out
+
+
+def _prefix_juan_starter_candidate(text: str) -> _Candidate | None:
+    match = _JUAN_STARTER_RE.match(text[:64])
+    if match is None:
+        return None
+    label = match.group(1)
+    return _Candidate(
+        start=0,
+        end=len(label),
+        depth=1,
+        text=label,
+        kind="juan-starter",
+    )
 
 
 def _depth_two_overrun_line(

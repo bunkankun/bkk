@@ -111,6 +111,10 @@ def _heading(offset: int, length: int, depth: int, marker_id: str) -> dict:
     }
 
 
+def _citation_nodes(nodes: list[dict]) -> list[dict]:
+    return [node for node in nodes if node.get("level") != 0]
+
+
 def test_build_ctf_nodes_hierarchy_spans_and_parents() -> None:
     text = "x甲一xxx乙二xxx丙三xxxx丁四xxxx戊五xxxx"
     headings = [
@@ -129,18 +133,25 @@ def test_build_ctf_nodes_hierarchy_spans_and_parents() -> None:
         headings=headings,
     )
 
-    assert nodes[0]["parent_id"] == TEXT_ID
-    assert nodes[0]["id"] == "KR4c0022/1/1/@1+2"
-    assert nodes[1]["id"] == "KR4c0022/1/1/1/@6+2"
-    assert nodes[1]["parent_id"] == "KR4c0022/1/1/@1+2"
-    assert nodes[2]["id"] == "KR4c0022/1/1/1/1/@11+2"
-    assert nodes[2]["parent_id"] == "KR4c0022/1/1/1/@6+2"
-    assert nodes[3]["id"] == "KR4c0022/1/1/2/@17+2"
-    assert nodes[3]["parent_id"] == "KR4c0022/1/1/@1+2"
-    assert nodes[4]["id"] == "KR4c0022/1/2/@23+2"
-    assert nodes[1]["span_ref"] == "KR4c0022/1/@6+11"
-    assert nodes[2]["span_ref"] == "KR4c0022/1/@11+6"
-    assert nodes[-1]["span_ref"] == f"KR4c0022/1/@23+{len(text) - 23}"
+    assert nodes[0] == {
+        "id": "KR4c0022/1",
+        "label": "KR4c0022/1",
+        "level": 0,
+        "parent_id": TEXT_ID,
+    }
+    citations = _citation_nodes(nodes)
+    assert citations[0]["parent_id"] == "KR4c0022/1"
+    assert citations[0]["id"] == "KR4c0022/1/1/@1+2"
+    assert citations[1]["id"] == "KR4c0022/1/1/1/@6+2"
+    assert citations[1]["parent_id"] == "KR4c0022/1/1/@1+2"
+    assert citations[2]["id"] == "KR4c0022/1/1/1/1/@11+2"
+    assert citations[2]["parent_id"] == "KR4c0022/1/1/1/@6+2"
+    assert citations[3]["id"] == "KR4c0022/1/1/2/@17+2"
+    assert citations[3]["parent_id"] == "KR4c0022/1/1/@1+2"
+    assert citations[4]["id"] == "KR4c0022/1/2/@23+2"
+    assert citations[1]["span_ref"] == "KR4c0022/1/@6+11"
+    assert citations[2]["span_ref"] == "KR4c0022/1/@11+6"
+    assert citations[-1]["span_ref"] == f"KR4c0022/1/@23+{len(text) - 23}"
     assert all("path" not in node for node in nodes)
 
 
@@ -159,10 +170,23 @@ def test_build_ctf_nodes_short_refs() -> None:
 
     assert nodes == [
         {
+            "id": "4c22/1",
+            "label": "4c22/1",
+            "level": 0,
+            "parent_id": "4c22",
+        },
+        {
+            "id": "4c22/1/@0+8",
+            "label": "王右丞集箋注卷一",
+            "level": 0,
+            "parent_id": "4c22/1",
+            "marker_id": "h1",
+        },
+        {
             "id": "4c22/1/1/@8+2",
             "label": "古詩",
             "level": 1,
-            "parent_id": "4c22",
+            "parent_id": "4c22/1",
             "marker_id": "h2",
             "span_ref": "4c22/1/@8+4",
         },
@@ -183,10 +207,12 @@ def test_build_ctf_nodes_single_initial_level_one_uses_juan_starter() -> None:
     )
 
     assert [(node["id"], node["parent_id"], node["level"]) for node in nodes] == [
-        ("KR4c0022/2/1/@4+2", "KR4c0022", 1),
-        ("KR4c0022/2/2/@8+2", "KR4c0022", 1),
+        ("KR4c0022/2", "KR4c0022", 0),
+        ("KR4c0022/2/@0+2", "KR4c0022/2", 0),
+        ("KR4c0022/2/1/@4+2", "KR4c0022/2", 1),
+        ("KR4c0022/2/2/@8+2", "KR4c0022/2", 1),
     ]
-    assert nodes[0]["span_ref"] == "KR4c0022/2/@4+4"
+    assert _citation_nodes(nodes)[0]["span_ref"] == "KR4c0022/2/@4+4"
 
 
 def test_build_ctf_nodes_juan_starter_and_category_are_labels() -> None:
@@ -200,13 +226,17 @@ def test_build_ctf_nodes_juan_starter_and_category_are_labels() -> None:
             HeadingRecord(8, 7, 1, "h2", 1),
             HeadingRecord(15, 10, 2, "h3", 2),
         ],
+        juan_label="王右丞集箋注卷十\u3000近體詩二十六首",
     )
 
     assert [
         (node["id"], node["parent_id"], node["level"], node["label"])
         for node in nodes
     ] == [
-        ("KR4c0022/10/1/@15+10", "KR4c0022", 1, "奉和聖製從蓬萊"),
+        ("KR4c0022/10", "KR4c0022", 0, "王右丞集箋注卷十\u3000近體詩二十六首"),
+        ("KR4c0022/10/@0+8", "KR4c0022/10", 0, "王右丞集箋注卷十"),
+        ("KR4c0022/10/@8+7", "KR4c0022/10", 0, "近體詩二十六首"),
+        ("KR4c0022/10/1/@15+10", "KR4c0022/10", 1, "奉和聖製從蓬萊"),
     ]
 
 
@@ -225,7 +255,7 @@ def test_build_ctf_node_sequence_path_does_not_reset_across_descendants() -> Non
         ],
     )
 
-    assert [node["id"] for node in nodes] == [
+    assert [node["id"] for node in _citation_nodes(nodes)] == [
         "KR4c0022/12/1/@1+2",
         "KR4c0022/12/1/1/@5+2",
         "KR4c0022/12/1/1/1/@9+2",
@@ -254,11 +284,14 @@ def test_build_ctf_asset_auto_uses_existing_voices_and_hashes() -> None:
     )
 
     assert asset["source"]["mode"] == "voices"
-    assert [node["label"] for node in asset["nodes"]] == [
+    assert [node["label"] for node in _citation_nodes(asset["nodes"])] == [
         "登樓歌",
     ]
+    assert asset["nodes"][0]["id"] == "KR4c0022/1"
     assert asset["nodes"][0]["parent_id"] == TEXT_ID
-    assert asset["nodes"][0]["id"] == "KR4c0022/1/1/@12+3"
+    assert asset["nodes"][0]["label"] == "王右丞集箋注卷一\u3000古詩十首"
+    assert _citation_nodes(asset["nodes"])[0]["parent_id"] == "KR4c0022/1"
+    assert _citation_nodes(asset["nodes"])[0]["id"] == "KR4c0022/1/1/@12+3"
     assert asset["hash"] == ctf_hash(asset)
 
 
@@ -280,11 +313,11 @@ def test_build_ctf_asset_auto_ignores_stale_commentary_lemma_heading() -> None:
         heading_source="auto",
     )
 
-    assert [node["label"] for node in asset["nodes"]] == [
+    assert [node["label"] for node in _citation_nodes(asset["nodes"])] == [
         "春過賀遂員外藥園",
     ]
-    assert asset["nodes"][0]["id"] == "KR4c0022/12/1/@6+8"
-    assert asset["nodes"][0]["parent_id"] == TEXT_ID
+    assert _citation_nodes(asset["nodes"])[0]["id"] == "KR4c0022/12/1/@6+8"
+    assert _citation_nodes(asset["nodes"])[0]["parent_id"] == "KR4c0022/12"
 
 
 def test_collect_indent_heading_voices_skips_heading_inside_note() -> None:
@@ -316,15 +349,15 @@ def test_build_ctf_asset_auto_uses_derived_when_existing_is_incomplete() -> None
     )
 
     assert asset["source"]["mode"] == "derive"
-    assert [node["label"] for node in asset["nodes"]] == [
+    assert [node["label"] for node in _citation_nodes(asset["nodes"])] == [
         "春過賀遂員外藥園",
         "河南嚴尹弟見宿弊廬訪别人賦十韻",
     ]
-    assert [node["id"] for node in asset["nodes"]] == [
+    assert [node["id"] for node in _citation_nodes(asset["nodes"])] == [
         "KR4c0022/12/1/@6+8",
         "KR4c0022/12/2/@16+15",
     ]
-    assert all(node["parent_id"] == TEXT_ID for node in asset["nodes"])
+    assert all(node["parent_id"] == "KR4c0022/12" for node in _citation_nodes(asset["nodes"]))
 
 
 def test_build_ctf_asset_labels_prefix_juan_starter_and_category() -> None:
@@ -346,10 +379,13 @@ def test_build_ctf_asset_labels_prefix_juan_starter_and_category() -> None:
 
     assert asset["label"] == "王右丞集箋注卷十二\u3000近體詩十六首"
     assert [
-        (node["id"], node["parent_id"], node["label"])
+        (node["id"], node["parent_id"], node["level"], node["label"])
         for node in asset["nodes"]
     ] == [
-        ("KR4c0022/12/1/@21+8", TEXT_ID, "春過賀遂員外藥園"),
+        ("KR4c0022/12", TEXT_ID, 0, "王右丞集箋注卷十二\u3000近體詩十六首"),
+        ("KR4c0022/12/@0+9", "KR4c0022/12", 0, "王右丞集箋注卷十二"),
+        ("KR4c0022/12/@15+6", "KR4c0022/12", 0, "近體詩十六首"),
+        ("KR4c0022/12/1/@21+8", "KR4c0022/12", 1, "春過賀遂員外藥園"),
     ]
 
 
@@ -359,8 +395,13 @@ def test_ctf_tsv_text_includes_text_root_and_heading_rows() -> None:
         text_label="王右丞集箋注",
         nodes=[
             {
-                "id": "KR4c0022/1/1/@0+8",
+                "id": "KR4c0022/1",
                 "parent_id": TEXT_ID,
+                "label": "王右丞集箋注卷一",
+            },
+            {
+                "id": "KR4c0022/1/1/@0+8",
+                "parent_id": "KR4c0022/1",
                 "label": "王右丞集箋注卷一",
             },
         ],
@@ -381,8 +422,13 @@ def test_ctf_tsv_text_uses_implicit_juan_parent_for_short_refs() -> None:
         text_label=None,
         nodes=[
             {
-                "id": "4c22/12/1/@21+8",
+                "id": "4c22/12",
                 "parent_id": "4c22",
+                "label": "王右丞集箋注卷十二\u3000近體詩十六首",
+            },
+            {
+                "id": "4c22/12/1/@21+8",
+                "parent_id": "4c22/12",
                 "label": "春過賀遂員外藥園",
             },
         ],
@@ -427,12 +473,13 @@ def test_process_one_ctf_derives_without_existing_voices(tmp_path: Path) -> None
         (bundle / "assets" / f"{TEXT_ID}_001.ctf.yaml").read_text(encoding="utf-8")
     )
     assert data["source"]["mode"] == "derive"
-    labels = [node["label"] for node in data["nodes"]]
-    assert "古詩十首" not in labels
+    label_nodes = [node for node in data["nodes"] if node["level"] == 0]
+    assert "古詩十首" in [node["label"] for node in label_nodes]
+    labels = [node["label"] for node in _citation_nodes(data["nodes"])]
     assert "扶南曲歌詞五首" in labels
-    first_poem = data["nodes"][labels.index("扶南曲歌詞五首")]
+    first_poem = _citation_nodes(data["nodes"])[labels.index("扶南曲歌詞五首")]
     assert first_poem["id"] == f"{TEXT_ID}/1/1/@18+7"
-    assert first_poem["parent_id"] == TEXT_ID
+    assert first_poem["parent_id"] == f"{TEXT_ID}/1"
 
 
 def test_run_ctf_skip_force_and_dry_run(tmp_path: Path) -> None:
@@ -488,7 +535,8 @@ def test_run_ctf_skip_force_and_dry_run(tmp_path: Path) -> None:
     ) == 0
     forced = yaml.safe_load(output.read_text(encoding="utf-8"))
     assert forced["source"]["mode"] == "voices"
-    assert forced["nodes"][0]["id"].startswith("4c22/1/1/@")
+    assert forced["nodes"][0]["id"] == "4c22/1"
+    assert _citation_nodes(forced["nodes"])[0]["id"].startswith("4c22/1/1/@")
 
     output.unlink()
     assert _run_ctf(
@@ -535,6 +583,7 @@ def test_run_ctf_tsv_writes_whole_text_file_to_out_root(tmp_path: Path) -> None:
         "id\tparent_id\tlabel",
         f"{TEXT_ID}\tKR4c\tTest",
         f"{TEXT_ID}/1\t{TEXT_ID}\t王右丞集箋注卷一",
+        f"{TEXT_ID}/1/@0+8\t{TEXT_ID}/1\t王右丞集箋注卷一",
         f"{TEXT_ID}/1/1/@8+2\t{TEXT_ID}/1\t古詩",
     ]
     assert not (bundle / "assets" / f"{TEXT_ID}_001.ctf.yaml").exists()

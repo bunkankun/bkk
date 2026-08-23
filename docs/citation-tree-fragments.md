@@ -76,6 +76,8 @@ source: indent-headings
 indent_depth: <integer>
 ```
 
+Label-only containers use the same source but have `name: label`.
+
 `--heading-source voices` uses existing persisted heading voices only.
 
 `--heading-source derive` derives a fresh set from indent and line-break
@@ -86,9 +88,9 @@ headings and uses the richer derived set when derivation finds additional
 usable headings. This protects against stale or incomplete persisted voice
 markers while still allowing existing voices to be reused.
 
-Derived heading voices also carry a `path` property when the heading
-becomes a citation node. The path is the sequence path used in CTF IDs.
-Label-only headings do not receive a citation path.
+Derived heading voices carry a `path` property when the heading becomes a
+citation node. The path is the sequence path used in CTF IDs. Label-only
+voices do not receive a citation path.
 
 ## YAML Shape
 
@@ -107,11 +109,25 @@ source:
   manifest_hash: sha256:...
   bucket_hash: sha256:...
 nodes:
+- id: KR4c0022/12
+  label: 王右丞集箋注卷十二　近體詩十六首
+  level: 0
+  parent_id: KR4c0022
+- id: KR4c0022/12/@0+9
+  label: 王右丞集箋注卷十二
+  level: 0
+  parent_id: KR4c0022/12
+  marker_id: h1
+- id: KR4c0022/12/@15+6
+  label: 近體詩十六首
+  level: 0
+  parent_id: KR4c0022/12
+  marker_id: h2
 - id: KR4c0022/12/1/@21+8
   label: 春過賀遂員外藥園
   level: 1
-  parent_id: KR4c0022
-  marker_id: h2
+  parent_id: KR4c0022/12
+  marker_id: h3
   span_ref: KR4c0022/12/@21+906
 hash: sha256:...
 ```
@@ -123,40 +139,58 @@ Top-level fields:
 - `textid` is the canonical text ID by default, for example `KR4c0022`.
 - `seq` is the juan sequence number.
 - `bucket` is currently always `body`.
-- `label`, when present, labels the juan as a citation container.
+- `label`, when present, repeats the juan container label for convenience.
 - `source` records how the headings were obtained and the source hashes.
-- `nodes` is a flat list of citation nodes.
+- `nodes` is a flat list of CTF nodes.
 - `hash` is computed with the same stable JSON canonicalization style used
   for marker assets. The hash field is set to the zero hash before hashing.
 
 ## Nodes
 
-Each node is flat, but hierarchy-aware:
+Each node is flat, but hierarchy-aware. The first node in a per-juan CTF is
+the explicit juan container:
+
+```yaml
+- id: KR4c0022/12
+  label: 王右丞集箋注卷十二　近體詩十六首
+  level: 0
+  parent_id: KR4c0022
+```
+
+Label-only heading markers are emitted as level-0 nodes under the juan
+container and do not have `span_ref`:
+
+```yaml
+- id: KR4c0022/12/@0+9
+  label: 王右丞集箋注卷十二
+  level: 0
+  parent_id: KR4c0022/12
+  marker_id: h1
+```
+
+Citation headings are emitted as level 1 or deeper:
 
 ```yaml
 - id: KR4c0022/12/2/@927+15
   label: 河南嚴尹弟見宿弊廬訪别人賦十韻
   level: 1
-  parent_id: KR4c0022
+  parent_id: KR4c0022/12
   marker_id: h3
   span_ref: KR4c0022/12/@927+570
 ```
 
 Fields:
 
-- `id` is the stable citation node ID.
+- `id` is the stable CTF node ID.
 - `label` is sliced from body text at the heading marker span.
 - `level` is the citation level after label promotion rules are applied.
-- `parent_id` points to the parent citation node, or to the text root for
-  top-level nodes in the per-juan YAML fragment.
+- `parent_id` points to the parent CTF node. Top-level citation nodes point
+  to the explicit juan node.
 - `marker_id` is present when the source heading marker had an ID.
-- `span_ref` covers the text controlled by the heading. It begins at the
-  heading offset and ends before the next heading at the same or higher
-  citation level, or at the end of the bucket.
-
-The YAML representation does not materialize a separate juan node. The
-juan is represented by `seq` and by the optional top-level `label`. The TSV
-projection adds explicit juan rows.
+- `span_ref` covers the text controlled by a citation heading. It begins at
+  the heading offset and ends before the next heading at the same or higher
+  citation level, or at the end of the bucket. Level-0 juan and label nodes
+  do not have `span_ref`.
 
 ## ID Rules
 
@@ -198,7 +232,7 @@ Some headings describe the containing juan or category rather than a
 citable internal unit. These are treated as labels, not citation nodes.
 
 In body buckets, a juan-starter at the beginning of the juan is a label.
-It is not emitted as a node.
+It is emitted as a level-0 label node, not as a citation heading.
 
 If the only remaining level-1 heading immediately after the juan starter is
 a category heading, it is also a label. Lower headings below it are promoted
@@ -222,6 +256,13 @@ and the first poem becomes a level-1 citation node:
 KR4c0022/12/1/@21+8
 ```
 
+The label markers themselves appear as level-0 nodes:
+
+```text
+KR4c0022/12/@0+9
+KR4c0022/12/@15+6
+```
+
 The ideographic space separates the juan-starter label from the following
 category label.
 
@@ -233,12 +274,13 @@ The TSV representation contains three columns:
 id	parent_id	label
 ```
 
-It is one file per text, not one file per juan. It includes three kinds of
+It is one file per text, not one file per juan. It includes four kinds of
 row:
 
 1. the text root;
 2. one explicit row for each juan;
-3. all citation nodes from the selected juans.
+3. level-0 label nodes from the selected juans;
+4. all citation nodes from the selected juans.
 
 Example:
 
@@ -246,6 +288,8 @@ Example:
 id	parent_id	label
 KR4c0022	KR4c	王右丞集箋注
 KR4c0022/12	KR4c0022	王右丞集箋注卷十二　近體詩十六首
+KR4c0022/12/@0+9	KR4c0022/12	王右丞集箋注卷十二
+KR4c0022/12/@15+6	KR4c0022/12	近體詩十六首
 KR4c0022/12/1/@21+8	KR4c0022/12	春過賀遂員外藥園
 KR4c0022/12/2/@927+15	KR4c0022/12	河南嚴尹弟見宿弊廬訪别人賦十韻
 ```
@@ -255,9 +299,9 @@ The parent of the text root is the text family. For `KR4c0022`, that is
 
 The parent of a juan row is the text root.
 
-The parent of a top-level citation node is the juan row. This differs from
-the YAML sidecar, where the same top-level node points to the text root
-because the YAML fragment does not materialize the juan container.
+The parent of a level-0 label node is the juan row.
+
+The parent of a top-level citation node is also the juan row.
 
 With `--short`, the same table uses compact IDs:
 
@@ -265,6 +309,8 @@ With `--short`, the same table uses compact IDs:
 id	parent_id	label
 4c22	4c	王右丞集箋注
 4c22/12	4c22	王右丞集箋注卷十二　近體詩十六首
+4c22/12/@0+9	4c22/12	王右丞集箋注卷十二
+4c22/12/@15+6	4c22/12	近體詩十六首
 4c22/12/1/@21+8	4c22/12	春過賀遂員外藥園
 ```
 

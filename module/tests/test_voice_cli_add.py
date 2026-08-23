@@ -462,7 +462,7 @@ def test_add_indent_headings_preserves_existing_note_voice(tmp_path: Path) -> No
         dry_run=False,
     )
 
-    assert stats["by_name"] == {"head": 2}
+    assert stats["by_name"] == {"head": 1, "label": 1}
     manifest = yaml.safe_load(
         (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
     )
@@ -470,13 +470,14 @@ def test_add_indent_headings_preserves_existing_note_voice(tmp_path: Path) -> No
     assert {"type": "voice", "offset": 5, "length": 2, "name": "note", "id": "n1"} in markers
     assert [
         marker for marker in markers
-        if marker.get("type") == "voice" and marker.get("name") == "head"
+        if marker.get("type") == "voice"
+        and marker.get("source") == "indent-headings"
     ] == [
         {
             "type": "voice",
             "offset": 0,
             "length": 2,
-            "name": "head",
+            "name": "label",
             "id": "h1",
             "source": "indent-headings",
             "indent_depth": 1,
@@ -519,7 +520,7 @@ def test_add_indent_headings_force_replaces_only_heading_source(
         source="indent-headings",
         force=False,
         dry_run=False,
-    )["by_name"] == {"head": 2}
+    )["by_name"] == {"head": 1, "label": 1}
 
     stats = _process_one(
         bundle,
@@ -531,7 +532,7 @@ def test_add_indent_headings_force_replaces_only_heading_source(
         dry_run=False,
     )
 
-    assert stats["by_name"] == {"head": 2}
+    assert stats["by_name"] == {"head": 1, "label": 1}
     manifest = yaml.safe_load(
         (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
     )
@@ -544,7 +545,8 @@ def test_add_indent_headings_force_replaces_only_heading_source(
     ]
     assert len([
         marker for marker in markers
-        if marker.get("type") == "voice" and marker.get("name") == "head"
+        if marker.get("type") == "voice"
+        and marker.get("source") == "indent-headings"
     ]) == 2
 
 
@@ -574,7 +576,7 @@ def test_add_auto_chooses_indent_headings_profile(tmp_path: Path) -> None:
         dry_run=False,
     )
 
-    assert stats["by_name"] == {"head": 3}
+    assert stats["by_name"] == {"head": 2, "label": 1}
     manifest = yaml.safe_load(
         (bundle / f"{TEXT_ID}.manifest.yaml").read_text(encoding="utf-8")
     )
