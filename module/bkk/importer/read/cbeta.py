@@ -106,6 +106,10 @@ class _DirectReader:
         self.mulu_indexes: dict[str, int] = {}
         self.seen_ids: dict[str, int] = {}
         self.anchor_offsets: dict[str, tuple[str, int]] = {}
+        self.head_indexes: dict[str, int] = {}
+        self.head_stack: list[tuple[int, tuple[int, ...]]] = []
+        self.head_child_counts: dict[tuple[int, ...], int] = {}
+        self.pending_mulu_head: dict | None = None
         self.xml_elements = normalize_xml_element_names(xml_elements)
         self.use_milestone_juan = use_milestone_juan
 
@@ -151,6 +155,23 @@ class _DirectReader:
     def append_text(self, text: str) -> None:
         _append_text(text, self.text_buf, self.markers)
 
+    def reset_head_paths(self) -> None:
+        self.head_stack = []
+        self.head_child_counts = {}
+        self.pending_mulu_head = None
+        self.head_indexes[self.current_label] = 0
+
+    def next_head_path(self, depth: int) -> list[int]:
+        level = max(1, depth)
+        while self.head_stack and self.head_stack[-1][0] >= level:
+            self.head_stack.pop()
+        parent_path = self.head_stack[-1][1] if self.head_stack else ()
+        position = self.head_child_counts.get(parent_path, 0) + 1
+        self.head_child_counts[parent_path] = position
+        path = parent_path + (position,)
+        self.head_stack.append((level, path))
+        return list(path)
+
     def emit_pb(self, el) -> None:
         original_id = _xmlid(el)
         tail = (el.get("n") or "").strip()
@@ -193,11 +214,55 @@ class _DirectReader:
             label, f"mulu-{self.mulu_indexes[label]}",
         )
         extras = _attrs_to_dict(el.attrib)
+        if "type" in extras:
+            extras["mulu_type"] = extras.pop("type")
         self.markers.append(Marker(
             type="cbeta:mulu", offset=self.offset(),
             content=unicodedata.normalize("NFC", text),
             id=mid, extras=extras,
         ))
+        try:
+            level = int(el.get("level", "1"))
+        except ValueError:
+            level = 1
+        self.pending_mulu_head = {
+            "offset": self.offset(),
+            "level": level,
+        }
+
+    def emit_head(self, el) -> None:
+        start = self.offset()
+        self.append_text(el.text or "")
+        self.walk(el)
+        length = self.offset() - start
+        if length <= 0:
+            self.pending_mulu_head = None
+            return
+
+        pending = self.pending_mulu_head or {}
+        depth = (
+            pending.get("level", 1)
+            if pending.get("offset") == start
+            else 1
+        )
+        try:
+            depth = int(depth)
+        except (TypeError, ValueError):
+            depth = 1
+        label = self.current_label
+        self.head_indexes[label] = self.head_indexes.get(label, 0) + 1
+        self.markers.append(Marker(
+            type="voice",
+            offset=start,
+            id=f"h{self.head_indexes[label]}",
+            extras={
+                "length": length,
+                "name": "head",
+                "source": "xml",
+                "path": self.next_head_path(depth),
+            },
+        ))
+        self.pending_mulu_head = None
 
     def emit_juan(self, el) -> None:
         fun = el.get("fun", "")
@@ -213,6 +278,7 @@ class _DirectReader:
             self.finish_juan()
             self.current_label = label
             self.current_jhead = jhead
+            self.reset_head_paths()
             extras = {"juan_n": label}
             if jhead:
                 extras["jhead"] = jhead
@@ -238,6 +304,7 @@ class _DirectReader:
         self.finish_juan()
         self.current_label = label
         self.current_jhead = ""
+        self.reset_head_paths()
         self.markers.append(Marker(
             type="cbeta:juan-start", offset=self.offset(),
             content="",
@@ -293,6 +360,8 @@ class _DirectReader:
                 self.emit_lb(child)
             elif tag == "mulu" and ns == CB_NS:
                 self.emit_mulu(child)
+            elif tag == "head" and ns == TEI_NS:
+                self.emit_head(child)
             elif tag == "juan" and ns == CB_NS:
                 self.emit_juan(child)
             elif (

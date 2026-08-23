@@ -99,6 +99,7 @@ import argparse
 import copy
 import csv
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -157,6 +158,23 @@ def _on_exists_skip_merged_only(args) -> bool:
     """True iff --on-exists skip-merged: skip already-merged bundles but
     still process TLS-only bundles that haven't had KRP merged yet."""
     return getattr(args, "on_exists", "overwrite") == "skip-merged"
+
+
+def _on_exists_wipe_before_overwrite(args) -> bool:
+    return getattr(args, "on_exists", "overwrite") == "wipe-before-overwrite"
+
+
+def _wipe_existing_bundle(out_root: Path, text_id: str) -> None:
+    bundle_dir = out_root / text_id
+    if not bundle_dir.is_dir():
+        return
+    for child in bundle_dir.iterdir():
+        if child.name in {".git", ".gitignore"}:
+            continue
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
 
 
 def _report_skipped(bundle_dir: Path, *, kind: str, label: str) -> None:
@@ -326,18 +344,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--yes", action="store_true",
                    help="skip the bulk-import confirmation prompt")
     p.add_argument("--on-exists", dest="on_exists",
-                   choices=["overwrite", "skip", "skip-merged"],
+                   choices=[
+                       "overwrite", "wipe-before-overwrite",
+                       "skip", "skip-merged",
+                   ],
                    default="overwrite",
                    help="behavior when a target bundle directory already "
                         "exists: 'overwrite' (default; pre-existing "
                         "behavior, including the KRP-into-TLS merge); "
+                        "'wipe-before-overwrite' (remove existing bundle "
+                        "files before writing a fresh import, preserving "
+                        ".git and .gitignore); "
                         "'skip' (leave the on-disk bundle alone); "
                         "'skip-merged' (skip KRP-state bundles and "
                         "TLS bundles that already have KRP editions merged "
                         "in, but still merge into TLS-only bundles — "
                         "use this to resume an aborted bulk KRP merge run). "
-                        "Conflict errors (TLS into existing KRP, unknown "
-                        "bundle state) are unaffected.")
+                        "Import-order conflict errors are still reported; "
+                        "unknown bundle state is overwritten only for "
+                        "'overwrite' or removed first for "
+                        "'wipe-before-overwrite'.")
     p.add_argument("--sample", type=Path, default=None,
                    help="optional sample tree to diff against; emits a "
                         "divergence-from-sample.md alongside the output")
@@ -1090,6 +1116,13 @@ def _import_one_cbeta(
 
     effective_out = _effective_out_root(args.out_root, kr_id, args.by_section)
     existing = inspect_existing_bundle(effective_out, kr_id)
+    if (
+        _on_exists_wipe_before_overwrite(args)
+        and existing.state != "empty"
+        and not skip_manifest_writes
+    ):
+        _wipe_existing_bundle(effective_out, kr_id)
+        existing = inspect_existing_bundle(effective_out, kr_id)
     if existing.state == "krp":
         bundle_dir = existing.manifest_path.parent
         raise BundleConflictError(
@@ -1098,7 +1131,10 @@ def _import_one_cbeta(
             f"Remedy: remove {bundle_dir} and re-import CBETA first, "
             f"then KRP."
         )
-    if existing.state == "unknown":
+    if (
+        existing.state == "unknown"
+        and getattr(args, "on_exists", "overwrite") != "overwrite"
+    ):
         bundle_dir = existing.manifest_path.parent
         raise BundleConflictError(
             f"{kr_id}: a bundle already exists at {bundle_dir} but its "

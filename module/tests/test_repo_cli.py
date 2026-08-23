@@ -220,3 +220,81 @@ def test_diff_check_origin_reports_origin_mismatches(tmp_path, monkeypatch, caps
     assert "  origin missing/mismatch: 1" in out.out
     assert "    KR1a0002: https://github.com/other/KR1a0002.git" in out.out
     assert "1 origin ok, 1 origin missing/mismatch" in out.err
+
+
+def test_sync_diverged_prefer_remote_resets_to_upstream(tmp_path, monkeypatch):
+    repo = _bundle(tmp_path, "KR1a0001")
+    (repo / ".git").mkdir()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(cmd, *, cwd=None):
+        assert Path(cwd) == repo
+        calls.append(tuple(cmd))
+        if cmd[:2] == ["git", "rev-parse"]:
+            return subprocess.CompletedProcess(cmd, 0, "origin/main\n", "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+
+    result = cli._action_sync_diverged(repo, "remote", False)
+
+    assert result == "reset to origin/main"
+    assert calls == [
+        ("git", "fetch", "--prune"),
+        ("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"),
+        ("git", "reset", "--hard", "@{u}"),
+        ("git", "clean", "-fd"),
+    ]
+
+
+def test_sync_diverged_prefer_local_force_pushes_clean_repo(tmp_path, monkeypatch):
+    repo = _bundle(tmp_path, "KR1a0001")
+    (repo / ".git").mkdir()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(cmd, *, cwd=None):
+        assert Path(cwd) == repo
+        calls.append(tuple(cmd))
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+
+    result = cli._action_sync_diverged(repo, "local", False)
+
+    assert result == "force-pushed local"
+    assert calls == [
+        ("git", "status", "--porcelain"),
+        ("git", "fetch", "--prune"),
+        ("git", "push", "--force-with-lease"),
+    ]
+
+
+def test_sync_diverged_prefer_local_rejects_dirty_repo(tmp_path, monkeypatch):
+    repo = _bundle(tmp_path, "KR1a0001")
+    (repo / ".git").mkdir()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(cmd, *, cwd=None):
+        assert Path(cwd) == repo
+        calls.append(tuple(cmd))
+        return subprocess.CompletedProcess(cmd, 0, " M file\n", "")
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+
+    result = cli._action_sync_diverged(repo, "local", False)
+
+    assert result == "error: working tree dirty; commit or stash before --prefer local"
+    assert calls == [("git", "status", "--porcelain")]
+
+
+def test_run_sync_diverged_accepts_all_scope(tmp_path, monkeypatch, capsys):
+    corpus = tmp_path / "corpus"
+    bundle = _bundle(corpus, "KR1a0001")
+    (bundle / ".git").mkdir()
+    monkeypatch.setattr(cli, "load_rc", lambda: {"repo": {"corpus": corpus}})
+
+    rc = cli.run(["sync-diverged", "--all", "--prefer", "remote", "--dry-run"])
+
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "KR1a0001  plan: git fetch --prune" in out.out

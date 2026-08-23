@@ -153,6 +153,72 @@ def test_direct_reader_emits_configured_xml_element_markers(tmp_path: Path):
     assert markers[0].extras["attrs"] == {"xml:id": "p1", "rend": "test"}
 
 
+def test_direct_reader_emits_xml_head_voice_markers_with_paths(tmp_path: Path):
+    xml = tmp_path / "T01n0001.xml"
+    xml.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"
+     xmlns:cb="http://www.cbeta.org/ns/1.0"
+     xml:id="T01n0001">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title xml:lang="zh-Hant">測試經</title></titleStmt>
+      <publicationStmt><p/></publicationStmt>
+      <sourceDesc><p/></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <cb:juan fun="open" n="1"/>
+      <cb:div>
+        <cb:mulu level="1" type="其他">大章</cb:mulu><head>大章</head><p>甲</p>
+        <cb:div>
+          <cb:mulu level="2" type="其他">小節</cb:mulu><head>小節</head><p>乙</p>
+        </cb:div>
+        <cb:mulu level="1" type="其他">次章</cb:mulu><head>次章</head><p>丙</p>
+      </cb:div>
+      <cb:juan fun="close" n="1"/>
+      <cb:juan fun="open" n="2"/>
+      <cb:div>
+        <cb:mulu level="1" type="其他">後章</cb:mulu><head>後章</head><p>丁</p>
+      </cb:div>
+    </body>
+  </text>
+</TEI>
+""",
+        encoding="utf-8",
+    )
+
+    bundle = read_cbeta(
+        xml,
+        {"kr_id": "KR9x0001", "old_id": "T01n0001", "title": ""},
+    )
+
+    first_heads = [
+        marker for marker in bundle.juans[0].sections[0].markers
+        if marker.type == "voice" and marker.extras.get("name") == "head"
+    ]
+    assert [
+        (m.offset, m.extras["length"], m.id, m.extras["source"], m.extras["path"])
+        for m in first_heads
+    ] == [
+        (0, 2, "h1", "xml", [1]),
+        (3, 2, "h2", "xml", [1, 1]),
+        (6, 2, "h3", "xml", [2]),
+    ]
+    assert [
+        marker.extras.get("mulu_type")
+        for marker in bundle.juans[0].sections[0].markers
+        if marker.type == "cbeta:mulu"
+    ] == ["其他", "其他", "其他"]
+
+    second_heads = [
+        marker for marker in bundle.juans[1].sections[0].markers
+        if marker.type == "voice" and marker.extras.get("name") == "head"
+    ]
+    assert [(m.id, m.extras["path"]) for m in second_heads] == [("h1", [1])]
+
+
 def test_cli_imports_old_id_to_mapped_kr_id(tmp_path: Path):
     cbeta_root = tmp_path / "cbeta"
     target = cbeta_root / "X" / "X63" / SOURCE_XML.name
@@ -187,6 +253,181 @@ def test_cli_imports_old_id_to_mapped_kr_id(tmp_path: Path):
     )
     assert source["format"] == "cbeta-direct"
     assert source["mapping"]["old_id"] == "X63n1222"
+
+
+def test_cli_writes_cbeta_xml_heads_to_marker_asset_not_manifest(tmp_path: Path):
+    cbeta_root = tmp_path / "cbeta"
+    target = cbeta_root / "T" / "T01" / "T01n0001.xml"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"
+     xmlns:cb="http://www.cbeta.org/ns/1.0"
+     xml:id="T01n0001">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title xml:lang="zh-Hant">測試經</title></titleStmt>
+      <publicationStmt><p/></publicationStmt>
+      <sourceDesc><p/></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <cb:juan fun="open" n="1"/>
+      <cb:div>
+        <cb:mulu level="1" type="其他">大章</cb:mulu><head>大章</head><p>甲</p>
+      </cb:div>
+    </body>
+  </text>
+</TEI>
+""",
+        encoding="utf-8",
+    )
+    mapping = _write_mapping(
+        tmp_path / "mapping.csv",
+        kr_id="KR9x0001",
+        old_id="T01n0001",
+    )
+    out = tmp_path / "out"
+
+    rc = run([
+        "--format", "cbeta",
+        "--in", str(cbeta_root),
+        "--mapping", str(mapping),
+        "--text-id", "T01n0001",
+        "--out", str(out),
+    ])
+
+    assert rc == 0
+    bundle_root = out / "KR9x0001"
+    manifest = yaml.safe_load(
+        (bundle_root / "KR9x0001.manifest.yaml").read_text(encoding="utf-8")
+    )
+    assert all(entry["type"] != "head" for entry in manifest["table_of_contents"])
+    assert [entry["type"] for entry in manifest["table_of_contents"]] == [
+        "juan",
+        "mulu",
+    ]
+
+    juan = yaml.safe_load(
+        (bundle_root / "KR9x0001_001.yaml").read_text(encoding="utf-8")
+    )
+    assert [
+        marker for marker in juan["body"]["markers"]
+        if marker.get("type") == "voice"
+    ] == []
+
+    asset = load_marker_asset(bundle_root, manifest, 1)
+    heads = [
+        marker for marker in asset["markers"]["body"]
+        if marker.get("type") == "voice" and marker.get("name") == "head"
+    ]
+    assert heads == [
+        {
+            "type": "voice",
+            "offset": 0,
+            "id": "h1",
+            "length": 2,
+            "name": "head",
+            "source": "xml",
+            "path": [1],
+        }
+    ]
+    assert [
+        marker for marker in juan["body"]["markers"]
+        if marker.get("id") == "KR9x0001_T_001-mulu-1"
+    ] == [
+        {
+            "type": "cbeta:mulu",
+            "offset": 0,
+            "content": "大章",
+            "id": "KR9x0001_T_001-mulu-1",
+            "level": "1",
+            "mulu_type": "其他",
+        }
+    ]
+
+
+def test_on_exists_overwrite_replaces_unknown_cbeta_bundle(tmp_path: Path):
+    cbeta_root = tmp_path / "cbeta"
+    target = cbeta_root / "T" / "T01" / "T01n0001.xml"
+    target.parent.mkdir(parents=True)
+    target.write_text(_minimal_cbeta_xml("T01n0001", [1]), encoding="utf-8")
+    mapping = _write_mapping(
+        tmp_path / "mapping.csv",
+        kr_id="KR9x0001",
+        old_id="T01n0001",
+    )
+    out = tmp_path / "out"
+    unknown = out / "KR9x0001"
+    unknown.mkdir(parents=True)
+    (unknown / "KR9x0001.manifest.yaml").write_text(
+        "canonical_identifier: bkk:krp/KR9x0001/v1\nmetadata: {}\n",
+        encoding="utf-8",
+    )
+
+    rc = run([
+        "--format", "cbeta",
+        "--in", str(cbeta_root),
+        "--mapping", str(mapping),
+        "--text-id", "T01n0001",
+        "--out", str(out),
+        "--on-exists", "overwrite",
+    ])
+
+    assert rc == 0
+    manifest = yaml.safe_load(
+        (unknown / "KR9x0001.manifest.yaml").read_text(encoding="utf-8")
+    )
+    assert manifest["metadata"]["identifiers"]["cbeta"] == "T01n0001"
+    assert (unknown / "KR9x0001.source.yaml").is_file()
+
+
+def test_on_exists_wipe_before_overwrite_removes_stale_cbeta_files(
+    tmp_path: Path,
+):
+    cbeta_root = tmp_path / "cbeta"
+    target = cbeta_root / "T" / "T01" / "T01n0001.xml"
+    target.parent.mkdir(parents=True)
+    target.write_text(_minimal_cbeta_xml("T01n0001", [1]), encoding="utf-8")
+    mapping = _write_mapping(
+        tmp_path / "mapping.csv",
+        kr_id="KR9x0001",
+        old_id="T01n0001",
+    )
+    out = tmp_path / "out"
+    args = [
+        "--format", "cbeta",
+        "--in", str(cbeta_root),
+        "--mapping", str(mapping),
+        "--text-id", "T01n0001",
+        "--out", str(out),
+    ]
+    assert run(args) == 0
+
+    bundle_root = out / "KR9x0001"
+    git_dir = bundle_root / ".git"
+    git_dir.mkdir()
+    (git_dir / "HEAD").write_text("ref: refs/heads/master\n", encoding="utf-8")
+    gitignore = bundle_root / ".gitignore"
+    gitignore.write_text("ignored\n", encoding="utf-8")
+    stale = bundle_root / "KR9x0001_999.yaml"
+    stale.write_text("stale", encoding="utf-8")
+    stale_asset = bundle_root / "assets" / "KR9x0001_999.markers.yaml"
+    stale_asset.parent.mkdir(exist_ok=True)
+    stale_asset.write_text("stale", encoding="utf-8")
+
+    rc = run(args + ["--on-exists", "wipe-before-overwrite"])
+
+    assert rc == 0
+    assert git_dir.is_dir()
+    assert (git_dir / "HEAD").read_text(encoding="utf-8") == (
+        "ref: refs/heads/master\n"
+    )
+    assert gitignore.read_text(encoding="utf-8") == "ignored\n"
+    assert not stale.exists()
+    assert not stale_asset.exists()
+    assert (bundle_root / "KR9x0001_001.yaml").is_file()
 
 
 def test_cli_imports_native_cbeta_p5_shape(tmp_path: Path):

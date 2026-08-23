@@ -5,7 +5,8 @@ repo. Source files (``*.bkkx`` SQLite index, ``*.source.yaml`` cache) are
 gitignored; manifest + juan YAMLs are tracked.
 
 Actions: ``init``, ``clone``, ``reclone``, ``commit``, ``push``, ``pull``,
-``status``, ``diff`` (compare local corpus to org, optionally sync the gap).
+``sync-diverged``, ``status``, ``diff`` (compare local corpus to org,
+optionally sync the gap).
 
 Scope: ``--text-prefix`` (textid8/4/3, e.g. ``KR1a0001``, ``KR1a``)
 or ``--all``. The prefix is forwarded to
@@ -144,6 +145,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_pull = sub.add_parser("pull", help="pull --ff-only from origin")
     _scope(p_pull)
+
+    p_sync = sub.add_parser(
+        "sync-diverged",
+        help="resolve branch divergence by choosing local or remote as truth",
+    )
+    _scope(p_sync)
+    p_sync.add_argument(
+        "--prefer",
+        choices=["remote", "local"],
+        required=True,
+        help=(
+            "remote: discard local commits/working-tree changes with "
+            "fetch + reset --hard @{u} + clean -fd; local: discard remote "
+            "commits with push --force-with-lease"
+        ),
+    )
 
     p_status = sub.add_parser("status", help="summarize per-bundle git status")
     _scope(p_status)
@@ -818,6 +835,52 @@ def _action_pull(bundle_dir: Path, dry_run: bool) -> str:
     return tail[-1] if tail else "ok"
 
 
+def _action_sync_diverged(
+    bundle_dir: Path,
+    prefer: str,
+    dry_run: bool,
+) -> str:
+    if not _is_repo(bundle_dir):
+        return "skipped (not a repo)"
+    if prefer == "remote":
+        if dry_run:
+            return "plan: git fetch --prune && git reset --hard @{u} && git clean -fd"
+        r = _run(["git", "fetch", "--prune"], cwd=bundle_dir)
+        if r.returncode != 0:
+            return f"error: git fetch: {_first_err_line(r)}"
+        upstream = _run(
+            ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+            cwd=bundle_dir,
+        )
+        if upstream.returncode != 0:
+            return f"error: no upstream: {_first_err_line(upstream)}"
+        r = _run(["git", "reset", "--hard", "@{u}"], cwd=bundle_dir)
+        if r.returncode != 0:
+            return f"error: git reset: {_first_err_line(r)}"
+        r = _run(["git", "clean", "-fd"], cwd=bundle_dir)
+        if r.returncode != 0:
+            return f"error: git clean: {_first_err_line(r)}"
+        return f"reset to {upstream.stdout.strip()}"
+
+    if prefer == "local":
+        if dry_run:
+            return "plan: git fetch --prune && git push --force-with-lease"
+        dirty = _run(["git", "status", "--porcelain"], cwd=bundle_dir)
+        if dirty.returncode != 0:
+            return f"error: git status: {_first_err_line(dirty)}"
+        if dirty.stdout.strip():
+            return "error: working tree dirty; commit or stash before --prefer local"
+        r = _run(["git", "fetch", "--prune"], cwd=bundle_dir)
+        if r.returncode != 0:
+            return f"error: git fetch: {_first_err_line(r)}"
+        r = _run(["git", "push", "--force-with-lease"], cwd=bundle_dir)
+        if r.returncode != 0:
+            return f"error: git push --force-with-lease: {_first_err_line(r)}"
+        return "force-pushed local"
+
+    return f"error: unknown preference {prefer!r}"
+
+
 def _action_status(bundle_dir: Path) -> str:
     if not _is_repo(bundle_dir):
         return "not a repo"
@@ -1028,6 +1091,8 @@ def run(argv: list[str] | None = None) -> int:
             result = _action_update(b, args.message, args.dry_run)
         elif args.action == "pull":
             result = _action_pull(b, args.dry_run)
+        elif args.action == "sync-diverged":
+            result = _action_sync_diverged(b, args.prefer, args.dry_run)
         elif args.action == "status":
             result = _action_status(b)
         else:

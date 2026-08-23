@@ -44,6 +44,18 @@ from bkk.marker_assets import (
 
 
 def _marker_dict(m: Marker) -> dict:
+    if m.type == "voice":
+        d: dict = {
+            "type": m.type,
+            "offset": m.offset,
+            "id": m.id,
+        }
+        if m.content:
+            d["content"] = m.content
+        for k, v in m.extras.items():
+            d[k] = v
+        return marker_to_flow(d)
+
     if m.type == "variant":
         # Variant markers carry their own shape: {type, offset, length, content,
         # <witness-short>...}. ``length`` and the witness keys live in extras.
