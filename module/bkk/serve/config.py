@@ -12,6 +12,7 @@ class ServeConfig:
     corpus_root: Path
     index_path: Path
     catalog_path: Path | None = None
+    ctf_root: Path | None = None
     translation_search_path: Path | None = None
     core_root: Path | None = None
     core_index_path: Path | None = None
@@ -123,6 +124,15 @@ class ServeConfig:
             catalog = Path(rc_catalog).resolve()
         else:
             catalog = root / "_catalog.bkkc"
+
+        env_ctf_root = os.environ.get("BKK_CTF_ROOT")
+        rc_ctf_root = rc.get("ctf_root")
+        if env_ctf_root:
+            ctf_root: Path | None = Path(env_ctf_root).resolve()
+        elif rc_ctf_root:
+            ctf_root = Path(rc_ctf_root).resolve()
+        else:
+            ctf_root = None
 
         core_rc = core_rc or {}
         env_core_root = os.environ.get("BKK_CORE_ROOT")
@@ -391,6 +401,7 @@ class ServeConfig:
             corpus_root=root,
             index_path=index,
             catalog_path=catalog,
+            ctf_root=ctf_root,
             translation_search_path=translation_search,
             core_root=core_root,
             core_index_path=core_index,
@@ -437,6 +448,7 @@ class ServeConfig:
         corpus_root: Path | str | None = None,
         index_path: Path | str | None = None,
         catalog_path: Path | str | None = None,
+        ctf_root: Path | str | None = None,
         translation_search_path: Path | str | None = None,
         core_root: Path | str | None = None,
         core_index_path: Path | str | None = None,
@@ -473,6 +485,8 @@ class ServeConfig:
             updates["index_path"] = Path(index_path).resolve()
         if catalog_path is not None:
             updates["catalog_path"] = Path(catalog_path).resolve()
+        if ctf_root is not None:
+            updates["ctf_root"] = Path(ctf_root).resolve()
         if translation_search_path is not None:
             updates["translation_search_path"] = Path(translation_search_path).resolve()
         if core_root is not None:

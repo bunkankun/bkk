@@ -34,6 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--catalog", type=Path, default=None, dest="catalog_path",
                    help="catalog .bkkc index path "
                         "(default: <corpus>/_catalog.bkkc)")
+    p.add_argument("--ctf-root", type=Path, default=None, dest="ctf_root",
+                   help="CTF root for DTS navigation/document refs "
+                        "(default: global.ctf_root or $BKK_CTF_ROOT)")
     p.add_argument("--core-root", type=Path, default=None, dest="core_root",
                    help="bkk-core knowledge layer root directory "
                         "(default: core.root from .bkkrc; enables /core/* endpoints)")
@@ -123,6 +126,7 @@ def run(argv: list[str] | None = None) -> int:
         corpus_root=args.corpus,
         index_path=args.index,
         catalog_path=args.catalog_path,
+        ctf_root=args.ctf_root,
         core_root=args.core_root,
         core_index_path=args.core_index_path,
         core_upstream_repo=args.core_upstream_repo,
@@ -157,6 +161,8 @@ def run(argv: list[str] | None = None) -> int:
         os.environ["BKK_INDEX_PATH"] = str(config.index_path)
         if config.catalog_path is not None:
             os.environ["BKK_CATALOG_PATH"] = str(config.catalog_path)
+        if config.ctf_root is not None:
+            os.environ["BKK_CTF_ROOT"] = str(config.ctf_root)
         if config.core_root is not None:
             os.environ["BKK_CORE_ROOT"] = str(config.core_root)
         if config.core_index_path is not None:

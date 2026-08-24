@@ -29,6 +29,10 @@ def test_openapi_json(client):
         "/api/texts/{identifier}/juan",
         "/api/texts/{identifier}/juan/{seq}",
         "/api/catalog",
+        "/api/dts",
+        "/api/dts/collection",
+        "/api/dts/navigation",
+        "/api/dts/document",
         "/api/by-canonical",
         "/api/search",
     }

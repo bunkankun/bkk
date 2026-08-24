@@ -212,3 +212,21 @@ def test_catalog_path_env_and_cli(corpus: Path, tmp_path: Path, monkeypatch: pyt
     args = build_parser().parse_args(["--catalog", str(cli_catalog)])
     config = base.merge_cli(catalog_path=args.catalog_path)
     assert config.catalog_path == cli_catalog.resolve()
+
+
+def test_ctf_root_env_and_cli(corpus: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    env_ctf = tmp_path / "env-ctf"
+    cli_ctf = tmp_path / "cli-ctf"
+
+    monkeypatch.setenv("BKK_CTF_ROOT", str(env_ctf))
+    monkeypatch.delenv("BKK_INDEX_PATH", raising=False)
+    monkeypatch.delenv("BKK_CATALOG_PATH", raising=False)
+    monkeypatch.delenv("BKK_WEB_DIST", raising=False)
+    monkeypatch.delenv("BKK_UPSTREAM_REPO", raising=False)
+
+    base = ServeConfig.from_env(corpus_root=corpus)
+    assert base.ctf_root == env_ctf.resolve()
+
+    args = build_parser().parse_args(["--ctf-root", str(cli_ctf)])
+    config = base.merge_cli(ctf_root=args.ctf_root)
+    assert config.ctf_root == cli_ctf.resolve()

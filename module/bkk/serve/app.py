@@ -26,6 +26,7 @@ from .routers import contributions as contributions_router
 from .routers import core as core_router
 from .routers import core_edit as core_edit_router
 from .routers import duplications as duplications_router
+from .routers import dts as dts_router
 from .routers import parallels as parallels_router
 from .routers import recipes as recipes_router
 from .routers import redirects as redirects_router
@@ -110,6 +111,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             {"name": "annotations", "description": "Per-juan annotations pinned to text offsets (sibling *.ann.yaml)."},
             {"name": "annotations-write", "description": "Compose annotations: Bluesky session + record creation."},
             {"name": "catalog", "description": "Browse the corpus with curated metadata filters."},
+            {"name": "dts", "description": "Distributed Text Services collection, navigation, and document access."},
             {"name": "core", "description": "Browse the bkk-core knowledge layer (concepts, graphs, words, …)."},
             {"name": "search", "description": "Variant-aware KWIC search across the corpus."},
             {"name": "translations", "description": "Translation overlay discovery and alignment."},
@@ -155,6 +157,7 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(bundles_router.router, prefix="/api")
     app.include_router(texts_router.router, prefix="/api")
     app.include_router(catalog_router.router, prefix="/api")
+    app.include_router(dts_router.router, prefix="/api")
     app.include_router(core_router.router, prefix="/api")
     app.include_router(core_edit_router.router, prefix="/api")
     app.include_router(search_router.router, prefix="/api")
@@ -181,6 +184,7 @@ def create_app(config: ServeConfig) -> FastAPI:
                 "corpus_root": str(config.corpus_root),
                 "index_path": str(config.index_path),
                 "catalog_path": str(config.catalog_path),
+                "ctf_root": str(config.ctf_root) if config.ctf_root is not None else None,
                 "upstream_repo": config.upstream_repo,
                 "bluesky_enabled": config.bluesky_enabled,
                 "parallels_enabled": True,
@@ -217,6 +221,7 @@ def create_app(config: ServeConfig) -> FastAPI:
             "corpus_root": str(config.corpus_root),
             "index_path": str(config.index_path),
             "catalog_path": str(config.catalog_path),
+            "ctf_root": str(config.ctf_root) if config.ctf_root is not None else None,
             "upstream_repo": config.upstream_repo,
             "bluesky_enabled": config.bluesky_enabled,
             "parallels_enabled": True,
