@@ -15,6 +15,10 @@ from urllib.parse import quote
 import yaml
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
+from lxml import etree
+
+from bkk.exporter.recipe import RecipeError
+from bkk.exporter.tei import render_ctf_fragment_tei
 
 from .. import errors, selection
 from ..state import AppState
@@ -271,7 +275,7 @@ def document(
     if media_type == "text/plain":
         return Response(text, media_type="text/plain; charset=utf-8")
     return Response(
-        _tei_document(text, ref=ref),
+        _tei_document(state, rec, text, ref=ref),
         media_type="application/tei+xml; charset=utf-8",
         headers={"Link": f'<{_dts_base(request)}/collection?id={quote(resource)}>; rel="collection"'},
     )
@@ -713,7 +717,62 @@ def _document_text(state: AppState, rec, ref: str | None) -> str:
     ).text
 
 
-def _tei_document(text: str, *, ref: str | None) -> str:
+def _tei_document(state: AppState, rec, text: str, *, ref: str | None) -> str:
+    if ref is not None:
+        return _formatted_tei_document(state, rec, ref)
+    return _plain_tei_document(text, ref=ref)
+
+
+def _formatted_tei_document(state: AppState, rec, ref: str) -> str:
+    try:
+        if ref == rec.textid:
+            fragments = [
+                render_ctf_fragment_tei(
+                    f"{rec.textid}/{seq}",
+                    corpus_root=state.config.corpus_root,
+                    punctuation_root=state.config.punctuation_root,
+                )
+                for seq in _manifest_part_seqs(rec.manifest)
+            ]
+        else:
+            fragments = [
+                render_ctf_fragment_tei(
+                    ref,
+                    corpus_root=state.config.corpus_root,
+                    ctf_root=_ctf_root(state),
+                    punctuation_root=state.config.punctuation_root,
+                )
+            ]
+    except RecipeError as exc:
+        raise errors.bad_request("dts_tei_format_error", detail=str(exc)) from exc
+
+    root = etree.Element(f"{{{TEI_NS}}}TEI", nsmap={None: TEI_NS})
+    text_el = etree.SubElement(root, f"{{{TEI_NS}}}text")
+    body = etree.SubElement(text_el, f"{{{TEI_NS}}}body")
+    wrapper = etree.SubElement(body, f"{{{DTS_NS}}}wrapper", nsmap={"dts": DTS_NS})
+    wrapper.set("ref", ref)
+    for fragment in fragments:
+        wrapper.append(fragment)
+    return etree.tostring(
+        root,
+        xml_declaration=True,
+        encoding="UTF-8",
+        pretty_print=False,
+    ).decode("utf-8")
+
+
+def _manifest_part_seqs(manifest: dict[str, Any]) -> list[int]:
+    seqs: list[int] = []
+    for entry in (manifest.get("assets") or {}).get("parts") or []:
+        if not isinstance(entry, dict):
+            continue
+        seq = entry.get("seq")
+        if isinstance(seq, int):
+            seqs.append(seq)
+    return seqs
+
+
+def _plain_tei_document(text: str, *, ref: str | None) -> str:
     escaped = html.escape(text, quote=False)
     if ref is None:
         body = f"<text><body>{escaped}</body></text>"

@@ -141,8 +141,11 @@ Use `mediaType=text/plain` for raw text. Supported media types are:
 - `text/plain`
 
 Fragment lookup uses the CTF span and then slices the master body text from
-the corresponding BKK juan YAML. Whole-resource retrieval concatenates body
-text from all manifest parts in manifest order.
+the corresponding BKK juan YAML. `text/plain` returns that raw text slice.
+TEI responses for `ref` requests wrap TEI fragments rendered by the BKK TEI
+exporter, so available segmentation, punctuation, notes, and related marker
+markup are preserved inside `<dts:wrapper>`. Whole-resource plain-text
+retrieval concatenates body text from all manifest parts in manifest order.
 
 ## Current Limitations
 

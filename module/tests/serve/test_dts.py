@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 from fastapi.testclient import TestClient
+from lxml import etree
 
 from bkk.index import build_catalog_index
 from bkk.serve import create_app
@@ -14,15 +15,26 @@ from bkk.serve.config import ServeConfig
 from .conftest import write_bundle
 from .test_catalog import _write_frontmatter
 
+TEI_NS = "http://www.tei-c.org/ns/1.0"
+DTS_NS = "https://w3id.org/api/dts#"
+BKK_NS = "http://bunkankun.org/ns/1.0"
+NS = {"tei": TEI_NS, "dts": DTS_NS, "bkk": BKK_NS}
+
 
 def _dts_client(tmp_path: Path) -> TestClient:
-    write_bundle(
+    bundle = write_bundle(
         tmp_path,
         "KR1h0001",
         "甲乙丙丁戊己庚辛",
         title="Manifest Title",
         identifiers={"krp": "KR1h0001"},
     )
+    juan_path = bundle / "KR1h0001_001.yaml"
+    juan = yaml.safe_load(juan_path.read_text(encoding="utf-8"))
+    juan["body"]["markers"] = [
+        {"type": "punctuation", "offset": 2, "content": "，"},
+    ]
+    juan_path.write_text(yaml.safe_dump(juan, allow_unicode=True), encoding="utf-8")
     write_bundle(
         tmp_path,
         "KR1h0002",
@@ -174,7 +186,13 @@ def test_dts_document_fragments_and_media_types(tmp_path: Path) -> None:
     assert tei.status_code == 200
     assert tei.headers["content-type"].startswith("application/tei+xml")
     assert '<dts:wrapper xmlns:dts="https://w3id.org/api/dts#"' in tei.text
-    assert "甲乙丙丁" in tei.text
+    root = etree.fromstring(tei.content)
+    wrapper = root.xpath(".//dts:wrapper", namespaces=NS)[0]
+    assert wrapper.get("ref") == "KR1h0001/1/1/@0+2"
+    div = wrapper.xpath("./tei:div", namespaces=NS)[0]
+    assert div.get(f"{{{BKK_NS}}}ref") == "KR1h0001/1/1/@0+2"
+    assert "".join(div.xpath(".//tei:seg/text()", namespaces=NS)) == "甲乙丙丁"
+    assert div.xpath(".//tei:c/@n", namespaces=NS) == ["，"]
 
     plain = client.get(
         "/dts/document",
@@ -191,6 +209,18 @@ def test_dts_document_fragments_and_media_types(tmp_path: Path) -> None:
         params={"resource": "KR1h0001", "mediaType": "text/plain"},
     )
     assert whole.text == "甲乙丙丁戊己庚辛"
+
+    whole_tei = client.get(
+        "/dts/document",
+        params={"resource": "KR1h0001", "ref": "KR1h0001"},
+    )
+    root = etree.fromstring(whole_tei.content)
+    wrapper = root.xpath(".//dts:wrapper", namespaces=NS)[0]
+    assert wrapper.get("ref") == "KR1h0001"
+    div = wrapper.xpath("./tei:div", namespaces=NS)[0]
+    assert div.get(f"{{{BKK_NS}}}ref") == "KR1h0001/1"
+    assert "".join(div.xpath(".//tei:seg/text()", namespaces=NS)) == "甲乙丙丁戊己庚辛"
+    assert div.xpath(".//tei:c/@n", namespaces=NS) == ["，"]
 
 
 def test_dts_reads_per_juan_yaml_ctf(tmp_path: Path) -> None:

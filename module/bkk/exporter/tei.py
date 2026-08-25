@@ -142,6 +142,24 @@ def export_tei_from_recipe(
     return [Path(filename)]
 
 
+def render_ctf_fragment_tei(
+    ref: str,
+    *,
+    corpus_root: Path,
+    ctf_root: Path | None = None,
+    punctuation_root: Path | str | None = None,
+    id_factory: _IdFactory | None = None,
+) -> etree._Element:
+    """Render one CTF ref as a TEI div fragment."""
+
+    return _render_fragment(
+        _resolve_fragment(ref, ctf_root=ctf_root),
+        corpus_root=corpus_root,
+        id_factory=id_factory or _IdFactory(),
+        punctuation_root=punctuation_root,
+    )
+
+
 def default_ctf_root(rc: dict) -> Path | None:
     env = os.environ.get("BKK_CTF_ROOT")
     if env:
