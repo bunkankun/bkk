@@ -35,8 +35,9 @@ import yaml
 
 
 _KRP_OPTIONAL = {"shape", "edition", "mode", "editions", "juans"}
-_KNOWN = {"format", "bundle", "output_dir"} | _KRP_OPTIONAL
-_SUPPORTED_FORMATS = {"tls", "krp"}
+_TEI_OPTIONAL = {"ctf"}
+_KNOWN = {"format", "bundle", "output_dir"} | _KRP_OPTIONAL | _TEI_OPTIONAL
+_SUPPORTED_FORMATS = {"tls", "krp", "tei"}
 _SHAPES = {"dirs", "git", "single"}
 _MODES = {"split", "concat"}
 
@@ -53,6 +54,8 @@ class Recipe:
     mode: str = "split"
     editions: list[str] | None = None
     juans: list[int] | None = None
+    # TEI-specific knobs.
+    ctf: list[str] | None = None
 
 
 class RecipeError(ValueError):
@@ -92,6 +95,12 @@ def load_recipe(path: Path) -> Recipe:
     if fmt is not None and fmt != "krp" and krp_keys:
         raise RecipeError(
             f"recipe at {path} uses krp-only keys {sorted(krp_keys)} "
+            f"with format {fmt!r}"
+        )
+    tei_keys = (keys & _TEI_OPTIONAL)
+    if fmt is not None and fmt != "tei" and tei_keys:
+        raise RecipeError(
+            f"recipe at {path} uses tei-only keys {sorted(tei_keys)} "
             f"with format {fmt!r}"
         )
 
@@ -140,6 +149,15 @@ def load_recipe(path: Path) -> Recipe:
                 f"recipe at {path}: `juans` must be a list of integers"
             )
 
+    ctf = raw.get("ctf")
+    if ctf is not None:
+        if not isinstance(ctf, list) or not all(
+            isinstance(value, str) and value for value in ctf
+        ):
+            raise RecipeError(
+                f"recipe at {path}: `ctf` must be a list of non-empty strings"
+            )
+
     base = path.parent
     bundle = (base / str(raw["bundle"])).resolve() if "bundle" in raw else None
     output_dir = (
@@ -149,7 +167,7 @@ def load_recipe(path: Path) -> Recipe:
     return Recipe(
         format=fmt, bundle=bundle, output_dir=output_dir, source_path=path,
         shape=shape, edition=edition, mode=mode,
-        editions=editions, juans=juans,
+        editions=editions, juans=juans, ctf=ctf,
     )
 
 
@@ -163,6 +181,7 @@ def apply_overrides(
     mode: str | None = None,
     editions: list[str] | None = None,
     juans: list[int] | None = None,
+    ctf: list[str] | None = None,
 ) -> Recipe:
     """Layer CLI overrides on top of a (possibly missing) recipe.
 
@@ -183,6 +202,7 @@ def apply_overrides(
         mode=mode if mode is not None else base.mode,
         editions=editions if editions is not None else base.editions,
         juans=juans if juans is not None else base.juans,
+        ctf=ctf if ctf is not None else base.ctf,
     )
     _validate_executable(merged)
     return merged
@@ -197,7 +217,12 @@ def _validate_executable(recipe: Recipe) -> None:
             f"unsupported format: {recipe.format!r} "
             f"(supported: {sorted(_SUPPORTED_FORMATS)})"
         )
-    if recipe.bundle is None:
+    if recipe.format == "tei":
+        if recipe.bundle is not None:
+            raise RecipeError("format tei does not use `bundle`; pass --ctf")
+        if not recipe.ctf:
+            raise RecipeError("format tei requires at least one --ctf value")
+    elif recipe.bundle is None:
         raise RecipeError(
             "no bundle set: pass --bundle / --corpus or set `bundle:` in the recipe"
         )
@@ -224,6 +249,10 @@ def _validate_executable(recipe: Recipe) -> None:
     if recipe.format != "krp" and krp_set:
         raise RecipeError(
             f"krp-only options used with format {recipe.format!r}"
+        )
+    if recipe.format != "tei" and recipe.ctf is not None:
+        raise RecipeError(
+            f"tei-only options used with format {recipe.format!r}"
         )
 
     if recipe.shape == "single" and not recipe.edition:

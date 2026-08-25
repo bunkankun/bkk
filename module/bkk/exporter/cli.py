@@ -45,10 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--recipe", type=Path, default=None,
                    help="path to a (possibly generic) recipe YAML; optional "
                         "when all required fields are supplied as flags")
-    p.add_argument("--format", choices=sorted({"krp", "tls"}), default=None,
+    p.add_argument("--format", choices=sorted({"krp", "tei", "tls"}), default=None,
                    help="output format (overrides recipe.format)")
     p.add_argument("--bundle", type=Path, default=None,
-                   help="single bundle source dir (overrides recipe.bundle)")
+                   help="single bundle source dir (overrides recipe.bundle); "
+                        "not used by --format tei")
     p.add_argument("--output-dir", dest="output_dir", type=Path, default=None,
                    help="output dir for a single bundle, or output **parent** "
                         "for --corpus (one subdir per text id)")
@@ -62,7 +63,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="krp: split | concat (overrides recipe.mode)")
     p.add_argument("--corpus", type=Path, default=None,
                    help="corpus root containing bundle subdirs; iterate every "
-                        "bundle (filtered by --text-id / --text-prefix)")
+                        "bundle (filtered by --text-id / --text-prefix), or "
+                        "resolve --ctf refs for --format tei")
+    p.add_argument("--ctf", action="append", default=None,
+                   help="tei: CTF node/ref selecting one fragment; repeatable")
+    p.add_argument("--ctf-root", type=Path, default=None,
+                   help="tei: CTF sidecar root (default: global.ctf_root or "
+                        "$BKK_CTF_ROOT)")
     p.add_argument("--text-id", dest="text_id", default=None, type=text_id_arg,
                    help="with --corpus: restrict to a single text id")
     p.add_argument("--section", default=None,
@@ -107,10 +114,6 @@ def run(argv: list[str] | None = None) -> int:
         if rc_corpus is not None:
             args.corpus = Path(rc_corpus)
 
-    if args.corpus is not None and args.bundle is not None:
-        print("error: --corpus and --bundle are mutually exclusive",
-              file=sys.stderr)
-        return 2
     if args.section and args.text_prefix:
         print("error: provide only one of --text-prefix or --section",
               file=sys.stderr)
@@ -125,6 +128,14 @@ def run(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
+    requested_format = args.format or (template.format if template is not None else None)
+    if requested_format == "tei":
+        return _run_tei(args, template, rc)
+
+    if args.corpus is not None and args.bundle is not None:
+        print("error: --corpus and --bundle are mutually exclusive",
+              file=sys.stderr)
+        return 2
     if args.corpus is not None:
         return _run_corpus(args, template)
     return _run_single(args, template)
@@ -137,6 +148,7 @@ def _run_single(args, template: Recipe | None) -> int:
             template,
             format=args.format, bundle=args.bundle, output_dir=args.output_dir,
             shape=args.shape, edition=args.edition, mode=args.mode,
+            ctf=args.ctf,
         )
     except RecipeError as e:
         print(f"error: {e}", file=sys.stderr)
@@ -148,6 +160,47 @@ def _run_single(args, template: Recipe | None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
+    print(f"wrote {len(written)} file(s) under {recipe.output_dir}")
+    for p in written:
+        print(f"  {p}")
+    return 0
+
+
+def _run_tei(args, template: Recipe | None, rc: dict) -> int:
+    if args.bundle is not None:
+        print("error: --format tei does not use --bundle; pass --ctf",
+              file=sys.stderr)
+        return 2
+    corpus_root = args.corpus
+    if corpus_root is None:
+        print("error: --corpus is required with --format tei "
+              "(or set export.corpus/global.corpus in .bkkrc)", file=sys.stderr)
+        return 2
+    if not corpus_root.is_dir():
+        print(f"error: --corpus is not a directory: {corpus_root}",
+              file=sys.stderr)
+        return 2
+    try:
+        recipe = apply_overrides(
+            template,
+            format=args.format, bundle=None, output_dir=args.output_dir,
+            shape=args.shape, edition=args.edition, mode=args.mode,
+            ctf=args.ctf,
+        )
+    except RecipeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    try:
+        from .tei import default_ctf_root, export_tei_from_recipe
+        ctf_root = args.ctf_root.resolve() if args.ctf_root is not None else default_ctf_root(rc)
+        written = export_tei_from_recipe(
+            recipe,
+            corpus_root=corpus_root.resolve(),
+            ctf_root=ctf_root,
+        )
+    except RecipeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     print(f"wrote {len(written)} file(s) under {recipe.output_dir}")
     for p in written:
         print(f"  {p}")
@@ -189,6 +242,7 @@ def _run_corpus(args, template: Recipe | None) -> int:
                 bundle=bundle_dir,
                 output_dir=out_root / text_id,
                 shape=args.shape, edition=args.edition, mode=args.mode,
+                ctf=args.ctf,
             )
             written = _dispatch(recipe)
             print(
@@ -205,6 +259,8 @@ def _dispatch(recipe: Recipe) -> list[Path]:
     if recipe.format == "tls":
         from .tls import export_tls_from_recipe
         return export_tls_from_recipe(recipe)
+    if recipe.format == "tei":
+        raise RecipeError("format tei must be dispatched through --ctf resolution")
     if recipe.format == "krp":
         from .krp import export_krp_from_recipe
         return export_krp_from_recipe(recipe)
