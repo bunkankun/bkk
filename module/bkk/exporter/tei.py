@@ -16,6 +16,7 @@ from bkk.index.merge import find_bundle
 from bkk.marker_assets import hydrate_juan_markers, load_marker_asset
 from bkk.rendering.punctuation import (
     PAGE_BREAK_RENDER_TOKEN,
+    is_note_open_punctuation,
     punctuation_render_rank,
 )
 from bkk.short_refs import compact_text_id, normalize_text_id
@@ -27,6 +28,10 @@ BKK_NS = "http://bunkankun.org/ns/1.0"
 _TEI_NSMAP = {None: TEI_NS, "bkk": BKK_NS}
 _BUCKETS = {"front", "body", "back"}
 _NOTE_VOICES = {"commentary", "note"}
+_PUNCTUATION_THRESHOLD = 5
+_IDEOGRAPHIC_PUNCTUATION = frozenset(
+    "，、。；：？！「」『』《》〈〉（）〔〕【】"
+)
 _REF_RE = re.compile(
     r"^(?P<text>(?:KR)?[0-9][a-z]{1,2}[0-9]{1,4})"
     r"/(?P<juan>[0-9]+)(?P<tail>(?:/.*)?)$"
@@ -79,7 +84,7 @@ class _IdFactory:
         self._used: dict[str, int] = {}
 
     def make(self, prefix: str, offset: int) -> str:
-        base = f"bkk_{_escape_xml_id_part(prefix)}_o{offset}"
+        base = _format_seg_xml_id(prefix, offset)
         count = self._used.get(base, 0) + 1
         self._used[base] = count
         if count == 1:
@@ -88,7 +93,10 @@ class _IdFactory:
 
 
 def export_tei_from_recipe(
-    recipe: Recipe, *, corpus_root: Path, ctf_root: Path | None = None,
+    recipe: Recipe, *,
+    corpus_root: Path,
+    ctf_root: Path | None = None,
+    punctuation_root: Path | str | None = None,
 ) -> list[Path]:
     """Export CTF-selected fragments as TEI-flavored XML div fragments."""
 
@@ -103,7 +111,12 @@ def export_tei_from_recipe(
 
     id_factory = _IdFactory()
     divs = [
-        _render_fragment(fragment, corpus_root=corpus_root, id_factory=id_factory)
+        _render_fragment(
+            fragment,
+            corpus_root=corpus_root,
+            id_factory=id_factory,
+            punctuation_root=punctuation_root,
+        )
         for fragment in fragments
     ]
     if len(divs) == 1:
@@ -135,6 +148,16 @@ def default_ctf_root(rc: dict) -> Path | None:
         return Path(env).resolve()
     value = (rc.get("global") or {}).get("ctf_root")
     if value is None:
+        return None
+    return Path(value).resolve()
+
+
+def default_punctuation_root(rc: dict) -> Path | None:
+    env = os.environ.get("BKK_PUNCTUATION_ROOT")
+    if env and env.strip() != "assets":
+        return Path(env).resolve()
+    value = (rc.get("llm") or {}).get("punctuation_root")
+    if value is None or str(value).strip() in ("", "assets"):
         return None
     return Path(value).resolve()
 
@@ -290,7 +313,11 @@ def _lookup_ctf_tsv(
 
 
 def _render_fragment(
-    fragment: ResolvedFragment, *, corpus_root: Path, id_factory: _IdFactory,
+    fragment: ResolvedFragment,
+    *,
+    corpus_root: Path,
+    id_factory: _IdFactory,
+    punctuation_root: Path | str | None,
 ) -> etree._Element:
     bundle_dir = find_bundle(corpus_root, fragment.textid)
     if bundle_dir is None:
@@ -314,6 +341,16 @@ def _render_fragment(
         )
     end = offset + length
     markers = _absolute_markers(bucket.get("markers") or [])
+    markers = _with_punctuation_source(
+        markers,
+        corpus_root=corpus_root,
+        bundle_dir=bundle_dir,
+        manifest=manifest,
+        textid=fragment.textid,
+        seq=fragment.juan,
+        bucket=fragment.bucket,
+        punctuation_root=punctuation_root,
+    )
 
     div = etree.Element(_q("div"), nsmap=_TEI_NSMAP)
     div.set(_q("ref", BKK_NS), fragment.original)
@@ -376,6 +413,171 @@ def _render_fragment(
             fragment_end=end,
         )
     return div
+
+
+def _with_punctuation_source(
+    markers: list[dict[str, Any]],
+    *,
+    corpus_root: Path,
+    bundle_dir: Path,
+    manifest: dict[str, Any],
+    textid: str,
+    seq: int,
+    bucket: str,
+    punctuation_root: Path | str | None,
+) -> list[dict[str, Any]]:
+    if _has_sufficient_ideographic_punctuation(markers):
+        return markers
+    sidecar_markers = _sole_sidecar_punctuation_markers(
+        corpus_root=corpus_root,
+        bundle_dir=bundle_dir,
+        manifest=manifest,
+        textid=textid,
+        seq=seq,
+        bucket=bucket,
+        punctuation_root=punctuation_root,
+    )
+    if sidecar_markers is None:
+        return markers
+    next_index = len(markers)
+    out = [
+        marker for marker in markers
+        if marker.get("type") != "punctuation"
+    ]
+    for marker in sidecar_markers:
+        item = dict(marker)
+        item["_index"] = next_index
+        next_index += 1
+        out.append(item)
+    return out
+
+
+def _has_sufficient_ideographic_punctuation(markers: list[dict[str, Any]]) -> bool:
+    count = 0
+    for marker in markers:
+        if marker.get("type") != "punctuation":
+            continue
+        content = marker.get("content")
+        if not isinstance(content, str):
+            continue
+        count += sum(1 for ch in content if ch in _IDEOGRAPHIC_PUNCTUATION)
+        if count > _PUNCTUATION_THRESHOLD:
+            return True
+    return False
+
+
+def _sole_sidecar_punctuation_markers(
+    *,
+    corpus_root: Path,
+    bundle_dir: Path,
+    manifest: dict[str, Any],
+    textid: str,
+    seq: int,
+    bucket: str,
+    punctuation_root: Path | str | None,
+) -> list[dict[str, Any]] | None:
+    try:
+        from bkk.recipe.punc_report import (
+            _sidecar_punctuation_markers,
+        )
+    except Exception as exc:  # pragma: no cover - defensive dependency guard
+        raise RecipeError(f"could not load punctuation sidecar helpers: {exc}") from exc
+
+    pattern = f"{textid}_{seq:03d}*.punctuation.yaml"
+    asset_sidecars = _asset_punctuation_sidecars(
+        bundle_dir,
+        manifest,
+        seq,
+        pattern,
+    )
+    if len(asset_sidecars) == 1:
+        return _sidecar_punctuation_markers(asset_sidecars[0], bucket)
+    if len(asset_sidecars) > 1:
+        return None
+
+    if punctuation_root is None or str(punctuation_root).strip() in ("", "assets"):
+        return None
+    root = Path(punctuation_root)
+    candidates: list[Path] = []
+    seen: set[str] = set()
+    for directory in _external_punctuation_dirs(
+        root,
+        corpus_root=corpus_root,
+        bundle_dir=bundle_dir,
+        textid=textid,
+    ):
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.glob(pattern)):
+            key = str(path.resolve(strict=False))
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(path)
+    sidecars = candidates
+    if len(sidecars) != 1:
+        return None
+    return _sidecar_punctuation_markers(sidecars[0], bucket)
+
+
+def _asset_punctuation_sidecars(
+    bundle_dir: Path,
+    manifest: dict[str, Any],
+    seq: int,
+    pattern: str,
+) -> list[Path]:
+    candidates: list[Path] = []
+    seen: set[str] = set()
+
+    def add(path: Path) -> None:
+        if not path.is_file():
+            return
+        key = str(path.resolve(strict=False))
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(path)
+
+    for ref in (manifest.get("assets") or {}).get("references") or []:
+        if not isinstance(ref, dict):
+            continue
+        if ref.get("role") != "llm-punctuation" or ref.get("seq") != seq:
+            continue
+        filename = ref.get("filename") or ref.get("name")
+        if isinstance(filename, str):
+            add(bundle_dir / filename)
+
+    for path in sorted(bundle_dir.rglob(pattern)):
+        add(path)
+    return candidates
+
+
+def _external_punctuation_dirs(
+    root: Path,
+    *,
+    corpus_root: Path,
+    bundle_dir: Path,
+    textid: str,
+) -> list[Path]:
+    dirs: list[Path] = []
+    try:
+        rel = bundle_dir.resolve().relative_to(corpus_root.resolve())
+        dirs.append(root / rel)
+    except ValueError:
+        pass
+    section = textid[:4]
+    dirs.append(root / section / textid)
+    dirs.append(root / textid)
+
+    out: list[Path] = []
+    seen: set[str] = set()
+    for directory in dirs:
+        key = str(directory.resolve(strict=False))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(directory)
+    return out
 
 
 def _absolute_markers(markers: list[Any]) -> list[dict[str, Any]]:
@@ -442,7 +644,7 @@ def _segment_defs(
     cursor = start
     for offset in sorted({
         marker["offset"] for marker in point_markers
-        if _offset_in_interval(marker["offset"], start, end, fragment_end)
+        if start < marker["offset"] < end
     }):
         if cursor < offset:
             out.append(_TextSeg(cursor, offset, id_factory.make(id_prefix, cursor)))
@@ -520,34 +722,40 @@ def _append_interval(
     precomputed: dict[tuple[int, int], _TextSeg] | None = None,
     fragment_end: int,
 ) -> None:
-    cursor = start
-    offsets = sorted({
-        marker["offset"] for marker in point_markers
-        if _offset_in_interval(marker["offset"], start, end, fragment_end)
-    })
-    for offset in offsets:
-        if cursor < offset:
-            _append_seg(
-                parent,
-                text,
-                cursor,
-                offset,
-                id_prefix,
-                id_factory,
-                precomputed=precomputed,
-            )
-        for unit in _ordered_units_at(point_markers, offset):
-            _append_unit(parent, unit, offset)
-        cursor = offset
-    if cursor < end:
+    if precomputed is None:
+        segments = _segment_defs(
+            start,
+            end,
+            point_markers,
+            id_prefix,
+            id_factory,
+            fragment_end=fragment_end,
+        )
+    else:
+        segments = [
+            seg for seg in precomputed.values()
+            if start <= seg.start and seg.end <= end
+        ]
+        segments.sort(key=lambda seg: (seg.start, seg.end))
+    for seg in segments:
+        leading = [
+            unit for unit in _ordered_units_at(point_markers, seg.start)
+            if _unit_belongs_to_next_segment(unit)
+        ]
+        trailing = [
+            unit for unit in _ordered_units_at(point_markers, seg.end)
+            if _unit_belongs_to_previous_segment(unit)
+        ]
         _append_seg(
             parent,
             text,
-            cursor,
-            end,
+            seg.start,
+            seg.end,
             id_prefix,
             id_factory,
             precomputed=precomputed,
+            leading_units=leading,
+            trailing_units=trailing,
         )
 
 
@@ -560,13 +768,29 @@ def _append_seg(
     id_factory: _IdFactory,
     *,
     precomputed: dict[tuple[int, int], _TextSeg] | None,
+    leading_units: list[_RenderUnit] | None = None,
+    trailing_units: list[_RenderUnit] | None = None,
 ) -> None:
     seg = etree.SubElement(parent, _q("seg"))
     known = precomputed.get((start, end)) if precomputed is not None else None
     xml_id = known.xml_id if known is not None else id_factory.make(id_prefix, start)
     seg.set(_q("id", XML_NS), xml_id)
     seg.set(_q("offset", BKK_NS), str(start))
-    seg.text = text[start:end]
+    for unit in leading_units or []:
+        _append_unit(seg, unit, unit.marker["offset"])
+    _append_text(seg, text[start:end])
+    for unit in trailing_units or []:
+        _append_unit(seg, unit, unit.marker["offset"])
+
+
+def _append_text(el: etree._Element, text: str) -> None:
+    if not text:
+        return
+    if len(el) == 0:
+        el.text = (el.text or "") + text
+    else:
+        last = el[-1]
+        last.tail = (last.tail or "") + text
 
 
 def _ordered_units_at(
@@ -610,19 +834,19 @@ def _sort_units(units: list[_RenderUnit]) -> list[_RenderUnit]:
     result: list[_RenderUnit] = []
     start = 0
     while start < len(ordered):
-        first_rank = punctuation_render_rank(ordered[start].ch)
+        first_rank = _unit_render_rank(ordered[start])
         if first_rank is None:
             result.append(ordered[start])
             start += 1
             continue
         end = start + 1
-        while end < len(ordered) and punctuation_render_rank(ordered[end].ch) is not None:
+        while end < len(ordered) and _unit_render_rank(ordered[end]) is not None:
             end += 1
         result.extend(
             sorted(
                 ordered[start:end],
                 key=lambda unit: (
-                    punctuation_render_rank(unit.ch) or 0,
+                    _unit_render_rank(unit) or 0,
                     unit.index,
                 ),
             )
@@ -631,23 +855,53 @@ def _sort_units(units: list[_RenderUnit]) -> list[_RenderUnit]:
     return result
 
 
+def _unit_render_rank(unit: _RenderUnit) -> int | None:
+    if unit.kind == "page-break":
+        return (punctuation_render_rank("\n") or 0) - 1
+    return punctuation_render_rank(unit.ch)
+
+
 def _append_unit(parent: etree._Element, unit: _RenderUnit, offset: int) -> None:
     if unit.kind == "punctuation":
         el = etree.SubElement(parent, _q("c"))
         el.set("n", unit.ch)
     elif unit.kind == "line-break":
         el = etree.SubElement(parent, _q("lb"))
+        marker_id = unit.marker.get("id")
+        if isinstance(marker_id, str) and marker_id:
+            el.set(_q("id", XML_NS), marker_id)
     elif unit.kind == "page-break":
         el = etree.SubElement(parent, _q("pb"))
+        marker_id = unit.marker.get("id")
+        if isinstance(marker_id, str) and marker_id:
+            el.set(_q("id", XML_NS), marker_id)
+        image = unit.marker.get("image")
+        if isinstance(image, str) and image:
+            el.set("facs", image)
     else:
         return
     el.set(_q("offset", BKK_NS), str(offset))
 
 
-def _offset_in_interval(offset: int, start: int, end: int, fragment_end: int) -> bool:
-    if start <= offset < end:
-        return True
-    return offset == end == fragment_end
+def _unit_belongs_to_next_segment(unit: _RenderUnit) -> bool:
+    return unit.kind == "punctuation" and is_note_open_punctuation(unit.ch)
+
+
+def _unit_belongs_to_previous_segment(unit: _RenderUnit) -> bool:
+    return not _unit_belongs_to_next_segment(unit)
+
+
+def _format_seg_xml_id(prefix: str, offset: int) -> str:
+    parts = [part for part in prefix.strip("/").split("/") if part]
+    if len(parts) >= 2:
+        textid = normalize_text_id(parts[0])
+        juan = int(parts[1])
+        base = f"{_escape_xml_id_part(textid)}_bkk_{juan:03d}"
+        path = ".".join(_escape_xml_id_part(part) for part in parts[2:])
+        if path:
+            return f"{base}-{path}.o{offset}"
+        return f"{base}-o{offset}"
+    return f"bkk_{_escape_xml_id_part(prefix)}_o{offset}"
 
 
 def _escape_xml_id_part(value: str) -> str:

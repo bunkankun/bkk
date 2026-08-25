@@ -70,6 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ctf-root", type=Path, default=None,
                    help="tei: CTF sidecar root (default: global.ctf_root or "
                         "$BKK_CTF_ROOT)")
+    p.add_argument("--punctuation-root", type=Path, default=None,
+                   help="tei: external punctuation sidecar root (default: "
+                        "[llm].punctuation_root or $BKK_PUNCTUATION_ROOT)")
     p.add_argument("--text-id", dest="text_id", default=None, type=text_id_arg,
                    help="with --corpus: restrict to a single text id")
     p.add_argument("--section", default=None,
@@ -191,12 +194,22 @@ def _run_tei(args, template: Recipe | None, rc: dict) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     try:
-        from .tei import default_ctf_root, export_tei_from_recipe
+        from .tei import (
+            default_ctf_root,
+            default_punctuation_root,
+            export_tei_from_recipe,
+        )
         ctf_root = args.ctf_root.resolve() if args.ctf_root is not None else default_ctf_root(rc)
+        punctuation_root = (
+            args.punctuation_root.resolve()
+            if args.punctuation_root is not None
+            else default_punctuation_root(rc)
+        )
         written = export_tei_from_recipe(
             recipe,
             corpus_root=corpus_root.resolve(),
             ctf_root=ctf_root,
+            punctuation_root=punctuation_root,
         )
     except RecipeError as e:
         print(f"error: {e}", file=sys.stderr)

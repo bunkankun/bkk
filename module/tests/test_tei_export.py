@@ -160,6 +160,7 @@ def test_tei_export_resolves_ctf_yaml_span_and_renders_offsets_punctuation_and_n
         ("，", "1"),
         ("。", "4"),
     ]
+    assert all(c.getparent().tag == f"{{{TEI}}}seg" for c in punct)
 
     note = root.xpath(".//tei:note", namespaces=NS)[0]
     assert note.get("type") == "commentary"
@@ -231,6 +232,291 @@ def test_tei_export_accepts_recipe_ctf(
     assert rc == 0, err
     root = _parse(out_dir / "KR1h0001.tei.xml")
     assert "".join(root.xpath(".//tei:seg/text()", namespaces=NS)) == "甲乙"
+
+
+def test_tei_export_uses_sole_external_punctuation_when_bundle_has_none(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    corpus = tmp_path / "corpus"
+    _write_bundle(corpus, "KR1h0001", "甲乙")
+    punctuation_root = tmp_path / "punctuation"
+    ext = punctuation_root / "KR1h" / "KR1h0001"
+    ext.mkdir(parents=True)
+    (ext / "KR1h0001_001.model.punctuation.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "markers": {
+                    "body": [
+                        {"type": "punctuation", "offset": 1, "content": "，"},
+                    ]
+                }
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    out_dir = tmp_path / "out"
+    rc, _out, err = _capture([
+        "--format", "tei",
+        "--corpus", str(corpus),
+        "--punctuation-root", str(punctuation_root),
+        "--ctf", "KR1h0001/1/@0+2",
+        "--output-dir", str(out_dir),
+    ])
+
+    assert rc == 0, err
+    root = _parse(out_dir / "KR1h0001.tei.xml")
+    punct = root.xpath(".//tei:c", namespaces=NS)
+    assert [(c.get("n"), c.get(f"{{{BKK}}}offset")) for c in punct] == [
+        ("，", "1"),
+    ]
+
+
+def test_tei_export_sole_external_punctuation_replaces_core_punctuation(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    corpus = tmp_path / "corpus"
+    _write_bundle(
+        corpus,
+        "KR1h0001",
+        "甲乙",
+        [{"type": "punctuation", "offset": 1, "content": ")"}],
+    )
+    punctuation_root = tmp_path / "punctuation"
+    ext = punctuation_root / "KR1h" / "KR1h0001"
+    ext.mkdir(parents=True)
+    (ext / "KR1h0001_001.model.punctuation.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "markers": {
+                    "body": [
+                        {"type": "punctuation", "offset": 1, "content": "，"},
+                    ]
+                }
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    out_dir = tmp_path / "out"
+    rc, _out, err = _capture([
+        "--format", "tei",
+        "--corpus", str(corpus),
+        "--punctuation-root", str(punctuation_root),
+        "--ctf", "KR1h0001/1/@0+2",
+        "--output-dir", str(out_dir),
+    ])
+
+    assert rc == 0, err
+    root = _parse(out_dir / "KR1h0001.tei.xml")
+    assert [c.get("n") for c in root.xpath(".//tei:c", namespaces=NS)] == ["，"]
+
+
+def test_tei_export_keeps_core_punctuation_when_it_is_ideographic_enough(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    corpus = tmp_path / "corpus"
+    _write_bundle(
+        corpus,
+        "KR1h0001",
+        "甲乙丙丁戊己庚",
+        [
+            {"type": "punctuation", "offset": offset, "content": "，"}
+            for offset in range(1, 7)
+        ],
+    )
+    punctuation_root = tmp_path / "punctuation"
+    ext = punctuation_root / "KR1h" / "KR1h0001"
+    ext.mkdir(parents=True)
+    (ext / "KR1h0001_001.model.punctuation.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "markers": {
+                    "body": [
+                        {"type": "punctuation", "offset": 1, "content": "。"},
+                    ]
+                }
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    out_dir = tmp_path / "out"
+    rc, _out, err = _capture([
+        "--format", "tei",
+        "--corpus", str(corpus),
+        "--punctuation-root", str(punctuation_root),
+        "--ctf", "KR1h0001/1/@0+7",
+        "--output-dir", str(out_dir),
+    ])
+
+    assert rc == 0, err
+    root = _parse(out_dir / "KR1h0001.tei.xml")
+    assert [c.get("n") for c in root.xpath(".//tei:c", namespaces=NS)] == [
+        "，", "，", "，", "，", "，", "，",
+    ]
+
+
+def test_tei_export_punctuation_boundary_ownership_and_lb_ids(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    corpus = tmp_path / "corpus"
+    _write_bundle(
+        corpus,
+        "KR1h0001",
+        "甲乙丙",
+        [
+            {"type": "punctuation", "offset": 0, "content": "》"},
+            {"type": "punctuation", "offset": 0, "content": "《"},
+            {"type": "line-break", "offset": 1, "id": "lb-original"},
+            {"type": "punctuation", "offset": 3, "content": "。"},
+            {"type": "punctuation", "offset": 3, "content": "《"},
+        ],
+    )
+
+    out_dir = tmp_path / "out"
+    rc, _out, err = _capture([
+        "--format", "tei",
+        "--corpus", str(corpus),
+        "--ctf", "KR1h0001/1/@0+3",
+        "--output-dir", str(out_dir),
+    ])
+
+    assert rc == 0, err
+    root = _parse(out_dir / "KR1h0001.tei.xml")
+    assert [c.get("n") for c in root.xpath(".//tei:c", namespaces=NS)] == [
+        "《",
+        "。",
+    ]
+    assert all(c.getparent().tag == f"{{{TEI}}}seg" for c in root.xpath(".//tei:c", namespaces=NS))
+    lb = root.xpath(".//tei:lb", namespaces=NS)[0]
+    assert lb.get(f"{{{XML}}}id") == "lb-original"
+    assert lb.getparent().tag == f"{{{TEI}}}seg"
+
+
+def test_tei_export_page_break_ids_facs_and_order_before_lb(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    corpus = tmp_path / "corpus"
+    _write_bundle(
+        corpus,
+        "KR1h0001",
+        "甲乙",
+        [
+            {
+                "type": "page-break",
+                "offset": 1,
+                "id": "pb-original",
+                "image": "IMG/p1.png",
+            },
+            {"type": "line-break", "offset": 1, "id": "lb-original"},
+        ],
+    )
+
+    out_dir = tmp_path / "out"
+    rc, _out, err = _capture([
+        "--format", "tei",
+        "--corpus", str(corpus),
+        "--ctf", "KR1h0001/1/@0+2",
+        "--output-dir", str(out_dir),
+    ])
+
+    assert rc == 0, err
+    root = _parse(out_dir / "KR1h0001.tei.xml")
+    seg = root.xpath(".//tei:seg", namespaces=NS)[0]
+    children = list(seg)
+    assert [child.tag for child in children] == [
+        f"{{{TEI}}}pb",
+        f"{{{TEI}}}lb",
+    ]
+    pb, lb = children
+    assert pb.get(f"{{{XML}}}id") == "pb-original"
+    assert pb.get("facs") == "IMG/p1.png"
+    assert lb.get(f"{{{XML}}}id") == "lb-original"
+
+
+def test_tei_export_segment_xml_ids_use_compatibility_format(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    corpus = tmp_path / "corpus"
+    _write_bundle(corpus, "KR4c0022", "甲乙丙丁戊己")
+
+    out_dir = tmp_path / "out"
+    rc, _out, err = _capture([
+        "--format", "tei",
+        "--corpus", str(corpus),
+        "--ctf", "KR4c0022/1/5/1/@3+3",
+        "--output-dir", str(out_dir),
+    ])
+
+    assert rc == 0, err
+    root = _parse(out_dir / "KR4c0022.tei.xml")
+    seg = root.xpath(".//tei:seg", namespaces=NS)[0]
+    assert seg.get(f"{{{XML}}}id") == "KR4c0022_bkk_001-5.1.o3"
+
+    out_dir2 = tmp_path / "out2"
+    rc, _out, err = _capture([
+        "--format", "tei",
+        "--corpus", str(corpus),
+        "--ctf", "KR4c0022/1/@3+3",
+        "--output-dir", str(out_dir2),
+    ])
+
+    assert rc == 0, err
+    root = _parse(out_dir2 / "KR4c0022.tei.xml")
+    seg = root.xpath(".//tei:seg", namespaces=NS)[0]
+    assert seg.get(f"{{{XML}}}id") == "KR4c0022_bkk_001-o3"
+
+
+def test_tei_export_ignores_external_punctuation_when_ambiguous(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr("bkk.config.load_rc", lambda: {})
+    corpus = tmp_path / "corpus"
+    _write_bundle(corpus, "KR1h0001", "甲乙")
+    punctuation_root = tmp_path / "punctuation"
+    ext = punctuation_root / "KR1h" / "KR1h0001"
+    ext.mkdir(parents=True)
+    for model, content in [("a", "，"), ("b", "。")]:
+        (ext / f"KR1h0001_001.{model}.punctuation.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "markers": {
+                        "body": [
+                            {
+                                "type": "punctuation",
+                                "offset": 1,
+                                "content": content,
+                            },
+                        ]
+                    }
+                },
+                allow_unicode=True,
+            ),
+            encoding="utf-8",
+        )
+
+    out_dir = tmp_path / "out"
+    rc, _out, err = _capture([
+        "--format", "tei",
+        "--corpus", str(corpus),
+        "--punctuation-root", str(punctuation_root),
+        "--ctf", "KR1h0001/1/@0+2",
+        "--output-dir", str(out_dir),
+    ])
+
+    assert rc == 0, err
+    root = _parse(out_dir / "KR1h0001.tei.xml")
+    assert root.xpath(".//tei:c", namespaces=NS) == []
 
 
 def test_tei_export_rejects_bundle_and_requires_ctf(
