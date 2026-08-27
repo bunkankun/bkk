@@ -94,6 +94,7 @@ def merge_translations(
     corpus: Path | str,
     out_path: Path | str,
     *,
+    translation_root: Path | str | None = None,
     rebuild: bool = False,
     no_build: bool = False,
     progress: bool = False,
@@ -105,11 +106,12 @@ def merge_translations(
     or stale.  ``progress=True`` writes one status line per bundle to stderr.
     """
     corpus = Path(corpus)
+    translation_root_path = Path(translation_root) if translation_root is not None else None
     out_path = Path(out_path)
     if out_path.exists():
         out_path.unlink()
 
-    bundles = discover_translation_bundles(corpus)
+    bundles = discover_translation_bundles(corpus, translation_root=translation_root_path)
     if not bundles:
         log.info("no translation bundles found under %s", corpus)
         _write_empty(out_path, corpus)
@@ -188,13 +190,26 @@ def merge_translations(
     return out_path
 
 
-def discover_translation_bundles(corpus: Path | str) -> list[Path]:
-    """Return all translation bundle directories under any ``translations/`` root in ``corpus``."""
+def discover_translation_bundles(
+    corpus: Path | str,
+    *,
+    translation_root: Path | str | None = None,
+) -> list[Path]:
+    """Return all translation bundle dirs under legacy or dedicated translation roots."""
     corpus = Path(corpus)
+    translation_root_path = Path(translation_root) if translation_root is not None else None
     seen: set[Path] = set()
-    for root in _find_translation_roots(corpus):
+    roots = _find_translation_roots(corpus)
+    if corpus.is_dir() and corpus not in roots:
+        roots.append(corpus)
+    for root in roots:
         for pattern in ("*/*/*/*.md", "*/*/*/*/*.md"):
             for md in root.glob(pattern):
+                if md.parent.name == md.stem and md.parent not in seen:
+                    seen.add(md.parent)
+    if translation_root_path is not None and translation_root_path.is_dir():
+        for pattern in ("*/*/*/*.md", "*/*/*/*/*.md"):
+            for md in translation_root_path.glob(pattern):
                 if md.parent.name == md.stem and md.parent not in seen:
                     seen.add(md.parent)
     return sorted(seen, key=lambda p: p.name)

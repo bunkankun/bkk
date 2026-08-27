@@ -13,6 +13,7 @@ class ServeConfig:
     index_path: Path
     catalog_path: Path | None = None
     ctf_root: Path | None = None
+    translation_root: Path | None = None
     translation_search_path: Path | None = None
     core_root: Path | None = None
     core_index_path: Path | None = None
@@ -67,7 +68,9 @@ class ServeConfig:
             )
         if self.translation_search_path is None:
             object.__setattr__(
-                self, "translation_search_path", self.corpus_root / "_translations.bkkt"
+                self,
+                "translation_search_path",
+                (self.translation_root or self.corpus_root) / "_translations.bkkt",
             )
         if self.annotations_index_path is None and self.annotations_root is not None:
             object.__setattr__(
@@ -133,6 +136,15 @@ class ServeConfig:
             ctf_root = Path(rc_ctf_root).resolve()
         else:
             ctf_root = None
+
+        env_translation_root = os.environ.get("BKK_TRANSLATION_ROOT")
+        rc_translation_root = rc.get("translation_root")
+        if env_translation_root:
+            translation_root: Path | None = Path(env_translation_root).resolve()
+        elif rc_translation_root:
+            translation_root = Path(rc_translation_root).resolve()
+        else:
+            translation_root = None
 
         core_rc = core_rc or {}
         env_core_root = os.environ.get("BKK_CORE_ROOT")
@@ -402,6 +414,7 @@ class ServeConfig:
             index_path=index,
             catalog_path=catalog,
             ctf_root=ctf_root,
+            translation_root=translation_root,
             translation_search_path=translation_search,
             core_root=core_root,
             core_index_path=core_index,
@@ -449,6 +462,7 @@ class ServeConfig:
         index_path: Path | str | None = None,
         catalog_path: Path | str | None = None,
         ctf_root: Path | str | None = None,
+        translation_root: Path | str | None = None,
         translation_search_path: Path | str | None = None,
         core_root: Path | str | None = None,
         core_index_path: Path | str | None = None,
@@ -487,6 +501,8 @@ class ServeConfig:
             updates["catalog_path"] = Path(catalog_path).resolve()
         if ctf_root is not None:
             updates["ctf_root"] = Path(ctf_root).resolve()
+        if translation_root is not None:
+            updates["translation_root"] = Path(translation_root).resolve()
         if translation_search_path is not None:
             updates["translation_search_path"] = Path(translation_search_path).resolve()
         if core_root is not None:

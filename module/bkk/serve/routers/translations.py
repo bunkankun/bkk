@@ -37,11 +37,21 @@ def overlays(request: Request) -> OverlaysResponse:
         try:
             count = int(conn.execute("SELECT COUNT(*) FROM catalog_translation").fetchone()[0])
         except Exception:
-            count = len(list_translation_bundles(state.corpus_root))
+            count = len(
+                list_translation_bundles(
+                    state.corpus_root,
+                    translation_root_path=state.config.translation_root,
+                )
+            )
         finally:
             conn.close()
     else:
-        count = len(list_translation_bundles(state.corpus_root))
+        count = len(
+            list_translation_bundles(
+                state.corpus_root,
+                translation_root_path=state.config.translation_root,
+            )
+        )
     return OverlaysResponse(
         overlays=[OverlayFamily(id="translations", label="Translations", count=count)]
     )
@@ -77,6 +87,7 @@ def translations(
         except Exception:
             matches = list_translation_bundles(
                 state.corpus_root,
+                translation_root_path=state.config.translation_root,
                 q=q,
                 source_textid=source_textid,
                 lang=lang,
@@ -90,6 +101,7 @@ def translations(
     else:
         matches = list_translation_bundles(
             state.corpus_root,
+            translation_root_path=state.config.translation_root,
             q=q,
             source_textid=source_textid,
             lang=lang,
@@ -179,13 +191,21 @@ def bundle_translations(
                 offset=offset,
             )
         except Exception:
-            matches = list_translation_bundles(state.corpus_root, source_textid=textid)
+            matches = list_translation_bundles(
+                state.corpus_root,
+                translation_root_path=state.config.translation_root,
+                source_textid=textid,
+            )
             total = len(matches)
             page = matches[offset:offset + limit]
         finally:
             conn.close()
     else:
-        matches = list_translation_bundles(state.corpus_root, source_textid=textid)
+        matches = list_translation_bundles(
+            state.corpus_root,
+            translation_root_path=state.config.translation_root,
+            source_textid=textid,
+        )
         total = len(matches)
         page = matches[offset:offset + limit]
     return TranslationListResponse(
@@ -227,7 +247,11 @@ def juan_translation_alignment(
         finally:
             conn.close()
     if translation is None:
-        for bundle in list_translation_bundles(state.corpus_root, source_textid=textid):
+        for bundle in list_translation_bundles(
+            state.corpus_root,
+            translation_root_path=state.config.translation_root,
+            source_textid=textid,
+        ):
             if bundle.id == translation_id:
                 translation = load_translation_bundle(bundle.path, include_juans=True)
                 break
@@ -271,6 +295,7 @@ def segment_translations(
             seq=seq,
             corresp=corresp,
             source_text=source_text,
+            translation_root_path=state.config.translation_root,
             search_conn=search_conn,
             catalog_conn=catalog_conn,
         )

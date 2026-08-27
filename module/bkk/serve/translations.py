@@ -70,24 +70,52 @@ def translation_root(corpus_root: Path) -> Path:
     return corpus_root / "translations"
 
 
+def translation_bundle_roots(
+    corpus_root: Path,
+    *,
+    translation_root_path: Path | None = None,
+) -> list[Path]:
+    roots: list[Path] = []
+    dedicated = Path(translation_root_path) if translation_root_path is not None else None
+    if dedicated is not None and dedicated.is_dir():
+        roots.append(dedicated)
+    legacy = translation_root(corpus_root)
+    if legacy.is_dir() and legacy not in roots:
+        roots.append(legacy)
+    return roots
+
+
+def _translation_bundle_manifest_paths(
+    corpus_root: Path,
+    *,
+    translation_root_path: Path | None = None,
+) -> list[Path]:
+    bundle_paths = {
+        path
+        for root in translation_bundle_roots(
+            corpus_root, translation_root_path=translation_root_path,
+        )
+        for pattern in ("*/*/*/*.md", "*/*/*/*/*.md")
+        for path in root.glob(pattern)
+    }
+    return sorted(bundle_paths)
+
+
 def list_translation_bundles(
     corpus_root: Path,
     *,
+    translation_root_path: Path | None = None,
     q: str | None = None,
     source_textid: str | None = None,
     lang: str | None = None,
 ) -> list[TranslationBundle]:
-    root = translation_root(corpus_root)
-    if not root.is_dir():
+    if not translation_bundle_roots(corpus_root, translation_root_path=translation_root_path):
         return []
     query = (q or "").casefold().strip()
     out: list[TranslationBundle] = []
-    bundle_paths = {
-        path
-        for pattern in ("*/*/*/*.md", "*/*/*/*/*.md")
-        for path in root.glob(pattern)
-    }
-    for bundle_md in sorted(bundle_paths):
+    for bundle_md in _translation_bundle_manifest_paths(
+        corpus_root, translation_root_path=translation_root_path,
+    ):
         bundle_id = bundle_md.stem
         if bundle_md.parent.name != bundle_id:
             continue
@@ -538,6 +566,7 @@ def get_segment_translations(
     seq: int,
     corresp: str,
     source_text: str,
+    translation_root_path: Path | None = None,
     *,
     search_conn: sqlite3.Connection | None = None,
     catalog_conn: sqlite3.Connection | None = None,
@@ -549,7 +578,11 @@ def get_segment_translations(
         )
     else:
         entries = _segment_translations_from_fs(
-            corpus_root, textid=textid, seq=seq, corresp=corresp,
+            corpus_root,
+            translation_root_path=translation_root_path,
+            textid=textid,
+            seq=seq,
+            corresp=corresp,
         )
     return SegmentTranslationsResponse(
         corresp=corresp,
@@ -611,12 +644,17 @@ def _segment_translations_from_index(
 def _segment_translations_from_fs(
     corpus_root: Path,
     *,
+    translation_root_path: Path | None = None,
     textid: str,
     seq: int,
     corresp: str,
 ) -> "list":
     from .schemas import SegmentTranslationEntry  # noqa: PLC0415
-    bundles = list_translation_bundles(corpus_root, source_textid=textid)
+    bundles = list_translation_bundles(
+        corpus_root,
+        translation_root_path=translation_root_path,
+        source_textid=textid,
+    )
     entries = []
     for bundle_stub in bundles:
         try:

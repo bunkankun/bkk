@@ -7,7 +7,7 @@ Subcommands::
     python -m bkk.index build --all [<corpus>] [--jobs N]
     python -m bkk.index catalog <corpus> [--csv PATH] [--out PATH]
                                          [--text-prefix KR3a]
-    python -m bkk.index translations <corpus> [--out PATH]
+    python -m bkk.index translations [translation_root] [--out PATH]
     python -m bkk.index annotations [annotations_root] [--out PATH]
     python -m bkk.index merge <corpus> [--out PATH] [--text-prefix KR3a]
                                        [--text-list PATH]
@@ -156,7 +156,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     pt = sub.add_parser("translations", help="build/merge per-bundle .bkkt translation search indices")
     pt.add_argument("corpus", type=Path, nargs="?", default=None,
-                    help="corpus directory (or set global.corpus in .bkkrc)")
+                    help="translation root or corpus directory (default: global.translation_root, else global.corpus)")
+    pt.add_argument("--translation-root", type=Path, default=None,
+                    help="dedicated translation bundle root (overrides positional corpus for discovery)")
     pt.add_argument("--out", type=Path, default=None,
                     help="merged output path (default: <corpus>/_translations.bkkt)")
     grp = pt.add_mutually_exclusive_group()
@@ -463,11 +465,18 @@ def run(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.cmd in ("merge", "catalog", "translations"):
+    if args.cmd in ("merge", "catalog"):
         if args.corpus is None:
             args.corpus = idx.get("corpus") or g.get("corpus")
         if args.corpus is None:
             parser.error("corpus is required (or set global.corpus in .bkkrc)")
+    if args.cmd == "translations":
+        if args.corpus is None:
+            args.corpus = args.translation_root or idx.get("translation_root") or g.get("translation_root") or idx.get("corpus") or g.get("corpus")
+        if args.corpus is None:
+            parser.error("translation root is required (or set global.translation_root in .bkkrc)")
+        if args.translation_root is None and (idx.get("translation_root") or g.get("translation_root")):
+            args.translation_root = idx.get("translation_root") or g.get("translation_root")
     if args.cmd == "merge":
         selected_scopes = [
             bool(args.section), bool(args.prefix), bool(args.text_prefix),
@@ -631,6 +640,7 @@ def run(argv: list[str] | None = None) -> int:
     if args.cmd == "translations":
         path = merge_translations(
             args.corpus, args.out,
+            translation_root=args.translation_root,
             rebuild=args.rebuild, no_build=args.no_build,
             progress=True,
         )
@@ -647,6 +657,7 @@ def run(argv: list[str] | None = None) -> int:
         path = build_catalog_index(
             args.corpus, args.csv_path, args.out,
             prefix=args.prefix, csv_stub=args.csv_stub,
+            translation_root=g.get("translation_root") or idx.get("translation_root"),
         )
         print(f"wrote {path}")
         if args.csv_stub:

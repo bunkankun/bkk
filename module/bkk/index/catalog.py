@@ -124,6 +124,7 @@ def build_catalog_index(
     *,
     prefix: str | None = None,
     csv_stub: Path | str | None = None,
+    translation_root: Path | str | None = None,
 ) -> Path:
     """Build a ``.bkkc`` catalog index for bundles present in ``corpus``.
 
@@ -134,6 +135,7 @@ def build_catalog_index(
     corpus = Path(corpus)
     csv_path = Path(csv_path)
     out_path = Path(out_path)
+    translation_root_path = Path(translation_root) if translation_root is not None else None
 
     catalog_rows = _read_frontmatter_csv(csv_path)
     sections = {
@@ -205,7 +207,7 @@ def build_catalog_index(
         direct_counts[section_code] = direct_counts.get(section_code, 0) + 1
 
     section_records = _section_records(sections, direct_counts)
-    translation_records = _translation_records(corpus)
+    translation_records = _translation_records(corpus, translation_root=translation_root_path)
 
     if out_path.exists():
         out_path.unlink()
@@ -551,8 +553,14 @@ def _find_translation_roots(corpus: Path) -> list[Path]:
     return out
 
 
-def _translation_records(corpus: Path) -> list[tuple]:
+def _translation_records(
+    corpus: Path,
+    *,
+    translation_root: Path | None = None,
+) -> list[tuple]:
     roots = _find_translation_roots(corpus)
+    if translation_root is not None and translation_root.is_dir() and translation_root not in roots:
+        roots.append(translation_root)
     if not roots:
         return []
     bundle_paths = {
@@ -636,5 +644,4 @@ def _translation_source_textid(bundle_dir: Path, source_canonical_identifier: An
         return bundle_dir.parents[1].name
     except IndexError:
         return "_unknown"
-
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import yaml
 
 from bkk.index.catalog import build_catalog_index
-from bkk.index.translation import merge_translations
+from bkk.index.translation import discover_translation_bundles, merge_translations
 from bkk.serve.translations import align_translation, list_translation_bundles
 from bkk.serve.translations import (
     list_translation_bundles_from_catalog,
@@ -85,6 +86,16 @@ markers:
     )
 
 
+def _write_dedicated_translation(root: Path) -> None:
+    legacy = root / "translations"
+    _write_translation(root)
+    source = legacy / "KR1h" / "KR1h0004" / "en" / "KR1h0004-en-test"
+    target = root / "bkktranslations" / "KR1h" / "KR1h0004" / "en" / "KR1h0004-en-test"
+    target.parent.mkdir(parents=True)
+    source.rename(target)
+    shutil.rmtree(legacy)
+
+
 def test_translation_bundle_search_and_alignment(tmp_path: Path):
     source_juan = _write_source(tmp_path)
     _write_translation(tmp_path)
@@ -113,6 +124,22 @@ def test_translation_bundle_search_and_alignment(tmp_path: Path):
     assert aligned.rows[1].translation_text == "learning and practice"
     assert aligned.rows[2].translation_text == ""
     assert aligned.rows[2].continued is True
+
+
+def test_translation_bundles_can_live_in_dedicated_root(tmp_path: Path):
+    _write_dedicated_translation(tmp_path)
+    translation_root = tmp_path / "bkktranslations"
+
+    matches = list_translation_bundles(
+        tmp_path,
+        translation_root_path=translation_root,
+        q="practice",
+    )
+
+    assert [m.id for m in matches] == ["KR1h0004-en-test"]
+    assert discover_translation_bundles(tmp_path, translation_root=translation_root) == [
+        translation_root / "KR1h" / "KR1h0004" / "en" / "KR1h0004-en-test"
+    ]
 
 
 def test_catalog_translation_index_supports_fast_lookup(tmp_path: Path):
@@ -159,3 +186,35 @@ def test_catalog_translation_index_supports_fast_lookup(tmp_path: Path):
         translation=loaded,
     )
     assert aligned.rows[1].translation_text == "learning and practice"
+
+
+def test_catalog_and_translation_search_can_index_dedicated_translation_root(tmp_path: Path):
+    _write_source(tmp_path)
+    _write_dedicated_translation(tmp_path)
+    translation_root = tmp_path / "bkktranslations"
+    csv_path = tmp_path / "frontmatter.csv"
+    csv_path.write_text(
+        "id,title,titlePinyin,titleEnglish,notBefore,notAfter,dzt_date\n"
+        "KR1h,經部,Jing,Classics,,,,\n"
+        "KR1h0004,論語,Lunyu,Analects,-500,-400,\n",
+        encoding="utf-8",
+    )
+    catalog_path = tmp_path / "_catalog.bkkc"
+    translations_path = translation_root / "_translations.bkkt"
+    build_catalog_index(tmp_path, csv_path, catalog_path, translation_root=translation_root)
+    merge_translations(tmp_path, translations_path, translation_root=translation_root)
+
+    import sqlite3
+
+    conn = sqlite3.connect(catalog_path)
+    search_conn = sqlite3.connect(translations_path)
+    try:
+        matches, total = list_translation_bundles_from_catalog(
+            conn, search_conn=search_conn, source_textid="KR1h0004", q="practice"
+        )
+    finally:
+        conn.close()
+        search_conn.close()
+
+    assert total == 1
+    assert matches[0].path == translation_root / "KR1h" / "KR1h0004" / "en" / "KR1h0004-en-test"

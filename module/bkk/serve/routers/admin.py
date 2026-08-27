@@ -88,19 +88,31 @@ def _run_merge(jobs: JobRegistry, job_id: str, corpus_root, out_path):
         jobs.mark_error(job_id, exc)
 
 
-def _run_catalog_index(jobs: JobRegistry, job_id: str, corpus_root, csv_path, out_path):
+def _run_catalog_index(
+    jobs: JobRegistry,
+    job_id: str,
+    corpus_root,
+    csv_path,
+    out_path,
+    translation_root,
+):
     jobs.mark_running(job_id)
     try:
-        out = build_catalog_index(corpus_root, csv_path, out_path)
+        out = build_catalog_index(
+            corpus_root,
+            csv_path,
+            out_path,
+            translation_root=translation_root,
+        )
         jobs.mark_done(job_id, {"catalog_path": str(out)})
     except Exception as exc:
         jobs.mark_error(job_id, exc)
 
 
-def _run_translation_index(jobs: JobRegistry, job_id: str, corpus_root, out_path):
+def _run_translation_index(jobs: JobRegistry, job_id: str, corpus_root, out_path, translation_root):
     jobs.mark_running(job_id)
     try:
-        out = merge_translations(corpus_root, out_path)
+        out = merge_translations(corpus_root, out_path, translation_root=translation_root)
         jobs.mark_done(job_id, {"translation_search_path": str(out)})
     except Exception as exc:
         jobs.mark_error(job_id, exc)
@@ -306,6 +318,7 @@ def post_catalog_index(
         state.corpus_root,
         csv_path,
         state.catalog_path,
+        state.config.translation_root,
     )
     return _accepted(job)
 
@@ -326,6 +339,7 @@ def post_translation_search_index(
         job.id,
         state.corpus_root,
         state.translation_search_path,
+        state.config.translation_root,
     )
     return _accepted(job)
 

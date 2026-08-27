@@ -60,6 +60,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--parallels-root", type=Path, default=None,
                    help="per-juan parallel marker asset root "
                         "(default: serve.parallels_root from .bkkrc)")
+    p.add_argument("--translation-root", type=Path, default=None,
+                   help="Git-backed translation bundle root "
+                        "(default: global.translation_root from .bkkrc)")
     p.add_argument("--host", default=None, help="bind address (default: 127.0.0.1)")
     p.add_argument("--port", type=int, default=None, help="port (default: 8000)")
     p.add_argument("--admin-team", default=None, dest="admin_team",
@@ -127,6 +130,7 @@ def run(argv: list[str] | None = None) -> int:
         index_path=args.index,
         catalog_path=args.catalog_path,
         ctf_root=args.ctf_root,
+        translation_root=args.translation_root,
         core_root=args.core_root,
         core_index_path=args.core_index_path,
         core_upstream_repo=args.core_upstream_repo,
@@ -163,6 +167,8 @@ def run(argv: list[str] | None = None) -> int:
             os.environ["BKK_CATALOG_PATH"] = str(config.catalog_path)
         if config.ctf_root is not None:
             os.environ["BKK_CTF_ROOT"] = str(config.ctf_root)
+        if config.translation_root is not None:
+            os.environ["BKK_TRANSLATION_ROOT"] = str(config.translation_root)
         if config.core_root is not None:
             os.environ["BKK_CORE_ROOT"] = str(config.core_root)
         if config.core_index_path is not None:

@@ -25,7 +25,7 @@ _PATH_KEYS = frozenset(
      "root", "mapping",
      "annotations_out", "annotations_root", "annotations_index",
      "parallels_root",
-     "comments_root", "translations_root",
+     "comments_root", "translations_root", "translation_root",
      "source_root", "ai_config", "prompt", "punctuation_root",
      "report"}
 )
