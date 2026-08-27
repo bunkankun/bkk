@@ -85,7 +85,7 @@ export function StatusBar() {
       <button
         className={`sdb${showTranslation && !editing ? " on" : ""}`}
         disabled={textTab == null || editing}
-        title="Toggle translation sidecar"
+        title="Toggle translation"
         onClick={() => {
           if (textTab != null && !editing) workspace.toggleTranslationSidecar();
         }}

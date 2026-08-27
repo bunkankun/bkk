@@ -8,7 +8,6 @@ import { CoreRecord } from "./CoreRecord";
 import { DuplicationViewer } from "./DuplicationViewer";
 import { ImagePanel } from "./ImagePanel";
 import { TextViewer } from "./TextViewer";
-import { TranslationSidecar } from "./TranslationSidecar";
 import { BundleEditor } from "./BundleEditor";
 import type { EditorPosition } from "../../lib/editorText";
 
@@ -289,7 +288,7 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
             onCursorInfoChange={setEditCursor}
           />
         ) : (
-          <div className={`ws-unified${showTranslation || showImage ? " has-sidecars" : ""}`}>
+          <div className={`ws-unified${showImage ? " has-sidecars" : ""}`}>
             <div className="ws-primary">
               <TextViewer
                 key={`${activeTextTab.textid}:${activeTextTab.seq}`}
@@ -299,26 +298,17 @@ export function WorkspacePane({ pane, closeable = false }: { pane: PaneLeaf; clo
                 seq={activeTextTab.seq}
                 lineMode={effectiveLineMode}
                 translationAlign={showTranslation}
+                translationId={
+                  selectedTranslation?.source_textid === activeTextTab.textid
+                    ? selectedTranslation.id
+                    : null
+                }
               />
             </div>
-            {(showTranslation || showImage) && (
+            {showImage && (
               <>
                 <InspectResizer />
                 <div className="ws-sidecars" style={{ width: inspectWidth }}>
-                  {showTranslation && (
-                    <TranslationSidecar
-                      key={`trans:${activeTextTab.textid}:${activeTextTab.seq}:${selectedTranslation?.id ?? ""}`}
-                      paneId={pane.id}
-                      tabId={activeTextTab.id}
-                      textid={activeTextTab.textid}
-                      seq={activeTextTab.seq}
-                      translationId={
-                        selectedTranslation?.source_textid === activeTextTab.textid
-                          ? selectedTranslation.id
-                          : null
-                      }
-                    />
-                  )}
                   {showImage && (
                     <ImagePanel
                       key={`image:${activeTextTab.textid}:${activeTextTab.seq}`}

@@ -14,6 +14,7 @@ import {
   getJuanParallelsStatus,
   getManifest,
   getPunctuationSidecars,
+  getTranslationAlignment,
 } from "../../api/client";
 import type {
   Annotation,
@@ -22,6 +23,8 @@ import type {
   JuanMarker,
   Manifest,
   PunctuationSidecar,
+  TranslationAlignedRow,
+  TranslationAlignmentResponse,
 } from "../../api/types";
 import { krRefToChar } from "../../lib/pua";
 import {
@@ -879,6 +882,28 @@ function initialVisibleBlockIndexes(blocks: Block[], viewportHeight: number | nu
   return visible;
 }
 
+export function alignedTranslationForBlock(
+  block: Pick<Block, "bucket" | "startOffset" | "endOffset">,
+  rows: TranslationAlignedRow[],
+): TranslationAlignedRow | null {
+  if (block.bucket !== "body") return null;
+  let best: { row: TranslationAlignedRow; overlap: number; distance: number } | null = null;
+  for (const row of rows) {
+    const overlap = Math.min(block.endOffset, row.source_end) -
+      Math.max(block.startOffset, row.source_offset);
+    if (overlap <= 0) continue;
+    const distance = Math.abs(block.startOffset - row.source_offset);
+    if (
+      best == null ||
+      overlap > best.overlap ||
+      (overlap === best.overlap && distance < best.distance)
+    ) {
+      best = { row, overlap, distance };
+    }
+  }
+  return best?.row ?? null;
+}
+
 interface Props {
   paneId: string;
   tabId: string;
@@ -886,6 +911,7 @@ interface Props {
   seq: number;
   lineMode: LineMode;
   translationAlign?: boolean;
+  translationId?: string | null;
 }
 
 export function TextViewer({
@@ -895,6 +921,7 @@ export function TextViewer({
   seq,
   lineMode,
   translationAlign = false,
+  translationId = null,
 }: Props) {
   const rightTab = useWorkspace((s) => s.rightTab);
   const showPageBreaks = useWorkspace((s) => s.readPrefs.showPageBreaks);
@@ -912,6 +939,7 @@ export function TextViewer({
       : null,
   );
   const currentPageMarkerId = currentPage?.markerId ?? null;
+  const selectedSegment = useWorkspace((s) => s.selectedSegment);
   const activeEdition = useMemo(
     () => (currentPageMarkerId ? parseMarkerId(currentPageMarkerId)?.edition ?? null : null),
     [currentPageMarkerId],
@@ -925,6 +953,9 @@ export function TextViewer({
   const [punctuationSidecars, setPunctuationSidecars] = useState<PunctuationSidecar[]>([]);
   const [selectedPunctuationSidecar, setSelectedPunctuationSidecar] =
     useState<PunctuationSidecarSelection>(null);
+  const [translationAlignment, setTranslationAlignment] =
+    useState<TranslationAlignmentResponse | null>(null);
+  const [translationError, setTranslationError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const contentReady = juan != null && annotations != null;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1027,6 +1058,29 @@ export function TextViewer({
       cancelled = true;
     };
   }, [textid, seq, selectedEdition]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTranslationAlignment(null);
+    setTranslationError(null);
+    if (!translationAlign || translationId == null) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    getTranslationAlignment(textid, seq, translationId)
+      .then((response) => {
+        if (cancelled) return;
+        setTranslationAlignment(response);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setTranslationError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [translationAlign, translationId, textid, seq]);
 
   const activePunctuationSidecar = useMemo(
     () =>
@@ -1171,6 +1225,20 @@ export function TextViewer({
     [blocksByBucket],
   );
 
+  const translationRows = useMemo(
+    () =>
+      translationAlign && translationAlignment?.status === "ok"
+        ? translationAlignment.rows
+        : [],
+    [translationAlign, translationAlignment],
+  );
+
+  const firstTranslatedCorresp = useMemo(
+    () =>
+      translationRows.find((row) => row.translation_text && !row.continued)?.corresp ?? null,
+    [translationRows],
+  );
+
   const annIndex = useMemo(
     () => buildAnnotationIndex(annotations ?? []),
     [annotations],
@@ -1207,6 +1275,46 @@ export function TextViewer({
       return changed ? next : prev;
     });
   }, [blocks, contentReady]);
+
+  useEffect(() => {
+    if (
+      !translationAlign ||
+      !selectedSegment ||
+      selectedSegment.textid !== textid ||
+      selectedSegment.seq !== seq ||
+      translationRows.length === 0
+    ) {
+      return;
+    }
+    const row = translationRows.find((candidate) => candidate.corresp === selectedSegment.corresp);
+    if (!row) return;
+    const targetIdx = blocks.findIndex(
+      (block) =>
+        block.bucket === "body" &&
+        row.source_offset >= block.startOffset &&
+        row.source_offset < block.endOffset,
+    );
+    if (targetIdx < 0) return;
+    setVisibleBlocks((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (let i = 0; i <= targetIdx; i++) {
+        if (!next.has(i)) {
+          next.add(i);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    window.requestAnimationFrame(() => {
+      const block = blocks[targetIdx];
+      containerRef.current
+        ?.querySelector<HTMLElement>(
+          `.tv-block[data-bucket="${block.bucket}"][data-block-start="${block.startOffset}"]`,
+        )
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, [translationAlign, selectedSegment, translationRows, blocks, textid, seq]);
 
   useEffect(() => {
     if (
@@ -1679,30 +1787,19 @@ export function TextViewer({
     };
   }, [handleMouseUp]);
 
-  const syncSourceBlock = useCallback(
-    (block: Block) => {
-      if (!translationAlign || block.bucket !== "body") return;
+  const selectAlignedBlock = useCallback(
+    (block: Block, row: TranslationAlignedRow | null) => {
+      if (!translationAlign || block.bucket !== "body" || row == null) return;
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) return;
-      const root = scrollRef.current;
-      if (!root) return;
-      const rootRect = root.getBoundingClientRect();
-      const anchorTop = Math.min(72, Math.max(40, rootRect.height * 0.16));
-      window.dispatchEvent(
-        new CustomEvent("bkk:source-scroll-sync", {
-          detail: {
-            paneId,
-            tabId,
-            textid,
-            seq,
-            bucket: block.bucket,
-            offset: block.startOffset,
-            anchorTop,
-          },
-        }),
-      );
+      workspace.setSelectedSegment({
+        textid,
+        seq,
+        corresp: row.corresp,
+        sourceText: row.source_text,
+      });
     },
-    [translationAlign, paneId, tabId, textid, seq],
+    [translationAlign, textid, seq],
   );
 
   if (error) {
@@ -1718,6 +1815,16 @@ export function TextViewer({
   const editionShort = selectedEditionOption?.short ?? manifest?.metadata?.edition?.short ?? null;
   const bunkankunUrl = textidToBunkankunUrl(textid);
   const altIds = manifestAltIds(manifest);
+  const translationTitle =
+    translationAlignment?.translation?.title ??
+    translationAlignment?.translation?.id ??
+    translationId;
+  const translationLang = translationAlignment?.translation?.language;
+  const translationTranslators = (translationAlignment?.translation?.responsibility ?? [])
+    .map((r) => r.name)
+    .filter((name): name is string => typeof name === "string" && name.length > 0)
+    .join(", ");
+  const translationDate = translationAlignment?.translation?.date;
 
   return (
     <div
@@ -1798,6 +1905,39 @@ export function TextViewer({
             </button>
           </div>
         ) : null}
+        {translationAlign ? (
+          <div className="tv-translation-meta">
+            {translationId == null ? (
+              "Select a translation from Translations."
+            ) : translationError ? (
+              `Failed to load translation: ${translationError}`
+            ) : translationAlignment?.status === "no_alignment_markers" ? (
+              "No source segment markers are available for translation alignment."
+            ) : translationTitle ? (
+              <>
+                <span className="tv-translation-meta-title">{translationTitle}</span>
+                {translationLang ? ` · ${translationLang}` : ""}
+                {translationTranslators ? ` · ${translationTranslators}` : ""}
+                {translationDate ? ` · ${translationDate.slice(0, 4)}` : ""}
+                {firstTranslatedCorresp ? (
+                  <button
+                    type="button"
+                    className="juan-nav-btn tv-translation-jump"
+                    onClick={() => {
+                      containerRef.current
+                        ?.querySelector<HTMLElement>("[data-first-translated]")
+                        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+                    }}
+                  >
+                    ↓ first translation
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              "Loading translation…"
+            )}
+          </div>
+        ) : null}
       </div>
       <div
         className={`tv-body tv-body-${lineMode}${translationAlign && lineMode === "phrase" ? " tv-body-translation-align" : ""}${showPageBreaks ? " tv-show-pb" : ""} tv-lb-${lineBreakDisplay}`}
@@ -1810,6 +1950,15 @@ export function TextViewer({
             ) : null}
             {view.blocks.map((b) => {
               const idx = blocks.indexOf(b);
+              const translationRow =
+                translationAlign && lineMode === "phrase"
+                  ? alignedTranslationForBlock(b, translationRows)
+                  : null;
+              const isActive =
+                translationRow != null &&
+                selectedSegment?.textid === textid &&
+                selectedSegment.seq === seq &&
+                selectedSegment.corresp === translationRow.corresp;
               return (
                 <BlockView
                   key={`${b.bucket}:${idx}`}
@@ -1827,7 +1976,10 @@ export function TextViewer({
                   lineBreakDisplay={lineBreakDisplay}
                   activeEdition={activeEdition}
                   bucketLength={bucketLengths.get(view.bucket) ?? 0}
-                  onAlignClick={translationAlign ? syncSourceBlock : undefined}
+                  translationRow={translationRow}
+                  translationActive={isActive}
+                  translationFirst={translationRow?.corresp === firstTranslatedCorresp}
+                  onAlignClick={translationAlign ? selectAlignedBlock : undefined}
                   rightTab={rightTab}
                   hasParallels={hasParallels}
                 />
@@ -1858,7 +2010,10 @@ interface BlockViewProps {
   lineBreakDisplay: LineBreakDisplay;
   activeEdition: string | null;
   bucketLength: number;
-  onAlignClick?: (block: Block) => void;
+  translationRow?: TranslationAlignedRow | null;
+  translationActive?: boolean;
+  translationFirst?: boolean;
+  onAlignClick?: (block: Block, row: TranslationAlignedRow | null) => void;
   rightTab: string;
   hasParallels: boolean | null;
 }
@@ -1878,11 +2033,23 @@ function BlockView({
   lineBreakDisplay,
   activeEdition,
   bucketLength,
+  translationRow = null,
+  translationActive = false,
+  translationFirst = false,
   onAlignClick,
   rightTab,
   hasParallels,
 }: BlockViewProps) {
   const Tag = block.tagName;
+  const interlaced = translationRow != null && block.bucket === "body";
+  const translationLineCount =
+    translationRow?.translation_text
+      ? Math.max(1, translationRow.translation_text.split("\n").length)
+      : translationRow
+        ? 1
+        : 0;
+  const estimatedInterlacedHeight =
+    block.estimatedHeight + (translationRow ? 18 + translationLineCount * 20 : 0);
 
   const renderChar = (rc: RenderedChar, i: number) => {
     if (rc.pageAnchor) {
@@ -2037,25 +2204,48 @@ function BlockView({
     });
   };
 
+  const renderTranslation = () => {
+    if (translationRow == null) return null;
+    if (translationRow.translation_text) {
+      return translationRow.translation_text.split("\n").map((line, i) => (
+        <p key={i}>{line}</p>
+      ));
+    }
+    return (
+      <span className="trans-missing">
+        {translationRow.continued ? "continued" : "untranslated"}
+      </span>
+    );
+  };
+
   if (!visible) {
     return (
       <Tag
         className="tv-block tv-block-placeholder"
         data-block-idx={blockIdx}
-        style={{ minHeight: block.estimatedHeight }}
+        style={{ minHeight: interlaced ? estimatedInterlacedHeight : block.estimatedHeight }}
       />
     );
   }
   return (
     <Tag
-      className="tv-block"
+      className={`tv-block${interlaced ? " tv-trans-block" : ""}${translationActive ? " active" : ""}${translationRow?.continued ? " continued" : ""}`}
       data-block-idx={blockIdx}
       data-bucket={block.bucket}
       data-block-start={block.startOffset}
       data-block-end={block.endOffset}
-      onClick={() => onAlignClick?.(block)}
+      data-trans-corresp={translationRow?.corresp}
+      {...(translationFirst ? { "data-first-translated": "1" } : {})}
+      onClick={() => onAlignClick?.(block, translationRow)}
     >
-      {renderChars()}
+      {interlaced ? (
+        <>
+          <div className="tv-source-line">{renderChars()}</div>
+          <div className="tv-translation-line">{renderTranslation()}</div>
+        </>
+      ) : (
+        renderChars()
+      )}
     </Tag>
   );
 }

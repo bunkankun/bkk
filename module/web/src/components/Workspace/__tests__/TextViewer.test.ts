@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { JuanMarker } from "../../../api/types";
 import {
+  alignedTranslationForBlock,
   buildBlocks,
   buildRenderedChars,
   headSequenceLabel,
@@ -234,5 +235,59 @@ describe("TextViewer phrase blocks", () => {
         "):note",
         "丁:plain",
       ]);
+  });
+});
+
+describe("TextViewer translation alignment", () => {
+  const rows = [
+    {
+      corresp: "001-1a.1",
+      source_marker_id: "m1",
+      source_offset: 0,
+      source_end: 2,
+      source_text: "甲乙",
+      translation_text: "alpha",
+      translation_refs: [],
+      continued: false,
+      resp: null,
+    },
+    {
+      corresp: "001-1a.2",
+      source_marker_id: "m2",
+      source_offset: 2,
+      source_end: 5,
+      source_text: "丙丁戊",
+      translation_text: "beta",
+      translation_refs: [],
+      continued: false,
+      resp: null,
+    },
+  ];
+
+  it("matches a body phrase block to the overlapping translation row", () => {
+    expect(
+      alignedTranslationForBlock(
+        { bucket: "body", startOffset: 2, endOffset: 5 },
+        rows,
+      )?.corresp,
+    ).toBe("001-1a.2");
+  });
+
+  it("uses largest overlap when display punctuation changes block edges", () => {
+    expect(
+      alignedTranslationForBlock(
+        { bucket: "body", startOffset: 1, endOffset: 5 },
+        rows,
+      )?.corresp,
+    ).toBe("001-1a.2");
+  });
+
+  it("does not attach translations to front or back blocks", () => {
+    expect(
+      alignedTranslationForBlock(
+        { bucket: "front", startOffset: 0, endOffset: 2 },
+        rows,
+      ),
+    ).toBeNull();
   });
 });
