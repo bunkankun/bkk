@@ -33,6 +33,7 @@ from .routers import redirects as redirects_router
 from .routers import search as search_router
 from .routers import texts as texts_router
 from .routers import translations as translations_router
+from .routers import view as view_router
 from .routers import voice as voice_router
 from .routers import workspace as workspace_router
 from .routers import user_texts as user_texts_router
@@ -151,6 +152,8 @@ def create_app(config: ServeConfig) -> FastAPI:
     app.include_router(annotations_write_router.router, prefix="/api")
     app.include_router(contributions_router.router, prefix="/api")
     app.include_router(translations_router.router, prefix="/api")
+    app.include_router(view_router.router, prefix="/api")
+    app.include_router(view_router.router, include_in_schema=False)
     app.include_router(voice_router.router, prefix="/api")
     app.include_router(parallels_router.router, prefix="/api")
     app.include_router(bundle_edit_router.router, prefix="/api")

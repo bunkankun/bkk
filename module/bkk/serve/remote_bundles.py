@@ -519,7 +519,14 @@ def _remote_visible(
     if not _valid_repo_name(textid):
         return None
     client = _client(state)
-    if session is not None and state.config.github_client_id:
+    if (
+        session is not None
+        and state.config.github_client_id
+        and (
+            not session.repo_inventory_ready
+            or textid in session.user_bundle_repos
+        )
+    ):
         user = _load_remote_bundle(
             client,
             repo=f"{session.login}/{textid}",

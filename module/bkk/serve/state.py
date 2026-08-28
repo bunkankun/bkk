@@ -123,6 +123,10 @@ class UserSession:
     html_url: str | None
     access_token: str
     workspace: dict[str, Any]
+    user_bundle_repos: frozenset[str] = frozenset()
+    user_translation_repos: frozenset[str] = frozenset()
+    repo_inventory_ready: bool = False
+    repo_inventory_updated_at: float | None = None
     is_admin: bool = False
     is_editor: bool = False
     bluesky: BlueskySession | None = None
@@ -135,6 +139,12 @@ class UserSession:
             "avatar_url": self.avatar_url,
             "html_url": self.html_url,
             "workspace": self.workspace,
+            "repo_inventory": {
+                "ready": self.repo_inventory_ready,
+                "updated_at": self.repo_inventory_updated_at,
+                "bundle_count": len(self.user_bundle_repos),
+                "translation_count": len(self.user_translation_repos),
+            },
             "is_admin": self.is_admin,
             "is_editor": self.is_editor,
             "bluesky": (
@@ -161,6 +171,10 @@ class SessionRegistry:
         html_url: str | None,
         access_token: str,
         workspace: dict[str, Any],
+        user_bundle_repos: frozenset[str] = frozenset(),
+        user_translation_repos: frozenset[str] = frozenset(),
+        repo_inventory_ready: bool = False,
+        repo_inventory_updated_at: float | None = None,
         is_admin: bool = False,
         is_editor: bool = False,
     ) -> UserSession:
@@ -172,6 +186,10 @@ class SessionRegistry:
             html_url=html_url,
             access_token=access_token,
             workspace=workspace,
+            user_bundle_repos=user_bundle_repos,
+            user_translation_repos=user_translation_repos,
+            repo_inventory_ready=repo_inventory_ready,
+            repo_inventory_updated_at=repo_inventory_updated_at,
             is_admin=is_admin,
             is_editor=is_editor,
         )

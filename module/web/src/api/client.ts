@@ -191,6 +191,15 @@ export async function getAuthSession(): Promise<AuthSession> {
   return fetchJson<AuthSession>(`${apiBase}/auth/session`);
 }
 
+export async function refreshRepoInventory(): Promise<{
+  ready: boolean;
+  updated_at?: number | null;
+  bundle_count: number;
+  translation_count: number;
+}> {
+  return fetchJson(`${apiBase}/auth/repo-inventory/refresh`, { method: "POST" });
+}
+
 export function startGithubLogin(): void {
   window.location.assign(`${apiBase}/auth/github/start`);
 }

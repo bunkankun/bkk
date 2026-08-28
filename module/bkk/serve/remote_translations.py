@@ -260,7 +260,14 @@ def _load_remote_translation_visible(
     if not _valid_translation_repo_name(translation_id):
         return None
     client = _client(state)
-    if session is not None and state.config.github_client_id:
+    if (
+        session is not None
+        and state.config.github_client_id
+        and (
+            not session.repo_inventory_ready
+            or translation_id in session.user_translation_repos
+        )
+    ):
         user = _load_remote_translation(
             client,
             repo=f"{session.login}/{translation_id}",

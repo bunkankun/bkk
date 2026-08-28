@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   clearManifestCache,
   listUserTexts,
+  refreshRepoInventory,
   syncUserTexts,
 } from "../../api/client";
 import type { UserTextListItem } from "../../api/types";
@@ -24,6 +25,8 @@ export function Settings() {
   const [userTexts, setUserTexts] = useState<UserTextListItem[]>([]);
   const [userTextsLoading, setUserTextsLoading] = useState(false);
   const [userTextsError, setUserTextsError] = useState<string | null>(null);
+  const [repoInventoryLoading, setRepoInventoryLoading] = useState(false);
+  const [repoInventoryError, setRepoInventoryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authenticated) {
@@ -76,6 +79,19 @@ export function Settings() {
       setUserTextsError(err instanceof Error ? err.message : String(err));
     } finally {
       setUserTextsLoading(false);
+    }
+  };
+
+  const handleRefreshRepoInventory = async () => {
+    if (!authenticated) return;
+    setRepoInventoryLoading(true);
+    setRepoInventoryError(null);
+    try {
+      await refreshRepoInventory();
+    } catch (err) {
+      setRepoInventoryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRepoInventoryLoading(false);
     }
   };
 
@@ -176,6 +192,18 @@ export function Settings() {
           </button>
         </div>
       </div>
+      <div className="settings-row">
+        <span className="settings-label">GitHub repositories</span>
+        <button
+          type="button"
+          className="settings-action"
+          disabled={!authenticated || repoInventoryLoading}
+          title="Refresh the list of private bundle and translation repositories"
+          onClick={() => void handleRefreshRepoInventory()}
+        >
+          {repoInventoryLoading ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
       {authenticated ? (
         <div className="settings-user-texts">
           {userTextsLoading ? <div className="settings-help">Loading user texts…</div> : null}
@@ -193,6 +221,7 @@ export function Settings() {
         </div>
       ) : null}
       {userTextsError ? <p className="settings-help settings-error">{userTextsError}</p> : null}
+      {repoInventoryError ? <p className="settings-help settings-error">{repoInventoryError}</p> : null}
       {!authenticated ? (
         <p className="settings-help">Log in with GitHub to create and read private user texts.</p>
       ) : (

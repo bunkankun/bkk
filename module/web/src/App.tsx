@@ -20,6 +20,41 @@ import { StatusBar } from "./components/StatusBar";
 import { PaneTree } from "./components/Workspace/PaneTree";
 import { setResizing, useWorkspace, workspace } from "./state/useWorkspace";
 
+function consumeViewRedirect(): void {
+  const url = new URL(window.location.href);
+  const textid = url.searchParams.get("view_textid");
+  const seqRaw = url.searchParams.get("view_seq");
+  if (!textid || !seqRaw) return;
+  const seq = Number(seqRaw);
+  if (!Number.isInteger(seq) || seq < 0) {
+    window.history.replaceState(window.history.state, document.title, "/");
+    return;
+  }
+  const bucket = url.searchParams.get("view_bucket") || "body";
+  const offsetRaw = url.searchParams.get("view_offset");
+  const lengthRaw = url.searchParams.get("view_length");
+  const offset = offsetRaw == null ? NaN : Number(offsetRaw);
+  const length = lengthRaw == null ? NaN : Number(lengthRaw);
+  if (
+    offsetRaw != null &&
+    lengthRaw != null &&
+    Number.isInteger(offset) &&
+    Number.isInteger(length) &&
+    offset >= 0 &&
+    length > 0
+  ) {
+    workspace.openTextLocation({ textid, seq, bucket, offset, length });
+  } else {
+    workspace.openJuan(textid, seq);
+  }
+  window.history.replaceState(window.history.state, document.title, "/");
+}
+
+function hasViewRedirectParams(): boolean {
+  const url = new URL(window.location.href);
+  return url.searchParams.has("view_textid") && url.searchParams.has("view_seq");
+}
+
 function ResizeHandle({ side }: { side: "left" | "right" }) {
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -194,7 +229,12 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void workspace.loadAuthSession();
+    const hasViewRedirect = hasViewRedirectParams();
+    void workspace
+      .loadAuthSession({ skipWorkspaceRestore: hasViewRedirect })
+      .finally(() => {
+        if (!cancelled && hasViewRedirect) consumeViewRedirect();
+      });
     getServerInfo()
       .then((info) => {
         if (cancelled) return;

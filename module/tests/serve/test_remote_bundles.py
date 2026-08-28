@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
 from bkk.serve.remote_bundles import GitHubBundleClient
+from bkk.serve.remote_bundles import _remote_visible
 
 from .conftest import write_bundle
 
@@ -149,6 +150,7 @@ def test_remote_canonical_manifest_and_juan_prefer_github(
     assert manifest.headers["x-bkk-bundle-origin"] == "remote-canonical"
     assert manifest.headers["x-bkk-bundle-repo"] == "bkkbooks/KR1h0004"
 
+
     juan = client.get("/bundles/KR1h0004/juan/1")
     assert juan.status_code == 200, juan.text
     assert juan.json()["body"]["text"] == "遠端正文"
@@ -156,6 +158,30 @@ def test_remote_canonical_manifest_and_juan_prefer_github(
     asset = client.get("/bundles/KR1h0004/assets/notes.md")
     assert asset.status_code == 200, asset.text
     assert asset.text == "# remote notes\n"
+
+
+def test_ready_inventory_skips_absent_user_bundle_probe(client, monkeypatch):
+    state = client.app.state.bkk
+    session = state.sessions.create(
+        login="alice",
+        name=None,
+        avatar_url=None,
+        html_url=None,
+        access_token="secret-token",
+        workspace={"repo": "alice/BKK-Workspace", "branch": "alice"},
+        repo_inventory_ready=True,
+    )
+    calls: list[str] = []
+
+    def fake_load(*args, **kwargs):
+        calls.append(kwargs["repo"])
+        return None
+
+    monkeypatch.setattr("bkk.serve.remote_bundles._load_remote_bundle", fake_load)
+
+    _remote_visible(state, "KR1h0004", session)
+
+    assert calls == ["bkkbooks/KR1h0004"]
 
 
 def test_remote_user_repo_beats_canonical(tmp_path: Path, fake_remote):

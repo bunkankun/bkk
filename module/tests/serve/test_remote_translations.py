@@ -11,6 +11,7 @@ from bkk.serve import create_app
 from bkk.serve.config import ServeConfig
 from bkk.serve.remote_bundles import GitHubBundleClient
 from bkk.serve.remote_translations import refresh_remote_translations
+from bkk.serve.remote_translations import _load_remote_translation_visible
 from bkk.serve.translations import list_translation_bundles_from_catalog
 
 from .test_translations import _write_source, _write_translation
@@ -146,6 +147,39 @@ def test_translation_alignment_prefers_remote_then_honors_prefer_local(
     assert local_response.status_code == 200, local_response.text
     assert local_response.json()["translation"]["title"] == "Test Translation"
     assert local_response.json()["rows"][0]["translation_text"] == "The Master said:"
+
+
+def test_ready_inventory_skips_absent_user_translation_probe(client, monkeypatch):
+    state = client.app.state.bkk
+    session = state.sessions.create(
+        login="alice",
+        name=None,
+        avatar_url=None,
+        html_url=None,
+        access_token="secret-token",
+        workspace={"repo": "alice/BKK-Workspace", "branch": "alice"},
+        repo_inventory_ready=True,
+    )
+    calls: list[str] = []
+
+    def fake_load(*args, **kwargs):
+        calls.append(kwargs["repo"])
+        return None
+
+    monkeypatch.setattr(
+        "bkk.serve.remote_translations._load_remote_translation",
+        fake_load,
+    )
+
+    _load_remote_translation_visible(
+        state,
+        session,
+        "KR1h0004-en-test",
+        source_textid="KR1h0004",
+        include_juans=False,
+    )
+
+    assert calls == ["bkktranslations/KR1h0004-en-test"]
 
 
 def test_remote_translation_refresh_builds_local_catalog_and_search(

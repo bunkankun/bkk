@@ -633,7 +633,7 @@ Because the target language is rarely CJK, **`canonical_set`** does not apply. U
 
 The body is ordinary Markdown. Headings, paragraphs, lists, footnotes, and inline emphasis all work as elsewhere. The translator is free to introduce headings, section breaks, and prefatory material that have no counterpart in the source — this is what makes the translation readable on its own.
 
-Source alignment is recorded with **Pandoc-style attribute spans**. A span surrounding a piece of translated prose declares which source segment(s) it corresponds to:
+Source alignment is currently recorded with **Pandoc-style attribute spans**. However, efforts are under way to replace this with a more flexible and less verbose method based on **Citation Tree Fragments** A span surrounding a piece of translated prose declares which source segment(s) it corresponds to:
 
 ```markdown
 [Le Maître a dit :]{corresp=002-1a.3}
@@ -745,6 +745,11 @@ The editor's responsibilities, listed in roughly increasing order of project spe
 The editor is a client of bunkanlib; it does not have its own resolution model. It writes the storage-form Markdown; the canonicalizer that produces the hash is shared with the rest of the toolchain.
 
 A first-cut editor that delivers parallel view, alignment status, and span management is enough to begin authoring. The remaining items can be added incrementally without breaking the format.
+
+## Citation Tree Fragments
+
+Distributed Text Services (DTS) introduced the concept of Citation Trees in its
+specification, which reached 1.0 in 2026-02-13, to describe the structure of a text with citable elements. We are extending this concept to use Fragments of such trees (CTF) independently, but locigally part of citation trees.  This will not only allow organize access to the corpus using a standardized API, but will also function to hold metadata and other information that is needed to assemble a rendering or description of any part of a text, independent of a specific version. 
 
 ## References
 

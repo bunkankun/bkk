@@ -58,6 +58,58 @@ def test_auth_session_returns_public_user(client):
     assert "access_token" not in body["user"]
 
 
+def test_user_repo_inventory_filters_bundle_and_translation_repositories(monkeypatch):
+    payloads = [
+        [
+            {"name": "KR1h0004"},
+            {"name": "KR1h0004-en-draft"},
+            {"name": "BKK-Workspace"},
+        ],
+        [],
+    ]
+
+    def fake_github_json(method, path, token, **kwargs):
+        assert method == "GET"
+        assert token == "token"
+        return payloads.pop(0)
+
+    monkeypatch.setattr(auth, "_github_json", fake_github_json)
+
+    bundles, translations = auth._user_repo_inventory("token")
+
+    assert bundles == frozenset({"KR1h0004"})
+    assert translations == frozenset({"KR1h0004-en-draft"})
+
+
+def test_refresh_repo_inventory_updates_current_session(client, monkeypatch):
+    state = client.app.state.bkk
+    session = state.sessions.create(
+        login="alice",
+        name=None,
+        avatar_url=None,
+        html_url=None,
+        access_token="secret-token",
+        workspace=_workspace(),
+    )
+    client.cookies.set("bkk_session", session.id)
+    monkeypatch.setattr(
+        auth,
+        "_user_repo_inventory",
+        lambda token: (
+            frozenset({"KR1h0004"}),
+            frozenset({"KR1h0004-en-draft"}),
+        ),
+    )
+
+    r = client.post("/auth/repo-inventory/refresh")
+
+    assert r.status_code == 200
+    assert r.json()["bundle_count"] == 1
+    assert r.json()["translation_count"] == 1
+    assert session.repo_inventory_ready is True
+    assert session.user_bundle_repos == frozenset({"KR1h0004"})
+
+
 # ---------- _is_team_member ----------
 
 

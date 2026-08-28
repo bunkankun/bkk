@@ -2598,7 +2598,7 @@ export const workspace = {
     state = { ...state, serverInfo: info };
     notify();
   },
-  async loadAuthSession() {
+  async loadAuthSession(options: { skipWorkspaceRestore?: boolean } = {}) {
     state = {
       ...state,
       auth: { ...state.auth, status: "loading", error: null },
@@ -2622,7 +2622,7 @@ export const workspace = {
       };
       notify();
       if (session.authenticated) {
-        void loadWorkspacePersistence();
+        if (!options.skipWorkspaceRestore) void loadWorkspacePersistence();
         void syncUserTexts().catch(() => undefined);
       }
     } catch (e) {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import time
 from typing import Any
@@ -20,6 +21,8 @@ SESSION_COOKIE = "bkk_session"
 OAUTH_STATE_COOKIE = "bkk_oauth_state"
 GITHUB_API = "https://api.github.com"
 REF_READY_ATTEMPTS = 12
+_USER_BUNDLE_REPO_RE = re.compile(r"KR\d+[a-z]\d{4}$")
+_USER_TRANSLATION_REPO_RE = re.compile(r"KR\d+[a-z]\d{4}-[A-Za-z0-9][A-Za-z0-9._-]*$")
 log = logging.getLogger("bkk.serve.github")
 
 
@@ -102,6 +105,49 @@ def _github_json(method: str, path: str, token: str, **kwargs: Any) -> Any:
     if not r.content:
         return None
     return r.json()
+
+
+def _user_repo_inventory(token: str) -> tuple[frozenset[str], frozenset[str]]:
+    """List relevant repositories visible to the authenticated GitHub user."""
+    bundle_repos: set[str] = set()
+    translation_repos: set[str] = set()
+    for page in range(1, 11):
+        payload = _github_json(
+            "GET",
+            "/user/repos?affiliation=owner,collaborator,organization_member"
+            f"&type=all&per_page=100&page={page}",
+            token,
+        )
+        if not isinstance(payload, list) or not payload:
+            break
+        for repo in payload:
+            if not isinstance(repo, dict) or not isinstance(repo.get("name"), str):
+                continue
+            name = repo["name"]
+            if _USER_TRANSLATION_REPO_RE.fullmatch(name):
+                translation_repos.add(name)
+            elif _USER_BUNDLE_REPO_RE.fullmatch(name):
+                bundle_repos.add(name)
+        if len(payload) < 100:
+            break
+    return frozenset(bundle_repos), frozenset(translation_repos)
+
+
+def _set_repo_inventory(
+    session: UserSession,
+    bundle_repos: frozenset[str],
+    translation_repos: frozenset[str],
+) -> dict[str, Any]:
+    session.user_bundle_repos = bundle_repos
+    session.user_translation_repos = translation_repos
+    session.repo_inventory_ready = True
+    session.repo_inventory_updated_at = time.time()
+    return {
+        "ready": True,
+        "updated_at": session.repo_inventory_updated_at,
+        "bundle_count": len(bundle_repos),
+        "translation_count": len(translation_repos),
+    }
 
 
 def _repo_exists(token: str, owner: str, repo: str) -> dict[str, Any] | None:
@@ -378,6 +424,14 @@ def github_callback(request: Request, code: str, state: str) -> RedirectResponse
     workspace = _workspace_for_user(app_state, access_token, login)
     is_admin = _is_team_member(access_token, app_state.config.admin_team, login)
     is_editor = _is_team_member(access_token, app_state.config.editor_team, login)
+    try:
+        user_bundle_repos, user_translation_repos = _user_repo_inventory(access_token)
+        inventory_ready = True
+    except HTTPException as exc:
+        log.warning("GitHub repository inventory failed for %s: %s", login, exc)
+        user_bundle_repos = frozenset()
+        user_translation_repos = frozenset()
+        inventory_ready = False
     user_session = app_state.sessions.create(
         login=login,
         name=user.get("name") if isinstance(user.get("name"), str) else None,
@@ -389,6 +443,10 @@ def github_callback(request: Request, code: str, state: str) -> RedirectResponse
         html_url=user.get("html_url") if isinstance(user.get("html_url"), str) else None,
         access_token=access_token,
         workspace=workspace,
+        user_bundle_repos=user_bundle_repos,
+        user_translation_repos=user_translation_repos,
+        repo_inventory_ready=inventory_ready,
+        repo_inventory_updated_at=time.time() if inventory_ready else None,
         is_admin=is_admin,
         is_editor=is_editor,
     )
@@ -404,6 +462,15 @@ def github_callback(request: Request, code: str, state: str) -> RedirectResponse
         max_age=60 * 60 * 24 * 30,
     )
     return response
+
+
+@router.post("/repo-inventory/refresh", summary="Refresh the current user's GitHub repository inventory")
+def refresh_repo_inventory(request: Request) -> dict[str, Any]:
+    user_session = _session_from_request(request)
+    if user_session is None:
+        raise HTTPException(status_code=401, detail="Login required")
+    bundle_repos, translation_repos = _user_repo_inventory(user_session.access_token)
+    return _set_repo_inventory(user_session, bundle_repos, translation_repos)
 
 
 @router.post("/logout", summary="Log out of the current BKK session")

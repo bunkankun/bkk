@@ -924,9 +924,17 @@ export interface AuthUser {
   avatar_url?: string | null;
   html_url?: string | null;
   workspace: WorkspaceInfo;
+  repo_inventory?: RepoInventory;
   is_admin: boolean;
   is_editor: boolean;
   bluesky?: { handle: string; did: string } | null;
+}
+
+export interface RepoInventory {
+  ready: boolean;
+  updated_at?: number | null;
+  bundle_count: number;
+  translation_count: number;
 }
 
 export interface AdminJob {
