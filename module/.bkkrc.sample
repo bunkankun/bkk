@@ -28,6 +28,12 @@ global:
 #                                 #   → bkk index merge <corpus>
 #                                 #   → bkk serve --corpus
 #
+#   translation_root: /data/bkk/translations
+#                                 # Git-backed translation bundle root
+#                                 #   → bkk index translations
+#                                 #   → bkk serve --translation-root
+#                                 #   → translation catalog/search endpoints
+#
 #   tls_root: /data/tls           # TLS source tree
 #                                 #   → bkk import --in  (when format=tls)
 #                                 #   → bkk validate --tls-source
@@ -37,6 +43,11 @@ global:
 #
 #   cbeta_root: /data/cbeta/CBETA_XML # CBETA XML tree
 #                                 #   → bkk import --in  (when format=cbeta)
+#
+#   ctf_root: /data/bkk/ctf       # CTF TSV sidecar root
+#                                 #   → bkk voice ctf-tsv --out
+#                                 #   → bkk export --format tei --ctf-root
+#                                 #   → bkk serve --ctf-root
 #
 #   skip_confirm: true            # skip bulk-operation confirmation prompts
 #                                 #   → bkk import --yes
@@ -145,6 +156,14 @@ llm:
 #   prompt: module/prompts/punctuation
 #                                # punctuation prompt file. Relative paths are
 #                                # resolved against the .bkkrc location.
+#   punctuation_root: assets      # where punctuation sidecars are written/read.
+#                                # `assets` means <bundle>/assets; any other
+#                                # value is treated as a by-section hierarchy:
+#                                # <root>/<section>/<bundle>/<file>.
+#                                # Used by `bkk llm punctuation`,
+#                                # `bkk export --format tei`, `bkk serve`, and
+#                                # recipe punctuation reports.
+#                                # Env: BKK_PUNCTUATION_ROOT.
 #   chunk_chars: 3000            # max core characters per LLM chunk.
 #   overlap: 50                  # context characters attached around overlong
 #                                # chunks; must be smaller than chunk_chars.
@@ -235,6 +254,20 @@ annotations:
 #                                # for the `bkk annotations` and `bkk index
 #                                # annotations` subcommands only (e.g. harvest into
 #                                # a staging dir before promoting it).
+#   comments_root: /data/bkk-comments
+#                                # comment archive root for Jetstream harvest,
+#                                # archive-delete, and archive-only deletion.
+#                                # Default: <annotations_root>/../bkk-comments.
+#   translations_root: /data/bkk-translations
+#                                # translation contribution archive root for
+#                                # Jetstream harvest, archive-delete, and
+#                                # archive-only deletion. Default:
+#                                # <annotations_root>/../bkk-translations.
+#   admin_dids:                   # DIDs allowed to curate their own records
+#     - did:plc:bkkadmin0000      # without the self-curation restriction.
+#   archive_on_delete: true       # propagate Jetstream delete ops to local
+#                                # annotation/comment/translation JSONL
+#                                # archives. Default: true.
 
 # ── Duplications editor ────────────────────────────────────────────────────
 # `bkk index duplications` writes a TSV report of duplicated juan-pairs. The
