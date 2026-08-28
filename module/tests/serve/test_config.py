@@ -148,23 +148,65 @@ def test_bundle_github_defaults_env_and_cli(corpus: Path, monkeypatch: pytest.Mo
     defaults = ServeConfig(corpus_root=corpus, index_path=corpus / "_corpus.bkkx")
     assert defaults.bundle_github_org == "bkkbooks"
     assert defaults.bundle_github_branch == "auto"
+    assert defaults.bundle_load_mode == "prefer_remote"
+    assert defaults.translation_github_org == "bkktranslations"
+    assert defaults.translation_github_branch == "auto"
+    assert defaults.translation_remote_cache_root == (
+        corpus.parent / f"_{corpus.name}_remote_translations"
+    )
 
     monkeypatch.setenv("BKK_BUNDLE_GITHUB_ORG", "env-books")
     monkeypatch.setenv("BKK_BUNDLE_GITHUB_BRANCH", "main")
+    monkeypatch.setenv("BKK_BUNDLE_LOAD_MODE", "prefer-local")
+    monkeypatch.setenv("BKK_TRANSLATION_GITHUB_ORG", "env-translations")
+    monkeypatch.setenv("BKK_TRANSLATION_GITHUB_BRANCH", "stable")
+    monkeypatch.setenv(
+        "BKK_TRANSLATION_REMOTE_CACHE_ROOT",
+        str(corpus / "remote-translations"),
+    )
+    monkeypatch.setenv("BKK_GITHUB_READ_TOKEN", "read-token")
+    monkeypatch.setenv("BKK_REMOTE_CACHE_TTL_S", "12.5")
     from_env = ServeConfig.from_env(corpus_root=corpus)
     assert from_env.bundle_github_org == "env-books"
     assert from_env.bundle_github_branch == "main"
+    assert from_env.bundle_load_mode == "prefer_local"
+    assert from_env.translation_github_org == "env-translations"
+    assert from_env.translation_github_branch == "stable"
+    assert from_env.translation_remote_cache_root == (corpus / "remote-translations").resolve()
+    assert from_env.github_read_token == "read-token"
+    assert from_env.remote_cache_ttl_s == 12.5
 
     args = build_parser().parse_args([
         "--bundle-github-org", "cli-books",
         "--bundle-github-branch", "stable",
+        "--bundle-load-mode", "prefer-remote",
+        "--translation-github-org", "cli-translations",
+        "--translation-github-branch", "release",
+        "--translation-remote-cache-root", str(corpus / "cli-remote-translations"),
     ])
     merged = from_env.merge_cli(
         bundle_github_org=args.bundle_github_org,
         bundle_github_branch=args.bundle_github_branch,
+        bundle_load_mode=args.bundle_load_mode,
+        translation_github_org=args.translation_github_org,
+        translation_github_branch=args.translation_github_branch,
+        translation_remote_cache_root=args.translation_remote_cache_root,
     )
     assert merged.bundle_github_org == "cli-books"
     assert merged.bundle_github_branch == "stable"
+    assert merged.bundle_load_mode == "prefer_remote"
+    assert merged.translation_github_org == "cli-translations"
+    assert merged.translation_github_branch == "release"
+    assert merged.translation_remote_cache_root == (
+        corpus / "cli-remote-translations"
+    ).resolve()
+
+
+def test_invalid_bundle_load_mode_is_rejected(corpus: Path):
+    with pytest.raises(ValueError, match="bundle_load_mode"):
+        ServeConfig.from_env(
+            corpus_root=corpus, rc={"bundle_load_mode": "sideways"},
+        )
 
 
 def test_bluesky_session_endpoint_disabled_by_default(client: TestClient):

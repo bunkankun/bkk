@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from .. import _examples as ex
 from .. import errors
 from .._hits import hit_out
-from ..resolver import BundleRecord
+from ..remote_bundles import ResolvedBundle, resolve_bundle, visible_bundles
 from ..schemas import (
     BundleAsset,
     BundleAssetsResponse,
@@ -39,12 +39,23 @@ def _owner(request: Request) -> str | None:
     return session.login if session is not None else None
 
 
-def _record(request: Request, textid: str) -> BundleRecord:
-    state: AppState = request.app.state.bkk
-    rec = state.lookup_visible_bundle(textid, _owner(request))
+def _record(request: Request, textid: str) -> ResolvedBundle:
+    rec = resolve_bundle(request, textid)
     if rec is None:
         raise errors.bundle_not_found(textid)
     return rec
+
+
+def _attach_bundle_headers(response: Response | None, rec: ResolvedBundle) -> None:
+    if response is None:
+        return
+    response.headers["X-BKK-Bundle-Origin"] = rec.origin
+    if rec.repo:
+        response.headers["X-BKK-Bundle-Repo"] = rec.repo
+    if rec.ref:
+        response.headers["X-BKK-Bundle-Ref"] = rec.ref
+    if rec.fallback_from_remote:
+        response.headers["X-BKK-Bundle-Fallback"] = "local"
 
 
 def _summary_from_manifest(textid: str, manifest: dict[str, Any]) -> BundleSummary:
@@ -102,8 +113,7 @@ def list_bundles(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ) -> BundleListResponse:
-    state: AppState = request.app.state.bkk
-    records = state.visible_bundle_records(_owner(request))
+    records = visible_bundles(request)
     if prefix:
         records = [r for r in records if r.textid.startswith(prefix)]
     total = len(records)
@@ -119,8 +129,13 @@ def list_bundles(
     response_model=BundleSummary,
     summary="Bundle summary (textid, canonical id, title, editions)",
 )
-def get_bundle(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> BundleSummary:
+def get_bundle(
+    request: Request,
+    textid: str = PathParam(..., openapi_examples=ex.TEXTID),
+    response: Response = None,
+) -> BundleSummary:
     rec = _record(request, textid)
+    _attach_bundle_headers(response, rec)
     return _summary_from_manifest(rec.textid, rec.manifest)
 
 
@@ -129,15 +144,18 @@ def get_bundle(request: Request, textid: str = PathParam(..., openapi_examples=e
     response_model=dict,
     summary="Full master manifest for the bundle",
 )
-def get_manifest(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> dict[str, Any]:
+def get_manifest(
+    request: Request,
+    textid: str = PathParam(..., openapi_examples=ex.TEXTID),
+    response: Response = None,
+) -> dict[str, Any]:
     state: AppState = request.app.state.bkk
     rec = _record(request, textid)
+    _attach_bundle_headers(response, rec)
     manifest = _manifest_with_image_overrides(rec.manifest, state)
     return {
         **manifest,
-        "available_editions": _available_editions(
-            rec.bundle_dir, rec.textid, rec.manifest,
-        ),
+        "available_editions": rec.available_editions(),
     }
 
 
@@ -169,12 +187,15 @@ def bundle_search(
     state: AppState = request.app.state.bkk
     rec = _record(request, textid)  # 404 if unknown textid
     # Prefer the per-bundle .bkkx; fall back to the corpus index with textid filter.
-    private_index = rec.bundle_dir / f"{textid}.bkkx"
-    is_private = False
     owner = _owner(request)
+    local_rec = rec.local or state.lookup_visible_bundle(textid, owner)
+    if local_rec is None:
+        raise errors.index_unavailable("remote bundle search requires a local index")
+    private_index = local_rec.bundle_dir / f"{textid}.bkkx"
+    is_private = False
     if owner:
         try:
-            rec.bundle_dir.relative_to(state.user_texts_root / owner)
+            local_rec.bundle_dir.relative_to(state.user_texts_root / owner)
             is_private = True
         except ValueError:
             pass
@@ -271,8 +292,13 @@ def _local_file_image_path(base_url: str, image_path: str) -> Path | None:
     response_model=list,
     summary="List of juan declared in the manifest's assets.parts",
 )
-def list_juan(request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)) -> list[dict[str, Any]]:
+def list_juan(
+    request: Request,
+    textid: str = PathParam(..., openapi_examples=ex.TEXTID),
+    response: Response = None,
+) -> list[dict[str, Any]]:
     rec = _record(request, textid)
+    _attach_bundle_headers(response, rec)
     parts = (rec.manifest.get("assets") or {}).get("parts") or []
     return list(parts)
 
@@ -286,15 +312,15 @@ def get_juan(
     request: Request,
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
+    response: Response = None,
     edition: str | None = Query(
         None,
         description="documentary edition short id; omitted reads the root surface edition",
     ),
 ) -> dict[str, Any]:
     rec = _record(request, textid)
-    return selection.load_juan_file_for_edition(
-        rec.bundle_dir, rec.manifest, rec.textid, seq, edition,
-    )
+    _attach_bundle_headers(response, rec)
+    return rec.load_juan(seq, edition)
 
 
 VALID_BUCKETS = ("front", "body", "back")
@@ -309,6 +335,7 @@ def get_juan_slice(
     request: Request,
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
+    response: Response = None,
     bucket: str = Query(
         "body",
         description="bucket to slice (front | body | back)",
@@ -344,6 +371,7 @@ def get_juan_slice(
     ),
 ) -> JuanSliceOut:
     rec = _record(request, textid)
+    _attach_bundle_headers(response, rec)
     forms_used = sum(
         1 for f in (from_ or to, offset is not None or length is not None, toc) if f
     )
@@ -355,7 +383,7 @@ def get_juan_slice(
 
     if toc is not None:
         def _loader(s: int) -> dict[str, Any]:
-            return selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, s)
+            return rec.load_juan(s)
 
         sl = selection.slice_by_toc(rec.manifest, _loader, toc)
         if sl.juan_seq != seq:
@@ -366,7 +394,7 @@ def get_juan_slice(
                 toc_seq=sl.juan_seq,
             )
     else:
-        juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
+        juan = rec.load_juan(seq)
         if from_ is not None or to is not None:
             if not (from_ and to):
                 raise errors.bad_request(
@@ -403,6 +431,7 @@ def list_punctuation_sidecars(
     request: Request,
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
+    response: Response = None,
     edition: str | None = Query(
         None,
         description="documentary edition short id; omitted reads the root surface edition",
@@ -410,9 +439,12 @@ def list_punctuation_sidecars(
 ) -> PunctuationSidecarsResponse:
     state: AppState = request.app.state.bkk
     rec = _record(request, textid)
-    bundle_dir, manifest = selection.load_manifest_for_edition_scope(
-        rec.bundle_dir, rec.manifest, rec.textid, edition,
-    )
+    _attach_bundle_headers(response, rec)
+    scope_key, manifest = rec.manifest_for_edition(edition)
+    if rec.is_remote:
+        return _remote_punctuation_sidecars(rec, manifest, rec.textid, seq, edition)
+    assert rec.local is not None
+    bundle_dir = Path(scope_key)
     sidecars: list[PunctuationSidecar] = []
     for name, path, entry in _punctuation_sidecar_entries(
         state, bundle_dir, manifest, rec.textid, seq,
@@ -481,13 +513,15 @@ def get_juan_bucket(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
     bucket: str = PathParam(..., openapi_examples=ex.BUCKET),
+    response: Response = None,
 ) -> dict[str, Any]:
     if bucket not in VALID_BUCKETS:
         raise errors.bad_request(
             "bad_bucket", bucket=bucket, valid=list(VALID_BUCKETS)
         )
     rec = _record(request, textid)
-    juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
+    _attach_bundle_headers(response, rec)
+    juan = rec.load_juan(seq)
     return juan.get(bucket) or {}
 
 
@@ -501,16 +535,19 @@ def get_juan_bucket_text(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
     bucket: str = PathParam(..., openapi_examples=ex.BUCKET),
+    response: Response = None,
 ) -> PlainTextResponse:
     if bucket not in VALID_BUCKETS:
         raise errors.bad_request(
             "bad_bucket", bucket=bucket, valid=list(VALID_BUCKETS)
         )
     rec = _record(request, textid)
-    juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
+    juan = rec.load_juan(seq)
     body = juan.get(bucket) or {}
     text = body.get("text") if isinstance(body, dict) else ""
-    return PlainTextResponse(text or "", media_type="text/plain; charset=utf-8")
+    out = PlainTextResponse(text or "", media_type="text/plain; charset=utf-8")
+    _attach_bundle_headers(out, rec)
+    return out
 
 
 @router.get(
@@ -523,6 +560,7 @@ def get_juan_bucket_markers(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     seq: int = PathParam(..., ge=0, openapi_examples=ex.SEQ),
     bucket: str = PathParam(..., openapi_examples=ex.BUCKET),
+    response: Response = None,
     type: str | None = Query(
         None,
         description="restrict to markers with this type",
@@ -547,7 +585,8 @@ def get_juan_bucket_markers(
             "bad_bucket", bucket=bucket, valid=list(VALID_BUCKETS)
         )
     rec = _record(request, textid)
-    juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
+    _attach_bundle_headers(response, rec)
+    juan = rec.load_juan(seq)
     body = juan.get(bucket) or {}
     markers = body.get("markers") or [] if isinstance(body, dict) else []
     out: list[dict[str, Any]] = []
@@ -575,9 +614,11 @@ def get_local_image(
     textid: str = PathParam(..., openapi_examples=ex.TEXTID),
     edition: str = PathParam(..., description="KRP page-break edition short id"),
     image_path: str = PathParam(..., description="image path from the page-break marker"),
+    response: Response = None,
 ) -> Response:
     state: AppState = request.app.state.bkk
     rec = _record(request, textid)
+    _attach_bundle_headers(response, rec)
     manifest = _manifest_with_image_overrides(rec.manifest, state)
     base_url = _image_base_url(manifest, edition)
     if base_url is None:
@@ -659,6 +700,54 @@ def _punctuation_sidecar_entries(
     return out
 
 
+def _remote_punctuation_sidecars(
+    rec: ResolvedBundle,
+    manifest: dict[str, Any],
+    textid: str,
+    seq: int,
+    edition: str | None,
+) -> PunctuationSidecarsResponse:
+    assert rec.remote is not None
+    prefix, _manifest = rec.remote.manifest_for_edition(edition)
+    sidecars: list[PunctuationSidecar] = []
+    for entry in _asset_entries(manifest):
+        if entry.get("role") != "llm-punctuation":
+            continue
+        if entry.get("seq") != seq:
+            continue
+        name = entry.get("filename") or entry.get("name")
+        if not isinstance(name, str):
+            continue
+        try:
+            data = rec.remote.fetch_yaml(f"{prefix}{name}")
+        except Exception as exc:
+            sidecars.append(
+                PunctuationSidecar(
+                    name=name,
+                    role=entry.get("role"),
+                    seq=entry.get("seq"),
+                    model=_entry_model(entry),
+                    status="missing",
+                    error=str(exc),
+                )
+            )
+            continue
+        status = data.get("status")
+        sidecars.append(
+            PunctuationSidecar(
+                name=name,
+                role=entry.get("role"),
+                seq=entry.get("seq"),
+                model=_entry_model(entry, data),
+                status=status if isinstance(status, str) else None,
+                markers=_marker_buckets(data.get("markers")),
+            )
+        )
+    return PunctuationSidecarsResponse(
+        textid=textid, seq=seq, edition=edition, sidecars=sidecars,
+    )
+
+
 def _model_from_punctuation_filename(textid: str, seq: int, name: str) -> str | None:
     prefix = f"{textid}_{seq:03d}"
     if not name.startswith(prefix) or not name.endswith(".punctuation.yaml"):
@@ -731,17 +820,22 @@ def _entry_model(entry: dict[str, Any], data: dict[str, Any] | None = None) -> s
     summary="Reference assets declared on the bundle's manifest",
 )
 def list_assets(
-    request: Request, textid: str = PathParam(..., openapi_examples=ex.TEXTID)
+    request: Request,
+    textid: str = PathParam(..., openapi_examples=ex.TEXTID),
+    response: Response = None,
 ) -> BundleAssetsResponse:
     state: AppState = request.app.state.bkk
     rec = _record(request, textid)
+    _attach_bundle_headers(response, rec)
     out: list[BundleAsset] = []
     for entry in _asset_entries(rec.manifest):
         name = entry.get("filename") or entry.get("name")
         if not isinstance(name, str):
             continue
-        path = _declared_asset_path(state, rec.bundle_dir, rec.textid, name)
-        size = path.stat().st_size if path.exists() else None
+        size: int | None = None
+        if rec.local is not None:
+            path = _declared_asset_path(state, rec.local.bundle_dir, rec.textid, name)
+            size = path.stat().st_size if path.exists() else None
         out.append(
             BundleAsset(
                 name=name,
@@ -778,9 +872,22 @@ def get_asset(
     asset_path = Path(name)
     if asset_path.is_absolute() or ".." in asset_path.parts:
         raise errors.bad_request("bad_asset_name", name=name)
-    path = _declared_asset_path(state, rec.bundle_dir, rec.textid, name)
+    if rec.remote is not None:
+        try:
+            _payload, raw = rec.remote.fetch_bytes(name)
+        except Exception as exc:
+            raise errors.bad_request(
+                "asset_missing_on_disk", textid=textid, name=name
+            ) from exc
+        out = Response(raw)
+        _attach_bundle_headers(out, rec)
+        return out
+    assert rec.local is not None
+    path = _declared_asset_path(state, rec.local.bundle_dir, rec.textid, name)
     if not path.exists() or not path.is_file():
         raise errors.bad_request(
             "asset_missing_on_disk", textid=textid, name=name
         )
-    return FileResponse(path)
+    out = FileResponse(path)
+    _attach_bundle_headers(out, rec)
+    return out

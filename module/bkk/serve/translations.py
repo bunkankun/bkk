@@ -403,6 +403,10 @@ def align_translation(
 
 def _read_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
     raw = path.read_text(encoding="utf-8")
+    return read_frontmatter_text(raw)
+
+
+def read_frontmatter_text(raw: str) -> tuple[dict[str, Any], str]:
     match = FRONTMATTER_RE.match(raw)
     if not match:
         return {}, raw
@@ -413,7 +417,11 @@ def _read_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
 
 
 def _read_translation_juan(path: Path) -> TranslationJuan:
-    header, body = _read_frontmatter(path)
+    return read_translation_juan_text(path, path.read_text(encoding="utf-8"))
+
+
+def read_translation_juan_text(path: Path, raw: str) -> TranslationJuan:
+    header, body = read_frontmatter_text(raw)
     markers = header.get("markers") if isinstance(header.get("markers"), list) else []
     spans = list(SPAN_RE.finditer(body))
     segments: list[TranslationSegment] = []

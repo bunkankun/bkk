@@ -40,6 +40,7 @@ from fastapi import HTTPException
 
 from .. import _examples as ex
 from .. import errors
+from ..remote_translations import refresh_remote_translations
 from ..state import AppState, Job, JobRegistry
 from .auth import SESSION_COOKIE
 
@@ -114,6 +115,20 @@ def _run_translation_index(jobs: JobRegistry, job_id: str, corpus_root, out_path
     try:
         out = merge_translations(corpus_root, out_path, translation_root=translation_root)
         jobs.mark_done(job_id, {"translation_search_path": str(out)})
+    except Exception as exc:
+        jobs.mark_error(job_id, exc)
+
+
+def _run_remote_translation_refresh(
+    jobs: JobRegistry,
+    job_id: str,
+    state: AppState,
+    token: str | None,
+):
+    jobs.mark_running(job_id)
+    try:
+        out = refresh_remote_translations(state, token=token)
+        jobs.mark_done(job_id, out)
     except Exception as exc:
         jobs.mark_error(job_id, exc)
 
@@ -340,6 +355,30 @@ def post_translation_search_index(
         state.corpus_root,
         state.translation_search_path,
         state.config.translation_root,
+    )
+    return _accepted(job)
+
+
+@router.post(
+    "/translations/remote-refresh",
+    summary="Refresh the local translation catalog/cache from GitHub",
+)
+def post_remote_translation_refresh(
+    request: Request,
+    background: BackgroundTasks,
+    state: AppState = Depends(_require_admin),
+) -> JSONResponse:
+    session = state.sessions.get(request.cookies.get(SESSION_COOKIE))
+    token = state.config.github_read_token or (
+        session.access_token if session is not None else None
+    )
+    job = state.jobs.create(kind="translation_remote_refresh", target=None)
+    background.add_task(
+        _run_remote_translation_refresh,
+        state.jobs,
+        job.id,
+        state,
+        token,
     )
     return _accepted(job)
 

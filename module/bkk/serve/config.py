@@ -5,6 +5,21 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Literal
+
+
+BundleLoadMode = Literal["prefer_remote", "prefer_local"]
+
+
+def normalize_bundle_load_mode(value: object) -> BundleLoadMode:
+    raw = str(value or "prefer_remote").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in {"remote", "prefer_remote"}:
+        return "prefer_remote"
+    if raw in {"local", "prefer_local"}:
+        return "prefer_local"
+    raise ValueError(
+        "bundle_load_mode must be one of: prefer_remote, prefer_local"
+    )
 
 
 @dataclass(frozen=True)
@@ -49,6 +64,12 @@ class ServeConfig:
     # "auto" follows each repository's GitHub default_branch. An explicit
     # branch remains available for deployments with a uniform branch policy.
     bundle_github_branch: str = "auto"
+    bundle_load_mode: BundleLoadMode = "prefer_remote"
+    translation_github_org: str = "bkktranslations"
+    translation_github_branch: str = "auto"
+    translation_remote_cache_root: Path | None = None
+    github_read_token: str | None = None
+    remote_cache_ttl_s: float = 60.0
     user_texts_root: Path | None = None
     user_text_upload_limit: int = 20 * 1024 * 1024
     # Bluesky write/feed UI and atproto-backed endpoints are opt-in. Keep the
@@ -81,6 +102,12 @@ class ServeConfig:
                 self,
                 "user_texts_root",
                 self.corpus_root.parent / f"_{self.corpus_root.name}_user_texts",
+            )
+        if self.translation_remote_cache_root is None:
+            object.__setattr__(
+                self,
+                "translation_remote_cache_root",
+                self.corpus_root.parent / f"_{self.corpus_root.name}_remote_translations",
             )
 
     @classmethod
@@ -342,6 +369,42 @@ class ServeConfig:
             "BKK_BUNDLE_GITHUB_BRANCH",
             str(rc.get("bundle_github_branch", "auto")),
         )
+        bundle_load_mode = normalize_bundle_load_mode(
+            os.environ.get(
+                "BKK_BUNDLE_LOAD_MODE",
+                rc.get("bundle_load_mode", "prefer_remote"),
+            )
+        )
+        translation_github_org = os.environ.get(
+            "BKK_TRANSLATION_GITHUB_ORG",
+            str(rc.get("translation_github_org", "bkktranslations")),
+        )
+        translation_github_branch = os.environ.get(
+            "BKK_TRANSLATION_GITHUB_BRANCH",
+            str(rc.get("translation_github_branch", "auto")),
+        )
+        env_translation_remote_cache_root = os.environ.get(
+            "BKK_TRANSLATION_REMOTE_CACHE_ROOT"
+        )
+        translation_remote_cache_root = (
+            Path(env_translation_remote_cache_root).resolve()
+            if env_translation_remote_cache_root
+            else (
+                Path(rc["translation_remote_cache_root"]).resolve()
+                if rc.get("translation_remote_cache_root")
+                else None
+            )
+        )
+        github_read_token = os.environ.get(
+            "BKK_GITHUB_READ_TOKEN",
+            rc.get("github_read_token"),
+        )
+        remote_cache_ttl_s = float(
+            os.environ.get(
+                "BKK_REMOTE_CACHE_TTL_S",
+                rc.get("remote_cache_ttl_s", 60.0),
+            )
+        )
         env_user_texts_root = os.environ.get("BKK_USER_TEXTS_ROOT")
         user_texts_root = (
             Path(env_user_texts_root).resolve()
@@ -448,6 +511,12 @@ class ServeConfig:
             source_branch=source_branch,
             bundle_github_org=bundle_github_org,
             bundle_github_branch=bundle_github_branch,
+            bundle_load_mode=bundle_load_mode,
+            translation_github_org=translation_github_org,
+            translation_github_branch=translation_github_branch,
+            translation_remote_cache_root=translation_remote_cache_root,
+            github_read_token=github_read_token,
+            remote_cache_ttl_s=remote_cache_ttl_s,
             user_texts_root=user_texts_root,
             user_text_upload_limit=user_text_upload_limit,
             max_search_hits=max_search_hits,
@@ -489,6 +558,12 @@ class ServeConfig:
         source_branch: str | None = None,
         bundle_github_org: str | None = None,
         bundle_github_branch: str | None = None,
+        bundle_load_mode: str | None = None,
+        translation_github_org: str | None = None,
+        translation_github_branch: str | None = None,
+        translation_remote_cache_root: Path | str | None = None,
+        github_read_token: str | None = None,
+        remote_cache_ttl_s: float | None = None,
         user_texts_root: Path | str | None = None,
     ) -> "ServeConfig":
         """Return a copy with any non-``None`` argument overriding the field."""
@@ -555,6 +630,20 @@ class ServeConfig:
             updates["bundle_github_org"] = bundle_github_org
         if bundle_github_branch is not None:
             updates["bundle_github_branch"] = bundle_github_branch
+        if bundle_load_mode is not None:
+            updates["bundle_load_mode"] = normalize_bundle_load_mode(bundle_load_mode)
+        if translation_github_org is not None:
+            updates["translation_github_org"] = translation_github_org
+        if translation_github_branch is not None:
+            updates["translation_github_branch"] = translation_github_branch
+        if translation_remote_cache_root is not None:
+            updates["translation_remote_cache_root"] = Path(
+                translation_remote_cache_root
+            ).resolve()
+        if github_read_token is not None:
+            updates["github_read_token"] = github_read_token
+        if remote_cache_ttl_s is not None:
+            updates["remote_cache_ttl_s"] = float(remote_cache_ttl_s)
         if user_texts_root is not None:
             updates["user_texts_root"] = Path(user_texts_root).resolve()
         return replace(self, **updates)

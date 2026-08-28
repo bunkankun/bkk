@@ -100,6 +100,21 @@ def build_parser() -> argparse.ArgumentParser:
                    help="base branch for bundle edits "
                         "(default: auto-detect each repository's default branch)")
     p.add_argument(
+        "--bundle-load-mode",
+        choices=["prefer-remote", "prefer-local"],
+        default=None,
+        help="bundle read source preference (default: prefer-remote)",
+    )
+    p.add_argument("--translation-github-org", default=None,
+                   help="GitHub organization containing translation bundle repositories "
+                        "(default: bkktranslations)")
+    p.add_argument("--translation-github-branch", default=None,
+                   help="branch for translation bundle reads "
+                        "(default: auto-detect each repository's default branch)")
+    p.add_argument("--translation-remote-cache-root", type=Path, default=None,
+                   help="local cache root populated from remote translation repositories "
+                        "(default: sibling of the corpus root)")
+    p.add_argument(
         "--user-texts-root",
         type=Path,
         default=None,
@@ -152,6 +167,10 @@ def run(argv: list[str] | None = None) -> int:
         workspace_repo_name=args.workspace_repo_name,
         bundle_github_org=args.bundle_github_org,
         bundle_github_branch=args.bundle_github_branch,
+        bundle_load_mode=args.bundle_load_mode,
+        translation_github_org=args.translation_github_org,
+        translation_github_branch=args.translation_github_branch,
+        translation_remote_cache_root=args.translation_remote_cache_root,
         user_texts_root=args.user_texts_root,
     )
 
@@ -203,6 +222,16 @@ def run(argv: list[str] | None = None) -> int:
         os.environ["BKK_WORKSPACE_REPO_NAME"] = config.workspace_repo_name
         os.environ["BKK_BUNDLE_GITHUB_ORG"] = config.bundle_github_org
         os.environ["BKK_BUNDLE_GITHUB_BRANCH"] = config.bundle_github_branch
+        os.environ["BKK_BUNDLE_LOAD_MODE"] = config.bundle_load_mode
+        os.environ["BKK_TRANSLATION_GITHUB_ORG"] = config.translation_github_org
+        os.environ["BKK_TRANSLATION_GITHUB_BRANCH"] = config.translation_github_branch
+        if config.translation_remote_cache_root is not None:
+            os.environ["BKK_TRANSLATION_REMOTE_CACHE_ROOT"] = str(
+                config.translation_remote_cache_root
+            )
+        os.environ["BKK_REMOTE_CACHE_TTL_S"] = str(config.remote_cache_ttl_s)
+        if config.github_read_token is not None:
+            os.environ["BKK_GITHUB_READ_TOKEN"] = config.github_read_token
         uvicorn.run(
             "bkk.serve.cli:app_factory",
             factory=True,

@@ -261,6 +261,69 @@ def build_catalog_index(
     return out_path
 
 
+def refresh_translation_catalog(
+    corpus: Path | str,
+    out_path: Path | str,
+    *,
+    translation_root: Path | str | None = None,
+) -> Path:
+    """Replace the translation slice of a catalog from local translation files."""
+    corpus = Path(corpus)
+    out_path = Path(out_path)
+    translation_root_path = Path(translation_root) if translation_root is not None else None
+    records = _translation_records(corpus, translation_root=translation_root_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(out_path))
+    try:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        if "meta" not in tables:
+            conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        if "catalog_translation" not in tables:
+            conn.executescript("""
+CREATE TABLE catalog_translation (
+  id TEXT PRIMARY KEY,
+  source_textid TEXT NOT NULL,
+  path TEXT NOT NULL,
+  canonical_identifier TEXT,
+  source_canonical_identifier TEXT,
+  language TEXT,
+  title TEXT,
+  original_title TEXT,
+  responsibility TEXT NOT NULL,
+  date TEXT,
+  license TEXT,
+  juan_count INTEGER NOT NULL,
+  seg_count INTEGER NOT NULL,
+  source_juans TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX idx_catalog_translation_source ON catalog_translation(source_textid);
+CREATE INDEX idx_catalog_translation_language ON catalog_translation(language);
+CREATE INDEX idx_catalog_translation_title ON catalog_translation(title);
+""")
+        conn.execute("DELETE FROM catalog_translation")
+        conn.executemany(
+            "INSERT INTO catalog_translation("
+            "id, source_textid, path, canonical_identifier, "
+            "source_canonical_identifier, language, title, original_title, "
+            "responsibility, date, license, juan_count, seg_count, source_juans"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            records,
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
+            ("translation_root", str(translation_root_path or "")),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return out_path
+
+
 def default_catalog_csv(start: Path | None = None) -> Path | None:
     """Return the nearest ``catalog/frontmatter.csv`` from ``start`` upward."""
     start = Path.cwd() if start is None else Path(start)
@@ -644,4 +707,3 @@ def _translation_source_textid(bundle_dir: Path, source_canonical_identifier: An
         return bundle_dir.parents[1].name
     except IndexError:
         return "_unknown"
-

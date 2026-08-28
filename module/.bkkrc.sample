@@ -204,6 +204,41 @@ serve:
 #   source_branch: master         # branch fetched by /admin/update.
 #   upstream_repo: org/repo       # GitHub ORG/REPO surfaced to the SPA on GET /
 #   web_dist: /path/to/dist      # directory containing the built SPA
+#   bundle_load_mode: prefer_remote
+#                                # bundle/translation read source preference:
+#                                # prefer_remote | prefer_local. Remote is the
+#                                # default: /bundles/* and selected translation
+#                                # reads try GitHub first and fall back to local
+#                                # storage when possible.
+#                                # Env: BKK_BUNDLE_LOAD_MODE.
+#   bundle_github_org: bkkbooks   # canonical GitHub org containing one repo
+#                                # per text bundle. Env: BKK_BUNDLE_GITHUB_ORG.
+#   bundle_github_branch: auto    # auto = use each repo's default branch.
+#                                # Env: BKK_BUNDLE_GITHUB_BRANCH.
+#   translation_github_org: bkktranslations
+#                                # canonical GitHub org containing one repo per
+#                                # translation bundle. Selected translations are
+#                                # read from <user>/<translation_id> first when
+#                                # the user is logged in, then from this org.
+#                                # Env: BKK_TRANSLATION_GITHUB_ORG.
+#   translation_github_branch: auto
+#                                # auto = use each translation repo's default
+#                                # branch. Env: BKK_TRANSLATION_GITHUB_BRANCH.
+#   translation_remote_cache_root: /var/lib/bkk/remote-translations
+#                                # local cache populated by
+#                                # POST /admin/translations/remote-refresh.
+#                                # That job also refreshes catalog_translation
+#                                # and the translation search index so
+#                                # translation discovery remains local.
+#                                # Env: BKK_TRANSLATION_REMOTE_CACHE_ROOT.
+#   github_read_token: ghp_...    # optional server-side GitHub token for
+#                                # canonical bundle and translation reads.
+#                                # Prefer setting this in ~/.bkkrc or
+#                                # BKK_GITHUB_READ_TOKEN; it is not returned by
+#                                # server metadata endpoints.
+#   remote_cache_ttl_s: 60        # short in-memory TTL for GitHub bundle
+#                                # content, repo metadata, and tree responses.
+#                                # Env: BKK_REMOTE_CACHE_TTL_S.
 #   welcome: /var/lib/bkk/welcome.md
 #                                # markdown file shown in the empty workspace
 #                                # and when the user clicks the logo in the

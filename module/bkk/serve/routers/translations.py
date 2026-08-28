@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query, Request
 
-from bkk.serve import errors, selection
+from bkk.serve import errors
+from bkk.serve.remote_bundles import resolve_bundle
+from bkk.serve.remote_translations import resolve_translation_bundle
 from bkk.serve.schemas import (
     OverlayFamily,
     OverlaysResponse,
@@ -14,14 +16,11 @@ from bkk.serve.schemas import (
     TranslationSearchResponse,
 )
 from bkk.serve.state import AppState
-from bkk.serve.routers.auth import SESSION_COOKIE
 from bkk.serve.translations import (
     align_translation,
     get_segment_translations,
     list_translation_bundles_from_catalog,
     list_translation_bundles,
-    load_translation_bundle_from_catalog,
-    load_translation_bundle,
     search_translation_segments,
 )
 
@@ -176,10 +175,7 @@ def bundle_translations(
     offset: int = Query(0, ge=0),
 ) -> TranslationListResponse:
     state: AppState = request.app.state.bkk
-    session = state.sessions.get(request.cookies.get(SESSION_COOKIE))
-    if state.lookup_visible_bundle(
-        textid, session.login if session else None,
-    ) is None:
+    if resolve_bundle(request, textid) is None:
         raise errors.bundle_not_found(textid)
     conn = state.open_catalog()
     if conn is not None:
@@ -228,33 +224,15 @@ def juan_translation_alignment(
     translation_id: str = PathParam(...),
 ) -> TranslationAlignmentResponse:
     state: AppState = request.app.state.bkk
-    session = state.sessions.get(request.cookies.get(SESSION_COOKIE))
-    rec = state.lookup_visible_bundle(textid, session.login if session else None)
+    rec = resolve_bundle(request, textid)
     if rec is None:
         raise errors.bundle_not_found(textid)
-    translation = None
-    conn = state.open_catalog()
-    if conn is not None:
-        try:
-            translation = load_translation_bundle_from_catalog(
-                conn,
-                translation_id=translation_id,
-                source_textid=textid,
-                include_juans=True,
-            )
-        except Exception:
-            translation = None
-        finally:
-            conn.close()
-    if translation is None:
-        for bundle in list_translation_bundles(
-            state.corpus_root,
-            translation_root_path=state.config.translation_root,
-            source_textid=textid,
-        ):
-            if bundle.id == translation_id:
-                translation = load_translation_bundle(bundle.path, include_juans=True)
-                break
+    translation = resolve_translation_bundle(
+        request,
+        translation_id,
+        source_textid=textid,
+        include_juans=True,
+    )
     if translation is None:
         raise HTTPException(
             status_code=404,
@@ -264,12 +242,12 @@ def juan_translation_alignment(
                 "translation_id": translation_id,
             },
         )
-    juan = selection.load_juan_file(rec.bundle_dir, rec.manifest, rec.textid, seq)
+    juan = rec.load_juan(seq)
     return align_translation(
         textid=textid,
         seq=seq,
         source_juan=juan,
-        translation=translation,
+        translation=translation.bundle,
     )
 
 
