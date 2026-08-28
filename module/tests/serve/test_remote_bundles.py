@@ -137,7 +137,7 @@ def test_remote_canonical_manifest_and_juan_prefer_github(
     client = TestClient(create_app(ServeConfig(
         corpus_root=tmp_path,
         index_path=tmp_path / "_corpus.bkkx",
-        github_read_token="server-token",
+        bundle_github_read_token="bundle-token",
         github_client_id="client-id",
         github_client_secret="client-secret",
     )))
@@ -162,7 +162,7 @@ def test_remote_user_repo_beats_canonical(tmp_path: Path, fake_remote):
     client = TestClient(create_app(ServeConfig(
         corpus_root=tmp_path,
         index_path=tmp_path / "_corpus.bkkx",
-        github_read_token="server-token",
+        bundle_github_read_token="bundle-token",
         github_client_id="client-id",
         github_client_secret="client-secret",
     )))
@@ -194,7 +194,7 @@ def test_remote_failure_falls_back_to_local(tmp_path: Path, monkeypatch):
     client = TestClient(create_app(ServeConfig(
         corpus_root=tmp_path,
         index_path=tmp_path / "_corpus.bkkx",
-        github_read_token="server-token",
+        bundle_github_read_token="bundle-token",
     )))
 
     response = client.get("/bundles/KR1h0005/manifest")

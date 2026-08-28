@@ -369,7 +369,7 @@ def post_remote_translation_refresh(
     state: AppState = Depends(_require_admin),
 ) -> JSONResponse:
     session = state.sessions.get(request.cookies.get(SESSION_COOKIE))
-    token = state.config.github_read_token or (
+    token = state.config.translation_github_read_token or state.config.github_read_token or (
         session.access_token if session is not None else None
     )
     job = state.jobs.create(kind="translation_remote_refresh", target=None)

@@ -411,7 +411,8 @@ def resolve_bundle(request: "Request", textid: str) -> ResolvedBundle | None:
         if private is not None:
             return _from_local_record(state, private, owner)
 
-    has_remote_credentials = bool(state.config.github_read_token) or (
+    read_token = state.config.bundle_github_read_token or state.config.github_read_token
+    has_remote_credentials = bool(read_token) or (
         session is not None and bool(state.config.github_client_id)
     )
     if not has_remote_credentials:
@@ -419,7 +420,7 @@ def resolve_bundle(request: "Request", textid: str) -> ResolvedBundle | None:
 
     if (
         session is None
-        and not state.config.github_read_token
+        and not read_token
         and state.lookup_bundle(textid) is not None
     ):
         return _local_visible(state, textid, owner)
@@ -455,7 +456,7 @@ def visible_bundles(request: "Request") -> list[ResolvedBundle]:
     if (
         state.config.bundle_load_mode == "prefer_local"
         or (
-            not state.config.github_read_token
+            not (state.config.bundle_github_read_token or state.config.github_read_token)
             and not (session is not None and state.config.github_client_id)
         )
     ):
@@ -530,7 +531,7 @@ def _remote_visible(
         )
         if user is not None:
             return user
-    canonical_token = state.config.github_read_token or (
+    canonical_token = state.config.bundle_github_read_token or state.config.github_read_token or (
         session.access_token
         if session is not None and state.config.github_client_id
         else None
@@ -606,7 +607,7 @@ def _remote_records_for_listing(
                 )
                 if loaded is not None:
                     out.append(loaded)
-    token = state.config.github_read_token or (
+    token = state.config.bundle_github_read_token or state.config.github_read_token or (
         session.access_token
         if session is not None and state.config.github_client_id
         else None

@@ -79,7 +79,10 @@ def resolve_translation_bundle(
             include_juans=include_juans,
         )
 
-    has_remote_credentials = bool(state.config.github_read_token) or (
+    read_token = (
+        state.config.translation_github_read_token or state.config.github_read_token
+    )
+    has_remote_credentials = bool(read_token) or (
         session is not None and bool(state.config.github_client_id)
     )
     if not has_remote_credentials:
@@ -129,7 +132,10 @@ def refresh_remote_translations(state: "AppState", *, token: str | None) -> dict
     if not token:
         raise errors.bad_request(
             "github_token_missing",
-            reason="set serve.github_read_token or log in with GitHub before refreshing translations",
+            reason=(
+                "set serve.translation_github_read_token, serve.github_read_token, "
+                "or log in with GitHub before refreshing translations"
+            ),
         )
     cache_root = state.config.translation_remote_cache_root
     if cache_root is None:
@@ -268,7 +274,7 @@ def _load_remote_translation_visible(
         )
         if user is not None:
             return user
-    token = state.config.github_read_token or (
+    token = state.config.translation_github_read_token or state.config.github_read_token or (
         session.access_token
         if session is not None and state.config.github_client_id
         else None

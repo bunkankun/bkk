@@ -125,7 +125,7 @@ def test_translation_alignment_prefers_remote_then_honors_prefer_local(
     remote_client = TestClient(create_app(ServeConfig(
         corpus_root=tmp_path,
         index_path=tmp_path / "_corpus.bkkx",
-        github_read_token="server-token",
+        translation_github_read_token="translation-token",
     )))
     remote_response = remote_client.get(
         "/bundles/KR1h0004/juan/1/translations/KR1h0004-en-test"
@@ -138,7 +138,7 @@ def test_translation_alignment_prefers_remote_then_honors_prefer_local(
         corpus_root=tmp_path,
         index_path=tmp_path / "_corpus.bkkx",
         bundle_load_mode="prefer_local",
-        github_read_token="server-token",
+        translation_github_read_token="translation-token",
     )))
     local_response = local_client.get(
         "/bundles/KR1h0004/juan/1/translations/KR1h0004-en-test"
@@ -159,11 +159,11 @@ def test_remote_translation_refresh_builds_local_catalog_and_search(
         index_path=tmp_path / "_corpus.bkkx",
         catalog_path=tmp_path / "_catalog.bkkc",
         translation_search_path=tmp_path / "_translations.bkkt",
-        github_read_token="server-token",
+        translation_github_read_token="translation-token",
     )
     app = create_app(config)
 
-    result = refresh_remote_translations(app.state.bkk, token="server-token")
+    result = refresh_remote_translations(app.state.bkk, token="translation-token")
 
     cache_root = config.translation_remote_cache_root
     bundle_dir = cache_root / "KR1h" / "KR1h0004" / "en" / "KR1h0004-en-test"

@@ -68,6 +68,10 @@ class ServeConfig:
     translation_github_org: str = "bkktranslations"
     translation_github_branch: str = "auto"
     translation_remote_cache_root: Path | None = None
+    bundle_github_read_token: str | None = None
+    translation_github_read_token: str | None = None
+    # Backward-compatible fallback used when the bundle/translation-specific
+    # token is not set.
     github_read_token: str | None = None
     remote_cache_ttl_s: float = 60.0
     user_texts_root: Path | None = None
@@ -399,6 +403,14 @@ class ServeConfig:
             "BKK_GITHUB_READ_TOKEN",
             rc.get("github_read_token"),
         )
+        bundle_github_read_token = os.environ.get(
+            "BKK_BUNDLE_GITHUB_READ_TOKEN",
+            rc.get("bundle_github_read_token"),
+        )
+        translation_github_read_token = os.environ.get(
+            "BKK_TRANSLATION_GITHUB_READ_TOKEN",
+            rc.get("translation_github_read_token"),
+        )
         remote_cache_ttl_s = float(
             os.environ.get(
                 "BKK_REMOTE_CACHE_TTL_S",
@@ -515,6 +527,8 @@ class ServeConfig:
             translation_github_org=translation_github_org,
             translation_github_branch=translation_github_branch,
             translation_remote_cache_root=translation_remote_cache_root,
+            bundle_github_read_token=bundle_github_read_token,
+            translation_github_read_token=translation_github_read_token,
             github_read_token=github_read_token,
             remote_cache_ttl_s=remote_cache_ttl_s,
             user_texts_root=user_texts_root,
@@ -562,6 +576,8 @@ class ServeConfig:
         translation_github_org: str | None = None,
         translation_github_branch: str | None = None,
         translation_remote_cache_root: Path | str | None = None,
+        bundle_github_read_token: str | None = None,
+        translation_github_read_token: str | None = None,
         github_read_token: str | None = None,
         remote_cache_ttl_s: float | None = None,
         user_texts_root: Path | str | None = None,
@@ -640,6 +656,10 @@ class ServeConfig:
             updates["translation_remote_cache_root"] = Path(
                 translation_remote_cache_root
             ).resolve()
+        if bundle_github_read_token is not None:
+            updates["bundle_github_read_token"] = bundle_github_read_token
+        if translation_github_read_token is not None:
+            updates["translation_github_read_token"] = translation_github_read_token
         if github_read_token is not None:
             updates["github_read_token"] = github_read_token
         if remote_cache_ttl_s is not None:

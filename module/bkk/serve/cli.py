@@ -230,6 +230,12 @@ def run(argv: list[str] | None = None) -> int:
                 config.translation_remote_cache_root
             )
         os.environ["BKK_REMOTE_CACHE_TTL_S"] = str(config.remote_cache_ttl_s)
+        if config.bundle_github_read_token is not None:
+            os.environ["BKK_BUNDLE_GITHUB_READ_TOKEN"] = config.bundle_github_read_token
+        if config.translation_github_read_token is not None:
+            os.environ["BKK_TRANSLATION_GITHUB_READ_TOKEN"] = (
+                config.translation_github_read_token
+            )
         if config.github_read_token is not None:
             os.environ["BKK_GITHUB_READ_TOKEN"] = config.github_read_token
         uvicorn.run(

@@ -154,6 +154,8 @@ def test_bundle_github_defaults_env_and_cli(corpus: Path, monkeypatch: pytest.Mo
     assert defaults.translation_remote_cache_root == (
         corpus.parent / f"_{corpus.name}_remote_translations"
     )
+    assert defaults.bundle_github_read_token is None
+    assert defaults.translation_github_read_token is None
 
     monkeypatch.setenv("BKK_BUNDLE_GITHUB_ORG", "env-books")
     monkeypatch.setenv("BKK_BUNDLE_GITHUB_BRANCH", "main")
@@ -165,6 +167,8 @@ def test_bundle_github_defaults_env_and_cli(corpus: Path, monkeypatch: pytest.Mo
         str(corpus / "remote-translations"),
     )
     monkeypatch.setenv("BKK_GITHUB_READ_TOKEN", "read-token")
+    monkeypatch.setenv("BKK_BUNDLE_GITHUB_READ_TOKEN", "bundle-read-token")
+    monkeypatch.setenv("BKK_TRANSLATION_GITHUB_READ_TOKEN", "translation-read-token")
     monkeypatch.setenv("BKK_REMOTE_CACHE_TTL_S", "12.5")
     from_env = ServeConfig.from_env(corpus_root=corpus)
     assert from_env.bundle_github_org == "env-books"
@@ -174,6 +178,8 @@ def test_bundle_github_defaults_env_and_cli(corpus: Path, monkeypatch: pytest.Mo
     assert from_env.translation_github_branch == "stable"
     assert from_env.translation_remote_cache_root == (corpus / "remote-translations").resolve()
     assert from_env.github_read_token == "read-token"
+    assert from_env.bundle_github_read_token == "bundle-read-token"
+    assert from_env.translation_github_read_token == "translation-read-token"
     assert from_env.remote_cache_ttl_s == 12.5
 
     args = build_parser().parse_args([

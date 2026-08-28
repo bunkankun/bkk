@@ -231,11 +231,22 @@ serve:
 #                                # and the translation search index so
 #                                # translation discovery remains local.
 #                                # Env: BKK_TRANSLATION_REMOTE_CACHE_ROOT.
-#   github_read_token: ghp_...    # optional server-side GitHub token for
-#                                # canonical bundle and translation reads.
-#                                # Prefer setting this in ~/.bkkrc or
-#                                # BKK_GITHUB_READ_TOKEN; it is not returned by
-#                                # server metadata endpoints.
+#   bundle_github_read_token: github_pat_...
+#                                # optional server-side GitHub token for
+#                                # canonical text bundle reads.
+#                                # Env: BKK_BUNDLE_GITHUB_READ_TOKEN.
+#   translation_github_read_token: github_pat_...
+#                                # optional server-side GitHub token for
+#                                # canonical translation reads and
+#                                # /admin/translations/remote-refresh.
+#                                # Env: BKK_TRANSLATION_GITHUB_READ_TOKEN.
+#   github_read_token: github_pat_...
+#                                # legacy fallback used only when the
+#                                # bundle/translation-specific token is unset.
+#                                # Env: BKK_GITHUB_READ_TOKEN.
+#                                # Prefer storing tokens in ~/.bkkrc or env;
+#                                # they are not returned by server metadata
+#                                # endpoints.
 #   remote_cache_ttl_s: 60        # short in-memory TTL for GitHub bundle
 #                                # content, repo metadata, and tree responses.
 #                                # Env: BKK_REMOTE_CACHE_TTL_S.
