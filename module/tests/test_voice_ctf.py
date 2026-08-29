@@ -343,6 +343,31 @@ def test_collect_indent_heading_voices_skips_heading_inside_note() -> None:
     assert collect_indent_heading_voices(markers, text_len=8) == []
 
 
+def test_build_ctf_asset_preserves_derived_reconstructed_line_label() -> None:
+    text = "前一篇正文前二篇正文同王十三維哭殷遙儲光羲正文"
+    asset = build_ctf_asset(
+        text_id=TEXT_ID,
+        seq=1,
+        bucket_name="body",
+        text=text,
+        markers=[
+            _lb(0), _indent(0, 2),
+            _lb(3),
+            _lb(5), _indent(5, 2),
+            _lb(8),
+            _lb(10), _indent(10, 2), _indent(18, 5),
+            _lb(21),
+        ],
+        manifest_hash=None,
+        bucket_hash=None,
+        heading_source="derive",
+    )
+
+    third = _citation_nodes(asset["nodes"])[2]
+    assert third["id"] == f"{TEXT_ID}/1/3/@10+11"
+    assert third["label"] == "同王十三維哭殷遙　　　　　儲光羲"
+
+
 def test_build_ctf_asset_auto_uses_derived_when_existing_is_incomplete() -> None:
     text = "近體詩十六首春過賀遂員外藥園正文河南嚴尹弟見宿弊廬訪别人賦十韻本文"
     asset = build_ctf_asset(

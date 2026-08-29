@@ -100,8 +100,9 @@ def test_later_depth_two_internal_indent_is_not_toc_after_regular_headings() -> 
     ] == [
         (0, 3, 2, [1]),
         (5, 3, 2, [2]),
-        (10, 8, 2, [3]),
+        (10, 11, 2, [3]),
     ]
+    assert out[2]["label"] == "同王十三維哭殷遙　　　　　儲光羲"
     assert has_indent_heading_profile(len(text), markers, text) is True
 
 

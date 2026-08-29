@@ -88,6 +88,7 @@ def collect_indent_heading_voices(
         marker_id = marker.get("id")
         path = _coerce_heading_path(marker.get("path"))
         name = marker.get("name")
+        label = marker.get("label")
         out.append(HeadingRecord(
             offset=offset,
             length=length,
@@ -96,6 +97,7 @@ def collect_indent_heading_voices(
             index=index,
             path=path,
             name=name if name in {"head", "label"} else "head",
+            label=label if isinstance(label, str) and label else None,
         ))
     return sorted(out, key=lambda h: (h.offset, h.index))
 

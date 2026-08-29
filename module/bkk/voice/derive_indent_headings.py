@@ -36,6 +36,7 @@ class _Line:
     depth: int
     text: str
     internal_indent_offsets: tuple[int, ...]
+    internal_indents: tuple[tuple[int, str], ...]
     punctuation_offsets: tuple[int, ...]
     note_spans: tuple[tuple[int, int], ...]
 
@@ -78,6 +79,8 @@ def derive_voice_markers_from_indent_headings(
         }
         if path.path is not None:
             marker["path"] = list(path.path)
+        if candidate.text != text[candidate.start:candidate.end]:
+            marker["label"] = candidate.text
         out.append(marker)
     return out
 
@@ -231,6 +234,7 @@ def _depth_two_overrun_line(
         depth=2,
         text=text[start:end],
         internal_indent_offsets=(),
+        internal_indents=(),
         punctuation_offsets=tuple(
             offset
             for item in group
@@ -249,6 +253,7 @@ def _lines(text_len: int, markers: list[dict], text: str) -> list[_Line]:
     seen_line: set[int] = set()
     indent_at: dict[int, int] = {}
     indent_offsets: list[int] = []
+    indent_content_at: dict[int, str] = {}
     punctuation_offsets: list[int] = []
     note_spans: list[tuple[int, int]] = []
 
@@ -267,8 +272,10 @@ def _lines(text_len: int, markers: list[dict], text: str) -> list[_Line]:
             content = marker.get("content") or ""
             depth = len(content) if set(content) <= {"\u3000"} else 0
             if depth:
+                if offset not in indent_at:
+                    indent_offsets.append(offset)
                 indent_at[offset] = max(indent_at.get(offset, 0), depth)
-                indent_offsets.append(offset)
+                indent_content_at[offset] = "\u3000" * indent_at[offset]
         elif marker_type == "punctuation":
             punctuation_offsets.append(offset)
         elif marker_type == "voice" and marker.get("name") == "note":
@@ -295,6 +302,10 @@ def _lines(text_len: int, markers: list[dict], text: str) -> list[_Line]:
         internal_indent_offsets = tuple(
             offset for offset in indent_offsets if start < offset < end
         )
+        internal_indents = tuple(
+            (offset, indent_content_at[offset])
+            for offset in internal_indent_offsets
+        )
         internal_punctuation_offsets = tuple(
             offset for offset in punctuation_offsets if start < offset < end
         )
@@ -309,6 +320,7 @@ def _lines(text_len: int, markers: list[dict], text: str) -> list[_Line]:
             depth=depth,
             text=text[start:end],
             internal_indent_offsets=internal_indent_offsets,
+            internal_indents=internal_indents,
             punctuation_offsets=internal_punctuation_offsets,
             note_spans=line_note_spans,
         ))
@@ -331,13 +343,32 @@ def _candidates_for_line(
         # carry two headings on one physical line.
         if line.depth != 3 and not allow_internal_indent_heading:
             return []
+        if line.depth != 3:
+            candidate = _candidate_for_span(
+                line.start,
+                line.end,
+                line.depth,
+                line.text,
+                punctuation_offsets=line.punctuation_offsets,
+                note_spans=line.note_spans,
+                allow_title_like=allow_title_like,
+                allow_early_section=allow_early_section,
+                seen_title_like=seen_title_like,
+            )
+            if candidate is None:
+                return []
+            return [_Candidate(
+                candidate.start,
+                candidate.end,
+                candidate.depth,
+                _line_text_with_internal_indents(line),
+                candidate.kind,
+            )]
         points = (
             (line.start, *line.internal_indent_offsets),
             (*line.internal_indent_offsets, line.end),
         )
         spans = list(zip(*points))
-        if line.depth != 3:
-            spans = spans[:1]
         candidates: list[_Candidate] = []
         for start, end in spans:
             candidate = _candidate_for_span(
@@ -366,6 +397,17 @@ def _candidates_for_line(
         seen_title_like=seen_title_like,
     )
     return [candidate] if candidate is not None else []
+
+
+def _line_text_with_internal_indents(line: _Line) -> str:
+    parts: list[str] = []
+    cursor = line.start
+    for offset, content in line.internal_indents:
+        parts.append(line.text[cursor - line.start:offset - line.start])
+        parts.append(content)
+        cursor = offset
+    parts.append(line.text[cursor - line.start:])
+    return "".join(parts)
 
 
 def _candidate_for_span(
