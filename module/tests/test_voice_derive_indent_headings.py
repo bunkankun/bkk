@@ -81,6 +81,30 @@ def test_toc_rows_with_internal_indents_are_rejected() -> None:
     assert has_indent_heading_profile(len(text), markers, text) is False
 
 
+def test_later_depth_two_internal_indent_is_not_toc_after_regular_headings() -> None:
+    text = "前一篇正文前二篇正文同王十三維哭殷遙儲光羲正文"
+    markers = [
+        _lb(0), _indent(0, 2),
+        _lb(3),
+        _lb(5), _indent(5, 2),
+        _lb(8),
+        _lb(10), _indent(10, 2), _indent(18, 5),
+        _lb(21),
+    ]
+
+    out = derive_voice_markers_from_indent_headings(len(text), markers, text)
+
+    assert [
+        (marker["offset"], marker["length"], marker["indent_depth"], marker.get("path"))
+        for marker in out
+    ] == [
+        (0, 3, 2, [1]),
+        (5, 3, 2, [2]),
+        (10, 8, 2, [3]),
+    ]
+    assert has_indent_heading_profile(len(text), markers, text) is True
+
+
 def test_long_prefatory_prose_and_deep_indent_are_rejected() -> None:
     text = "臣等謹案傅子晉司𨽻校尉鶉觚子北地傅玄撰正心篇"
     markers = [
@@ -250,6 +274,7 @@ def test_early_one_indent_count_line_is_section_heading() -> None:
     ] == [
         (0, 8, 1),
         (14, 4, 1),
+        (18, 13, 2),
     ]
     assert has_indent_heading_profile(len(text), markers, text) is True
 

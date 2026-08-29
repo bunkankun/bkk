@@ -21,7 +21,7 @@ _MAX_EARLY_SECTION_OFFSET = 64
 _HEADING_SUFFIXES = ("篇", "章", "卷", "品")
 _STANDALONE_HEADS = {"附録", "附錄", "目録", "目錄"}
 _ATTRIBUTION_SUFFIXES = ("撰", "著", "注", "註", "箋", "校", "纂", "譯", "译")
-_ATTRIBUTION_CHARS = {"臣"}
+_ATTRIBUTION_PREFIXES = ("臣",)
 _COUNT_HEADING_SUFFIXES = ("首",)
 _COUNT_CHARS = set("一二三四五六七八九十百千兩〇零")
 _JUAN_STARTER_RE = re.compile(
@@ -156,17 +156,24 @@ def _heading_candidates(
     if starter is not None:
         seen_title_like.add(starter.text)
     index = 0
+    regular_heading_count = 0
     while index < len(lines):
         line, next_index = _depth_two_overrun_line(lines, index, text)
         candidates = _candidates_for_line(
             line,
             allow_title_like=not emitted_title_like,
             allow_early_section=_is_early_section_context(lines, index),
+            allow_internal_indent_heading=regular_heading_count >= 2,
             seen_title_like=seen_title_like,
         )
         if not candidates:
             index = next_index
             continue
+        if not line.internal_indent_offsets:
+            regular_heading_count += sum(
+                1 for candidate in candidates
+                if candidate.depth in {2, 3}
+            )
         out.extend(
             candidate for candidate in candidates
             if not (candidate.start == 0 and starter is not None)
@@ -313,6 +320,7 @@ def _candidates_for_line(
     *,
     allow_title_like: bool,
     allow_early_section: bool,
+    allow_internal_indent_heading: bool,
     seen_title_like: set[str],
 ) -> list[_Candidate]:
     if line.depth not in {1, 2, 3}:
@@ -321,14 +329,17 @@ def _candidates_for_line(
         # Multi-column TOC rows commonly use depth-1/2 plus internal spacing.
         # Depth-3 rows in tractat bibliographic sections, by contrast, can
         # carry two headings on one physical line.
-        if line.depth != 3:
+        if line.depth != 3 and not allow_internal_indent_heading:
             return []
         points = (
             (line.start, *line.internal_indent_offsets),
             (*line.internal_indent_offsets, line.end),
         )
+        spans = list(zip(*points))
+        if line.depth != 3:
+            spans = spans[:1]
         candidates: list[_Candidate] = []
-        for start, end in zip(*points):
+        for start, end in spans:
             candidate = _candidate_for_span(
                 start,
                 end,
@@ -495,9 +506,7 @@ def _span_covered_by_note(
 
 
 def _looks_like_attribution(text: str) -> bool:
-    return text.endswith(_ATTRIBUTION_SUFFIXES) or any(
-        char in text for char in _ATTRIBUTION_CHARS
-    )
+    return text.endswith(_ATTRIBUTION_SUFFIXES) or text.startswith(_ATTRIBUTION_PREFIXES)
 
 
 def _looks_like_count_heading(text: str) -> bool:
